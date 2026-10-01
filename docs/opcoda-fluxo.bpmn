@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn" id="opcoda-defs" targetNamespace="http://opcoda/tg">
+  <bpmn:message id="msg_arquivo" name="Caminho do binario selecionado" />
+  <bpmn:message id="msg_audio" name="Audio stereo processado" />
+  <bpmn:collaboration id="col">
+    <bpmn:participant id="p_usuario" name="Usuario" />
+    <bpmn:participant id="p_opcoda" name="Opcoda" processRef="proc_opcoda" />
+    <bpmn:participant id="p_daw" name="DAW / Host" />
+    <bpmn:messageFlow id="m1" sourceRef="p_usuario" targetRef="start_sel" messageRef="msg_arquivo" name="seleciona .exe" />
+    <bpmn:messageFlow id="m2" sourceRef="end_audio" targetRef="p_daw" messageRef="msg_audio" name="entrega mix bus" />
+  </bpmn:collaboration>
+  <bpmn:process id="proc_opcoda" name="Pipeline Opcoda" isExecutable="false">
+    <bpmn:laneSet id="lanes">
+      <bpmn:lane id="lane_ui" name="UI">
+        <bpmn:flowNodeRef>start_sel</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_dialogo</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_enviar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_erro</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>end_rejeitado</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="lane_parser" name="Parser (fora da thread de audio)">
+        <bpmn:flowNodeRef>t_mapear</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_validar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>g_valido</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_preparar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_publicar</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="lane_dsp" name="Motor DSP (tempo real rigido)">
+        <bpmn:flowNodeRef>t_consumir</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_agendar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_ler</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>t_mixar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>end_audio</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start_sel" name="Arquivo selecionado">
+      <bpmn:messageEventDefinition messageRef="msg_arquivo" />
+    </bpmn:startEvent>
+    <bpmn:task id="t_dialogo" name="Abrir ou arrastar" />
+    <bpmn:task id="t_enviar" name="Enviar ao parser" />
+    <bpmn:task id="t_mapear" name="Mapear READONLY" />
+    <bpmn:task id="t_validar" name="Validar PE" />
+    <bpmn:exclusiveGateway id="g_valido" name="Válido?" />
+    <bpmn:task id="t_preparar" name="Copiar + entropia" />
+    <bpmn:task id="t_publicar" name="Fila SPSC" />
+    <bpmn:task id="t_consumir" name="Ler descritor" />
+    <bpmn:task id="t_agendar" name="Agendar grãos" />
+    <bpmn:task id="t_ler" name="Ler grãos" />
+    <bpmn:task id="t_mixar" name="Mixar + limiter" />
+    <bpmn:task id="t_erro" name="Mostrar erro" />
+    <bpmn:endEvent id="end_audio" name="Áudio entregue">
+      <bpmn:messageEventDefinition messageRef="msg_audio" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_rejeitado" name="Arquivo rejeitado" />
+    <bpmn:sequenceFlow id="f1" sourceRef="start_sel" targetRef="t_dialogo" />
+    <bpmn:sequenceFlow id="f2" sourceRef="t_dialogo" targetRef="t_enviar" />
+    <bpmn:sequenceFlow id="f3" sourceRef="t_enviar" targetRef="t_mapear" />
+    <bpmn:sequenceFlow id="f4" sourceRef="t_mapear" targetRef="t_validar" />
+    <bpmn:sequenceFlow id="f5" sourceRef="t_validar" targetRef="g_valido" />
+    <bpmn:sequenceFlow id="f6" sourceRef="g_valido" targetRef="t_preparar" name="válido" />
+    <bpmn:sequenceFlow id="f7" sourceRef="g_valido" targetRef="t_erro" name="inválido" />
+    <bpmn:sequenceFlow id="f8" sourceRef="t_erro" targetRef="end_rejeitado" />
+    <bpmn:sequenceFlow id="f9" sourceRef="t_preparar" targetRef="t_publicar" />
+    <bpmn:sequenceFlow id="f10" sourceRef="t_publicar" targetRef="t_consumir" />
+    <bpmn:sequenceFlow id="f11" sourceRef="t_consumir" targetRef="t_agendar" />
+    <bpmn:sequenceFlow id="f12" sourceRef="t_agendar" targetRef="t_ler" />
+    <bpmn:sequenceFlow id="f13" sourceRef="t_ler" targetRef="t_mixar" />
+    <bpmn:sequenceFlow id="f14" sourceRef="t_mixar" targetRef="end_audio" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagrama">
+    <bpmndi:BPMNPlane id="plano" bpmnElement="col">
+      <bpmndi:BPMNShape id="s_p_usuario" bpmnElement="p_usuario">
+        <dc:Bounds x="10" y="10" width="1900" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_p_opcoda" bpmnElement="p_opcoda" isHorizontal="true">
+        <dc:Bounds x="10" y="100" width="1900" height="410" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_lane_ui" bpmnElement="lane_ui" isHorizontal="true" bioc:fill="#E3F2FD" bioc:stroke="#90CAF9">
+        <dc:Bounds x="40" y="100" width="1870" height="110" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_lane_parser" bpmnElement="lane_parser" isHorizontal="true" bioc:fill="#FFF8E1" bioc:stroke="#FFE082">
+        <dc:Bounds x="40" y="210" width="1870" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_lane_dsp" bpmnElement="lane_dsp" isHorizontal="true" bioc:fill="#E8F5E9" bioc:stroke="#A5D6A7">
+        <dc:Bounds x="40" y="330" width="1870" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_p_daw" bpmnElement="p_daw">
+        <dc:Bounds x="10" y="530" width="1900" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_start" bpmnElement="start_sel" bioc:stroke="#1E88E5">
+        <dc:Bounds x="52" y="127" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_dialogo" bpmnElement="t_dialogo">
+        <dc:Bounds x="135" y="105" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_enviar" bpmnElement="t_enviar">
+        <dc:Bounds x="285" y="105" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_mapear" bpmnElement="t_mapear">
+        <dc:Bounds x="435" y="220" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_validar" bpmnElement="t_validar">
+        <dc:Bounds x="595" y="220" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_gate" bpmnElement="g_valido" bioc:fill="#FFF3E0" bioc:stroke="#FB8C00">
+        <dc:Bounds x="775" y="235" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_preparar" bpmnElement="t_preparar">
+        <dc:Bounds x="865" y="220" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_publicar" bpmnElement="t_publicar">
+        <dc:Bounds x="1015" y="220" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_consumir" bpmnElement="t_consumir">
+        <dc:Bounds x="1155" y="380" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_agendar" bpmnElement="t_agendar">
+        <dc:Bounds x="1305" y="380" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_ler" bpmnElement="t_ler">
+        <dc:Bounds x="1455" y="380" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_mixar" bpmnElement="t_mixar">
+        <dc:Bounds x="1605" y="380" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_end_audio" bpmnElement="end_audio" bioc:stroke="#1E88E5">
+        <dc:Bounds x="1782" y="402" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_erro" bpmnElement="t_erro" bioc:fill="#FFEBEE" bioc:stroke="#E53935">
+        <dc:Bounds x="865" y="105" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_end_rej" bpmnElement="end_rejeitado" bioc:stroke="#E53935">
+        <dc:Bounds x="1062" y="127" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1">
+        <di:waypoint x="88" y="145" />
+        <di:waypoint x="135" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2">
+        <di:waypoint x="265" y="145" />
+        <di:waypoint x="285" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3">
+        <di:waypoint x="350" y="185" />
+        <di:waypoint x="350" y="240" />
+        <di:waypoint x="435" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4">
+        <di:waypoint x="565" y="260" />
+        <di:waypoint x="595" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5">
+        <di:waypoint x="725" y="260" />
+        <di:waypoint x="775" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6">
+        <di:waypoint x="825" y="260" />
+        <di:waypoint x="865" y="260" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="828" y="264" width="44" height="18" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f7" bpmnElement="f7" bioc:stroke="#E53935">
+        <di:waypoint x="800" y="235" />
+        <di:waypoint x="800" y="145" />
+        <di:waypoint x="865" y="145" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="800" y="118" width="52" height="18" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f8" bpmnElement="f8" bioc:stroke="#E53935">
+        <di:waypoint x="995" y="145" />
+        <di:waypoint x="1062" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f9" bpmnElement="f9">
+        <di:waypoint x="995" y="260" />
+        <di:waypoint x="1015" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f10" bpmnElement="f10">
+        <di:waypoint x="1080" y="300" />
+        <di:waypoint x="1080" y="420" />
+        <di:waypoint x="1155" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f11" bpmnElement="f11">
+        <di:waypoint x="1285" y="420" />
+        <di:waypoint x="1305" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f12" bpmnElement="f12">
+        <di:waypoint x="1435" y="420" />
+        <di:waypoint x="1455" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f13" bpmnElement="f13">
+        <di:waypoint x="1585" y="420" />
+        <di:waypoint x="1605" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f14" bpmnElement="f14">
+        <di:waypoint x="1735" y="420" />
+        <di:waypoint x="1782" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_m1" bpmnElement="m1" bioc:stroke="#1E88E5">
+        <di:waypoint x="150" y="80" />
+        <di:waypoint x="150" y="105" />
+        <di:waypoint x="70" y="105" />
+        <di:waypoint x="70" y="127" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_m2" bpmnElement="m2" bioc:stroke="#1E88E5">
+        <di:waypoint x="1800" y="438" />
+        <di:waypoint x="1800" y="530" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

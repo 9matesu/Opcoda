@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Opcoda: relatório de apoio</title>
+<style>
+  @page { size: A4; margin: 25mm 20mm; }
+  body { font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.5; color: #111; max-width: 100%; }
+  h1 { font-size: 18pt; text-align: center; margin-bottom: 4pt; }
+  .sub { text-align: center; color: #444; margin-bottom: 18pt; }
+  h2 { font-size: 14pt; margin-top: 20pt; border-bottom: 1px solid #999; padding-bottom: 2pt; }
+  p, li { text-align: justify; }
+  figure { margin: 14pt 0; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 220mm; border: 1px solid #bbb; }
+  figcaption { font-size: 10pt; color: #333; margin-top: 4pt; }
+  figcaption .fonte { display: block; font-size: 9pt; color: #555; }
+  table { border-collapse: collapse; width: 100%; font-size: 10pt; }
+  th, td { border: 1px solid #666; padding: 4pt 6pt; text-align: left; }
+  th { background: #eee; }
+</style>
+</head>
+<body>
+<h1>Opcoda: do databending ao instrumento em tempo real</h1>
+<p class="sub">Relatório de apoio para apresentação. Trabalho de Graduação, ADS, 5º semestre. Outubro de 2026.</p>
+
+<h2>1. Databending e o problema</h2>
+<p>Databending é a leitura de um arquivo não sonoro como se fosse áudio. O Audacity oferece essa operação pelo diálogo de importação de dados brutos, em que o usuário define codificação, canais e taxa (Figura 1). O procedimento é offline e sem tratamento: bytes executáveis não têm média zero, cabeçalhos geram cliques e variações rápidas produzem aliasing. Um parser sem verificação de limites ainda pode ler fora do arquivo e derrubar a sessão.</p>
+<figure>
+  <img src="assets/fig1-audacity-raw.png" alt="Diálogo de importação de dados brutos do Audacity">
+  <figcaption>Figura 1: diálogo de importação de dados brutos do Audacity.<span class="fonte">Fonte: Manual oficial do Audacity, página File Menu Import. Acesso em out. 2026.</span></figcaption>
+</figure>
+
+<h2>2. Similares e diferencial</h2>
+<p>Granulator II, de Robert Henke, é a referência artística de síntese granular: fluxo constante de grãos com posição, tamanho e afinação moduláveis, além de filtros em série (Figura 2). Opera apenas sobre samples, dentro do Ableton Live com Max for Live.</p>
+<figure>
+  <img src="assets/fig2-granulator2.jpg" alt="Granulator II, de Robert Henke">
+  <figcaption>Figura 2: Granulator II, de Robert Henke.<span class="fonte">Fonte: página oficial do autor. Acesso em out. 2026.</span></figcaption>
+</figure>
+<p>Quanta 2, da Audio Damage, é o granular comercial multiformato (VST3, AU, AAX e CLAP para desktop, com versão iOS), voltado a performance com samples tradicionais (Figura 3). Também não lê binários nem calcula entropia.</p>
+<figure>
+  <img src="assets/fig3-quanta.png" alt="Catálogo de instrumentos da Audio Damage">
+  <figcaption>Figura 3: catálogo de instrumentos da Audio Damage, com o Quanta 2.<span class="fonte">Fonte: site oficial da Audio Damage. Acesso em out. 2026.</span></figcaption>
+</figure>
+<p>O diferencial do Opcoda está na combinação ausente nos três: parser PE seguro com verificação de limites, entropia de Shannon como modulação e motor granular em tempo real rígido. A estrutura lida segue a especificação PE/COFF da Microsoft (DOS Header, assinatura PE, COFF, Optional Header, tabela de seções e seções como .text, .data e .rsrc).</p>
+
+<h2>3. Arquitetura</h2>
+<p>O pipeline tem quatro blocos: Parser isolado na UI thread, fila SPSC lock-free, motor granular de 8 vozes na thread de áudio e saída com DC-blocker e limiter (Figura 4). O diagrama BPMN completo está em <code>docs/opcoda-fluxo.bpmn</code>.</p>
+<figure>
+  <svg width="640" height="120" viewBox="0 0 640 120" font-family="Arial" font-size="13">
+    <rect x="8" y="30" width="140" height="60" fill="#E3F2FD" stroke="#1E88E5"/>
+    <text x="78" y="55" text-anchor="middle">Parser PE</text>
+    <text x="78" y="72" text-anchor="middle" font-size="11">UI thread</text>
+    <rect x="168" y="30" width="140" height="60" fill="#FFF8E1" stroke="#FB8C00"/>
+    <text x="238" y="55" text-anchor="middle">Fila SPSC</text>
+    <text x="238" y="72" text-anchor="middle" font-size="11">lock-free</text>
+    <rect x="328" y="30" width="140" height="60" fill="#E8F5E9" stroke="#2E7D32"/>
+    <text x="398" y="55" text-anchor="middle">Motor granular</text>
+    <text x="398" y="72" text-anchor="middle" font-size="11">8 vozes</text>
+    <rect x="488" y="30" width="140" height="60" fill="#F3E5F5" stroke="#6A1B9A"/>
+    <text x="558" y="55" text-anchor="middle">Saída</text>
+    <text x="558" y="72" text-anchor="middle" font-size="11">DC-block + limiter</text>
+    <line x1="148" y1="60" x2="168" y2="60" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="308" y1="60" x2="328" y2="60" stroke="#333" stroke-width="2"/>
+    <line x1="468" y1="60" x2="488" y2="60" stroke="#333" stroke-width="2"/>
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="#333" stroke-width="2"/></marker></defs>
+  </svg>
+  <figcaption>Figura 4: pipeline do Opcoda em quatro blocos.<span class="fonte">Fonte: elaborado pela equipe.</span></figcaption>
+</figure>
+
+<h2>4. Acessibilidade W3C</h2>
+<p>Auditoria WCAG 2.2 nível AA pelo método WCAG-EM. Nos documentos, links genéricos foram corrigidos para texto descritivo (critério 2.4.4) e a tabela do cronograma usa cabeçalho (1.3.1). Na interface, os critérios de aceite cobrem teclado total, foco visível, nomes acessíveis nos knobs, contraste de 4.5:1 e erro do parser em texto com código, nunca só por cor. O MIDI learn funciona como via acessível sem mouse. Reauditoria ao fim da etapa E4.</p>
+
+<h2>5. MVP e validação</h2>
+<table>
+  <tr><th>Item</th><th>Meta do MVP (03/11)</th></tr>
+  <tr><td>Formatos</td><td>Standalone e VST3 x64</td></tr>
+  <tr><td>Entrada</td><td>Arrasto de .exe com som em menos de 2 s</td></tr>
+  <tr><td>Condicionamento</td><td>Atenuação de DC de ao menos 40 dB</td></tr>
+  <tr><td>Tempo real</td><td>Bloco abaixo de 50% do orçamento, 0 xruns</td></tr>
+  <tr><td>Robustez</td><td>0 segfaults em 50 mutações + 10 casos de borda</td></tr>
+</table>
+<p>CLAP, bateria completa de testes e monografia seguem após a entrega.</p>
+</body>
+</html>

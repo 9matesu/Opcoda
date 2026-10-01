@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Opcoda: artigo TG</title>
+<style>
+  @page { size: A4; margin: 30mm 20mm 20mm 30mm; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.5; color: #000; }
+  h1.title { font-size: 14pt; font-weight: bold; text-transform: uppercase; text-align: center; }
+  .authors { text-align: right; font-size: 12pt; margin-top: 12pt; }
+  .resumo { font-size: 11pt; line-height: 1.0; margin-top: 18pt; }
+  .resumo p { text-indent: 0; margin: 0; text-align: justify; }
+  .resumo h2 { font-size: 11pt; margin-bottom: 2pt; }
+  .kw { font-size: 11pt; margin-top: 6pt; }
+  .abstract { font-size: 11pt; font-style: italic; line-height: 1.0; margin-top: 14pt; }
+  .abstract p { text-indent: 0; margin: 0; text-align: justify; }
+  h2.sec { font-size: 12pt; margin-top: 18pt; }
+  h3.sub { font-size: 12pt; margin-top: 12pt; font-weight: bold; }
+  p.body { text-indent: 1.25cm; text-align: justify; margin: 0; }
+  p.eq { text-indent: 0; text-align: center; margin: 6pt 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 10pt; margin: 8pt 0; }
+  th, td { border: 1px solid #000; padding: 3pt 5pt; text-align: left; }
+  .tabtitle { font-size: 11pt; text-align: left; margin: 8pt 0 0 0; }
+  .tabfonte { font-size: 11pt; text-align: left; margin: 0 0 8pt 0; }
+  .refs p { text-align: left; text-indent: 0; line-height: 1.0; margin: 0 0 6pt 0; }
+  ul.obj { font-size: 12pt; }
+  ul.obj li { text-align: justify; margin-bottom: 2pt; }
+</style>
+</head>
+<body>
+<h1 class="title">Opcoda: síntese granular em tempo real a partir de binários executáveis (PE)</h1>
+<div class="authors">
+Mateus Costa de Oliveira Santos<br>
+Rafael Augusto Garcez Elisei<br><br>
+Prof. Me. Warner Brezolin (orientador)
+</div>
+
+<div class="resumo">
+<h2>Resumo</h2>
+<p>Este artigo apresentou o projeto Opcoda, instrumento virtual que converte arquivos executáveis no formato Portable Executable em material sonoro por síntese granular em tempo real. O objetivo geral consistiu em entregar, até 03/11, um aplicativo standalone e um plugin VST3 x64 com abertura de .exe por diálogo ou arrasto, parâmetros controláveis por MIDI e playback sem interrupções. A justificativa apoiou-se em três relevâncias: científica, pela arquitetura lock-free e leitura segura de binários; social, pela acessibilidade da interface segundo a WCAG 2.2; pessoal, pelo interesse dos autores em computação musical. As bases teóricas reuniram Pietrek e Sikorski e Honig sobre o formato PE, Shannon e Lyda e Hamrock sobre entropia, Roads, Smith e Cascone sobre granular e DSP, e Pirkle sobre plugins de áudio. A metodologia caracterizou-se como pesquisa aplicada, quali-quantitativa, com desenvolvimento de protótipo em cinco etapas semanais. Os resultados parciais incluíram a análise de três similares, a modelagem do pipeline em BPMN, a auditoria W3C da documentação e a especificação da bateria de testes T1 a T4. Concluiu-se que a combinação de parser seguro, entropia como modulação e motor granular é inédita entre os similares e viável no prazo.</p>
+<p class="kw">Palavras-chave: Síntese granular. Databending. Tempo real. Acessibilidade. VST3.</p>
+</div>
+
+<div class="abstract">
+<h2 style="font-size:11pt;">Abstract</h2>
+<p>This paper presented the Opcoda project, a virtual instrument that converts Portable Executable files into sound through real-time granular synthesis. The general objective was to deliver, by 11/03, a standalone application and an x64 VST3 plugin with .exe opening via dialog or drag-and-drop, MIDI-controllable parameters and glitch-free playback. The justification relied on scientific relevance (lock-free architecture and safe binary parsing), social relevance (WCAG 2.2 interface accessibility) and the authors' personal interest in digital audio. The theoretical bases included Pietrek and Sikorski and Honig on the PE format, Shannon and Lyda and Hamrock on entropy, Roads, Smith and Cascone on granular synthesis and DSP, and Pirkle on audio plugins. The methodology was applied, quali-quantitative research with prototype development in five weekly stages. Partial results included the analysis of three similar systems, pipeline modeling in BPMN, the W3C audit of the documentation and the specification of the T1 to T4 test battery. It was concluded that the combination of safe parser, entropy-driven modulation and granular engine is unprecedented among the similars and feasible on schedule.</p>
+<p class="kw">Keywords: Granular synthesis. Databending. Real-time. Accessibility. VST3.</p>
+</div>
+
+<h2 class="sec">Introdução</h2>
+<p class="body">A leitura de arquivos não sonoros como áudio, prática conhecida como databending, popularizou-se com a importação de dados brutos do Audacity. O procedimento, porém, permaneceu offline, sem tratamento de sinal e sem garantias de estabilidade. O presente trabalho inseriu-se nesse contexto com o propósito de construir um instrumento musical de tempo real cuja matéria-prima são arquivos executáveis do sistema Windows.</p>
+<p class="body">A relevância científica do trabalho residiu na aplicação combinada de três domínios raramente reunidos em um projeto de graduação: análise estática segura de binários, descritores de teoria da informação como sinal de controle e engenharia de software em tempo real rígido. A comunicação entre interface e motor de áudio por fila lock-free, a proibição de alocação dinâmica no laço de áudio e o sandboxing de leitura constituíram contribuições metodológicas replicáveis para outros projetos de sistemas concorrentes.</p>
+<p class="body">A relevância social manifestou-se em dois planos. No plano do acesso à produção musical, o instrumento transforma qualquer computador com arquivos executáveis em fonte sonora, sem custo de samples. No plano da inclusão, a interface foi especificada desde o início segundo a WCAG 2.2, com operação por teclado, foco visível, contraste mínimo e controle integral por MIDI, de modo que músicos com restrições motoras ou visuais possam operar o instrumento.</p>
+<p class="body">A relevância pessoal decorreu da afinidade dos autores com computação musical e processamento digital de sinais, áreas que motivaram a escolha de um tema capaz de unir engenharia de software e criação sonora em um único artefato avaliável.</p>
+<p class="body">Um exemplo concreto ilustrou o problema. Ao importar o Bloco de Notas do Windows como dados brutos a 44,1 kHz e 16 bits, o trecho do cabeçalho DOS produziu um salto de amplitude próximo à escala cheia nos primeiros milissegundos, seguido de patamares de zeros do preenchimento. O ouvido percebeu um estalo, depois silêncio, depois ruído denso do segmento de código. Nada nesse contorno correspondeu a uma decisão musical, apenas à geometria do arquivo. O Opcoda nasceu para substituir esse acaso por controle: cada região virou fonte de grãos com posição, densidade e dispersão ajustáveis.</p>
+<p class="body">O objetivo geral consistiu em entregar, até 03/11, o Opcoda como aplicativo standalone e plugin VST3 x64 que abre ou recebe por arrasto arquivos .exe, com parâmetros granulares controláveis por MIDI, redução de offset DC de ao menos 40 dB e playback sem interrupções. Os objetivos específicos foram:</p>
+<ul class="obj">
+<li>implementar parser PE próprio com verificação de limites e conversão para float normalizado;</li>
+<li>implementar ingestão somente-leitura com diálogo e arrasto, cópia defensiva e erros tipados;</li>
+<li>implementar fila lock-free entre interface e DSP com troca por double-buffer;</li>
+<li>implementar motor granular de 8 vozes com grãos de 1 a 100 ms e janelas Hann e Gaussiana;</li>
+<li>implementar entropia de Shannon por janela e por seção como modulação;</li>
+<li>implementar DC-blocker, limiter e cadeia de condicionamento da saída;</li>
+<li>construir interface simples com mapa de seções, waveform e controles automatizáveis;</li>
+<li>garantir isolamento entre interface e DSP com verificação por thread-sanitizer;</li>
+<li>mapear parâmetros via MIDI learn, CC, pitch e mod wheel.</li>
+</ul>
+<p class="body">A pergunta de pesquisa indagou como construir um instrumento em tempo real que leia binários PE arbitrários com segurança e os converta em material sonoro controlável, por síntese granular guiada por entropia, sem travar o host. A hipótese H1 afirmou que o pipeline proposto reduz o offset em ao menos 40 dB, mantém o processamento abaixo de 50% do orçamento com 8 vozes e registra zero travamentos sob fuzzing. A hipótese nula H0 negou diferença relevante ante a leitura bruta.</p>
+<p class="body">Este artigo organiza-se como segue. A seção 1 apresenta a fundamentação teórica nos quatro eixos. A seção 2 detalha a metodologia. A seção 3 discute os resultados parciais. A conclusão fecha o trabalho e indica passos futuros.</p>
+
+<h2 class="sec">1. Fundamentação teórica</h2>
+<h3 class="sub">1.1 Arquitetura de binários e engenharia reversa estática</h3>
+<p class="body">O formato Portable Executable é o formato de executáveis, bibliotecas e drivers do Windows em x86 e x64, derivado do COFF, com especificação mantida pela Microsoft (Microsoft, 2024). Pietrek documentou a anatomia canônica do formato, campo a campo, em artigos de referência (Pietrek, 1994; Pietrek, 2002). A sequência lógica compreende DOS Header com o deslocamento e_lfanew, assinatura PE, COFF File Header, Optional Header, tabela de seções e corpo das seções.</p>
+<p class="body">Cada entrada da tabela declara nome, tamanhos virtual e em disco, ponteiros e flags de permissão. Os valores em disco e em memória podem divergir de forma legítima ou por corrupção, o que exige verificação de limites em toda leitura indexada (Pietrek, 2002; Microsoft, 2024). As seções convencionais exibem perfis próprios: .text com código de máquina, .data e .rdata com dados e constantes, .rsrc com recursos. Sikorski e Honig adotam essa segmentação como base da análise estática, que inspeciona o artefato sem executá-lo (Sikorski; Honig, 2012). No Opcoda, cada seção corresponde a uma região de textura estatística sonificável.</p>
+<p class="body">O carregador do sistema percorreu essa estrutura ao mapear a imagem: leu e_lfanew, conferiu a assinatura, dimensionou os cabeçalhos por SizeOfOptionalHeader e copiou cada seção segundo endereços virtuais e alinhamentos de SectionAlignment e FileAlignment (Microsoft, 2024). Os diretórios de dados do Optional Header, como importação e recursos, completaram o retrato das dependências do binário. Para o instrumento, cada um desses campos foi tratado como dado opaco sob suspeita: nenhum deslocamento foi confiado sem prova de pertinência ao tamanho do arquivo.</p>
+<p class="tabtitle">Tabela 1: seções PE e perfil de conteúdo</p>
+<table>
+<tr><th>Seção</th><th>Conteúdo típico</th><th>Perfil estatístico esperado</th></tr>
+<tr><td>.text</td><td>Código de máquina</td><td>Entropia intermediária a alta</td></tr>
+<tr><td>.data / .rdata</td><td>Dados e constantes</td><td>Entropia mista</td></tr>
+<tr><td>.rsrc</td><td>Ícones, bitmaps, diálogos</td><td>Regiões homogêneas e periódicas</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores, a partir de Microsoft (2024) e Sikorski e Honig (2012).</p>
+<p class="body">A leitura segura aplicou o menor privilégio (somente leitura, sem página executável), verificação de limites em e_lfanew, NumberOfSections, PointerToRawData e SizeOfRawData, e rejeição com erro tipado, em linha com práticas de software seguro para sistemas com restrições temporais (Kleidermacher; Kleidermacher, 2012).</p>
+
+<h3 class="sub">1.2 Teoria da informação e entropia</h3>
+<p class="body">Shannon definiu a entropia de fonte discreta como a informação média por símbolo (Shannon, 1948):</p>
+<p class="eq">H(X) = - Σ p(xi) · log2 p(xi)</p>
+<p class="body">Dois casos extremos calibraram a leitura. Um bloco de 1024 bytes idênticos produziu H = 0, pois um único símbolo concentrou toda a probabilidade. Um bloco com os 256 valores igualmente distribuídos produziu H = 8 bits por byte, o máximo teórico. Entre os extremos, o código compilado ocupou a faixa intermediária, e os trechos comprimidos ou cifrados aproximaram-se do teto. No instrumento, a curva modulou dispersão, aleatoriedade e densidade dos grãos (Entropy-to-CV): alta entropia gerou texturas instáveis, baixa entropia gerou texturas estáveis.</p>
+
+<h3 class="sub">1.3 DSP e síntese granular</h3>
+<p class="body">Roads formalizou o microsom: som como agregado de grãos de 1 a 100 ms com duração, envelope, frequência, amplitude e posição próprios, em nuvens meso-temporais (Roads, 2001). Bytes como PCM violam as garantias do áudio: média não nula, descontinuidades e variações acima de Nyquist com aliasing (Smith, 2007; Zölzer, 2011). A janela impõe amplitude nula nas bordas e elimina cliques na sobreposição:</p>
+<p class="body">A sobreposição com soma (overlap-add) garantiu continuidade entre grãos sucessivos: cada grão entrou em fade-in enquanto o anterior executou fade-out, de modo que a soma preservou a energia sem degraus. Densidade controlou quantos grãos soaram por segundo; spray espalhou os pontos de leitura em torno da posição base; a afinação deslocou cada grão em semitons com interpolação. A combinação desses três controles converteu regiões estáticas do binário em texturas em movimento.</p>
+<p class="eq">Hann: w(n) = 0,5 · (1 - cos(2πn / (N-1)))</p>
+<p class="eq">Hamming: w(n) = 0,54 - 0,46 · cos(2πn / (N-1))</p>
+<p class="eq">Blackman: w(n) = 0,42 - 0,5 · cos(2πn / (N-1)) + 0,08 · cos(4πn / (N-1))</p>
+<p class="tabtitle">Tabela 2: janelas e compromisso adotado</p>
+<table>
+<tr><th>Janela</th><th>Suavidade temporal</th><th>Uso no Opcoda</th></tr>
+<tr><td>Hann</td><td>Alta</td><td>Adotada no MVP</td></tr>
+<tr><td>Gaussiana</td><td>Alta</td><td>Adotada no MVP</td></tr>
+<tr><td>Hamming / Blackman</td><td>Média a alta</td><td>Alternativas documentadas</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores, a partir de Smith (2007).</p>
+<p class="body">O offset saiu por DC-blocker y[n] = x[n] - x[n-1] + R · y[n-1], com R = 0,995 e corte entre 10 e 15 Hz, e a coloração usou biquad ressonante na Forma Direta, com limiter na saída (Smith, 2007; Zölzer, 2011). Esteticamente, o trabalho filiou-se à música pós-digital, que adota o erro como vocabulário (Cascone, 2000), com a diferença de domesticar o acidente por engenharia.</p>
+
+<h3 class="sub">1.4 Tempo real rígido em plugins</h3>
+<p class="body">VST3 e CLAP impõem contrato rígido ao callback de áudio, com blocos de poucos milissegundos: nada de alocação dinâmica, nada de I/O ou chamada bloqueante, nada de mutex com espera, sob risco de inversão de prioridade (Steinberg, 2024; CLAP, 2024; Pirkle, 2019). A Tabela 3 quantificou o orçamento por bloco nas configurações do plano de testes.</p>
+<p class="tabtitle">Tabela 3: orçamento de tempo real por bloco</p>
+<table>
+<tr><th>Buffer (samples)</th><th>44,1 kHz</th><th>48 kHz</th><th>96 kHz</th></tr>
+<tr><td>128</td><td>2,9 ms</td><td>2,7 ms</td><td>1,3 ms</td></tr>
+<tr><td>256</td><td>5,8 ms</td><td>5,3 ms</td><td>2,7 ms</td></tr>
+<tr><td>512</td><td>11,6 ms</td><td>10,7 ms</td><td>5,3 ms</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores. Critério T2 exige p99 abaixo de 50% desses valores.</p>
+<p class="body">A inversão de prioridade ilustrou o risco: se a thread de áudio, de alta prioridade, aguardasse um mutex detido pela interface, de baixa prioridade, o prazo do bloco dependeria do escalonador, e o resultado audível seria a interrupção. A fila SPSC eliminou a espera por construção, pois produtor e consumidor avançaram índices independentes sobre buffer pré-alocado.</p>
+<p class="body">A arquitetura separou a interface (60 fps, com I/O e parsing) do DSP (pré-alocado), ligados por fila SPSC lock-free com atômicas acquire-release e parâmetros atômicos suavizados (Pirkle, 2019).</p>
+
+<h2 class="sec">2. Metodologia</h2>
+<p class="body">A pesquisa caracterizou-se como aplicada, quali-quantitativa, com desenvolvimento de protótipo e revisão bibliográfica. O contexto foi o laboratório do curso, sem participantes humanos, de modo que a Resolução 196/96 e o Termo de Consentimento não se aplicaram. Os instrumentos foram C++20, JUCE 8 ou iPlug2, GoogleTest, libFuzzer, Pluginval, REAPER 7 e Bitwig. Os procedimentos seguiram cinco etapas semanais: S1 com esqueleto e parser em teste; S2 com motor de 8 vozes, arrasto e DC-blocker; S3 com MIDI e medição de bloco; S4 com GUI, FFT e fuzzing básico; S5 com congelamento e validação no REAPER.</p>
+<p class="tabtitle">Tabela 4: bateria de testes e critérios</p>
+<table>
+<tr><th>Ensaio</th><th>Método resumido</th><th>Critério de aceite</th></tr>
+<tr><td>T1 espectral</td><td>FFT N=65536 em 3 binários</td><td>DC -40 dB; sub-20 Hz abaixo de -60 dBFS</td></tr>
+<tr><td>T2 desempenho</td><td>Blocos de 128 a 512 samples, 1 a 8 vozes</td><td>p99 abaixo de 50% do orçamento; 0 xruns</td></tr>
+<tr><td>T3 robustez</td><td>50 mutações e 10 casos de borda</td><td>0 segfaults; cobertura acima de 70%</td></tr>
+<tr><td>T4 aceite</td><td>Arrasto, 6 parâmetros, 2 CCs, 2 min por formato</td><td>Som em menos de 2 s; CC move o parâmetro</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores.</p>
+<p class="tabtitle">Tabela 5: etapas semanais até o MVP</p>
+<table>
+<tr><th>Semana</th><th>Até</th><th>Foco</th></tr>
+<tr><td>S1</td><td>08/10</td><td>Esqueleto do plugin e parser em teste</td></tr>
+<tr><td>S2</td><td>15/10</td><td>Motor de 8 vozes, arrasto e DC-blocker</td></tr>
+<tr><td>S3</td><td>22/10</td><td>MIDI learn e medição de bloco</td></tr>
+<tr><td>S4</td><td>29/10</td><td>GUI, FFT e fuzzing básico</td></tr>
+<tr><td>S5</td><td>03/11</td><td>Congelamento e validação no REAPER</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores.</p>
+
+<h2 class="sec">3. Análise e discussão dos resultados</h2>
+<p class="body">A análise de similares comparou Granulator II (granular de referência, restrito a samples e ao Ableton), Quanta 2 (granular comercial multiformato, restrito a samples) e Audacity raw (databending offline sem tratamento). A tabela 4 resumiu o confronto.</p>
+<p class="tabtitle">Tabela 6: similares ante o Opcoda</p>
+<table>
+<tr><th>Critério</th><th>Granulator II</th><th>Quanta 2</th><th>Audacity raw</th><th>Opcoda</th></tr>
+<tr><td>Fonte</td><td>Samples</td><td>Samples</td><td>Qualquer bruto</td><td>.exe e PE</td></tr>
+<tr><td>Granular RT</td><td>Sim</td><td>Sim</td><td>Não</td><td>Sim, 8 vozes</td></tr>
+<tr><td>Parser PE</td><td>Não</td><td>Não</td><td>Não</td><td>Sim</td></tr>
+<tr><td>Modulação por entropia</td><td>Não</td><td>Não</td><td>Não</td><td>Sim</td></tr>
+<tr><td>Formatos</td><td>Max for Live</td><td>VST3 e outros</td><td>Editor</td><td>Standalone e VST3</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores.</p>
+<p class="body">Nenhum similar reuniu as três contribuições, o que sustentou o ineditismo diante do referencial. A modelagem BPMN fixou Usuário, Opcoda (UI, Parser, DSP) e DAW, com gateway de validade e ramo de erro tipado. A auditoria WCAG-EM produziu a Tabela 6: corrigiu links genéricos (2.4.4), aprovou a tabela do cronograma (1.3.1) e definiu aceite de knobs, mouse, cores e MIDI, com reauditoria ao fim da etapa E4.</p>
+<p class="tabtitle">Tabela 7: achados W3C e encaminhamento</p>
+<table>
+<tr><th>Critério</th><th>Resultado</th><th>Encaminhamento</th></tr>
+<tr><td>2.4.4 finalidade do link</td><td>Falha parcial</td><td>Texto descritivo nos links</td></tr>
+<tr><td>1.3.1 informação e relações</td><td>Passa</td><td>Manter cabeçalhos nas tabelas</td></tr>
+<tr><td>3.1.1 idioma da página</td><td>Atenção</td><td>Fixar lang="pt-BR" no template</td></tr>
+<tr><td>1.4.3 contraste mínimo</td><td>A verificar</td><td>Medir 4.5:1 antes da entrega</td></tr>
+<tr><td>2.1.1 teclado; 2.4.7 foco; 4.1.2 nome e função</td><td>A verificar no protótipo</td><td>Checklist na GUI final</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores.</p>
+<p class="body">Como limitação honesta, os ensaios T1 a T4 estavam especificados com execução prevista até 03/11, de modo que a confirmação de H1 aguardou o MVP. Outra limitação foi o recorte Windows x64 e o teto de 8 vozes, suficientes para a hipótese, mas estreitos para generalização. Ameaças à validade incluíram a máquina de referência única nos testes de desempenho e o corpus enxuto de fuzzing, ambos documentados para ampliação futura.</p>
+<p class="tabtitle">Tabela 8: parâmetros do MVP e controle MIDI</p>
+<table>
+<tr><th>Parâmetro</th><th>Faixa</th><th>Controle</th></tr>
+<tr><td>Tamanho de grão</td><td>1 a 100 ms</td><td>Knob, CC, automação</td></tr>
+<tr><td>Densidade</td><td>1 a 200 grãos/s</td><td>Knob, CC, automação</td></tr>
+<tr><td>Posição</td><td>0 a 100%</td><td>Waveform, CC, automação</td></tr>
+<tr><td>Spray</td><td>0 a 100%</td><td>Knob, CC, entropia local</td></tr>
+<tr><td>Afinação</td><td>-24 a +24 semitons</td><td>Knob, teclado MIDI</td></tr>
+<tr><td>Volume e panorama</td><td>-inf a 0 dB; L-R</td><td>Knob, mod wheel, automação</td></tr>
+</table>
+<p class="tabfonte">Fonte: elaborado pelos autores.</p>
+
+<h2 class="sec">Conclusão</h2>
+<p class="body">O percurso confirmou a viabilidade técnica e acadêmica do Opcoda no escopo de ADS. Parser seguro, entropia como modulação e granular em tempo real mostraram-se combináveis em um instrumento testável. As contribuições consolidadas foram a arquitetura desacoplada com fila SPSC aplicada a databending, o uso de entropia por seção PE como modulação e o protocolo de validação com critérios numéricos. A hipótese H1 seguiu para verificação empírica no MVP. Trabalhos futuros incluem o formato CLAP, a bateria completa e a monografia.</p>
+
+<h2 class="sec">Glossário</h2>
+<p class="body">Databending: leitura de arquivo não sonoro como áudio. Grão: microfragmento de 1 a 100 ms. Spray: dispersão temporal dos grãos. Entropia: informação média por símbolo, em bits. DC-blocker: filtro passa-alta que remove offset. Fila SPSC: fila lock-free de um produtor e um consumidor. MIDI learn: associação de controle MIDI a parâmetro por toque. xrun: interrupção audível por estouro do orçamento de bloco.</p>
+
+<h2 class="sec">Referências</h2>
+<div class="refs">
+<p>CASCONE, K. The aesthetics of failure. Computer Music Journal, v. 24, n. 4, p. 12-18, 2000.</p>
+<p>CLAP. CLever Audio Plugin: specification. 2024.</p>
+<p>KLEIDERMACHER, D.; KLEIDERMACHER, M. Embedded systems security. Oxford: Newnes, 2012.</p>
+<p>LYDA, R.; HAMROCK, J. Using entropy analysis to find encrypted and packed malware. IEEE Security &amp; Privacy, v. 5, n. 2, p. 40-45, 2007.</p>
+<p>MICROSOFT. Microsoft Portable Executable and Common Object File Format specification. Redmond, 2024.</p>
+<p>PIETREK, M. Peering inside the PE. Microsoft Systems Journal, 1994.</p>
+<p>PIETREK, M. An in-depth look into the Win32 Portable Executable file format. MSDN Magazine, 2002.</p>
+<p>PIRKLE, W. C. Designing software synthesizer plug-ins in C++. 2. ed. New York: Focal Press, 2019.</p>
+<p>ROADS, C. Microsound. Cambridge: MIT Press, 2001.</p>
+<p>SHANNON, C. E. A mathematical theory of communication. Bell System Technical Journal, v. 27, p. 379-423, 1948.</p>
+<p>SIKORSKI, M.; HONIG, A. Practical malware analysis. San Francisco: No Starch Press, 2012.</p>
+<p>SMITH, J. O. Introduction to digital filters. [S.l.]: W3K Publishing, 2007.</p>
+<p>STEINBERG. VST 3 audio plug-ins SDK: documentation. Hamburg, 2024.</p>
+<p>ZÖLZER, U. (Ed.). DAFX: digital audio effects. 2. ed. Chichester: Wiley, 2011.</p>
+</div>
+</body>
+</html>
