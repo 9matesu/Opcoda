@@ -1,28 +1,81 @@
 # Opcoda
 
-Proposta de Trabalho de Graduação: Análise e Desenvolvimento de Sistemas (5º semestre)
+Sintetizador granular em tempo real (VST3, CLAP e Standalone, Windows x64) que
+transforma binários Portable Executable em som.
 
-Sintetizador granular em tempo real (VST3/CLAP) a partir da análise estática de binários no formato Portable Executable (PE).
+Trabalho de Graduação em Análise e Desenvolvimento de Sistemas, 5º semestre.
+
+## Build
+
+Requer Visual Studio Build Tools 2026, CMake 3.28+ e JUCE 8.0.14 clonado em
+`I:\deps\JUCE`. O `cl.exe` depende do vcvars64, então o build passa pelo script:
+
+```powershell
+.\tools\build.ps1              # debug + AddressSanitizer + testes
+.\tools\build.ps1 -Release     # release, gera VST3 e Standalone
+```
 
 ## Estrutura
 
-- `docs/01-titulo-e-tema.md`: Título e tema acadêmico
-- `docs/02-problematizacao-hipotese.md`: Problematização e hipótese
-- `docs/03-justificativa.md`: Justificativa e motivação técnica
-- `docs/04-objetivos.md`: Objetivos geral e específicos
-- `docs/05-fundamentacao.md`: Fundamentação teórica e estado da arte
-- `docs/06-metodologia-arquitetura.md`: Metodologia e arquitetura proposta
-- `docs/07-plano-testes.md`: Plano de testes e validação
-- `docs/08-cronograma.md`: Cronograma de execução
-- `docs/proposta-completa.md`: Versão completa em arquivo único
-- `docs/referencias.md`: Referências preliminares (ABNT NBR 6023)
-- `docs/09-similares.md`: Análise de similares (Granulator II, Quanta 2, Audacity)
-- `docs/10-acessibilidade-w3c.md`: Análise W3C pelo método WCAG-EM
-- `docs/11-bpmn.md`: BPMN do fluxo de dados (+ `docs/opcoda-fluxo.bpmn`)
-- `docs/12-apresentacao.md`: Prompt e roteiro de 8 slides
-- `docs/13-topicos-apresentacao.md`: Tópicos de apresentação (databending, justificativas, diferencial, similares)
-- `docs/14-relatorio-apoio.md`: Relatório formal de apoio com figuras
-- `docs/14-relatorio-apoio.pdf`: Relatório em PDF para apresentação
-- `docs/15-artigo-tg.pdf`: Artigo TG em PDF no modelo 2019_1 (Mateus, Rafael, orient. Warner Brezolin)
+```
+src/opcoda_core/    núcleo C++20 puro, sem JUCE
+  pe/               parser PE, conversão byte para amostra
+  entropy/          entropia de Shannon por janela
+  dsp/              motor granular, janelas, DC-blocker, limiter
+  rt/               fila SPSC, troca de amostra, guard de alocação
+src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
+tests/              GoogleTest, 87 casos mais 6 do guard de alocação
+docs/               documentação acadêmica e técnica
+specs/              especificações por feature, do spec-kit
+```
 
-Escrita em tom acadêmico direto, adequado para o 5º semestre de ADS.
+O núcleo não depende de JUCE, e isso não é estilo: é o que permite rodar o
+AddressSanitizer, os testes de borda e o ensaio end-to-end com `notepad.exe`
+real sem o framework no caminho.
+
+## Usar
+
+O Standalone e o VST3 abrem com a interface de três faixas: arraste um `.exe`,
+`.dll`, `.bin` ou `.sys` para dentro da janela, ou use o botão `LOAD`, e o
+material toca em até um segundo. Binário recusado mostra o código tipado, como
+`E_BAD_MZ`, e o material anterior continua tocando.
+
+São seis parâmetros automatizáveis: tamanho de grão, densidade, posição, spray,
+afinação e volume. As teclas ainda não controlam nada; o gate por note-on e os
+CCs mapeados são a etapa S3, ver `docs/08-cronograma.md`.
+
+## Processo
+
+O desenvolvimento segue spec-kit. A constitution em `.specify/memory/constitution.md`
+define seis portões de qualidade (build, testes, tempo real, robustez,
+interface, documentação) que nenhuma tarefa fecha sem cumprir.
+
+## Documentação
+
+- `docs/01-titulo-e-tema.md` a `docs/05-fundamentacao.md`: tema, problema,
+  objetivos e base teórica
+- `docs/06-metodologia-arquitetura.md` a `docs/08-cronograma.md`: arquitetura,
+  testes e cronograma S1–S5
+- `docs/09-similares.md` a `docs/13-topicos-apresentacao.md`: análise de
+  similares, acessibilidade WCAG, BPMN e apresentação
+- `docs/14-relatorio-apoio.md` e `docs/15-artigo-tg.pdf`: artefatos para entrega
+- `docs/16-arquitetura-implementacao.md`: o que o código faz, incluindo os
+  defeitos encontrados e as decisões que mudaram
+- `docs/17-guia-de-build.md`: toolchain, presets, instalação e as guardas de
+  regressão do build
+- `docs/18-processo-sdd.md`: constitution, agentes de revisão e rastreabilidade
+- `design/DESIGN-SYSTEM.md`: tokens visuais extraídos do Stitch
+- `docs/16-arquitetura-implementacao.md`: decisões de implementação e bugs
+  encontrados
+- `docs/17-guia-de-build.md`: toolchain, presets e limitações declaradas
+- `docs/18-processo-sdd.md`: spec-kit, constitution, portões e agentes
+- `specs/001-ingestao-pe/spec.md`: ingestão de PE, com as armadilhas encontradas
+- `specs/003-troca-material/spec.md`: troca entre interface e áudio
+
+## Estado
+
+Núcleo completo e testado, plugin VST3 e Standalone com editor mínimo e seis
+parâmetros, compondo para x64. Entrega de áudio da S1 fechada.
+
+Falta o visual completo, arrasto de arquivo, MIDI e a validação em DAW, conforme
+o cronograma S2–S5.
