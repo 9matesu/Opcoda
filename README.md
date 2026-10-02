@@ -41,8 +41,8 @@ material toca em até um segundo. Binário recusado mostra o código tipado, com
 `E_BAD_MZ`, e o material anterior continua tocando.
 
 São seis parâmetros automatizáveis: tamanho de grão, densidade, posição, spray,
-afinação e volume. As teclas ainda não controlam nada; o gate por note-on e os
-CCs mapeados são a etapa S3, ver `docs/08-cronograma.md`.
+afinação e volume. As notas ligam o motor, o pedal de sustain segura as notas
+soltas, e os CCs 74 e 71 movem densidade e posição.
 
 ## Processo
 
