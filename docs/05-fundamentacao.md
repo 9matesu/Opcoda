@@ -70,7 +70,7 @@ O offset DC é removido por filtro IIR passa-alta de primeira ordem (DC-blocker)
 
 y[n] = x[n] - x[n-1] + R · y[n-1]
 
-com R = 0,995, o que posiciona a frequência de corte entre 10 e 15 Hz a 44,1 kHz, preservando o conteúdo audível (SMITH, 2007). A coloração adicional utiliza biquad ressonante na Forma Direta:
+com R = 0,9983, o que posiciona a frequência de corte em aproximadamente 12 Hz a 44,1 kHz, dentro da faixa de 10 a 15 Hz que preserva o conteúdo audível (SMITH, 2007). O coeficiente é R = exp(−2·π·f_c/f_s); o valor 0,995 que constava em versões anteriores deste texto produziria corte em 35 Hz, fora da faixa pretendida. A coloração adicional utiliza biquad ressonante na Forma Direta:
 
 y[n] = b0·x[n] + b1·x[n-1] + b2·x[n-2] - a1·y[n-1] - a2·y[n-2]
 

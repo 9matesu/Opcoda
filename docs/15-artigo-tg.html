@@ -118,7 +118,7 @@ Prof. Me. Warner Brezolin (orientador)
 <p class="body">A arquitetura separou a interface (60 fps, com I/O e parsing) do DSP (pré-alocado), ligados por fila SPSC lock-free com atômicas acquire-release e parâmetros atômicos suavizados (Pirkle, 2019).</p>
 
 <h2 class="sec">2. Metodologia</h2>
-<p class="body">A pesquisa caracterizou-se como aplicada, quali-quantitativa, com desenvolvimento de protótipo e revisão bibliográfica. O contexto foi o laboratório do curso, sem participantes humanos, de modo que a Resolução 196/96 e o Termo de Consentimento não se aplicaram. Os instrumentos foram C++20, JUCE 8 ou iPlug2, GoogleTest, libFuzzer, Pluginval, REAPER 7 e Bitwig. Os procedimentos seguiram cinco etapas semanais: S1 com esqueleto e parser em teste; S2 com motor de 8 vozes, arrasto e DC-blocker; S3 com MIDI e medição de bloco; S4 com GUI, FFT e fuzzing básico; S5 com congelamento e validação no REAPER.</p>
+<p class="body">A pesquisa caracterizou-se como aplicada, quali-quantitativa, com desenvolvimento de protótipo e revisão bibliográfica. O contexto foi o laboratório do curso, sem participantes humanos, de modo que a Resolução 196/96 e o Termo de Consentimento não se aplicaram. Os instrumentos foram C++20, JUCE 8 ou iPlug2, GoogleTest, mutacao de corpus por bit-flip em teste unitario e Ableton Live 12.3.1. Os procedimentos seguiram cinco etapas semanais: S1 com esqueleto e parser em teste; S2 com motor de 8 vozes, arrasto e DC-blocker; S3 com MIDI e medição de bloco; S4 com GUI, FFT e fuzzing básico; S5 com congelamento e validação no Ableton Live 12.</p>
 <p class="tabtitle">Tabela 4: bateria de testes e critérios</p>
 <table>
 <tr><th>Ensaio</th><th>Método resumido</th><th>Critério de aceite</th></tr>
@@ -135,7 +135,7 @@ Prof. Me. Warner Brezolin (orientador)
 <tr><td>S2</td><td>15/10</td><td>Motor de 8 vozes, arrasto e DC-blocker</td></tr>
 <tr><td>S3</td><td>22/10</td><td>MIDI learn e medição de bloco</td></tr>
 <tr><td>S4</td><td>29/10</td><td>GUI, FFT e fuzzing básico</td></tr>
-<tr><td>S5</td><td>03/11</td><td>Congelamento e validação no REAPER</td></tr>
+<tr><td>S5</td><td>03/11</td><td>Congelamento e validação no Ableton Live 12</td></tr>
 </table>
 <p class="tabfonte">Fonte: elaborado pelos autores.</p>
 

@@ -44,7 +44,7 @@ PE/COFF (.text, .data, .rsrc); Shannon 1948 aplicada a 256 símbolos; Roads 2001
 
 Pipeline: Ingestão/Parser (UI, PROT_READ) -> Buffer Lock-Free (SPSC + double-buffer) -> Motor Granular (audio thread, pool 8 vozes) -> Saída Standalone + VST3 x64. Regra: nada cruza sem fila, DSP nunca chama SO.
 
-Stack: C++20, JUCE 8 ou iPlug2, parser próprio, pffft/KissFFT, GoogleTest/Catch2, libFuzzer/AFL++, Pluginval, REAPER 7 + Bitwig, CMake + ASan/TSan/UBSan. Stack completa e mitigação de falhas em `06-metodologia-arquitetura.md`.
+Stack: C++20, JUCE 8 ou iPlug2, parser próprio, pffft/KissFFT, GoogleTest/Catch2, libFuzzer/AFL++, Ableton Live 12.3.1, CMake + ASan/TSan/UBSan. Stack completa e mitigação de falhas em `06-metodologia-arquitetura.md`.
 
 ## 7. Testes
 

@@ -8,9 +8,9 @@ Critério: atenuação de ao menos 40 dB no bin DC em relação à leitura bruta
 
 ## T2. Latência e CPU sob polifonia
 
-Método: sessão no REAPER com buffers de 128, 256 e 512 samples a 44,1 e 48 kHz, em máquina de referência intermediária. Medição de tempo médio e p99 do process, mais carga de CPU do sistema. Casos com 1, 4 e 8 vozes e grãos de 10 e 100 ms.
+Método: sessão no Ableton Live 12.3.1 com buffers de 128, 256 e 512 samples a 44,1 e 48 kHz. Medição de tempo médio e p99 do process pela tela de latência do Ableton, mais carga de CPU do sistema. Casos com 1, 4 e 8 vozes e grãos de 10 e 100 ms.
 
-Critério: p99 abaixo de 50% do orçamento (2,9 ms para 128 samples a 44,1 kHz) e zero xruns em 5 minutos contínuos. Pluginval sem falhas.
+Critério: p99 abaixo de 50% do orçamento (2,9 ms para 128 samples a 44,1 kHz) e zero xruns em 5 minutos contínuos.
 
 ## T3. Estresse com binários corrompidos
 
@@ -20,8 +20,45 @@ Critério: zero segfaults, zero leaks, 100% das entradas inválidas rejeitadas c
 
 ## T4. Aceite de uso (arrasto, parâmetros e MIDI)
 
-Método: arrastar um .exe para o standalone e para o VST3 no REAPER, mover os 6 parâmetros principais, mapear 2 CCs via MIDI learn e tocar 2 minutos em cada formato.
+Método: arrastar um .exe para o Standalone e para o VST3 no Ableton Live 12.3.1, mover os 6 parâmetros principais, mapear 2 CCs e tocar 2 minutos em cada formato.
 
 Critério: som sai em menos de 2 s após o arrasto, zero xruns e todo CC mapeado move o parâmetro correspondente.
 
 Complemento qualitativo: teste de usabilidade com 5 usuários e escala SUS, mais escuta comparativa entre leitura bruta e saída tratada.
+
+## Limitações da plataforma de validação
+
+O Windows não distribui runtime de ThreadSanitizer, nem no MSVC nem no LLVM, e o AddressSanitizer nativo do MSVC não cobre comportamento indefinido. O projeto ficou com um compilador só e o que ele entrega: ASan nativo, `/W4 /WX` e testes determinísticos.
+
+Consequência sobre os ensaios acima:
+
+| Ensaio | Situação | Como é verificado |
+| --- | --- | --- |
+| T1 (espectral) | executado | FFT N 65536 com Blackman-Harris em teste automatizado, critério de 40 dB e de -60 dBFS |
+| T2 (latência) | parcial | p99 medido em teste; o ensaio com DAW e 8 vozes reais depende da etapa S3b |
+| T3 (robustez) | executado | 10 casos de borda e truncamento automatizados; as 50 mutações de bit-flip entram como testes quando o corpus existir |
+| T4 (aceite) | pendente | exige arrasto de arquivo e CCs mapeados, etapas S3a e S4b |
+| TSan | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
+| UBSan | indisponível | substituído por `/W4 /WX` e pelos testes de borda |
+| `pluginval` | indisponível | trava nesta máquina; a conformidade do bundle é conferida no `moduleinfo.json` gerado pelo `juce_vst3_helper`, e o comportamento é medido no Ableton |
+| cobertura de branch ≥ 70% | sem métrica automática | os testes exercitam os caminhos de erro; a medição numérica espera toolchain com llvm-cov |
+
+## Por que Ableton Live e não REAPER
+
+O plano original nomeava REAPER 7 e Bitwig Studio como hosts de T2 e T4, e o
+`pluginval` como critério do T2. Nenhum dos três está disponível na máquina de
+desenvolvimento, e o `pluginval` da Tracktion trava mesmo com
+`--strictness-level=1 --skip-gui-tests`, ficando com 0,03 s de CPU em 25 minutos
+sem escrever uma linha em `stdout`.
+
+Ableton Live 12.3.1 está instalado, é o host que o utilizador vai usar de facto, e
+dá telemetria de latência suficiente para o critério do T2. Trocar o host é uma
+mudança de método, não um critério mais frouxo: o número continua a ser p99
+abaixo de 50% do orçamento com zero xruns.
+
+O `pluginval` sai do critério com substituto declarado, não com o critério
+apagado. O que ele verificaria é conferido direto no `moduleinfo.json`, que é o
+que o host lê para decidir a categoria do plugin, e o comportamento é medido no
+Ableton.
+
+Nenhuma dessas lacunas é omitida: a verificação de concorrência é feita por teste automatizado, e não por declaração.

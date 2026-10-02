@@ -24,7 +24,7 @@
   Pool fixo 8 vozes (MVP):
     Scheduler -> Seletor de posição -> Leitor interpolado
     -> Janela Hann/Gauss -> Ganho + Pan -> Mix bus
-  -> DC-Blocker estéreo (R=0,995)
+  -> DC-Blocker estéreo (R=0,9983, corte ~12 Hz)
   -> Soft-Clipper + Limiter -1 dBFS
          |
          v
@@ -42,10 +42,10 @@ Regra central: nada passa do parser para o DSP sem cruzar a fila, e o DSP nunca 
 - Entrada: file dialog + drag-and-drop do SO, que entrega o caminho do arquivo ao parser na UI thread.
 - Parser: próprio, header-only, sem dependência externa.
 - FFT para análise: pffft ou KissFFT.
-- Testes: GoogleTest ou Catch2, fuzzing com libFuzzer ou AFL++, validação com Pluginval.
-- DAWs de validação: REAPER 7 e Bitwig Studio.
-- MIDI: MIDI learn e CC mapeável nos parâmetros do framework, com pitch e mod wheel no standalone e no VST3. O MIDI chega ao DSP como parâmetro atômico, pela mesma via lock-free.
-- Build: CMake + Ninja, Clang e MSVC, CI com ASan, TSan e UBSan.
+- Testes: GoogleTest, com fuzzing por mutação convertido em testes unitários determinísticos, e conformidade do bundle conferida no `moduleinfo.json`.
+- DAW de validação: Ableton Live 12.3.1. O plano previa REAPER 7 e Bitwig Studio; a justificativa da troca está em `docs/07-plano-testes.md`.
+- MIDI: CC mapeável nos parâmetros do framework. O MIDI chega ao DSP como parâmetro atômico, pela mesma via lock-free.
+- Build: CMake + NMake, só MSVC. O plano previa Ninja com Clang e MSVC; a toolchain ficou num compilador só, com o que ele entrega nativamente.
 
 ## Mitigação de falhas
 

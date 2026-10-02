@@ -1,1 +1,74 @@
 edge-tmp/
+
+# Build CMake / Ninja / MSBuild
+build/
+build-release/
+cmake-build-*/
+design/stitch/*.html
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+install_manifest.txt
+Testing/
+compile_commands.json
+.ninja_deps
+.ninja_log
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Artefatos de plugin (gerados, nunca versionados)
+*.vst3/
+*.clap/
+*.audioplug
+Opcoda_artefacts/
+juce_vst3_helper/
+juce_lv2_helper/
+
+# Toolchain de cobertura e sanitizers
+*.profraw
+*.profdata
+coverage/
+.fuzz-corpus/
+crash-*/
+artifacts/
+leaks.out
+
+# JUCE / módulos externos
+JUCE/
+modules/
+
+# Compilados e objetos
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.dll
+*.exe
+
+# Hospede de plugins de teste do JUCE
+AudioPluginHost*
+
+# Editores e IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.cache/
+*.user
+*.userprefs
+
+# Sistema operacional
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Config local do opencode (MCP com chaves via env)
+opencode.local.json
+
+build-release/
