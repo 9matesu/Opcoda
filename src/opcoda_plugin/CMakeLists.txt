@@ -22,6 +22,24 @@ juce_add_plugin(Opcoda
     IS_MIDI_EFFECT FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
+# Um instrumento sem barramento de eventos MIDI e' recusado pelo Ableton, com
+# "plugin has instrument category, but no valid event input bus". O sintoma e'
+# o pior possivel: o host le o moduleinfo.json do disco, lista o plugin, e so
+# falha no LoadLibrary da instancia. Compila, passa em todos os testes e nao
+# funciona, e o defeito so aparece na maquina do utilizador.
+#
+# Esta guarda existe porque essa falha ja custou um ciclo inteiro de build,
+# instalar, reiniciar o Ableton e ler o log para descobrir duas linhas.
+get_target_property(opcoda_is_synth Opcoda JUCE_IS_SYNTH)
+get_target_property(opcoda_wants_midi_in Opcoda JUCE_NEEDS_MIDI_INPUT)
+
+if(opcoda_is_synth AND NOT opcoda_wants_midi_in)
+    message(FATAL_ERROR
+        "Opcoda: IS_SYNTH TRUE exige NEEDS_MIDI_INPUT TRUE. "
+        "O Ableton recusa um instrumento sem barramento de eventos MIDI, e a "
+        "recusa so aparece no host.")
+endif()
+
 target_sources(Opcoda
     PRIVATE
         source/plugin_processor.cpp

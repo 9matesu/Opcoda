@@ -129,6 +129,35 @@ Verificar depois de qualquer build de plugin:
 dumpbin /dependents build-release\src\opcoda_plugin\Opcoda_artefacts\Release\VST3\Opcoda.vst3\Contents\x86_64-win\Opcoda.vst3
 ```
 
+## IS_SYNTH sem barramento de eventos
+
+O segundo `FATAL_ERROR` de configuração está em `src/opcoda_plugin/CMakeLists.txt`.
+Ele existe porque `IS_SYNTH TRUE` e `NEEDS_MIDI_INPUT FALSE` se anulam no
+Ableton, e a falha é invisível para tudo o que não é o host:
+
+```
+error: Vst3: plugin has instrument category, but no valid event input bus
+error: VST3: No valid input bus could be found
+error: VST3: Failed: Opcoda
+```
+
+O scanner do Ableton lê `moduleinfo.json` do disco e lista o plugin normalmente.
+Só na instanciação é que ele pede o barramento de eventos e desiste. Compila
+limpo, passa em todos os testes, e não funciona.
+
+Com a guarda, a combinação inválida falha no configure, em segundos, com
+mensagem que diz o que fazer:
+
+```
+CMake Error at src/opcoda_plugin/CMakeLists.txt:37 (message):
+  Opcoda: IS_SYNTH TRUE exige NEEDS_MIDI_INPUT TRUE.
+```
+
+Note-se que o barramento de **eventos** MIDI e o barramento de **áudio** de
+entrada são coisas diferentes. O Opcoda não tem entrada de áudio — é um
+instrumento, não um efeito — e isso está certo. O que o Ableton exige é o
+barramento de eventos, que é o que permite ao host entregar notas.
+
 ## Portões de qualidade
 
 | Portão | Como verificar |
