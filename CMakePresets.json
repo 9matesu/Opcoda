@@ -1,0 +1,43 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Desenvolvimento (MSVC, ASan)",
+      "toolchainFile": "${sourceDir}/cmake/msvc.cmake",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_ASAN": "ON",
+        "OPCODA_BUILD_PLUGIN": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (MSVC, plugin, CRT estatico)",
+      "toolchainFile": "${sourceDir}/cmake/msvc.cmake",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_BUILD_PLUGIN": "ON",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "vst3", "configurePreset": "release", "targets": ["Opcoda_VST3"] },
+    { "name": "standalone", "configurePreset": "release", "targets": ["Opcoda_Standalone"] }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
