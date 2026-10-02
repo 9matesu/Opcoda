@@ -59,7 +59,15 @@ void GranularEngine::prepare(double sampleRate, int maximumBlockSize) noexcept {
     fillWindow(WindowType::kHann, windowA_.data(), activeWindowLength_);
     activeWindowType_ = WindowType::kHann;
 
+    // Rampa de 5 ms para abrir e fechar sem degrau no sinal.
+    setGateSeconds(0.005);
+
     reset();
+}
+
+void GranularEngine::setGateSeconds(double seconds) noexcept {
+    const auto samples = (seconds > 0.0) ? sampleRate_ * seconds : 1.0;
+    gateStep_ = static_cast<float>(1.0 / samples);
 }
 
 void GranularEngine::reset() noexcept {
@@ -68,6 +76,8 @@ void GranularEngine::reset() noexcept {
     }
     spawnAccumulator_ = 0.0;
     lastActiveVoices_ = 0;
+    gateLevel_ = 0.0f;
+    gateTarget_ = 0.0f;
     dcBlockerLeft_.prepare();
     dcBlockerRight_.prepare();
     limiterLeft_.prepare();
@@ -177,6 +187,9 @@ void GranularEngine::processBlock(float* left,
     if (source_ == nullptr || sourceCount_ == 0) {
         dcBlockerLeft_.processBlock(left, numSamples);
         dcBlockerRight_.processBlock(right, numSamples);
+        // O gate avanca mesmo sem material, senao fica congelado no meio da
+        // rampa e a primeira nota depois de carregar entra com ganho parcial.
+        applyGate(left, right, numSamples);
         return;
     }
 
@@ -271,10 +284,29 @@ void GranularEngine::processBlock(float* left,
 
     dcBlockerLeft_.processBlock(left, numSamples);
     dcBlockerRight_.processBlock(right, numSamples);
+
+    // Gate antes do limiter: fechar a rampa antes de saturar mantem o
+    // behaviour do limiter independente das notas.
+    applyGate(left, right, numSamples);
+
     limiterLeft_.processBlock(left, numSamples);
     limiterRight_.processBlock(right, numSamples);
 
     lastActiveVoices_ = activeVoiceCount();
+}
+
+void GranularEngine::applyGate(float* left, float* right, int numSamples) noexcept {
+    for (int i = 0; i < numSamples; ++i) {
+        if (gateLevel_ != gateTarget_) {
+            if (gateLevel_ < gateTarget_) {
+                gateLevel_ = std::min(gateTarget_, gateLevel_ + gateStep_);
+            } else {
+                gateLevel_ = std::max(gateTarget_, gateLevel_ - gateStep_);
+            }
+        }
+        left[i] *= gateLevel_;
+        right[i] *= gateLevel_;
+    }
 }
 
 } // namespace opcoda::dsp

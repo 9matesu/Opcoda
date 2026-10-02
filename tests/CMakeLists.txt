@@ -23,7 +23,8 @@ add_executable(opcoda_tests
     rt_test.cpp
     t1_spectral_test.cpp
     end_to_end_test.cpp
-    sample_exchange_test.cpp)
+    sample_exchange_test.cpp
+    note_tracker_test.cpp)
 
 target_link_libraries(opcoda_tests PRIVATE opcoda_core GTest::gtest_main)
 add_test(NAME opcoda_tests COMMAND opcoda_tests)

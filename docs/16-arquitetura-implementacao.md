@@ -288,10 +288,75 @@ mesma árvore, pelo mesmo motivo.
 verificando antes se ele ainda existe. Se sumiu, o erro é `E_SOURCE_MISSING` em
 vez de estado vazio silencioso.
 
-### A lacuna desta verificação
+### Gate de notas
+
+O motor granular ponta a ponta assim que havia ficheiro carregado, sem que
+exigisse nota nenhuma. Num instrumento isso é errado: o Ableton põe o plugin
+numa pista MIDI, o utilizador carrega um `.exe` e o som começa sem ele tocar
+nada.
+
+`GranularEngine::setSounding` liga e desliga o motor. A rampa é **linear, de
+5 ms**, e isso não é detalhe estético: abrir a saída de uma vez produz um degrau
+no sinal, e um degrau é um transiente largo em frequência, audível mesmo com
+release curto. A rampa custa duas multiplicações por amostra.
+
+O gate entra **antes** do limiter, para que o comportamento do limiter não
+dependa de quantas notas estão a soar.
+
+Sete testes cobrem a rampa: que fica em silêncio sem nota, que abre e fecha, que
+o nível avança a meio caminho depois de um bloco de 128 amostras (onde um gate
+binário já estaria em 1,0), que o tempo pedido é respeitado, e que `reset`
+fecha tudo. `reset` também limpa os valores de CC, porque reset significa
+esquecer tudo e deixar valor antigo invisível é o tipo de estado que só se
+descobre depois.
+
+## Notas e CCs
+
+`rt::NoteTracker` está no núcleo, sem JUCE, pela mesma razão que
+`pe::toSamples`: **é a regra que tem testes**. O plugin limita-se a traduzir
+`MidiMessage` em `Event`, que é a parte fina.
+
+O modelo separa **teclas premidas** de **notas presas pelo pedal**. Com o
+pedal premido, largar o teclado não desliga o som; soltar o pedal não abafa as
+teclas que continuam premidas. Um contador único não consegue expressar isso.
+
+Há um piso em zero na contagem. Uma `note-off` sem `note-on` correspondente vem
+de hosts que reenviam o estado inicial, e sem esse piso `sounding()` ficaria
+falso para sempre: o instrumento carregava, o knob mexia, e nunca mais saía som
+sem reiniciar o plugin.
+
+### Onde os CCs são aplicados, e porquê
+
+Os dois CCs mapeados são **CC74** (Brightness) → DENSITY e **CC71**
+(Resonance) → POSITION. São os dois com nome de brightness e resonance em
+qualquer teclado de palco, então não precisam de tabela para serem descobertos.
+
+O valor lido no callback vai para `NoteTracker` e é aplicado ao parâmetro
+**na thread de interface**, a partir do timer do editor.
+
+O caminho alternativo — escrever direto no parâmetro da thread de áudio — foi
+descartado de propósito. `setValueNotifyingHost` notifica os listeners, e o
+`SliderParameterAttachment` é um deles: seria acesso cruzado ao GUI a partir do
+callback, exatamente a classe de defeito que o guard de alocação não apanha.
+
+O custo é a latência do timer, cerca de 50 ms. Em troca o parâmetro continua a
+ser a fonte única da verdade: o host é notificado, o knob segue, e o estado do
+projeto fica certo sem caminho paralelo. Os dois valores fazem parte dos
+`NoteTracker` para poderem ser testados sem JUCE.
+
+### A lacuna do teste de tempo real
+
+O guard de alocação corre sobre o núcleo e **não vê o `processBlock` do
+plugin**, onde o MIDI é lido. `readNotes` é uma passagem por um buffer de
+mensagens já contadas, sem alocação previsível, mas isso é raciocínio e não
+medição.
+
+O que fecha esta lacuna é o T2 no Ableton, com buffers de 128 amostras e
+tráfego MIDI real, na etapa S3b. Está declarado em `docs/07-plano-testes.md`
+como dependência de DAW, e não como coisa já feita.
 
 O `tests/` é núcleo puro sem JUCE, por decisão de portão: o AddressSanitizer
-roda sem framework de áudio no caminho. O consequência é que
+roda sem framework de áudio no caminho. A consequência é que
 `PluginProcessor::getStateInformation` **não tem teste automatizado**, e é
 código novo.
 

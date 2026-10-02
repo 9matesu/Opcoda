@@ -140,19 +140,73 @@ void PluginProcessor::releaseReturnedBuffers() {
     }
 }
 
-void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) {
+void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
+    if (midi.isEmpty()) {
+        return;
+    }
+
+    // Range-for: MidiBuffer::Iterator foi deprecado no JUCE 8. A construcao de
+    // MidiMessage a partir de MidiMessageMetadata nao aloca, porque os bytes
+    // sao uma vista sobre o proprio buffer.
+    for (const auto metadata : midi) {
+        const juce::MidiMessage message = metadata.getMessage();
+
+        auto kind = rt::NoteTracker::Event::Kind::other;
+        if (message.isAllNotesOff() || message.isAllSoundOff()) {
+            kind = rt::NoteTracker::Event::Kind::allNotesOff;
+        } else if (message.getControllerNumber() == kCcSustain) {
+            kind = rt::NoteTracker::Event::Kind::sustain;
+        } else if (message.getControllerNumber() == kCcDensity
+                   || message.getControllerNumber() == kCcPosition) {
+            kind = rt::NoteTracker::Event::Kind::controller;
+        } else if (message.isNoteOn()) {
+            kind = rt::NoteTracker::Event::Kind::noteOn;
+        } else if (message.isNoteOff()) {
+            kind = rt::NoteTracker::Event::Kind::noteOff;
+        }
+
+        if (message.getControllerNumber() == kCcDensity) {
+            notes_.setController(kDensityController, message.getControllerValue() / 127.0f);
+        } else if (message.getControllerNumber() == kCcPosition) {
+            notes_.setController(kPositionController, message.getControllerValue() / 127.0f);
+        }
+
+        notes_.handle({kind, message.getControllerNumber(), message.getControllerValue()});
+    }
+}
+
+void PluginProcessor::applyPendingControllerChanges() {
+    if (!notes_.controllersChanged()) {
+        return;
+    }
+    notes_.clearControllersChanged();
+
+    const auto set = [this](const char* id, float value) {
+        if (auto* parameter = parameters_.getParameter(id)) {
+            parameter->setValueNotifyingHost(value);
+        }
+    };
+
+    set("density", notes_.controller(kDensityController));
+    set("position", notes_.controller(kPositionController));
+}
+
+void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
 
-    // A troca de material e o unico ponto de cruzamento entre as threads, e
+    // A troca de material e' o unico ponto de cruzamento entre as threads, e
     // acontece por troca de ponteiro, sem alocar e sem esperar.
     drainIncomingQueue();
+    readNotes(midi);
 
     const auto numSamples = buffer.getNumSamples();
+    engine_.setSounding(notes_.sounding());
     engine_.processBlock(buffer.getWritePointer(0),
                          buffer.getWritePointer(1),
                          numSamples,
                          currentParams());
 }
+
 
 void PluginProcessor::getStateInformation(juce::MemoryBlock& destData) {
     auto state = parameters_.copyState();

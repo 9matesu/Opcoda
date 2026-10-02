@@ -210,6 +210,10 @@ void PluginEditor::refresh() {
     // devolvido pela thread de audio pode ser liberado com seguranca.
     owner_.releaseReturnedBuffers();
 
+    // Os CCs recebidos sao aplicados aqui, e nao na thread de audio. Ver
+    // PluginProcessor::applyPendingControllerChanges para o porque.
+    owner_.applyPendingControllerChanges();
+
     const auto& info = owner_.sourceInfo();
 
     const auto setIfChanged = [](juce::Label& label, const juce::String& text) {

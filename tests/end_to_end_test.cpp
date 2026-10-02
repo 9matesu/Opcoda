@@ -48,6 +48,7 @@ std::vector<float> render(const std::vector<std::uint8_t>& bytes, int blocks = 2
 
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
+    engine.setSounding(true);
     engine.setSource(samples.data(), samples.size());
 
     GranularParams params;

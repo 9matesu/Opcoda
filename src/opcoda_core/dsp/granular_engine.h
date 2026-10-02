@@ -50,6 +50,21 @@ public:
     [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
     [[nodiscard]] std::size_t sourceSize() const noexcept { return sourceCount_; }
 
+    // Gate com rampa linear, para as notas ligarem e desligarem sem estalo.
+    //
+    // Abrir e fechar a saida de uma vez produz um degrau no sinal, e um degrau
+    // e' um transiente largo em frequencia: o ataque e' audivel mesmo com
+    // release curto. A rampa de 5 ms custa duas multiplicacoes por amostra e
+    // remove o problema.
+    void setSounding(bool on) noexcept { gateTarget_ = on ? 1.0f : 0.0f; }
+    [[nodiscard]] bool isSounding() const noexcept { return gateTarget_ > 0.5f; }
+    void setGateSeconds(double seconds) noexcept;
+
+    // Nivel corrente da rampa. Existe para o teste verificar a rampa em si,
+    // sem depender do agendamento de graos, que precisa de dezenas de blocos
+    // para produzir audio e tornaria a medicao lenta e fragil.
+    [[nodiscard]] float gateLevel() const noexcept { return gateLevel_; }
+
     void processBlock(float* left, float* right, int numSamples,
                       const GranularParams& params) noexcept;
 
@@ -59,6 +74,7 @@ public:
 private:
     void rebuildWindow(const GranularParams& params) noexcept;
     void startGrain(int voice, const GranularParams& params, double entropy) noexcept;
+    void applyGate(float* left, float* right, int numSamples) noexcept;
 
     static constexpr std::size_t kMaxEntropyPoints = 1024;
 
@@ -84,6 +100,10 @@ private:
     DcBlocker dcBlockerRight_ {};
     Limiter limiterLeft_ {};
     Limiter limiterRight_ {};
+
+    float gateLevel_ {0.0f};
+    float gateTarget_ {0.0f};
+    float gateStep_ {0.0f};
 
     int lastActiveVoices_ {0};
 };

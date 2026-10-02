@@ -261,6 +261,9 @@ TEST(GranularEngine, PrepareWithoutSourceIsSilent) {
 TEST(GranularEngine, ProducesAudioFromSyntheticSource) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
+    // O motor so toca com nota. Antes do gate esta chamada nao existia e o
+    // motor granulava sozinho assim que havia material carregado.
+    engine.setSounding(true);
 
     // Fonte sintetica: 4096 amostras de senoide. Evita depender de um .exe real
     // no teste unitario, mantendo o ensaio rapido e deterministico.
@@ -385,8 +388,9 @@ TEST(GranularEngine, GrainSweepsBoundedFractionOfSource) {
     // Regressao: o avanco por amostra tem que ser a taxa dividida pelo
     // comprimento da fonte. Somar a taxa crua a uma posicao normalizada fazia
     // o grao varrer o arquivo inteiro em duas amostras, o que zerava a saida.
-    GranularEngine engine;
+GranularEngine engine;
     engine.prepare(kSampleRate, 256);
+    engine.setSounding(true);
 
     constexpr std::size_t kSourceSize = 65536;
     std::vector<float> source(kSourceSize);
@@ -439,4 +443,121 @@ TEST(GranularEngine, ResetSilencesVoices) {
     engine.processBlock(left.data(), right.data(), 256, params);
     engine.reset();
     EXPECT_EQ(engine.lastActiveVoices(), 0);
+}
+
+namespace {
+// Fonte nivelada e constante: e' o pior caso para estalo, porque um degrau de
+// saida aparece com nitidez no meio de um sinal sem envelope.
+struct GateRig {
+    static constexpr double kSampleRate = 48000.0;
+    static constexpr int kBlock = 128;
+
+    GateRig() {
+        engine.prepare(kSampleRate, kBlock);
+        engine.setGateSeconds(0.005);
+        source.assign(8192, 0.75f);
+        engine.setSource(source.data(), source.size());
+        params.densityGrainsPerSec = 60.0f;
+        params.grainSizeMs = 20.0f;
+        left.assign(kBlock, 0.0f);
+        right.assign(kBlock, 0.0f);
+    }
+
+    void process(int blocks) {
+        for (int i = 0; i < blocks; ++i) {
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+    }
+
+    float peak() {
+        float peakValue = 0.0f;
+        for (const auto sample : left) {
+            peakValue = std::max(peakValue, std::abs(sample));
+        }
+        return peakValue;
+    }
+
+    GranularEngine engine;
+    std::vector<float> source;
+    std::vector<float> left;
+    std::vector<float> right;
+    GranularParams params;
+};
+} // namespace
+
+TEST(GranularEngineGate, SilentUntilSounding) {
+    GateRig rig;
+
+    // Sem nota, o motor consome blocos e nao devolve som. Antes do gate isto
+    // era o comportamento normal do plugin, e era por isso que o motor
+    // granulava sozinho assim que havia ficheiro carregado.
+    rig.process(8);
+    EXPECT_LT(rig.peak(), 1.0e-6f);
+}
+
+TEST(GranularEngineGate, OpensAndClosesWithTheNote) {
+    GateRig rig;
+    rig.engine.setSounding(true);
+    EXPECT_TRUE(rig.engine.isSounding());
+
+    // A 50 graos por segundo o primeiro grao so nasce depois de dezenas de
+    // blocos, entao aaudio so aparece depois de renderizar tempo suficiente.
+    rig.process(80);
+    EXPECT_GT(rig.peak(), 1.0e-4f);
+
+    rig.engine.setSounding(false);
+    EXPECT_FALSE(rig.engine.isSounding());
+    rig.process(8);
+    EXPECT_LT(rig.peak(), 1.0e-6f);
+}
+
+TEST(GranularEngineGate, RampIsGradualAndNotBinary) {
+    GateRig rig;
+
+    EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
+
+    rig.engine.setSounding(true);
+    rig.process(1);
+    const float afterOneBlock = rig.engine.gateLevel();
+
+    // 5 ms a 48 kHz sao 240 amostras, entao um bloco de 128 deve deixar a
+    // rampa a meio caminho. Um gate binario chegaria a 1 aqui, e e' exatamente
+    // esse degrau que produziria o estalo.
+    EXPECT_GT(afterOneBlock, 0.4f) << "a rampa subiu devagar demais: " << afterOneBlock;
+    EXPECT_LT(afterOneBlock, 1.0f) << "a rampa parece binaria";
+
+    rig.process(2);
+    EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 1.0f);
+
+    rig.engine.setSounding(false);
+    rig.process(1);
+    const float closing = rig.engine.gateLevel();
+    EXPECT_GT(closing, 0.0f) << "fechou de uma vez, sem rampa";
+    EXPECT_LT(closing, 1.0f);
+
+    rig.process(2);
+    EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
+}
+
+TEST(GranularEngineGate, RampTimeMatchesTheRequestedSeconds) {
+    GateRig rig;
+    rig.engine.setGateSeconds(0.001);
+    rig.engine.setSounding(true);
+
+    // 1 ms a 48 kHz sao 48 amostras: menos da metade de um bloco, entao o
+    // primeiro bloco ja fecha a rampa.
+    rig.process(1);
+    EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 1.0f);
+}
+
+TEST(GranularEngineGate, ResetClosesGate) {
+    GateRig rig;
+    rig.engine.setSounding(true);
+    rig.process(4);
+    rig.engine.reset();
+
+    EXPECT_FALSE(rig.engine.isSounding());
+    EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
+    rig.process(8);
+    EXPECT_LT(rig.peak(), 1.0e-6f);
 }

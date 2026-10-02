@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opcoda_core/dsp/granular_engine.h"
+#include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -82,6 +83,19 @@ void setStateInformation(const void* data, int sizeInBytes) override;
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
+    // Aplica na thread de interface os ultimos CCs recebidos.
+    //
+    // O caminho alternativo, escrever no parametro direto da thread de audio,
+    // foi descartado de proposito. setValueNotifyingHost notifica os
+    // listeners, e o SliderParameterAttachment e' um deles: seria acesso
+    // cruzado ao GUI a partir do callback, e a GUI a partir do callback e'
+    // exatamente a classe de defeito que o guard de alocacao nao apanha.
+    //
+    // O custo e' a latencia do timer do editor, cerca de 50 ms. Em troca, o
+    // parametro continua a ser a fonte unica da verdade: o host e' notificado,
+    // o knob segue, e o estado do projeto fica certo sem caminho paralelo.
+    void applyPendingControllerChanges();
+
     // live_ e' publicado pela thread de audio e consultado pela de interface.
     // Sem o atomico a leitura do editor seria uma corrida com a troca de
     // material, o que o compilador nao pode flagar porque os ponteiros sao do
@@ -110,6 +124,11 @@ private:
     // unica que pode liberar a memoria.
     void drainIncomingQueue() noexcept;
 
+    // Le o MidiBuffer do bloco e atualiza a contagem de notas. Roda na thread
+    // de audio e nao aloca nem bloqueia: um MidiBuffer e' so uma lista de
+    // mensagens com contadores ja resolvidos.
+    void readNotes(const juce::MidiBuffer& midi) noexcept;
+
     opcoda::dsp::GranularEngine engine_;
 
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
@@ -130,6 +149,19 @@ private:
     // Caminho do binario ativo, para o estado do host. Distinto de sourceName_,
     // que e' so o nome do ficheiro para a interface.
     juce::String sourcePath_;
+
+    // Notas premidas e CCs mapeados. Vive na thread de audio porque e' estado do
+    // audio, e o host so entrega MIDI durante processBlock.
+    //
+    // A regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter testes.
+    // Aqui so se traduz MidiMessage em Event, que e' a parte fina.
+    rt::NoteTracker notes_;
+
+    static constexpr int kCcSustain = 64;
+    static constexpr int kCcDensity = 74;  // Brightness: DENSITY
+    static constexpr int kCcPosition = 71; // Resonance: POSITION
+    static constexpr int kDensityController = 0;
+    static constexpr int kPositionController = 1;
 
     juce::AudioProcessorValueTreeState parameters_;
 };

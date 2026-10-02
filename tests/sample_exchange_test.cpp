@@ -184,6 +184,7 @@ TEST(SampleExchange, EngineProducesAudioAfterSwap) {
     SampleExchange exchange;
     GranularEngine engine;
     engine.prepare(44100.0, 256);
+    engine.setSounding(true);
 
     ASSERT_TRUE(exchange.publish(makeSamples(65536, 0.0f)));
     exchange.drainOnto(engine);
