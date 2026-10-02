@@ -51,8 +51,18 @@ public:
     const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String&) override {}
 
-    void getStateInformation(juce::MemoryBlock&) override {}
-    void setStateInformation(const void*, int) override {}
+// Estado: os seis parametros e o ficheiro carregado.
+//
+// copyState e replaceState da APVTS tratam dos parametros, incluindo os que o
+// host exponentiale ja' tinha empurrado para dentro com setValueNotifyingHost.
+// Sem isso, reabrir um projeto no Ableton trazia os knobs de volta no valor
+// default e a automatizacao do usuario sumia.
+//
+// A parte do binario e' uma arvore Value na APVTS, e nao um campo solto, pelo
+// mesmo motivo: o host pede o estado quando o projeto e' aberto, e o caminho
+// que ele percorre e' o mesmo dos parametros.
+void getStateInformation(juce::MemoryBlock& destData) override;
+void setStateInformation(const void* data, int sizeInBytes) override;
 
     // Chamado na thread de interface. Le o arquivo, converte e publica na fila.
     // Devolve false e preenche lastError em caso de recusa.
@@ -116,6 +126,10 @@ private:
     juce::String lastError_;
     juce::String sourceName_;
     SourceInfo sourceInfo_;
+
+    // Caminho do binario ativo, para o estado do host. Distinto de sourceName_,
+    // que e' so o nome do ficheiro para a interface.
+    juce::String sourcePath_;
 
     juce::AudioProcessorValueTreeState parameters_;
 };

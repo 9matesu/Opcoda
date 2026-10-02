@@ -273,7 +273,36 @@ assinatura exata de uma dependência de runtime ausente.
 Duas linhas no preset resolveram, e o `build.ps1` agora falha se o VST3 linkar
 contra qualquer DLL de debug. Detalhes em `docs/17-guia-de-build.md`.
 
-## O teste que fecha a S1
+## Estado do plugin
+
+`getStateInformation` e `setStateInformation` estavam vazios. A consequência é
+silenciosa: ao reabrir um projeto no Ableton, os knobs voltavam ao valor
+default e a automatização do usuário sumia.
+
+A implementação usa `copyState`/`replaceState` da APVTS, que é o caminho que o
+próprio host usa para empurrar parâmetros de automação de volta para dentro, e
+não uma segunda via. O binário carregado entra no estado como uma propriedade da
+mesma árvore, pelo mesmo motivo.
+
+`setStateInformation` **reingere o arquivo pelo mesmo `ingest` do arrasto**,
+verificando antes se ele ainda existe. Se sumiu, o erro é `E_SOURCE_MISSING` em
+vez de estado vazio silencioso.
+
+### A lacuna desta verificação
+
+O `tests/` é núcleo puro sem JUCE, por decisão de portão: o AddressSanitizer
+roda sem framework de áudio no caminho. O consequência é que
+`PluginProcessor::getStateInformation` **não tem teste automatizado**, e é
+código novo.
+
+Não há como contornar sem criar um alvo de teste com JUCE, o que traria
+framework de áudio para dentro do portão de tempo real. A verificação fica
+manual e declarada: no Ableton, mover um knob, guardar o projeto, fechar e
+reabrir. Se o knob voltar ao default, o defeito está no round-trip de XML.
+
+Isto é a mesma classe de buraco que as outras duas falhas de host: código
+que compila, passa em todos os testes, e só falha no DAW. A diferença é que
+aqui a lacuna está declarada em vez de ser descoberta depois.
 
 `tests/end_to_end_test.cpp` percorre a cadeia completa com `notepad.exe` do
 sistema, sem JUCE e sem host: ler disco, `parse`, `toSamples`, motor granular,
