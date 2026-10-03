@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opcoda_core/dsp/granular_engine.h"
+#include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
 
@@ -96,6 +97,38 @@ void setStateInformation(const void* data, int sizeInBytes) override;
         std::vector<float> entropyCurve;
     };
 
+// Seletor de bytes: escolhe qual regiao do binario alimenta o motor.
+    //
+    // A janela e' uma regiao contigua [start, end) e nao um indice de secao.
+    // A struct e' a do nucleo, em opcoda_core/pe/byte_range.h, porque a regra de
+    // validacao tem teste la e nao aqui.
+    using ByteRange = pe::ByteRange;
+
+    // Regiao corrente. Comeca na primeira secao com dados e e' movida pelo
+    // seletor.
+    [[nodiscard]] const ByteRange& byteRange() const noexcept { return byteRange_; }
+
+    // Move o seletor. Devolve false e nao mexe em nada se o intervalo nao for
+    // valido: vazio, invertido, ou a sair do ficheiro.
+    //
+    // A restricao e' do nucleo, nao da interface: e' o motor que recusa ler fora
+    // do buffer, e valida-lo aqui evita publicar na fila um buffer invalido que
+    // so falharia depois, na thread de audio.
+    bool setByteRange(std::uint64_t start, std::uint64_t end);
+
+// Alinha o inicio da regiao ao inicio da secao mais proxima, e estende o fim
+    // ate ao fim dessa secao.
+    //
+    // E' o que o duplo clique no seletor faz. O parametro `start` e' o inicio
+    // pedido; o metodo escolhe a secao, porque o alignamento por section e' uma
+    // pergunta sobre o PE e nao sobre aritmetica de bytes.
+    bool snapByteRangeToSection(std::uint64_t start);
+
+    // true quando a regiao atual esta' alinhada numa secao. O duplo clique
+    // usa isto para alternar entre o byte exato e o alinhado, em vez de fazer
+    // uma operacao sem volta.
+    [[nodiscard]] bool byteRangeIsSectionAligned() const noexcept;
+
     // Telemetria publicada pelo callback e lida pelo editor a 20 Hz.
     //
     // Sao atomicos soltos em vez de uma struct protegida por lock: sao cinco
@@ -167,6 +200,22 @@ private:
 
     void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
 
+    // Bytes crus do ficheiro carregado, para o seletor poder converter
+    // qualquer janela sem voltar a ler o disco.
+    //
+    // E' memoria que ja era alocada no ingest e que ficava de fora a seguir. O
+    // custo e' o tamanho do ficheiro, e a alternativa — reler do disco a cada
+    // movimento do seletor — pinge I/O na thread de interface e torna o
+    // arraste lento. Guardar e' a troca mais barata.
+    //
+    // Pertence a thread de interface, que e' a unica que escreve nela. A thread
+    // de audio nunca a le: so ve o buffer ja convertido, pela fila.
+    std::vector<std::uint8_t> sourceBytes_;
+
+    // Converte a janela corrente e publica na fila. Devolve false sem mexer em
+    // nada se a janela nao produz audio.
+    bool publishByteRange();
+
     opcoda::dsp::GranularEngine engine_;
 
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
@@ -183,6 +232,12 @@ private:
     juce::String lastError_;
     juce::String sourceName_;
     SourceInfo sourceInfo_;
+    ByteRange byteRange_;
+
+    // Inicio em bytes exatos, sem alinhamento. E' o destino do duplo clique
+    // quando a regiao esta' alinhada numa secao, e o que torna a operacao
+    // reversivel.
+    std::uint64_t lastExactStart_ {0};
 
     // Caminho do binario ativo, para o estado do host. Distinto de sourceName_,
     // que e' so o nome do ficheiro para a interface.

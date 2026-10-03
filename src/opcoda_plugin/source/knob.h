@@ -1,5 +1,6 @@
 #pragma once
 
+#include "assets.h"
 #include "boxed_label.h"
 #include "palette.h"
 
@@ -11,6 +12,17 @@
 namespace opcoda {
 
 // Um knob: rotulo em cima, slider rotativo no meio, valor em baixo.
+//
+// O corpo e' a peca fisica do asset harness, desenhada uma vez e rodada pelo
+// angulo do valor. O que a peca nao tem, e que o codigo desenha por cima: o
+// arco de valor, o anel de foco e o texto. A divisao e' deliberada, porque e'
+// ela que mantem o que a constitution exige.
+//
+// **Os knobs sao juce::Slider de verdade, nao desenho customizado.** Isso nao e'
+// padrao: e' o que da foco por teclado, ajuste com setas e AccessibilityHandler
+// de graca, e sao exatamente os criterios que a docs/10-acessibilidade-w3c.md
+// exige. O corpo vem de um PNG, mas o PNG e' so o desenho de fundo: quem opera
+// o controle continua a ser o Slider, e e' ele que tem o foco.
 //
 // O rotulo curto e' o do mock. O nome accessible e' a descricao completa em
 // portugues: um nome accessible curto demais, so "SIZE", e' inutil para quem
@@ -28,7 +40,7 @@ public:
     // Sem parametro de tamanho: o editor posiciona por celula e o knob se ajusta
     // ao espaco que sobra em resized(). Passar um tamanho aqui seria uma segunda
     // fonte da verdade que o layout ja define.
-Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
+    Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
@@ -39,7 +51,7 @@ Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         // Linear: os seis parametros usam NormalisableRange linear, e uma curva
-        // de resposta seria uma segunda fonte de verdade sem ganho nenhum.
+        // de resposta seria uma segunda fonte da verdade sem ganho nenhum.
         slider_.setVelocityBasedMode(false);
         slider_.setDoubleClickReturnValue(true, spec.defaultValue);
         slider_.setName(spec.spokenName);
@@ -58,7 +70,7 @@ Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
         setSize(56, 82);
     }
 
-void resized() override {
+    void resized() override {
         auto area = getLocalBounds();
         title_.setBounds(area.removeFromTop(13));
         area.removeFromTop(1);
@@ -78,7 +90,8 @@ void resized() override {
     }
 
     void paint(juce::Graphics& g) override {
-        // Painel do modulo, para o knob nao flotuar sobre o chassis liso.
+        // Painel do modulo, para o knob nao flotar sobre o chassis liso. O corpo
+        // do knob e' desenhado pelo LookAndFeel, que e' quem sabe o angulo.
         g.setColour(palette::panelBg);
         g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
         g.setColour(palette::alpha(palette::chassisBorder, 0.5f));
@@ -101,6 +114,7 @@ private:
     void sliderValueChanged(juce::Slider* changed) override {
         if (changed == &slider_) {
             showValue(slider_.getValue());
+            repaint();
         }
     }
 

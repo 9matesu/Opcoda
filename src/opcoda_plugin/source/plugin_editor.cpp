@@ -101,9 +101,16 @@ void PluginEditor::buildHeader() {
 
     for (auto* component : {static_cast<juce::Component*>(&tabs_),
                             static_cast<juce::Component*>(&curve_),
-                            static_cast<juce::Component*>(&voicesLed_)}) {
+                            static_cast<juce::Component*>(&voicesLed_),
+                            static_cast<juce::Component*>(&selector_)}) {
         addAndMakeVisible(*component);
     }
+
+    // O seletor escreve no Processor, que valida e publica na fila. Devolver
+    // true impede que o Processor reaja ao que ele proprio acabou de fazer.
+    selector_.onRangeChanged = [this](std::uint64_t start, std::uint64_t end) {
+        owner_.setByteRange(start, end);
+    };
 
     for (auto* readout : {&entropyReadout_, &offsetReadout_, &peakReadout_, &rateReadout_,
                           &voicesReadout_}) {
@@ -181,9 +188,12 @@ void PluginEditor::resized() {
     fileSize_.setBounds(juce::Rectangle<int> {stripRight - 58, header.getY() + 17, 58, 16});
     formatTag_.setBounds(juce::Rectangle<int> {fileSize_.getX() - 4 - 78, header.getY() + 17,
                                               78, 16});
-    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 14, 50, 24});
+    // O botao LOAD leva a peca quadrada mais o texto, entao precisa de ser mais
+    // largo que a peca. A 50 px a peca ocupava quase tudo e o texto saia em
+    // "LO", cortado.
+    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, 76, 28});
 
-    const int nameLeft = x + 50 + 6;
+    const int nameLeft = loadButton_.getRight() + 6;
     fileName_.setBounds(juce::Rectangle<int> {nameLeft, header.getY() + 14,
                                               juce::jmax(40, formatTag_.getX() - 6 - nameLeft),
                                               24});
@@ -193,14 +203,23 @@ void PluginEditor::resized() {
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
-    // Abas de secao na faixa de 18 px no topo do display, como no mock.
-    tabs_.setBounds(displayBounds.reduced(1, 1).withHeight(18));
+    // Seletor de bytes: 22 px logo abaixo do topo do display. A barra da regiao e'
+    // desenhada pelo proprio seletor, entao nao ha sobreposicao com as abas.
+    selector_.setBounds(displayBounds.reduced(1, 1)
+                            .withHeight(22)
+                            .withY(displayBounds.getY() + 1));
 
-    // A curva ocupa o resto, com 4 px de folga para a linha do topo.
-    curve_.setBounds(displayBounds.reduced(5, 22)
+    // Abas de secao na faixa de 18 px, logo abaixo do seletor.
+    tabs_.setBounds(displayBounds.reduced(1, 1)
+                        .withHeight(18)
+                        .withY(selector_.getBottom() + 1));
+
+    // A curva ocupa o resto, com 4 px de folga para a linha do topo e 24 px para
+    // o rodape de telemetria.
+    curve_.setBounds(displayBounds.reduced(5, 30)
                          .withTrimmedBottom(24));
 
-    const int statusY = displayBounds.getY() + tabs_.getHeight() + 4;
+    const int statusY = tabs_.getBottom() + 4;
     statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
                              .withSizeKeepingCentre(14, 14));
     status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY + 3,
@@ -292,6 +311,7 @@ void PluginEditor::refresh() {
     // carregado. A posicao da linha de estado nao muda: um alvo que salta
     // quando se carrega um binario e' pior do que um espaco constante.
     tabs_.setVisible(owner_.hasSource());
+    selector_.setVisible(owner_.hasSource());
 
     Led::State ledState = Led::State::off;
     juce::String message;
@@ -325,8 +345,15 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
         loadedSignature_ = signature;
         tabs_.setSections(info.sections);
         curve_.setCurve(info.entropyCurve);
+        selector_.setFileSize(static_cast<std::uint64_t>(info.sizeBytes));
+        selector_.setSections(info.sections);
         curve_.repaint();
     }
+
+    // O seletor e' a vista da regiao do Processor. showRange nao emite o
+    // callback, entao esta linha nao pode gerar um ciclo com o seletor.
+    const auto range = owner_.byteRange();
+    selector_.showRange(range.start, range.end);
 
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
@@ -344,15 +371,15 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
                      ? juce::String {}
                      : juce::String {curve_.valueAt(fraction), 2} + " bits/byte");
 
-    if (info.sections.empty()) {
+    // O rodape escreve o offset real da regiao, que e' o que o seletor esta' a
+    // escolher. E' hex porque o utilizador esta' dentro de um binario, e o
+    // offset em hexadecimal e' o que aparece no resto das ferramentas.
+    if (range.empty()) {
         setIfChanged(offsetReadout_, juce::String {});
     } else {
-        const auto count = static_cast<int>(info.sections.size());
-        const auto index = juce::jlimit(0, count - 1, tabs_.selected());
-        const auto& chosen = info.sections[static_cast<std::size_t>(index)];
         setIfChanged(offsetReadout_,
-                     chosen.name + " 0x" +
-                         juce::String::formatted("%06X", chosen.rawOffset));
+                     "0x" + juce::String::formatted("%08X", range.start) + "-" +
+                         juce::String::formatted("%08X", range.end));
     }
 
     setIfChanged(peakReadout_,

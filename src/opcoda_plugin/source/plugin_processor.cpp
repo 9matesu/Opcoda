@@ -1,12 +1,14 @@
 #include "plugin_processor.h"
 
 #include "opcoda_core/entropy/shannon_entropy.h"
+#include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/pe/byte_to_sample.h"
 #include "opcoda_core/pe/pe_parser.h"
 
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
 
 namespace opcoda {
 
@@ -91,29 +93,15 @@ bool PluginProcessor::ingest(const juce::String& path) {
         return false;
     }
 
-    const auto& section = parsed.image.sections[0];
-    auto buffer = std::make_shared<const std::vector<float>>(
-        pe::toSamples(bytes.data(), section.rawOffset, section.rawSize));
-    if (buffer->empty()) {
-        lastError_ = "E_EMPTY";
-        return false;
-    }
-
-    // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
-    // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
-    // produtor, e uma alocacao ali custaria o contrato de tempo real.
-    owned_.push_back(std::move(buffer));
-    if (!incoming_.push(owned_.back().get())) {
-        owned_.pop_back();
-        lastError_ = "E_BUSY";
-        return false;
-    }
-
 sourceName_ = juce::File(path).getFileName();
     sourcePath_ = path;
     sourceInfo_.name = sourceName_;
     sourceInfo_.formatTag = "[64-bit PE]";
     sourceInfo_.sizeBytes = static_cast<std::int64_t>(size);
+
+    // Os bytes crus ficam para o seletor de bytes converter qualquer janela sem
+    // voltar a ler o disco.
+    sourceBytes_ = std::move(bytes);
 
     // As secoes e a curva vao para o estado do editor. Antes eram descartadas
     // aqui, e o display nao tinha o que desenhar.
@@ -135,8 +123,134 @@ sourceName_ = juce::File(path).getFileName();
         sourceInfo_.sections.push_back(std::move(entry));
     }
 
-    sourceInfo_.entropyCurve = buildEntropyCurve(bytes.data(), size);
+    sourceInfo_.entropyCurve = buildEntropyCurve(sourceBytes_.data(), size);
+
+    // O seletor arranca na primeira secao com dados, e nao em zero: o cabecalho
+    // PE nao produz audio reconhecivel, e comecar la faria o instrumento soar
+    // errado logo apos o primeiro arrasto.
+    byteRange_ = {};
+    lastExactStart_ = 0;
+    for (const auto& section : parsed.image.sections) {
+        if (section.rawSize > 0) {
+            byteRange_ = {section.rawOffset,
+                          static_cast<std::uint64_t>(section.rawOffset) + section.rawSize};
+            lastExactStart_ = section.rawOffset;
+            break;
+        }
+    }
+    if (byteRange_.empty()) {
+        byteRange_ = {0, size};
+        lastExactStart_ = 0;
+    }
+
     lastError_.clear();
+
+    // A curva e as secoes estao publicadas acima; falta o audio. Se a primeira
+    // janela nao produzir audio, o ingest e' um sucesso sem som, que e' o mesmo
+    // que recusa so sem o codigo de erro.
+    return publishByteRange();
+}
+
+bool PluginProcessor::setByteRange(std::uint64_t start, std::uint64_t end) {
+    // A janela e' validada no nucleo, e nao aqui: e' a unica forma de a regra ter
+    // teste, porque o nucleo nao depende de JUCE e este ficheiro depende.
+    pe::ByteRange next {start, end};
+    if (!pe::clampByteRange(next, static_cast<std::uint64_t>(sourceBytes_.size()))) {
+        return false;
+    }
+
+    // Falha nao mexe no estado: a thread de audio continua com o material
+    // anterior em vez de ficar sem fonte.
+    const auto previous = byteRange_;
+    byteRange_ = next;
+    if (!publishByteRange()) {
+        byteRange_ = previous;
+        return false;
+    }
+
+    lastExactStart_ = next.start;
+    return true;
+}
+
+bool PluginProcessor::snapByteRangeToSection(std::uint64_t start) {
+    const auto size = static_cast<std::uint64_t>(sourceBytes_.size());
+    if (size == 0) {
+        return false;
+    }
+
+    // O inicio mais proximo vem do nucleo, que e' onde a regra tem teste: o
+    // nucleo nao depende de JUCE e este ficheiro depende.
+    std::vector<std::uint32_t> offsets;
+    std::vector<std::uint32_t> sizes;
+    offsets.reserve(sourceInfo_.sections.size());
+    sizes.reserve(sourceInfo_.sections.size());
+    for (const auto& section : sourceInfo_.sections) {
+        offsets.push_back(section.rawOffset);
+        sizes.push_back(section.rawSize);
+    }
+
+    const auto aligned = pe::nearestSectionStart(start, offsets.data(), sizes.data(),
+                                                 offsets.size());
+
+    // Alinhar produz uma janela que vai ate ao fim da secao. O fim do ficheiro
+    // entra no jogo porque uma janela so de cabecalho nao produz audio util.
+    std::uint64_t end = size;
+    for (const auto& section : sourceInfo_.sections) {
+        const auto candidate = static_cast<std::uint64_t>(section.rawOffset);
+        if (candidate == aligned && section.rawSize > 0) {
+            end = candidate + section.rawSize;
+            break;
+        }
+    }
+
+    if (end <= aligned) {
+        return false;
+    }
+    return setByteRange(aligned, end);
+}
+
+bool PluginProcessor::byteRangeIsSectionAligned() const noexcept {
+    const auto range = byteRange_;
+    if (range.empty()) {
+        return false;
+    }
+
+    for (const auto& section : sourceInfo_.sections) {
+        if (section.rawSize == 0) {
+            continue;
+        }
+        const auto start = static_cast<std::uint64_t>(section.rawOffset);
+        if (range.start == start &&
+            range.end == start + static_cast<std::uint64_t>(section.rawSize)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PluginProcessor::publishByteRange() {
+    const auto range = byteRange_;
+    const auto size = static_cast<std::uint64_t>(sourceBytes_.size());
+    if (range.empty() || range.end > size) {
+        return false;
+    }
+
+    auto buffer = std::make_shared<const std::vector<float>>(
+        pe::toSamples(sourceBytes_.data(), static_cast<std::size_t>(range.start),
+                      static_cast<std::size_t>(range.length())));
+    if (buffer->empty()) {
+        return false;
+    }
+
+    // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
+    // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
+    // produtor, e uma alocacao ali custaria o contrato de tempo real.
+    owned_.push_back(std::move(buffer));
+    if (!incoming_.push(owned_.back().get())) {
+        owned_.pop_back();
+        lastError_ = "E_BUSY";
+        return false;
+    }
     return true;
 }
 
@@ -285,9 +399,16 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
 void PluginProcessor::getStateInformation(juce::MemoryBlock& destData) {
     auto state = parameters_.copyState();
 
-    // O binario carregado vai para o estado porque sem ele o projeto abre com
+// O binario carregado vai para o estado porque sem ele o projeto abre com
     // os parametros certos e o som errado, que e' pior do que nao abrir nada.
     state.setProperty("sourcePath", sourcePath_, nullptr);
+
+    // A regiao tambem vai, pelo mesmo motivo: sem ela o projeto abre a tocar
+    // outra parte do ficheiro, e o utilizador nao sabe porque. Fica como
+    // propriedade e nao como PARAM, para nao virar um setimo parametro
+    // automatizavel: a Tabela 8 tem seis e o ensaio T4 mede seis.
+    state.setProperty("byteStart", static_cast<std::int64_t>(byteRange_.start), nullptr);
+    state.setProperty("byteEnd", static_cast<std::int64_t>(byteRange_.end), nullptr);
 
     if (auto xml = state.createXml()) {
         copyXmlToBinary(*xml, destData);
@@ -306,12 +427,29 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes) {
 
     parameters_.replaceState(juce::ValueTree::fromXml(*xml));
 
-    // O arquivo e' reingestado pela mesma via de ingest do arrasto: ler disco,
+// O arquivo e' reingestado pela mesma via de ingest do arrasto: ler disco,
     // converter e publicar na fila. Nao ha caminho paralelo, e' o mesmo codigo
     // que ja' tem teste.
-    const auto path = parameters_.state.getProperty("sourcePath").toString();
+    const auto tree = parameters_.state;
+    const auto path = tree.getProperty("sourcePath").toString();
     if (path.isNotEmpty() && juce::File(path).existsAsFile()) {
-        ingest(path);
+        if (ingest(path)) {
+            // A regiao so e' restaurada se o ingest passou. Aplicar antes
+            // faria setByteRange Working contra um buffer vazio, e o projeto
+            // abriria mudo sem dar erro.
+            const auto start = static_cast<std::uint64_t>(
+                juce::jmax<juce::int64>(0, tree.getProperty("byteStart").toString()
+                                                     .getLargeIntValue()));
+            const auto end = static_cast<std::uint64_t>(
+                juce::jmax<juce::int64>(0, tree.getProperty("byteEnd").toString()
+                                                   .getLargeIntValue()));
+            // Uma regiao guardada invalida neste ficheiro nao e' erro: o ficheiro pode
+            // ter mudado desde que o projeto foi guardado. O ingest ja deixou
+            // material auditavel, entao segue com ele.
+            if (end > start) {
+                static_cast<void>(setByteRange(start, end));
+            }
+        }
     } else if (path.isNotEmpty()) {
         lastError_ = "E_SOURCE_MISSING";
     }

@@ -21,6 +21,7 @@ endif()
 add_library(opcoda_core STATIC
     src/opcoda_core/pe/pe_parser.cpp
     src/opcoda_core/pe/byte_to_sample.cpp
+    src/opcoda_core/pe/byte_range.cpp
     src/opcoda_core/entropy/shannon_entropy.cpp
     src/opcoda_core/dsp/dc_blocker.cpp
     src/opcoda_core/dsp/limiter.cpp

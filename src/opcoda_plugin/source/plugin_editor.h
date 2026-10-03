@@ -1,6 +1,7 @@
 #pragma once
 
 #include "boxed_label.h"
+#include "byte_selector.h"
 #include "display_panel.h"
 #include "entropy_curve.h"
 #include "knob.h"
@@ -109,6 +110,11 @@ private:
     DisplayPanel display_;
     SectionTabs tabs_;
     EntropyCurve curve_;
+
+    // Seletor de bytes. Fica acima das abas porque e' o controle que muda o que
+    // se ouve, e as abas sao o mapa do ficheiro. A ordem e' a ordem de uso:
+    // escolhe-se a regiao, e depois le-se onde ela caiu.
+    ByteSelector selector_;
 
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};

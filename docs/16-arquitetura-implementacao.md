@@ -193,6 +193,8 @@ Cinco arquivos, cada um com uma responsabilidade só:
 | `display_panel.h` | fundo escuro e grade de 24 px |
 | `section_tabs.h/.cpp` | abas de seção PE, largura proporcional ao tamanho em disco |
 | `entropy_curve.h/.cpp` | curva de entropia com brilho em camadas e cursor |
+| `byte_selector.h/.cpp` | seletor de bytes: mapa de seções, barra da região e arraste |
+| `assets.h` | peças físicas do asset harness, embutidas e carregadas uma vez |
 | `plugin_editor.h/.cpp` | as três faixas e o layout |
 
 O editor tem três faixas: header claro, display escuro, painel de parâmetros. É a
@@ -269,11 +271,66 @@ carregar um binário é pior do que um espaço constante.
 **Um `int cursor` local colide com `Component::cursor`.** O `/W4` trata a
 ocultação de membro como erro, e o build parou. Passou a chamar-se `edge`.
 
+### O seletor de bytes
+
+O seletor escolhe uma região contígua `[start, end)` do ficheiro, e **não** um
+índice de seção. A distinção é o ponto: uma seção PE é um intervalo arredondado e
+alinhado, enquanto o que interessa é uma janela arbitrária, do tamanho que der,
+para poder atravessar o limite entre duas seções.
+
+**O seletor não é um parâmetro do host.** A Tabela 8 tem seis e o ensaio T4 mede
+seis; um sétimo parâmetro automatizável mudaria o que está escrito. O valor vive
+no `Processor`, entra no estado como `byteStart` e `byteEnd` ao lado do
+`sourcePath`, e o projeto abre com a mesma região selecionada sem acrescentar
+nada à tabela de parâmetros.
+
+A região corrente é **`pe::ByteRange`, do núcleo**, e não uma struct no plugin. A
+regra de validação tem teste em `tests/byte_range_test.cpp` porque o núcleo não
+depende de JUCE e o `PluginProcessor` depende; duplicar a regra em dois sítios
+para ter testes seria o pior dos dois mundos.
+
+O `ingest` deixou de descartar os bytes crus. Guardá-los é memória que já era
+alocada e que ficava de fora a seguir; a alternativa, reler o disco a cada
+arrasto do seletor, punge I/O na thread de interface. O custo é o tamanho do
+ficheiro, e é declarado em `plugin_processor.h`.
+
+O `ingest` arranca na primeira seção com dados, não em zero: o cabeçalho PE não
+produz áudio reconhecível, e começar lá faria o instrumento soar errado logo
+depois do primeiro arrasto.
+
+### Peças físicas do asset harness
+
+Os corpos dos knobs e o botão LOAD são PNGs gerados pelo harness em
+`opcoda-asset-harness`, embutidos com `juce_add_binary_data` a partir de
+`resources/assets`.
+
+**O harness não gera texto.** Todo o texto — rótulos, valores, escalas — é
+desenhado em código, porque texto gerado por modelo sai com letra errada e não
+há como corrigir sem regenerar.
+
+**O corpo do knob não é rodado.** É uma fotografia top-down com a luz de estúdio
+assente; rodar o PNG faria o brilho andar com o knob, e o realce passaria a
+descer de manhã a norte. O `README` do harness diz o mesmo: a rotação é do
+plugin, via filme de imagens, e `createSpriteSheet` está reservado e não
+implementado. O indicador do valor é o arco e o ponteiro, ambos em código.
+
+**O botão é desenhado como peça quadrada mais texto ao lado**, não esticado. A
+peça é um quadrado e o `LOAD` é uma faixa; esticar um PNG deformaria o bisel de
+2 px para 1 px de um lado e 4 px do outro.
+
+**O PNG não substitui o `juce::Slider`.** O corpo é imagem; quem opera o controle
+continua a ser o `Slider`, e é ele que tem o foco por teclado e o
+`AccessibilityHandler`. Um PNG não tem nenhum dos dois.
+
 ### O que não está feito
 
-A curva mostra sempre a entropia do ficheiro inteiro. Clicar numa aba muda o
-`offset` no rodapé mas não recorta a curva para essa seção, e a leitura de
-entropia segue o ponto central porque ainda não há cursor de transporte.
+A curva mostra sempre a entropia do ficheiro inteiro. O rodapé mostra a região
+em hexadecimal, mas a curva não é recortada para a região selecionada.
+
+O duplo clique para alinhar a uma seção está implementado no `Processor`
+(`snapByteRangeToSection` e `byteRangeIsSectionAligned`) mas **ainda não está
+ligado ao seletor**: o duplo clique do `juce::Slider` não chega ao
+`onValueChange`, e não foi acrescentado um caminho paralelo para o fazer.
 
 ## Categoria de instrumento
 
