@@ -9,8 +9,7 @@ juce_add_binary_data(OpcodaAssets
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/assets/knob-md.png
         ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/slider-cap.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/slider-track.png)
+        ${CMAKE_SOURCE_DIR}/resources/assets/slider-cap.png)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"

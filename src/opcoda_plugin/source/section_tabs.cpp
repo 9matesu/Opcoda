@@ -26,7 +26,7 @@ void SectionTabs::paint(juce::Graphics& g) {
             paintTab(g,
                      {x, bounds.getY(), width, bounds.getHeight()},
                      sections_[i].name,
-                     static_cast<int>(i) == selected_);
+                     overlapsSoundingRange(sections_[i]));
         }
         x += width;
     }
@@ -35,12 +35,17 @@ void SectionTabs::paint(juce::Graphics& g) {
 void SectionTabs::paintTab(juce::Graphics& g,
                            const juce::Rectangle<float>& bounds,
                            const juce::String& label,
-                           bool isSelected) {
-    if (isSelected) {
+                           bool isSounding) {
+    if (isSounding) {
         g.setColour(palette::accent);
         g.fillRect(bounds);
 
+        // Marca alem da cor: faixa preta de 2 px perto da base da aba ativa, com
+        // laranja visivel dos dois lados. Encostada ao fundo escuro, a faixa
+        // sumiria; suspensa dentro do laranja, a forma mantem-se legivel.
         g.setColour(juce::Colours::black);
+        g.fillRect(juce::Rectangle<float> {bounds.getX(), bounds.getBottom() - 4.0f,
+                                           bounds.getWidth(), 2.0f});
     } else {
         g.setColour(palette::displayPanel);
         g.fillRect(bounds);

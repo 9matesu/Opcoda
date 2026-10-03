@@ -129,18 +129,18 @@ sourceName_ = juce::File(path).getFileName();
     // PE nao produz audio reconhecivel, e comecar la faria o instrumento soar
     // errado logo apos o primeiro arrasto.
     byteRange_ = {};
-    lastExactStart_ = 0;
+    lastExactRange_ = {};
     for (const auto& section : parsed.image.sections) {
         if (section.rawSize > 0) {
             byteRange_ = {section.rawOffset,
                           static_cast<std::uint64_t>(section.rawOffset) + section.rawSize};
-            lastExactStart_ = section.rawOffset;
+            lastExactRange_ = byteRange_;
             break;
         }
     }
     if (byteRange_.empty()) {
         byteRange_ = {0, size};
-        lastExactStart_ = 0;
+        lastExactRange_ = byteRange_;
     }
 
     lastError_.clear();
@@ -151,12 +151,19 @@ sourceName_ = juce::File(path).getFileName();
     return publishByteRange();
 }
 
-bool PluginProcessor::setByteRange(std::uint64_t start, std::uint64_t end) {
+bool PluginProcessor::setByteRange(std::uint64_t start, std::uint64_t end,
+                                   bool rememberExactRange) {
     // A janela e' validada no nucleo, e nao aqui: e' a unica forma de a regra ter
     // teste, porque o nucleo nao depende de JUCE e este ficheiro depende.
     pe::ByteRange next {start, end};
     if (!pe::clampByteRange(next, static_cast<std::uint64_t>(sourceBytes_.size()))) {
         return false;
+    }
+
+    // Pedir a mesma janela nao republica material: republicar interromperia o
+    // audio para trocar por uma copia igual, sem ganho nenhum.
+    if (next.start == byteRange_.start && next.end == byteRange_.end) {
+        return true;
     }
 
     // Falha nao mexe no estado: a thread de audio continua com o material
@@ -168,18 +175,21 @@ bool PluginProcessor::setByteRange(std::uint64_t start, std::uint64_t end) {
         return false;
     }
 
-    lastExactStart_ = next.start;
+    if (rememberExactRange) {
+        lastExactRange_ = next;
+    }
     return true;
 }
 
-bool PluginProcessor::snapByteRangeToSection(std::uint64_t start) {
+bool PluginProcessor::snapByteRangeToSection() {
     const auto size = static_cast<std::uint64_t>(sourceBytes_.size());
     if (size == 0) {
         return false;
     }
 
-    // O inicio mais proximo vem do nucleo, que e' onde a regra tem teste: o
-    // nucleo nao depende de JUCE e este ficheiro depende.
+    // O nucleo decide, porque a regra tem teste la e nao aqui. Aqui so se junta
+    // a lista de secoes do PE ao formato que a funcao espera, e se publica o
+    // resultado.
     std::vector<std::uint32_t> offsets;
     std::vector<std::uint32_t> sizes;
     offsets.reserve(sourceInfo_.sections.size());
@@ -189,43 +199,41 @@ bool PluginProcessor::snapByteRangeToSection(std::uint64_t start) {
         sizes.push_back(section.rawSize);
     }
 
-    const auto aligned = pe::nearestSectionStart(start, offsets.data(), sizes.data(),
-                                                 offsets.size());
+    const auto previous = byteRange_;
+    const auto next = pe::sectionSnapToggle(previous, lastExactRange_, size,
+                                            offsets.data(), sizes.data(), offsets.size());
 
-    // Alinhar produz uma janela que vai ate ao fim da secao. O fim do ficheiro
-    // entra no jogo porque uma janela so de cabecalho nao produz audio util.
-    std::uint64_t end = size;
-    for (const auto& section : sourceInfo_.sections) {
-        const auto candidate = static_cast<std::uint64_t>(section.rawOffset);
-        if (candidate == aligned && section.rawSize > 0) {
-            end = candidate + section.rawSize;
-            break;
-        }
+    if (next.start == previous.start && next.end == previous.end) {
+        // Nada a mudar. Republicar material identico interromperia o audio para
+        // trocar por uma copia igual.
+        return true;
     }
 
-    if (end <= aligned) {
+    if (!setByteRange(next.start, next.end, false)) {
         return false;
     }
-    return setByteRange(aligned, end);
+
+    // Ao alinhar, a regiao anterior passa a ser a exacta a que se pode voltar.
+    // Ao voltar a exacta, a exacta continua a ser a mesma, e nao a regiao
+    // alinhada: senao o segundo duplo clique saltava para o sitio errado.
+    if (!byteRangeIsSectionAligned()) {
+        lastExactRange_ = next;
+    }
+
+    return true;
 }
 
 bool PluginProcessor::byteRangeIsSectionAligned() const noexcept {
-    const auto range = byteRange_;
-    if (range.empty()) {
-        return false;
+    std::vector<std::uint32_t> offsets;
+    std::vector<std::uint32_t> sizes;
+    offsets.reserve(sourceInfo_.sections.size());
+    sizes.reserve(sourceInfo_.sections.size());
+    for (const auto& section : sourceInfo_.sections) {
+        offsets.push_back(section.rawOffset);
+        sizes.push_back(section.rawSize);
     }
 
-    for (const auto& section : sourceInfo_.sections) {
-        if (section.rawSize == 0) {
-            continue;
-        }
-        const auto start = static_cast<std::uint64_t>(section.rawOffset);
-        if (range.start == start &&
-            range.end == start + static_cast<std::uint64_t>(section.rawSize)) {
-            return true;
-        }
-    }
-    return false;
+    return pe::isSectionAligned(byteRange_, offsets.data(), sizes.data(), offsets.size());
 }
 
 bool PluginProcessor::publishByteRange() {

@@ -21,6 +21,14 @@ ByteSelector::ByteSelector() {
     // comprimento vem do Processor, que e' quem decide o tamanho da janela.
     slider_.setRange(0.0, 1.0, 0.0);
     slider_.setDoubleClickReturnValue(false, 0.0);
+    // Marca o comando para o LookAndFeel usar a pega fisica em vez do cursor
+    // padrao. O nome e' uma chave de desenho, e nao um parametro ou funcao.
+    slider_.getProperties().set("byteRangeSelector", true);
+    slider_.onSnapRequested = [this] {
+        if (onSnapRequested) {
+            onSnapRequested();
+        }
+    };
 
     // 4.1.2 Nome, funcao e valor. Um Slider sem nome nao diz a um leitor de tela
     // o que e' nem o que faz, e "slider" sozinho e' o mesmo que nao dizer nada.
@@ -31,7 +39,8 @@ ByteSelector::ByteSelector() {
     slider_.setTooltip(
         "Arraste para escolher o byte inicial do material sintetizado. "
         "Seta a esquerda e a direita movem o inicio, Home e End vao para o "
-        "inicio e para o fim do ficheiro.");
+        "inicio e para o fim do ficheiro. Duplo clique ou Enter alterna entre o "
+        "byte exato e a secao mais proxima.");
 
     // A seta escreve no Processor, que valida e publica. O seletor nao decide
     // nada: se o Processor recusar, o valor volta no proximo showRange.

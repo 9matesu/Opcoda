@@ -112,6 +112,13 @@ void PluginEditor::buildHeader() {
         owner_.setByteRange(start, end);
     };
 
+    // O duplo clique e a tecla Enter alternam entre a regiao exacta e a secao
+    // alinhada. O metodo do Processor e' quem decide o sentido da alternancia,
+    // porque e' ele quem guarda a regiao exacta anterior.
+    selector_.onSnapRequested = [this] {
+        static_cast<void>(owner_.snapByteRangeToSection());
+    };
+
     for (auto* readout : {&entropyReadout_, &offsetReadout_, &peakReadout_, &rateReadout_,
                           &voicesReadout_}) {
         addAndMakeVisible(*readout);
@@ -203,10 +210,11 @@ void PluginEditor::resized() {
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
-    // Seletor de bytes: 22 px logo abaixo do topo do display. A barra da regiao e'
-    // desenhada pelo proprio seletor, entao nao ha sobreposicao com as abas.
+    // Seletor de bytes: 30 px logo abaixo do topo do display. A pega fisica, o
+    // mapa de secoes e a barra da regiao precisam de tres faixas distintas;
+    // em 22 px as tres colavam-se e o cursor sumia dentro da barra.
     selector_.setBounds(displayBounds.reduced(1, 1)
-                            .withHeight(22)
+                            .withHeight(30)
                             .withY(displayBounds.getY() + 1));
 
     // Abas de secao na faixa de 18 px, logo abaixo do seletor.
@@ -355,14 +363,36 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     const auto range = owner_.byteRange();
     selector_.showRange(range.start, range.end);
 
+    // O mapa de secoes mostra onde a regiao ativa caiu, e so essa marca e'
+    // persistente: a aba clicada deixava um estado visual que nao controlava
+    // nada, e isso era pior do que nao ter selecao nenhuma.
+    tabs_.setSoundingRange(range.start, range.end);
+
+    // A curva mostra a regiao selecionada, e nao o ficheiro inteiro. Mostrar
+    // sempre o ficheiro inteiro ao lado de uma regiao estreita mentiria sobre o
+    // que esta a soar.
+    if (info.sizeBytes > 0 && !range.empty()) {
+        curve_.setVisibleWindow(static_cast<float>(static_cast<double>(range.start) /
+                                                   static_cast<double>(info.sizeBytes)),
+                                static_cast<float>(static_cast<double>(range.end) /
+                                                   static_cast<double>(info.sizeBytes)));
+    } else {
+        curve_.setVisibleWindow(0.0f, 1.0f);
+    }
+
+    // As abas sao um mapa, e a marca segue a regiao ativa. A regiao pode
+    // atravessar secoes, por isso a marca e' por intersecao e nao por aba
+    // clicada.
+    tabs_.setSoundingRange(range.start, range.end);
+
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
     const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
     const auto sounding = telemetry.sounding.load(std::memory_order_relaxed);
 
-    // A leitura de entropia segue a posicao do cursor, que hoje e' o centro
-    // porque nao ha cursor de transporte. Quando existir, passa a ser a posicao
-    // de leitura; o resto do codigo ja' esta' preparado para isso.
+    // A leitura de entropia segue o centro da regiao selecionada. O valor vem da
+    // curva ja recortada para a janela ativa, por isso continua a ser so uma
+    // fracao: a conversao para bytes da regiao vive na curva, e nao aqui.
     const auto fraction = 0.5f;
     curve_.setCursorFraction(fraction);
 

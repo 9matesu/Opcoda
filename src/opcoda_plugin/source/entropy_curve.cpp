@@ -7,19 +7,67 @@ namespace {
 constexpr float kMaxBitsPerByte = 8.0f;
 }
 
+void EntropyCurve::setVisibleWindow(float start, float end) {
+    const auto nextStart = juce::jlimit(0.0f, 1.0f, start);
+    const auto nextEnd = juce::jlimit(0.0f, 1.0f, end);
+    if (nextStart == windowStart_ && nextEnd == windowEnd_) {
+        return;
+    }
+
+    windowStart_ = nextStart;
+    windowEnd_ = nextEnd;
+    rebuildPath();
+    repaint();
+}
+
+float EntropyCurve::valueAt(float fraction) const noexcept {
+    if (curve_.empty()) {
+        return 0.0f;
+    }
+
+    // A fracao e' da janela visivel, nao do ficheiro. Com o cursor a 0.5, isto
+    // le o centro da regiao selecionada.
+    const auto window = windowEnd_ > windowStart_ ? windowEnd_ - windowStart_ : 1.0f;
+    const auto global =
+        juce::jlimit(0.0f, 1.0f, windowStart_ + juce::jlimit(0.0f, 1.0f, fraction) * window);
+    const auto index = static_cast<std::size_t>(global * static_cast<float>(curve_.size() - 1));
+    return curve_[index];
+}
+
 void EntropyCurve::rebuildPath() {
     path_.clear();
     filled_.clear();
-    if (curve_.size() < 2) {
+    if (curve_.size() < 2 || !(windowEnd_ > windowStart_)) {
         return;
     }
 
     const auto width = static_cast<float>(getWidth());
     const auto height = static_cast<float>(getHeight());
     const auto lastIndex = static_cast<float>(curve_.size() - 1);
+    const auto window = windowEnd_ - windowStart_;
 
-    for (std::size_t i = 0; i < curve_.size(); ++i) {
-        const auto x = width * (static_cast<float>(i) / lastIndex);
+    // Apenas os pontos da janela vao para o Path, e nao a curva inteira. Sem
+    // isto, a regiao selecionada seria uma faixa fina por cima da mesma curva
+    // de sempre.
+    auto firstIndex = static_cast<std::size_t>(
+        juce::jlimit(0.0f, lastIndex, std::floor(windowStart_ * lastIndex)));
+    auto lastWindowIndex = static_cast<std::size_t>(
+        juce::jlimit(0.0f, lastIndex, std::ceil(windowEnd_ * lastIndex)));
+
+    // Uma regiao mais estreita do que uma janela da curva nao tem dois pontos
+    // para ligar. Incluir o ponto vizinho desenha o segmento em vez de deixar
+    // o display vazio, que seria lido como falta de material.
+    if (lastWindowIndex == firstIndex) {
+        if (firstIndex > 0) {
+            --firstIndex;
+        } else if (lastWindowIndex < curve_.size() - 1) {
+            ++lastWindowIndex;
+        }
+    }
+
+    for (auto i = firstIndex; i <= lastWindowIndex; ++i) {
+        const auto fileFraction = static_cast<float>(i) / lastIndex;
+        const auto x = width * ((fileFraction - windowStart_) / window);
         // Entropia alta sobe. A escala vai ate 8 porque um byte tem 8 bits, e
         // um binario comprimido chega perto disso: o topo da barra e' o
         // "aleatorio" e vale a pena ver que o eixo chega la.
@@ -27,7 +75,7 @@ void EntropyCurve::rebuildPath() {
                                             curve_[i] / kMaxBitsPerByte);
         const auto y = height * (1.0f - normalised);
 
-        if (i == 0) {
+        if (i == firstIndex) {
             path_.startNewSubPath(x, y);
         } else {
             path_.lineTo(x, y);

@@ -44,6 +44,11 @@ São seis parâmetros automatizáveis: tamanho de grão, densidade, posição, s
 afinação e volume. As notas ligam o motor, o pedal de sustain segura as notas
 soltas, e os CCs 74 e 71 movem densidade e posição.
 
+O seletor de bytes escolhe que região do binário alimenta o motor, arrastando ou
+com as setas; duplo clique ou `Enter` alternam entre a região exata e a seção PE
+mais próxima. A região entra no estado do projeto, pelo mesmo caminho do ficheiro
+carregado.
+
 ## Processo
 
 O desenvolvimento segue spec-kit. A constitution em `.specify/memory/constitution.md`
@@ -74,8 +79,10 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
 
 ## Estado
 
-Núcleo completo e testado, plugin VST3 e Standalone com editor mínimo e seis
-parâmetros, compondo para x64. Entrega de áudio da S1 fechada.
+Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
+faixas, MIDI por nota e CC, estado do host e seletor de bytes. 124 casos de teste
+e o guard de alocação verdes.
 
-Falta o visual completo, arrasto de arquivo, MIDI e a validação em DAW, conforme
-o cronograma S2–S5.
+Falta a validação no Ableton: T2 com medição de p99 e T4 de arrasto, parâmetros e
+CCs, conforme o cronograma S3b, S4b e S5. O bundle instalado em `Common Files` é
+anterior ao seletor de bytes e ao MIDI.

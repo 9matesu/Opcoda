@@ -186,12 +186,12 @@ Cinco arquivos, cada um com uma responsabilidade só:
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `palette.h` | os tokens do `design/DESIGN-SYSTEM.md`, em hex único |
-| `look_and_feel.h` | desenho do knob e bisel do botão |
+| `look_and_feel.h` | desenho do knob, do botão e da pega do seletor |
 | `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
 | `display_panel.h` | fundo escuro e grade de 24 px |
-| `section_tabs.h/.cpp` | abas de seção PE, largura proporcional ao tamanho em disco |
+| `section_tabs.h/.cpp` | mapa de seções PE, largura proporcional ao tamanho em disco |
 | `entropy_curve.h/.cpp` | curva de entropia com brilho em camadas e cursor |
 | `byte_selector.h/.cpp` | seletor de bytes: mapa de seções, barra da região e arraste |
 | `assets.h` | peças físicas do asset harness, embutidas e carregadas uma vez |
@@ -237,9 +237,12 @@ sem precisar de um segundo layout.
 As abas de seção, a curva de entropia e a telemetria entraram na F008. O
 `ingest` deixou de descartar o `PeImage`: publica em `SourceInfo` o nome, o
 tamanho e, por seção, o nome, o offset, o tamanho em disco e a entropia, mais
-uma curva de entropia em janelas calculada com `entropy::shannonCurve`. O
-`PeImage` continua a ser local ao `ingest`, para não segurar o ficheiro inteiro
-na memória da interface.
+uma curva de entropia em janelas calculada com `entropy::shannonCurve`.
+
+O `PeImage` continua a ser local ao `ingest`, mas **os bytes crus não**: são
+guardados, porque o seletor precisa de converter uma janela nova sem reler o
+disco. A distinção é deliberada e está escrita em `plugin_processor.h`: o parse
+sai, os bytes ficam.
 
 A telemetria de pico, vozes ativas e estado de som sai de `processBlock` por
 `std::atomic`, lida pela thread de interface a 20 Hz. `refreshTelemetry` só
@@ -287,7 +290,10 @@ nada à tabela de parâmetros.
 A região corrente é **`pe::ByteRange`, do núcleo**, e não uma struct no plugin. A
 regra de validação tem teste em `tests/byte_range_test.cpp` porque o núcleo não
 depende de JUCE e o `PluginProcessor` depende; duplicar a regra em dois sítios
-para ter testes seria o pior dos dois mundos.
+para ter testes seria o pior dos dois mundos. O mesmo vale para a decisão do
+alinhamento, que vive em `pe::sectionSnapToggle`: o duplo clique não "aponta
+para uma seção", ele **alterna** entre a região exata e a seção mais próxima.
+Sem a volta, pedir o alinhamento seria uma operação sem saída.
 
 O `ingest` deixou de descartar os bytes crus. Guardá-los é memória que já era
 alocada e que ficava de fora a seguir; a alternativa, reler o disco a cada
@@ -298,11 +304,30 @@ O `ingest` arranca na primeira seção com dados, não em zero: o cabeçalho PE 
 produz áudio reconhecível, e começar lá faria o instrumento soar errado logo
 depois do primeiro arrasto.
 
+**A curva mostra a região selecionada.** `EntropyCurve` recebeu
+`setVisibleWindow`, e o rodapé lê a entropia pela mesma janela. Mostrar sempre o
+ficheiro inteiro ao lado de uma região estreita mentiria sobre o que está a soar.
+Uma região mais estreita do que uma janela da curva não tem dois pontos para
+ligar, e inclui-se o ponto vizinho para o display não ficar vazio, que se leria
+como falta de material.
+
+**As abas deixaram de ser comandos.** Clicar numa aba só mudava o rodapé, não o
+som: era um estado visual que não controlava nada. Agora são um mapa, com
+`setInterceptsMouseClicks(false, false)`, e a marca segue a região por interseção.
+A marca é uma faixa preta de 2 px dentro do laranja: o fundo diz onde está o som a
+quem vê cor, e a faixa diz a quem não vê. Suspen sa 4 px acima da base, porque
+encostada ao fundo escuro a faixa desapareceria.
+
+O duplo clique e a tecla Enter chegam ao `Processor` por um `juce::Slider`
+subclasseado dentro do `ByteSelector`: o duplo clique padrão do `Slider`
+escreveria um valor de retorno e estragaria o início da região. A tecla Enter
+existe para o alinhamento ser possível só com teclado.
+
 ### Peças físicas do asset harness
 
-Os corpos dos knobs e o botão LOAD são PNGs gerados pelo harness em
-`opcoda-asset-harness`, embutidos com `juce_add_binary_data` a partir de
-`resources/assets`.
+Os corpos dos knobs, o botão LOAD e a pega do seletor são PNGs gerados pelo
+harness em `opcoda-asset-harness`, embutidos com `juce_add_binary_data` a partir
+de `resources/assets`.
 
 **O harness não gera texto.** Todo o texto — rótulos, valores, escalas — é
 desenhado em código, porque texto gerado por modelo sai com letra errada e não
@@ -322,15 +347,21 @@ peça é um quadrado e o `LOAD` é uma faixa; esticar um PNG deformaria o bisel 
 continua a ser o `Slider`, e é ele que tem o foco por teclado e o
 `AccessibilityHandler`. Um PNG não tem nenhum dos dois.
 
+A pega do seletor é desenhada por `drawLinearSlider` no `LookAndFeel`, guardada
+pela propriedade `byteRangeSelector` do `Slider`. Sem essa guarda, um slider
+linear futuro herdaria a pega física sem querer.
+
 ### O que não está feito
 
-A curva mostra sempre a entropia do ficheiro inteiro. O rodapé mostra a região
-em hexadecimal, mas a curva não é recortada para a região selecionada.
+A curva é recortada para a região selecionada, mas **não há cursor de
+transporte**: a leitura de entropia segue o meio da região, e mover o início da
+região é o que move a leitura.
 
-O duplo clique para alinhar a uma seção está implementado no `Processor`
-(`snapByteRangeToSection` e `byteRangeIsSectionAligned`) mas **ainda não está
-ligado ao seletor**: o duplo clique do `juce::Slider` não chega ao
-`onValueChange`, e não foi acrescentado um caminho paralelo para o fazer.
+O seletor só move o início da região; **o fim vem do `Processor`**. Não há,
+por enquanto, um segundo controle para o fim da janela, e arrastar redefine a
+região para o mesmo comprimento.
+
+A validação no Ableton continua por fazer, e com ela o T2 e o T4.
 
 ## Categoria de instrumento
 

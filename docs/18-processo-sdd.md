@@ -36,7 +36,7 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 94 casos verdes, incluindo o critério de 40 dB do T1 |
+| B · Testes | 124 casos verdes, incluindo o critério de 40 dB do T1 |
 | C · Tempo real | zero alocação no callback e na troca de material, com duas threads |
 | D · Robustez | entradas malformadas rejeitadas com erro tipado |
 | E · Interface | contraste, teclado e nome acessível (etapa S4) |
@@ -54,9 +54,9 @@ Cada objetivo específico de `docs/04-objetivos.md` tem uma feature:
 | OE4 · motor granular | F005 | pronto: 8 vozes, janelas, sobreposição |
 | OE5 · entropia de Shannon | F004 | pronto: curvo por janela, testado |
 | OE6 · condicionamento | F006 | pronto: DC-blocker e limiter |
-| OE7 · interface | F008 | etapa S4 |
+| OE7 · interface | F008 | interface pronta: chassi, knobs, display de entropia, seletor de bytes e telemetria; falta a auditoria de 200% de zoom |
 | OE8 · isolamento | F003 | pronto: guard de alocação e troca sem alocação verificados; TSan indisponível no Windows |
-| OE9 · MIDI | F009 | etapa S3 |
+| OE9 · MIDI | F009 | pronto: gate por nota, sustain e 2 CCs mapeados; falta o ensaio no host |
 | T1–T4 | F010 | T1 e T3 prontos; T2 e T4 dependem de DAW instalado |
 
 ## Agentes de revisão
@@ -69,8 +69,8 @@ concluída. Os arquivos ficam em `.opencode/agent/`.
 | `pe-parser-reviewer` | verificação de limites, endianness, transborno de inteiro, códigos de erro | sim |
 | `rt-dsp-auditor` | alocação, trava, I/O e exceção no caminho de áudio, escala de posição | sim |
 | `test-engineer` | portões B e D, o teste falha sem a correção, material real | sim |
-| `ui-reviewer` | responsividade, contraste, teclado, nomes acessíveis | etapa F008 |
-| `perf-benchmarker` | p99 do `processBlock` contra o orçamento de 2,9 ms | etapa F010 |
+| `ui-reviewer` | responsividade, contraste, teclado, nomes acessíveis | disponível; a revisão por captura de ecrã já apanhou quatro defeitos de layout |
+| `perf-benchmarker` | p99 do `processBlock` contra o orçamento de 2,9 ms | etapa S3b |
 | `doc-synchronizer` | coerência entre `docs/`, `specs/` e o código | etapa F010 |
 
 Só existem os três que já têm alvo. Os outros três têm coluna marcada com a

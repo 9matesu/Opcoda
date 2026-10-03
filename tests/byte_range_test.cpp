@@ -104,4 +104,109 @@ TEST(NearestSectionStart, ReturnsTheStartWhenEverySectionIsEmpty) {
               500u);
 }
 
+TEST(IsSectionAligned, MatchesASectionExactly) {
+    constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
+    constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
+
+    EXPECT_TRUE(opcoda::pe::isSectionAligned({1024, 8192}, offsets.data(), sizes.data(),
+                                             offsets.size()));
+    EXPECT_TRUE(opcoda::pe::isSectionAligned({8192, 10240}, offsets.data(), sizes.data(),
+                                             offsets.size()));
+}
+
+TEST(IsSectionAligned, RejectsAWindowThatStartsInsideASection) {
+    constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
+    constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
+
+    // Comeca dentro de .text e acaba no fim dela: nao e' a secao, e' uma janela
+    // dentro dela. Confundir os dois faria o alinhamento alternar sem sair.
+    EXPECT_FALSE(opcoda::pe::isSectionAligned({2000, 8192}, offsets.data(), sizes.data(),
+                                              offsets.size()));
+}
+
+TEST(IsSectionAligned, RejectsAnEmptyWindowAndNoSections) {
+    constexpr std::array<std::uint32_t, 1> offsets {1024};
+    constexpr std::array<std::uint32_t, 1> sizes {7168};
+
+    EXPECT_FALSE(opcoda::pe::isSectionAligned({0, 0}, offsets.data(), sizes.data(),
+                                              offsets.size()));
+    EXPECT_FALSE(opcoda::pe::isSectionAligned({1024, 8192}, nullptr, nullptr, 0));
+}
+
+TEST(SectionSnapToggle, AlignsToTheNearestSectionFromAnExactWindow) {
+    constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
+    constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
+
+    // Janela exacta dentro de .text: alinhar leva ao inicio e ao fim de .text.
+    const auto result = opcoda::pe::sectionSnapToggle({2000, 7000}, {2000, 7000}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 1024u);
+    EXPECT_EQ(result.end, 8192u);
+}
+
+TEST(SectionSnapToggle, ReturnsTheExactWindowWhenAlreadyAligned) {
+    constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
+    constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
+
+    // Ja alinhado em .text: volta a janela exacta. E' o que torna o duplo
+    // clique reversivel.
+    const auto result = opcoda::pe::sectionSnapToggle({1024, 8192}, {2000, 7000}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 2000u);
+    EXPECT_EQ(result.end, 7000u);
+}
+
+// Sem janela exacta guardada nao ha' para onde voltar. Devolve a regiao atual
+// em vez de inventar um destino, que seria pior do que nao fazer nada.
+TEST(SectionSnapToggle, StaysPutWhenAlignedWithNoExactWindowToReturnTo) {
+    constexpr std::array<std::uint32_t, 1> offsets {1024};
+    constexpr std::array<std::uint32_t, 1> sizes {7168};
+
+    const auto result = opcoda::pe::sectionSnapToggle({1024, 8192}, {}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 1024u);
+    EXPECT_EQ(result.end, 8192u);
+}
+
+TEST(SectionSnapToggle, SkipsSectionsWithoutRawDataWhenAligning) {
+    // .bss a 8192 com tamanho zero: alinhar a ela daria janela vazia.
+    constexpr std::array<std::uint32_t, 3> offsets {1024, 8192, 8300};
+    constexpr std::array<std::uint32_t, 3> sizes {7168, 0, 108};
+
+    const auto result = opcoda::pe::sectionSnapToggle({8250, 8400}, {8250, 8400}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 8300u);
+    EXPECT_EQ(result.end, 8408u);
+}
+
+// Um ficheiro sem nenhuma secao com dados nao tem para onde alinhar. A janela
+// atual e' devolvida, e nao o ficheiro inteiro: alinhar ao fim do ficheiro
+// trocaria o material sem o utilizador pedir.
+TEST(SectionSnapToggle, KeepsTheWindowWhenThereIsNoSectionToAlignTo) {
+    constexpr std::array<std::uint32_t, 2> offsets {0, 0};
+    constexpr std::array<std::uint32_t, 2> sizes {0, 0};
+
+    const auto result = opcoda::pe::sectionSnapToggle({2000, 7000}, {}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 2000u);
+    EXPECT_EQ(result.end, 7000u);
+}
+
+TEST(SectionSnapToggle, RejectsAnAlignmentThatWouldLeaveTheFile) {
+    // A secao mais proxima comeca depois do fim do ficheiro pedido.
+    constexpr std::array<std::uint32_t, 1> offsets {50000};
+    constexpr std::array<std::uint32_t, 1> sizes {100};
+
+    const auto result = opcoda::pe::sectionSnapToggle({100, 200}, {}, 10240,
+                                                      offsets.data(), sizes.data(),
+                                                      offsets.size());
+    EXPECT_EQ(result.start, 100u);
+    EXPECT_EQ(result.end, 200u);
+}
+
 } // namespace

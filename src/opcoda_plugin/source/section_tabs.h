@@ -11,51 +11,47 @@ namespace opcoda {
 
 // Abas de secao PE, proporcionais ao tamanho de cada secao.
 //
-// A largura proporcional e' o que faz o display dizer algo: a aba .text de um
-// binario real ocupa quase toda a barra e o .rsrc aparece como um risco. Uma
-// barra de abas de largura igual esconde exatamente a informacao que a barra de
-// secoes do PE traz.
+// As abas sao um mapa, e nao controlos. A selecao vive no ByteSelector, que e'
+// operavel por rato e por teclado; duplicar o comando nas abas criaria dois
+// estados para a mesma regiao e dois caminhos para o mesmo som. O mapa apenas
+// mostra onde a regiao ativa caiu.
 class SectionTabs : public juce::Component {
 public:
-    SectionTabs() { setOpaque(false); }
+    SectionTabs() {
+        setOpaque(false);
+        // Sem interacao propria: o seletor de bytes e' o comando, e este mapa
+        // nao precisa de ser clicavel para dizer onde se esta.
+        setInterceptsMouseClicks(false, false);
+    }
 
     void setSections(const std::vector<PluginProcessor::SourceInfo::SectionInfo>& sections) {
         sections_ = sections;
-        selected_ = 0;
         repaint();
     }
 
-    void setSelected(int index) {
-        if (selected_ != index) {
-            selected_ = index;
-            repaint();
+    // Regiao ativa do motor, em bytes do ficheiro. As secoes intersetadas pela
+    // regiao ganham uma marca alem da cor; sem isto, uma aba "ativa" seria so
+    // fundo laranja, que o criterio 1.1 do WCAG proibe como unico sinal.
+    void setSoundingRange(std::uint64_t start, std::uint64_t end) {
+        if (start == rangeStart_ && end == rangeEnd_) {
+            return;
         }
-    }
-
-    [[nodiscard]] int selected() const noexcept { return selected_; }
-
-    void mouseDown(const juce::MouseEvent& event) override {
-        const auto index = indexAt(event.position.toFloat());
-        if (index >= 0) {
-            setSelected(index);
-        }
+        rangeStart_ = start;
+        rangeEnd_ = end;
+        repaint();
     }
 
     void paint(juce::Graphics& g) override;
 
 private:
-    // Secoes sem dados brutos, como .bss, ocupam largura zero. Sem isso o
-    // cursor seria invisivel e a aba impossivel de acertar.
-    [[nodiscard]] int indexAt(const juce::Point<float>& position) const {
-        float x = 0.0f;
-        for (std::size_t i = 0; i < sections_.size(); ++i) {
-            const auto width = widthFor(sections_[i]);
-            if (position.x >= x && position.x < x + width) {
-                return static_cast<int>(i);
-            }
-            x += width;
+    [[nodiscard]] bool overlapsSoundingRange(
+        const PluginProcessor::SourceInfo::SectionInfo& section) const noexcept {
+        if (section.rawSize == 0 || rangeEnd_ <= rangeStart_) {
+            return false;
         }
-        return -1;
+        const auto start = static_cast<std::uint64_t>(section.rawOffset);
+        const auto end = start + static_cast<std::uint64_t>(section.rawSize);
+        return rangeStart_ < end && rangeEnd_ > start;
     }
 
     [[nodiscard]] float widthFor(const PluginProcessor::SourceInfo::SectionInfo& section) const {
@@ -65,10 +61,11 @@ private:
     void paintTab(juce::Graphics& g,
                   const juce::Rectangle<float>& bounds,
                   const juce::String& label,
-                  bool isSelected);
+                  bool isSounding);
 
     std::vector<PluginProcessor::SourceInfo::SectionInfo> sections_;
-    int selected_ {0};
+    std::uint64_t rangeStart_ {0};
+    std::uint64_t rangeEnd_ {0};
     float pixelsPerByte_ {0.0f};
 };
 

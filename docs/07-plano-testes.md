@@ -37,7 +37,7 @@ Consequência sobre os ensaios acima:
 | T1 (espectral) | executado | FFT N 65536 com Blackman-Harris em teste automatizado, critério de 40 dB e de -60 dBFS |
 | T2 (latência) | parcial | p99 medido em teste; o ensaio com DAW e 8 vozes reais depende da etapa S3b |
 | T3 (robustez) | executado | 10 casos de borda e truncamento automatizados; as 50 mutações de bit-flip entram como testes quando o corpus existir |
-| T4 (aceite) | pendente | exige arrasto de arquivo e CCs mapeados, etapas S3a e S4b |
+| T4 (aceite) | pendente | exige instalar o bundle atual no Ableton e repetir arrasto, parâmetros e CCs, etapas S3b e S4b |
 | TSan | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
 | UBSan | indisponível | substituído por `/W4 /WX` e pelos testes de borda |
 | `pluginval` | indisponível | trava nesta máquina; a conformidade do bundle é conferida no `moduleinfo.json` gerado pelo `juce_vst3_helper`, e o comportamento é medido no Ableton |

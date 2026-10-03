@@ -114,20 +114,20 @@ void setStateInformation(const void* data, int sizeInBytes) override;
     // A restricao e' do nucleo, nao da interface: e' o motor que recusa ler fora
     // do buffer, e valida-lo aqui evita publicar na fila um buffer invalido que
     // so falharia depois, na thread de audio.
-    bool setByteRange(std::uint64_t start, std::uint64_t end);
+    bool setByteRange(std::uint64_t start, std::uint64_t end, bool rememberExactRange = true);
 
-// Alinha o inicio da regiao ao inicio da secao mais proxima, e estende o fim
-    // ate ao fim dessa secao.
-    //
-    // E' o que o duplo clique no seletor faz. O parametro `start` e' o inicio
-    // pedido; o metodo escolhe a secao, porque o alignamento por section e' uma
-    // pergunta sobre o PE e nao sobre aritmetica de bytes.
-    bool snapByteRangeToSection(std::uint64_t start);
+// Alterna entre a regiao exacta e a secao PE mais proxima.
+//
+// E' o que o duplo clique e a tecla Enter fazem no seletor. **Alterna** em vez
+// de alinhar sempre: sem a volta, pedir o alinhamento seria uma operacao sem
+// saida, e quem entrasse numa secao nao saberia como voltar ao byte.
+//
+// A decisao vive em pe::sectionSnapToggle, no nucleo, porque a regra tem teste
+// la. Este metodo junta as secoes do PE e publica o resultado.
+bool snapByteRangeToSection();
 
-    // true quando a regiao atual esta' alinhada numa secao. O duplo clique
-    // usa isto para alternar entre o byte exato e o alinhado, em vez de fazer
-    // uma operacao sem volta.
-    [[nodiscard]] bool byteRangeIsSectionAligned() const noexcept;
+// true quando a regiao atual esta' alinhada numa secao com dados brutos.
+[[nodiscard]] bool byteRangeIsSectionAligned() const noexcept;
 
     // Telemetria publicada pelo callback e lida pelo editor a 20 Hz.
     //
@@ -234,10 +234,10 @@ private:
     SourceInfo sourceInfo_;
     ByteRange byteRange_;
 
-    // Inicio em bytes exatos, sem alinhamento. E' o destino do duplo clique
-    // quando a regiao esta' alinhada numa secao, e o que torna a operacao
-    // reversivel.
-    std::uint64_t lastExactStart_ {0};
+    // Inicio exato, sem alinhamento, da ultima regiao escolhida pelo utilizador.
+    // E' o destino do duplo clique quando a regiao esta' alinhada numa secao, e
+    // o que torna a operacao reversivel.
+    ByteRange lastExactRange_ {};
 
     // Caminho do binario ativo, para o estado do host. Distinto de sourceName_,
     // que e' so o nome do ficheiro para a interface.

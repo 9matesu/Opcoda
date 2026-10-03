@@ -41,4 +41,27 @@ struct ByteRange {
                                                  const std::uint32_t* sizes,
                                                  std::size_t count) noexcept;
 
+// true quando `range` coincide exactamente com uma secao com dados brutos.
+[[nodiscard]] bool isSectionAligned(const ByteRange& range,
+                                    const std::uint32_t* offsets,
+                                    const std::uint32_t* sizes,
+                                    std::size_t count) noexcept;
+
+// Regiao que resulta de pedir o alinhamento a secao mais proxima.
+//
+// **O alinhamento alterna.** Quando `current` ja esta' alinhado, devolve
+// `exact`, que e' a regiao exata anterior. Sem esta inversao, pedir o
+// alinhamento seria uma operacao sem volta: o utilizador chegava a uma secao
+// e nao tinha como sair dela sem reconstruir a selecao byte a byte.
+//
+// A escolha mora no nucleo e nao no plugin pelo mesmo motivo do resto: e' uma
+// regra sobre o PE, e o nucleo e' a parte que tem teste. O `PluginProcessor`
+// limita-se a aplicar o resultado.
+[[nodiscard]] ByteRange sectionSnapToggle(const ByteRange& current,
+                                          const ByteRange& exact,
+                                          std::uint64_t fileSize,
+                                          const std::uint32_t* offsets,
+                                          const std::uint32_t* sizes,
+                                          std::size_t count) noexcept;
+
 } // namespace opcoda::pe

@@ -13,10 +13,10 @@ namespace opcoda {
 
 // Um knob: rotulo em cima, slider rotativo no meio, valor em baixo.
 //
-// O corpo e' a peca fisica do asset harness, desenhada uma vez e rodada pelo
-// angulo do valor. O que a peca nao tem, e que o codigo desenha por cima: o
-// arco de valor, o anel de foco e o texto. A divisao e' deliberada, porque e'
-// ela que mantem o que a constitution exige.
+// O corpo e' a peca fisica do asset harness, desenhada uma vez e fixa. O que a
+// peca nao tem, e que o codigo desenha por cima: o arco de valor, o ponteiro,
+// o anel de foco e o texto. A divisao e' deliberada, porque e' ela que mantem
+// o que a constitution exige.
 //
 // **Os knobs sao juce::Slider de verdade, nao desenho customizado.** Isso nao e'
 // padrao: e' o que da foco por teclado, ajuste com setas e AccessibilityHandler

@@ -31,19 +31,19 @@ public:
         rebuildPath();
     }
 
+    // Janela visivel da curva, como fracao do ficheiro inteiro. O motor ouve a
+    // regiao selecionada, por isso a curva tambem mostra a regiao selecionada:
+    // uma curva sempre do ficheiro inteiro mentiria sobre o que esta a soar.
+    void setVisibleWindow(float start, float end);
+
     void setCursorFraction(float fraction) {
         cursor_ = juce::jlimit(0.0f, 1.0f, fraction);
         repaint();
     }
 
-    [[nodiscard]] float valueAt(float fraction) const noexcept {
-        if (curve_.empty()) {
-            return 0.0f;
-        }
-        const auto index = static_cast<std::size_t>(
-            juce::jlimit(0.0f, 1.0f, fraction) * static_cast<float>(curve_.size() - 1));
-        return curve_[index];
-    }
+    // Valor na posicao do cursor, dentro da janela visivel. Com o cursor a 0.5,
+    // devolve o centro da regiao selecionada, e nao o centro do ficheiro.
+    [[nodiscard]] float valueAt(float fraction) const noexcept;
 
     void paint(juce::Graphics& g) override;
     void resized() override { rebuildPath(); }
@@ -56,6 +56,8 @@ private:
     juce::Path filled_;
     int resolution_ {0};
     float cursor_ {0.0f};
+    float windowStart_ {0.0f};
+    float windowEnd_ {1.0f};
 };
 
 } // namespace opcoda

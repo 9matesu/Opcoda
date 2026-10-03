@@ -95,14 +95,23 @@ nome do device, e à direita a faixa de arquivo: botão `LOAD`, nome em mono,
 
 ### 2. Display
 
-Fundo `#0e1013`, 185 px. Duas sub-barras e a área de onda.
+Fundo `#0e1013`, com 1 px de `#252b31` na moldura. Quatro faixas, de cima para
+baixo:
 
-- Abas de seção PE no canto superior esquerdo,proporcionais ao tamanho do arquivo. A aba
-  ativa tem fundo laranja e texto preto.
-- Leitura à direita: `PTR: 0x0014B200`, `RATE: 48 kHz`, e um ponto verde com
-  `STEREO GRAINS`.
-- Área de onda com grade de 24 px e eixo zero no centro. A série é dupla: azul
-  `#1d2023` para a amplitude bruta e laranja para os picos de entropia.
+- **Seletor de bytes**, 30 px: mapa de seções PE no topo, proporcional ao
+  tamanho em disco, e barra da região selecionada na base. A pega física marca o
+  início. `Enter` ou duplo clique alterna entre a região exata e a seção mais
+  próxima.
+- **Mapa de seções**, 18 px: nome da seção em mono 9 px. A região ativa leva
+  fundo laranja **e** uma faixa preta de 2 px a 4 px da base, para não depender só
+  da cor.
+- **Linha de estado**, 14 px: `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO`,
+  com LED.
+- **Área da curva**, com grade de 24 px. A curva de entropia é recortada para a
+  região selecionada, e a escala é fixa em 0 a 8 bits por byte.
+
+- **Rodapé de telemetria**: entropia em bits por byte, região em hexadecimal,
+  `PK`, `RATE` e `VOICES`. Tudo em `textOnDark`, nunca nos tokens do chassi.
 
 ### 3. Painel de parâmetros
 
@@ -114,10 +123,16 @@ acima e valor em `valBox` abaixo.
 
 ## Controles
 
-Knob circular com ponteiro laranja, 1 px de arco de fundo `chassisBorder`.
-Rótulo em Inter 10 px acima, valor em `valBox` abaixo, com fonte mono.
+Knob circular com ponteiro laranja e arco de valor, 1 px de arco de fundo
+`chassisBorder`. O corpo vem do asset harness como peça física e **não é rodado**:
+é uma fotografia top-down com a luz de estúdio assente, e rodar o PNG faria o
+brilho andar com o controle. Rótulo em Inter 10 px acima, valor em `valBox`
+abaixo, com fonte mono.
 
 Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2.
+
+O PNG é sempre só o desenho. Quem opera o controle é um `juce::Slider`, porque é
+ele que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
 
 ## Adaptação ao JUCE
 
@@ -127,10 +142,15 @@ Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.
 | Inter | `juce::Font {16.0f}` com a fonte do sistema, ou `Inter` embarcada |
 | JetBrains Mono | `juce::Font` monoespaçada, ou `JetBrains Mono` embarcada |
 | Knob com ponteiro | `juce::Slider` `RotaryHorizontalVerticalDrag` com `LookAndFeel` próprio |
-| Aba de seção | `juce::Button` com `ButtonTextButton::ColourIds` |
+| Mapa de seções | `juce::Component` com `paint()` e `setInterceptsMouseClicks(false, false)` |
+| Seletor de bytes | `juce::Slider` linear deitado, subclasseado para o duplo clique |
 | Faixa de arquivo | `juce::Label` + `juce::TextButton` |
-| Onda | `juce::Component` com `paint()` e `Path` |
-| Tabela de seções | `juce::TableListBox` ou `ListBox` com `LookAndFeel` própria |
+| Curva de entropia | `juce::Component` com `paint()` e `juce::Path` |
+
+As peças físicas vêm de `I:\TG_I\opcoda-asset-harness` e são embutidas com
+`juce_add_binary_data`. O harness **não gera texto**: rótulos, valores e escalas
+são sempre desenhados em código, porque texto gerado por modelo sai com letra
+errada e não há como corrigir sem regenerar.
 
 JUCE não embarca fonte por padrão. Embarcar Inter e JetBrains Mono adiciona cerca
 de 400 KB ao binário; usar a fonte do sistema (`Segoe UI`) e a monoespaçada do

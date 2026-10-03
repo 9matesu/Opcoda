@@ -37,8 +37,13 @@ public:
     // comando, e nao guarda uma segunda copia.
     std::function<void(std::uint64_t start, std::uint64_t end)> onRangeChanged;
 
+    // Chamado pelo duplo clique do rato e pela tecla Enter com o seletor em
+    // foco. Sao duas formas de pedir a mesma operacao, e nao duas operacoes:
+    // sem a tecla, o alinhamento seria impossivel so com o teclado.
+    std::function<void()> onSnapRequested;
+
     // Le a regiao do Processor e escreve na escala, sem emitir onRangeChanged.
-    // E' o que evita o ciclo: o Processor muda a regiao, o seletor reflects, e
+    // E' o que evita o ciclo: o Processor muda a regiao, o seletor reflete, e
     // o seletor nao volta a pedir a mudanca.
     void showRange(std::uint64_t start, std::uint64_t end);
 
@@ -55,9 +60,37 @@ public:
 private:
     void paintSectionBar(juce::Graphics& g);
 
+    // Slider interno do seletor. A unica diferenca para um Slider normal e'
+    // receber o duplo clique e a tecla de ativacao: o duplo clique padrao do
+    // Slider escreveria um valor de retorno e estragaria o inicio da regiao.
+    struct RangeSlider : public juce::Slider {
+        std::function<void()> onSnapRequested;
+
+        RangeSlider()
+            : juce::Slider(juce::Slider::LinearHorizontal, juce::Slider::NoTextBox) {
+        }
+
+        void mouseDoubleClick(const juce::MouseEvent& event) override {
+            if (onSnapRequested) {
+                onSnapRequested();
+                return;
+            }
+            juce::Slider::mouseDoubleClick(event);
+        }
+
+        bool keyPressed(const juce::KeyPress& key) override {
+            if (key.getKeyCode() == juce::KeyPress::returnKey &&
+                !key.getModifiers().isAnyModifierKeyDown() && onSnapRequested) {
+                onSnapRequested();
+                return true;
+            }
+            return juce::Slider::keyPressed(key);
+        }
+    };
+
     // Declarado antes dos dados para que o onValueChange, montado no construtor
     // depois dos dois, veja um objeto ja completo.
-    juce::Slider slider_ {juce::Slider::LinearHorizontal, juce::Slider::NoTextBox};
+    RangeSlider slider_;
     std::vector<PluginProcessor::SourceInfo::SectionInfo> sections_;
     std::uint64_t fileSize_ {0};
     std::uint64_t rangeStart_ {0};

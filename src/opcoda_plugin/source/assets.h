@@ -50,12 +50,6 @@ inline const juce::Image& sliderCap() {
     return image;
 }
 
-inline const juce::Image& sliderTrack() {
-    static const juce::Image image {decode(BinaryData::slidertrack_png,
-                                           BinaryData::slidertrack_pngSize)};
-    return image;
-}
-
 } // namespace detail
 
 } // namespace opcoda::assets

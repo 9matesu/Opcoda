@@ -6,11 +6,11 @@
 
 namespace opcoda {
 
-// LookAndFeel do Opcoda. Existe para uma coisa so: o desenho do knob e do
-// botao.
+// LookAndFeel do Opcoda. Existe para tres desenhos: o knob, o botao e o
+// cursor do seletor de bytes. Todo o resto fica no LookAndFeel padrao.
 //
 // Os knobs sao juce::Slider de verdade, nao desenho customizado. Isso nao e
-// Repository: e o que da foco por teclado, ajuste com setas e
+// padrao: e o que da foco por teclado, ajuste com setas e
 // AccessibilityHandler de graca, e sao exatamente os criterios que a
 // docs/10-acessibilidade-w3c.md exige.
 class OpcodaLookAndFeel : public juce::LookAndFeel_V4 {
@@ -32,12 +32,62 @@ public:
         setColour(juce::TextButton::textColourOnId, palette::textDark);
     }
 
-    // Knob: peca fisica do asset harness, rodada pelo angulo do valor, com o
-    // arco de escala e o anel de foco desenhados por cima em codigo.
+    void drawLinearSlider(juce::Graphics& g,
+                          int x,
+                          int y,
+                          int width,
+                          int height,
+                          float sliderPos,
+                          float minSliderPos,
+                          float maxSliderPos,
+                          juce::Slider::SliderStyle style,
+                          juce::Slider& slider) override {
+        // So o cursor do seletor usa a pega fisica. Os outros sliders lineares,
+        // se algum dia existirem, continuam com o desenho padrao.
+        if (slider.getProperties().getWithDefault("byteRangeSelector", false) !=
+            juce::var {true}) {
+            juce::LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, sliderPos,
+                                                   minSliderPos, maxSliderPos, style, slider);
+            return;
+        }
+
+        const auto& cap = assets::detail::sliderCap();
+        const float thumbHeight = juce::jmin(static_cast<float>(height), 18.0f);
+        const float thumbWidth = cap.isValid()
+            ? thumbHeight * (static_cast<float>(cap.getWidth()) /
+                             static_cast<float>(cap.getHeight()))
+            : 10.0f;
+        const auto thumb = juce::Rectangle<float> {
+            sliderPos - thumbWidth * 0.5f,
+            static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f,
+            thumbWidth, thumbHeight};
+
+        if (cap.isValid()) {
+            // A pega marca o inicio da regiao. A barra da regiao e a faixa de
+            // posicao vivem no ByteSelector, por isso o cursor nao desenha
+            // nenhuma escala: seria a terceira leitura do mesmo numero.
+            g.drawImage(cap, thumb, juce::RectanglePlacement::centred);
+        } else {
+            // Sem a peca: cursor vetorial. Nao e' o caminho previsto, e' a rede
+            // para o binario nao falhar em silencio se o asset faltar.
+            g.setColour(palette::textOnDark);
+            g.fillRoundedRectangle(thumb, 2.0f);
+        }
+
+        // 2.7 Foco visivel. A peca nao sabe se o seletor tem o foco.
+        if (slider.hasKeyboardFocus(true)) {
+            g.setColour(palette::accent);
+            g.drawRoundedRectangle(thumb.expanded(2.0f), 2.0f, 1.5f);
+        }
+    }
+
+    // Knob: peca fisica do asset harness, com o arco de escala e o anel de
+    // foco desenhados por cima em codigo. O corpo fica fixo; o valor move-se
+    // no arco e no ponteiro.
     //
     // A divisao entre o que vem do PNG e o que e' codigo nao e' arbitraria. O
     // corpo e o marcador branco sao fisicos e ficam iguais em todos os valores.
-    // O arco precisa de know o valor, e o anel de foco precisa de saber se o
+    // O arco precisa de conhecer o valor, e o anel de foco precisa de saber se o
     // componente tem o foco do teclado: as duas coisas so existem em codigo, e
     // um PNG nao as teria.
     void drawRotarySlider(juce::Graphics& g,
@@ -55,17 +105,13 @@ public:
         const float angle = rotaryStartAngle +
                             sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
 
-        // A peca foi recortada com o marcador em 12:00, entao rodar o
-        // angulo do valor faz o marcador apontar para o sitio certo. A peca e'
-        // vista de cima, por isso a rotacao le-se como o marcador a girar.
-        //
-        // O retangulo e' calculado ANTES de addTransform. Um drawImage com um
-        // rect ja transformado e' ele proprio o rect que a rotacao despacha, e
-        // nao o rect pedido: o corpo sai do sitio e cai no canto.
+        // A peca foi recortada com o marcador em 12:00, mas o desenho nao roda
+        // a peca. A marcacao em 12:00 fica como origem; o valor e' o arco e o
+        // ponteiro, ambos em codigo.
         const auto& body = assets::detail::knobMd();
         if (body.isValid()) {
             // A peca nao e' rodada. E' uma fotografia top-down com a luz de
-            // estudio assente na peels; rodar o PNG faria o brilho andar com o
+            // estudio assente na peca; rodar o PNG faria o brilho andar com o
             // knob, e o realce passaria a descer de manha a norte, que e'
             // fisicamente falso. O harness diz o mesmo: a rotacao e' do
             // plugin, via filme de imagens, e `createSpriteSheet` esta'
