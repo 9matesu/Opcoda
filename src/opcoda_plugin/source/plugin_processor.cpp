@@ -1,8 +1,11 @@
 #include "plugin_processor.h"
 
+#include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_sample.h"
 #include "opcoda_core/pe/pe_parser.h"
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 
 namespace opcoda {
@@ -11,7 +14,7 @@ PluginProcessor::PluginProcessor()
     // So saida. Um barramento de entrada deixaria a trilha de audio do Ableton
     // esperando um sinal que o plugin nunca usa, e obrigaria o host a tratar o
     // Opcoda como efeito em vez de instrumento.
-    : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+: juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters_(*this, nullptr, "Opcoda", createParameterLayout()) {}
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout() {
@@ -106,13 +109,62 @@ bool PluginProcessor::ingest(const juce::String& path) {
         return false;
     }
 
-    sourceName_ = juce::File(path).getFileName();
+sourceName_ = juce::File(path).getFileName();
     sourcePath_ = path;
     sourceInfo_.name = sourceName_;
     sourceInfo_.formatTag = "[64-bit PE]";
     sourceInfo_.sizeBytes = static_cast<std::int64_t>(size);
+
+    // As secoes e a curva vao para o estado do editor. Antes eram descartadas
+    // aqui, e o display nao tinha o que desenhar.
+    sourceInfo_.sections.clear();
+    sourceInfo_.sections.reserve(parsed.image.numberOfSections);
+    for (std::size_t i = 0; i < parsed.image.numberOfSections; ++i) {
+        const auto& parsedSection = parsed.image.sections[i];
+        SourceInfo::SectionInfo entry;
+        // O campo de nome tem 8 bytes e pode nao estar terminado, por isso o
+        // comprimento vai explícito em vez de usar strlen.
+        entry.name = juce::String::fromUTF8(parsedSection.name,
+                                            static_cast<int>(
+                                                std::find(parsedSection.name,
+                                                          parsedSection.name + 8, '\0')
+                                                - parsedSection.name));
+        entry.rawOffset = parsedSection.rawOffset;
+        entry.rawSize = parsedSection.rawSize;
+        entry.entropy = parsedSection.entropy;
+        sourceInfo_.sections.push_back(std::move(entry));
+    }
+
+    sourceInfo_.entropyCurve = buildEntropyCurve(bytes.data(), size);
     lastError_.clear();
     return true;
+}
+
+std::vector<float> PluginProcessor::buildEntropyCurve(const std::uint8_t* data,
+                                                     std::size_t size) {
+    // Janelas proporcionais ao tamanho, com um piso e um teto. Sem o piso, um
+    // binario de 200 KB teria uma janela de 1 byte e um histograma de 256
+    // celulas por ponto, que e' ruido. Sem o teto, um arquivo de 200 MB teria
+    // 1500 janelas e a curva ficaria ilegivel.
+    constexpr std::size_t kTargetPoints = 320;
+    constexpr std::size_t kMinWindow = 256;
+
+    const auto window = juce::jmax(kMinWindow, size / kTargetPoints);
+    const auto count = juce::jmax<std::size_t>(1, (size + window - 1) / window);
+    if (count > kTargetPoints * 2) {
+        return {};
+    }
+
+    std::vector<double> raw(count, 0.0);
+    const auto written = entropy::shannonCurve(data, size, window, raw.data(), count);
+
+    std::vector<float> curve;
+    curve.reserve(written);
+    for (std::size_t i = 0; i < written; ++i) {
+        // A escala do display e' 0 a 8 bits por byte.
+        curve.push_back(static_cast<float>(raw[i]));
+    }
+    return curve;
 }
 
 void PluginProcessor::drainIncomingQueue() noexcept {
@@ -199,12 +251,34 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     drainIncomingQueue();
     readNotes(midi);
 
-    const auto numSamples = buffer.getNumSamples();
+const auto numSamples = buffer.getNumSamples();
     engine_.setSounding(notes_.sounding());
     engine_.processBlock(buffer.getWritePointer(0),
                          buffer.getWritePointer(1),
                          numSamples,
                          currentParams());
+
+    publishTelemetry(buffer);
+}
+
+// Publica o pico do bloco e as vozes ativas. Roda depois do motor e antes de
+// sair: a leitura e' sobre o bloco que acabou de ser escrito.
+void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept {
+    float peak = 0.0f;
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
+        const auto samples = buffer.getReadPointer(channel);
+        for (int i = 0; i < buffer.getNumSamples(); ++i) {
+            peak = std::max(peak, std::abs(samples[i]));
+        }
+    }
+
+    const auto decibels = (peak > 1.0e-6f) ? juce::Decibels::gainToDecibels(peak) : -1.0f;
+
+    // relaxed e' suficiente: sao valores de leitura para um mostrador, e a
+    // ordenacao que interessa e' dentro do proprio bloco, que ja terminou.
+    telemetry_.peakDb.store(decibels, std::memory_order_relaxed);
+    telemetry_.activeVoices.store(engine_.lastActiveVoices(), std::memory_order_relaxed);
+    telemetry_.sounding.store(notes_.sounding(), std::memory_order_relaxed);
 }
 
 

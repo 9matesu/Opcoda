@@ -79,7 +79,38 @@ void setStateInformation(const void* data, int sizeInBytes) override;
         juce::String name;
         juce::String formatTag;  // "[64-bit PE]", como no mock
         std::int64_t sizeBytes {0};
+
+        // Uma linha por secao, com a entropia em bits por byte. Publicado para
+        // o display, que precisa desenhar as abas proporcionais ao tamanho.
+        struct SectionInfo {
+            juce::String name;
+            std::uint32_t rawOffset {0};
+            std::uint32_t rawSize {0};
+            double entropy {0.0};
+        };
+
+        std::vector<SectionInfo> sections;
+
+        // Curva de entropia por janela, ja normalizada em [0, 8]. Vem do mesmo
+        // shannonCurve do ensaio T1, entao o que se ve e o que se mediu.
+        std::vector<float> entropyCurve;
     };
+
+    // Telemetria publicada pelo callback e lida pelo editor a 20 Hz.
+    //
+    // Sao atomicos soltos em vez de uma struct protegida por lock: sao cinco
+    // valores de leitura, e o custo de um CriticalSection por bloco seria o
+    // oposto do que este projeto persegue. Nao ha snapshot consistente entre os
+    // campos, e para uma leitura de pico e contagem de vozes isso e' irrelevante
+    // e vale a pena dizer explicitamente em vez de fingir que e' atómico.
+    struct Telemetry {
+        std::atomic<float> peakDb {-1.0f};
+        std::atomic<int> activeVoices {0};
+        std::atomic<bool> sounding {false};
+        std::atomic<float> sampleRate {48000.0f};
+    };
+
+    [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
@@ -129,6 +160,13 @@ private:
     // mensagens com contadores ja resolvidos.
     void readNotes(const juce::MidiBuffer& midi) noexcept;
 
+    // Curva de entropia por janela, normalizada em [0, 8]. Roda na thread de
+    // interface, no ingest, e nao no caminho de audio.
+    static std::vector<float> buildEntropyCurve(const std::uint8_t* data,
+                                                std::size_t size);
+
+    void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
+
     opcoda::dsp::GranularEngine engine_;
 
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
@@ -156,6 +194,7 @@ private:
     // A regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter testes.
     // Aqui so se traduz MidiMessage em Event, que e' a parte fina.
     rt::NoteTracker notes_;
+    Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;
     static constexpr int kCcDensity = 74;  // Brightness: DENSITY

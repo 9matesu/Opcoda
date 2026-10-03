@@ -191,6 +191,8 @@ Cinco arquivos, cada um com uma responsabilidade só:
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
 | `display_panel.h` | fundo escuro e grade de 24 px |
+| `section_tabs.h/.cpp` | abas de seção PE, largura proporcional ao tamanho em disco |
+| `entropy_curve.h/.cpp` | curva de entropia com brilho em camadas e cursor |
 | `plugin_editor.h/.cpp` | as três faixas e o layout |
 
 O editor tem três faixas: header claro, display escuro, painel de parâmetros. É a
@@ -228,13 +230,50 @@ despencam para poucos pixels. Os seis ficam sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
 sem precisar de um segundo layout.
 
+### O display F008
+
+As abas de seção, a curva de entropia e a telemetria entraram na F008. O
+`ingest` deixou de descartar o `PeImage`: publica em `SourceInfo` o nome, o
+tamanho e, por seção, o nome, o offset, o tamanho em disco e a entropia, mais
+uma curva de entropia em janelas calculada com `entropy::shannonCurve`. O
+`PeImage` continua a ser local ao `ingest`, para não segurar o ficheiro inteiro
+na memória da interface.
+
+A telemetria de pico, vozes ativas e estado de som sai de `processBlock` por
+`std::atomic`, lida pela thread de interface a 20 Hz. `refreshTelemetry` só
+reescreve um `Label` quando o texto muda, porque trocar o texto dispara um
+evento de acessibilidade e a 20 Hz isso vira ruído para quem usa leitor de tela.
+
+### Quatro defeitos que só a captura de ecrã apanhou
+
+Nenhum destes aparece em teste nenhum: são de layout e de contraste, e só
+mostram com o binário a correr.
+
+**A cor de texto do rodapé vinha da superfície clara.** As cinco leituras de
+telemetria são `BoxedLabel`, que nunca define cor de texto e portanto herda a
+quase preta do `Label`. Sobre o display escuro "48.0 kHz" ficava ilegível, o que
+reprova o critério 1.4.3. Passaram a usar `textOnDark`.
+
+**O rodapé empilhava caixas sobrepostas.** O helper media cada caixa a partir
+da margem esquerda a cada passo, em vez de encostar na caixa anterior, então
+todas ocupavam o mesmo intervalo e só a última pintada aparecia: o pico, a
+entropia e o offset estavam debaixo das outras. Agora são larguras fixas
+empilhadas da direita para a esquerda.
+
+**Uma caixa vazia parece defeito.** Sem ficheiro não há seções para listar, e a
+moldura das abas e das leituras vazias desenha um retângulo sem nada dentro. As
+abas e as duas leituras que dependem de material escondem-se quando não têm
+texto. A linha de estado não se move quando isso acontece: um alvo que salta ao
+carregar um binário é pior do que um espaço constante.
+
+**Um `int cursor` local colide com `Component::cursor`.** O `/W4` trata a
+ocultação de membro como erro, e o build parou. Passou a chamar-se `edge`.
+
 ### O que não está feito
 
-O display está vazio de propósito nesta etapa: as abas de seção, a curva de
-entropia com brilho e a telemetria de pico entram depois da aprovação do visual
-do chassi. A telemetria vai exigir que o `PeImage` deixe de ser descartado no
-`ingest`, porque a interface precisa do nome, do tamanho e da entropia de cada
-seção.
+A curva mostra sempre a entropia do ficheiro inteiro. Clicar numa aba muda o
+`offset` no rodapé mas não recorta a curva para essa seção, e a leitura de
+entropia segue o ponto central porque ainda não há cursor de transporte.
 
 ## Categoria de instrumento
 

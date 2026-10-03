@@ -2,11 +2,13 @@
 
 #include "boxed_label.h"
 #include "display_panel.h"
+#include "entropy_curve.h"
 #include "knob.h"
 #include "led.h"
 #include "look_and_feel.h"
 #include "palette.h"
 #include "plugin_processor.h"
+#include "section_tabs.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_events/juce_events.h>
@@ -61,6 +63,7 @@ private:
     void buildParameterPanel();
     void timerCallback() override;
     void refresh();
+    void refreshTelemetry(const PluginProcessor::SourceInfo& info);
 
     // Configura um rotulo sem fundo. Devolve void em vez de Label por valor
     // porque juce::Component tem construtor de copia deletado e nao declara
@@ -102,7 +105,10 @@ private:
 
     Led powerLed_ {Led::State::off};
     Led statusLed_ {Led::State::off};
+    Led voicesLed_ {Led::State::off};
     DisplayPanel display_;
+    SectionTabs tabs_;
+    EntropyCurve curve_;
 
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
@@ -110,6 +116,14 @@ private:
     BoxedLabel voices_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel status_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel engineTitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
+
+    // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
+    // mock. Todas em texto, nunca so por cor.
+    BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
 
     BoxedLabel fileName_ {palette::subPanel, palette::chassisBorder};
     BoxedLabel formatTag_ {palette::subPanel, palette::chassisBorder};
@@ -119,6 +133,10 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::unique_ptr<juce::FileChooser> chooser_;
     bool dragHovered_ {false};
+
+    // Identidade do material carregado. A curva e as abas so sao reconstruidas
+    // quando isto muda, e nao a cada tique do timer.
+    juce::String loadedSignature_;
 };
 
 } // namespace opcoda

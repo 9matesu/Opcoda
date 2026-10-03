@@ -37,19 +37,24 @@ mínimo de 562×408.
 | 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos |
 | 1.4.1 Uso de cor | LEDs nunca são o único sinal | **cumpre** | cada LED é acompanhado de rótulo; nenhum estado depende só da cor |
 | 1.4.10 Refluxo | interface utilizável a 200% de zoom sem rolagem horizontal | **parcial** | redimensiona de 560 a 4096 px sem rolagem, mas não há medição a 200% de zoom em display de baixa densidade |
-| 1.4.1 Uso de cor (curva e mapa de seções) | curva de entropia e mapa de seções usam rótulo ou padrão, não só cor | **pendente** | a curva de entropia e as abas de seção entram na etapa F008; ainda não existem |
+| 1.4.1 Uso de cor (curva e mapa de seções) | curva de entropia e mapa de seções usam rótulo ou padrão, não só cor | **parcial** | a curva tem cursor vertical e eixo de grade, e as abas trazem o nome da seção em texto. Mas a aba selecionada só se distingue pela cor e pelo fundo: falta um marcador que não seja cor, como um sublinhado ou um三角inho |
 
 ### Uma decisão de desenho que afeta acessibilidade
 
 O display é escuro porque o chassi é claro, e não por estética. Halo laranja
 sobre superfície clara dá 2,4:1 e desaparece, então toda a energia de brilho
-ficou na única região com contraste suficiente. Se a curva de entropia for
-vermelha sobre o LCD escuro, o contraste do texto adjacente não muda: é a
-mesma decisão, aplicada antes de a curva existir.
+ficou na única região com contraste suficiente.
+
+O rodapé de telemetria vive dentro do display, e isso obriga a uma segunda
+par de tokens: um rótulo sem cor de texto própria herda a quase preta do
+`Label` e fica ilegível sobre o LCD escuro. `textOnDark #c6cacc` sobre
+`display #0e1013` dá 11,6:1. Regra geral: **quem decide a cor de fundo decide
+a cor do texto**, e por isso o rodapé não pode usar os tokens do chassi claro.
 
 ## Encaminhamento
 
 Corrigir os links genéricos da proposta completa, fixar `lang="pt-BR"` no
-template e medir o refluxo a 200% de zoom em display de baixa densidade. Os itens
-pendentes acima pertencem à etapa F008 e à reauditoria no congelamento de código
-do MVP (etapa S5).
+template e medir o refluxo a 200% de zoom em display de baixa densidade. Dar à
+aba selecionada um marcador que não seja cor, para fechar o 1.4.1 parcial acima.
+Os itens pendentes acima entram na reauditoria no congelamento de código do MVP
+(etapa S5).

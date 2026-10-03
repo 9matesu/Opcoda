@@ -51,6 +51,10 @@ target_sources(Opcoda
         source/led.h
         source/boxed_label.h
         source/display_panel.h
+        source/section_tabs.cpp
+        source/section_tabs.h
+        source/entropy_curve.cpp
+        source/entropy_curve.h
         source/palette.h)
 
 target_link_libraries(Opcoda

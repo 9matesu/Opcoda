@@ -22,8 +22,12 @@ public:
 
     static juce::Font monoFont(float height) {
         auto font = juce::Font {juce::FontOptions {height, juce::Font::plain}};
-        font.setTypefaceName(juce::Font::getDefaultMonospacedFontName());
+        font.setTypefaceName(getDefaultMonospacedTypefaceName());
         return font;
+    }
+
+    static const juce::String& getDefaultMonospacedTypefaceName() {
+        return juce::Font::getDefaultMonospacedFontName();
     }
 
     static juce::Font sansFont(float height, bool bold = false) {

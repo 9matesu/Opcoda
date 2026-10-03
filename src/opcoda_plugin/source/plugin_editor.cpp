@@ -29,6 +29,15 @@ const std::array<Knob::Spec, 6> kSpecs {
 
 } // namespace
 
+// Trocar o texto de um Label dispara um evento de acessibilidade. A 20 Hz isso
+// vira ruido para quem usa leitor de tela, entao so se escreve quando muda.
+void setIfChanged(juce::Label& label, const juce::String& text) {
+    if (label.getText() != text) {
+        label.setText(text, juce::dontSendNotification);
+        label.setName(text);
+    }
+}
+
 PluginEditor::PluginEditor(PluginProcessor& processor)
     : juce::AudioProcessorEditor(&processor),
       owner_(processor),
@@ -88,6 +97,23 @@ void PluginEditor::buildHeader() {
                             static_cast<juce::Component*>(&statusLed_),
                             static_cast<juce::Component*>(&status_)}) {
         addAndMakeVisible(*component);
+    }
+
+    for (auto* component : {static_cast<juce::Component*>(&tabs_),
+                            static_cast<juce::Component*>(&curve_),
+                            static_cast<juce::Component*>(&voicesLed_)}) {
+        addAndMakeVisible(*component);
+    }
+
+    for (auto* readout : {&entropyReadout_, &offsetReadout_, &peakReadout_, &rateReadout_,
+                          &voicesReadout_}) {
+        addAndMakeVisible(*readout);
+        readout->setInterceptsMouseClicks(false, false);
+        // A cor de texto por omissao do Label e' quase preta e desaparece sobre
+        // o display escuro. textOnDark mantem a leitura acima de 4,5:1, que e'
+        // o que o criterio 1.4.3 exige. O rodape vive no display, nao no chassis
+        // claro, e por isso nao pode usar os tokens de superficie clara.
+        readout->setColour(juce::Label::textColourId, palette::textOnDark);
     }
 
     loadButton_.setButtonText("LOAD");
@@ -167,11 +193,43 @@ void PluginEditor::resized() {
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
-    const int statusY = displayBounds.getY();
+    // Abas de secao na faixa de 18 px no topo do display, como no mock.
+    tabs_.setBounds(displayBounds.reduced(1, 1).withHeight(18));
+
+    // A curva ocupa o resto, com 4 px de folga para a linha do topo.
+    curve_.setBounds(displayBounds.reduced(5, 22)
+                         .withTrimmedBottom(24));
+
+    const int statusY = displayBounds.getY() + tabs_.getHeight() + 4;
     statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
                              .withSizeKeepingCentre(14, 14));
     status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY + 3,
                                             displayBounds.getWidth() - 36 - 12, 14});
+
+    // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
+    // por caixa. A versao anterior media cada caixa a partir da margem esquerda
+    // a cada passo, o que fazia todas ocuparem o mesmo intervalo e se
+    // sobreporem: so a ultima pintada aparecia, e o pico, a entropia e o offset
+    // ficavam escondidos debaixo das outras.
+    const int footerY = displayBounds.getBottom() - 20;
+    constexpr int footerHeight {16};
+    const int margin = displayBounds.getX() + 12;
+    int edge = displayBounds.getRight() - 12;
+
+    voicesLed_.setBounds(juce::Rectangle<int> {edge - 12, footerY + 3, 12, 12});
+    edge -= 12 + 8;
+
+    const auto put = [&edge, footerY](juce::Component& target, int width) {
+        target.setBounds(juce::Rectangle<int> {edge - width, footerY + 2, width, footerHeight});
+        edge -= width + 8;
+    };
+
+    put(voicesReadout_, 74);
+    put(rateReadout_, 78);
+    put(peakReadout_, 86);
+    put(offsetReadout_, 116);
+    entropyReadout_.setBounds(juce::Rectangle<int> {margin, footerY + 2,
+                                                    juce::jmax(0, edge - margin), footerHeight});
 
     area.removeFromTop(10);
 
@@ -216,14 +274,6 @@ void PluginEditor::refresh() {
 
     const auto& info = owner_.sourceInfo();
 
-    const auto setIfChanged = [](juce::Label& label, const juce::String& text) {
-        // Trocar o texto dispara um evento de acessibilidade. A 20 Hz isso vira
-        // ruido para quem usa leitor de tela, entao so quando muda de fato.
-        if (label.getText() != text) {
-            label.setText(text, juce::dontSendNotification);
-            label.setName(text);
-        }
-    };
 
     setIfChanged(fileName_, info.name.isNotEmpty() ? info.name : juce::String {"-"});
     setIfChanged(formatTag_, info.formatTag);
@@ -236,6 +286,12 @@ void PluginEditor::refresh() {
     // aparece depois que ha algo para mostrar.
     formatTag_.setVisible(info.formatTag.isNotEmpty());
     fileSize_.setVisible(info.sizeBytes > 0);
+
+    // Sem ficheiro nao ha secoes para listar. A moldura vazia no topo do display
+    // lia-se como elemento partido, entao a faixa so aparece com material
+    // carregado. A posicao da linha de estado nao muda: um alvo que salta
+    // quando se carrega um binario e' pior do que um espaco constante.
+    tabs_.setVisible(owner_.hasSource());
 
     Led::State ledState = Led::State::off;
     juce::String message;
@@ -256,6 +312,67 @@ void PluginEditor::refresh() {
 
     statusLed_.setState(ledState);
     powerLed_.setState(ledState == Led::State::off ? Led::State::off : Led::State::ready);
+
+    refreshTelemetry(info);
+}
+
+// Abas e curva so sao reenviadas quando o conteudo muda. Reconstruir o Path a
+// 20 Hz sem necessidade seria trabalho inutil no thread de interface, e o
+// rebuild de Path e' a parte mais cara do display.
+void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
+    const auto signature = info.name + juce::String {info.sizeBytes};
+    if (loadedSignature_ != signature) {
+        loadedSignature_ = signature;
+        tabs_.setSections(info.sections);
+        curve_.setCurve(info.entropyCurve);
+        curve_.repaint();
+    }
+
+    const auto& telemetry = owner_.telemetry();
+    const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
+    const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
+    const auto sounding = telemetry.sounding.load(std::memory_order_relaxed);
+
+    // A leitura de entropia segue a posicao do cursor, que hoje e' o centro
+    // porque nao ha cursor de transporte. Quando existir, passa a ser a posicao
+    // de leitura; o resto do codigo ja' esta' preparado para isso.
+    const auto fraction = 0.5f;
+    curve_.setCursorFraction(fraction);
+
+    setIfChanged(entropyReadout_,
+                 info.sections.empty()
+                     ? juce::String {}
+                     : juce::String {curve_.valueAt(fraction), 2} + " bits/byte");
+
+    if (info.sections.empty()) {
+        setIfChanged(offsetReadout_, juce::String {});
+    } else {
+        const auto count = static_cast<int>(info.sections.size());
+        const auto index = juce::jlimit(0, count - 1, tabs_.selected());
+        const auto& chosen = info.sections[static_cast<std::size_t>(index)];
+        setIfChanged(offsetReadout_,
+                     chosen.name + " 0x" +
+                         juce::String::formatted("%06X", chosen.rawOffset));
+    }
+
+    setIfChanged(peakReadout_,
+                 peak < -0.5f ? juce::String {"PK -inf dB"}
+                              : juce::String {"PK "} + juce::String {peak, 1} + " dB");
+    setIfChanged(rateReadout_,
+                 juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
+                     + " kHz");
+    setIfChanged(voicesReadout_,
+                 juce::String {"VOICES "} + juce::String {activeVoices});
+
+    // Sem material nao ha entropia nem offset para ler. Uma caixa vazia e' um
+    // retangulo com moldura e nada dentro, que se le como defeito, e' o mesmo
+    // motivo que esconde os chips vazios do cabecalho.
+    entropyReadout_.setVisible(entropyReadout_.getText().isNotEmpty());
+    offsetReadout_.setVisible(offsetReadout_.getText().isNotEmpty());
+
+    // O LED de vozes nunca e' a unica pista: o numero ao lado e' o mesmo dado
+    // em texto, que e' o que o criterio 1.4.1 do WCAG pede.
+    voicesLed_.setState(sounding && activeVoices > 0 ? Led::State::ready : Led::State::off);
 }
 
 void PluginEditor::chooseFile() {
