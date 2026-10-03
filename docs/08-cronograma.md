@@ -15,20 +15,27 @@ S3 continua inteira.
 | S1 esqueleto e parser | concluída | nada |
 | S2 motor, arrasto e DC-blocker | concluída | nada |
 | S3a MIDI, estado e guardas | concluída | nada: estado do host, gate por note-on, pedal de sustain e 2 CCs mapeados |
-| S3b T2 no Ableton | por fazer | medir p99 e confirmar zero xruns em 5 minutos |
-| S4a GUI e display | concluída | nada: chassi, knobs, LEDs, display de entropia, abas, seletor de bytes e telemetria |
-| S4b T4 no Ableton | por fazer | arrasto, os 6 parâmetros, os 2 CCs, 2 minutos por formato |
+| S3b T2 no Ableton | bloqueado | medir p99 e confirmar zero xruns em 5 minutos; exige DAW licenciado |
+| S4a GUI e display | concluída | nada: chassi, knobs, LEDs, display de entropia, mapa de seções, seletor de bytes e telemetria |
+| S4b T4 no Ableton | bloqueado | arrasto, os 6 parâmetros, os 2 CCs, 2 minutos por formato; exige DAW licenciado |
 | S5 congelamento e validação | por fazer | auditoria de documentação, pacote x64 |
 
 Duas etapas estão fora da ordem original e isso é uma decisão registada, não um
 atraso escondido. O que mede se é a validade da cadeia inteira, e uma cadeia que
 não abre no host não valida nada.
 
+**S3b e S4b estão bloqueadas, não atrasadas.** O T2 e o T4 medem-se num DAW, e a
+única cópia do Ableton nesta máquina não tem licença válida: o executável arranca
+mas nunca abre janela utilizável. Sem chave legítima a medição não existe, e o
+`docs/07-plano-testes.md` escreve o motivo. A entrega de 03/11 depende de ter um
+host licenciado antes de 10/10; se não, S3b e S4b deslizam e a data de entrega
+move-se com elas.
+
 ## Plano a partir de 03/10/2026
 
 | Semana | Até | Foco | Entrega |
 | --- | --- | --- | --- |
-| S3b | 10/10 | T2 no Ableton Live 12 com buffers de 128, 256 e 512 a 44,1 e 48 kHz | p99 medido, zero xruns em 5 minutos |
+| S3b | 10/10 | obter DAW licenciado, depois T2 com buffers de 128, 256 e 512 a 44,1 e 48 kHz | p99 medido, zero xruns em 5 minutos |
 | S4b | 17/10 | T4 no Ableton: arrasto, os 6 parâmetros, os 2 CCs, 2 minutos por formato | ensaio executado com evidência |
 | S5 | 03/11 | congelamento, auditoria de documentação e empacotamento | pacote x64 entregue |
 

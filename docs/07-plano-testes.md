@@ -35,9 +35,9 @@ Consequência sobre os ensaios acima:
 | Ensaio | Situação | Como é verificado |
 | --- | --- | --- |
 | T1 (espectral) | executado | FFT N 65536 com Blackman-Harris em teste automatizado, critério de 40 dB e de -60 dBFS |
-| T2 (latência) | parcial | p99 medido em teste; o ensaio com DAW e 8 vozes reais depende da etapa S3b |
+| T2 (latência) | bloqueado | p99 medido em teste; o ensaio com DAW e 8 vozes reais exige um host licenciado, que não está disponível nesta máquina |
 | T3 (robustez) | executado | 10 casos de borda e truncamento automatizados; as 50 mutações de bit-flip entram como testes quando o corpus existir |
-| T4 (aceite) | pendente | exige instalar o bundle atual no Ableton e repetir arrasto, parâmetros e CCs, etapas S3b e S4b |
+| T4 (aceite) | bloqueado | exige instalar o bundle atual num DAW licenciado e repetir arrasto, parâmetros e CCs, etapas S3b e S4b |
 | TSan | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
 | UBSan | indisponível | substituído por `/W4 /WX` e pelos testes de borda |
 | `pluginval` | indisponível | trava nesta máquina; a conformidade do bundle é conferida no `moduleinfo.json` gerado pelo `juce_vst3_helper`, e o comportamento é medido no Ableton |
@@ -51,14 +51,31 @@ desenvolvimento, e o `pluginval` da Tracktion trava mesmo com
 `--strictness-level=1 --skip-gui-tests`, ficando com 0,03 s de CPU em 25 minutos
 sem escrever uma linha em `stdout`.
 
-Ableton Live 12.3.1 está instalado, é o host que o utilizador vai usar de facto, e
-dá telemetria de latência suficiente para o critério do T2. Trocar o host é uma
-mudança de método, não um critério mais frouxo: o número continua a ser p99
-abaixo de 50% do orçamento com zero xruns.
+Ableton Live 12.3.1 é o host que o utilizador vai usar de facto, e dá telemetria
+de latência suficiente para o critério do T2. Trocar o host é uma mudança de
+método, não um critério mais frouxo: o número continua a ser p99 abaixo de 50% do
+orçamento com zero xruns.
+
+**Este é o que bloqueia o T2 e o T4 hoje.** Existe uma cópia do Ableton nesta
+máquina, mas não é uma instalação licenciada: o diretório de programa traz um
+keygen e um patcher, e o executável arranca mas nunca abre uma janela utilizável,
+porque a ativação não está feita. Sem chave legítima não há ensaio, e ativar com
+o material que acompanha o pacote não é uma opção.
+
+Por isso o T2 e o T4 ficam **bloqueados** e não "pendentes". A diferença é
+deliberada: pendente é trabalho que está agendado; bloqueado é trabalho que não
+pode ser feito com o que existe nesta máquina. Um T2 executado num host
+licenciado é o que fecha o portão C no Ableton; sem ele, o portão continua a
+passar no guard de alocação e nos testes, e a lacuna fica escrita.
+
+O que já foi verificado sem DAW: o bundle declara `["Instrument", "Synth"]` no
+`moduleinfo.json`, e o `LoadLibrary` foi exercitado num host real quando o
+plugin foi aceite numa sessão anterior. O que falta é a telemetria de latência.
 
 O `pluginval` sai do critério com substituto declarado, não com o critério
 apagado. O que ele verificaria é conferido direto no `moduleinfo.json`, que é o
-que o host lê para decidir a categoria do plugin, e o comportamento é medido no
-Ableton.
+que o host lê para decidir a categoria do plugin, e o comportamento seria medido
+no Ableton, se e quando houver host licenciado.
 
-Nenhuma dessas lacunas é omitida: a verificação de concorrência é feita por teste automatizado, e não por declaração.
+Nenhuma dessas lacunas é omitida: a verificação de concorrência é feita por
+teste automatizado, e não por declaração.

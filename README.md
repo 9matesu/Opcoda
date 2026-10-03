@@ -84,5 +84,6 @@ faixas, MIDI por nota e CC, estado do host e seletor de bytes. 124 casos de test
 e o guard de alocação verdes.
 
 Falta a validação no Ableton: T2 com medição de p99 e T4 de arrasto, parâmetros e
-CCs, conforme o cronograma S3b, S4b e S5. O bundle instalado em `Common Files` é
-anterior ao seletor de bytes e ao MIDI.
+CCs. As duas etapas estão **bloqueadas**, não atrasadas: não há DAW licenciado
+nesta máquina, e a única cópia do Ableton presente não abre janela utilizável sem
+licença. O motivo está em `docs/07-plano-testes.md`.
