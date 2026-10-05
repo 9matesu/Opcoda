@@ -394,7 +394,7 @@ A consequência prática sobre os ensaios é a seguinte, e é a diferença entre
 \textbf{Ensaio} & \textbf{Situação} & \textbf{Como é verificado} \\ \midrule
 Espectral & executado & Transformada rápida de Fourier com 65536 pontos e janela Blackman-Harris em teste automatizado \\
 Latência & bloqueado & Percentil 99 medido em teste de núcleo; o ensaio com oito vozes reais exige host licenciado \\
-Robustez & executado & Dez casos de borda e truncamento automatizados; as mutações de bit entram quando o corpus existir \\
+Robustez & executado & Cinquenta mutações de bit e dez casos de borda, todos automatizados e com erro tipado \\
 Aceite & bloqueado & exige instalar o bundle num host licenciado e repetir arrasto, parâmetros e controladores \\
 ThreadSanitizer & indisponível & substituído pelo guard de alocação, que falha se o callback alocar \\
 MemorySanitizer & indisponível & não existe para o compilador da Microsoft no Windows; o substituto é instrumentar o arranque em três pontos \\
@@ -734,7 +734,7 @@ Vale registrar uma observação de qualidade do próprio ensaio. O critério de 
 Os dez casos de borda do plano de validação estão automatizados e passam. Cobrem arquivo vazio, arquivo de um byte, deslocamento apontando fora do arquivo, número de seções acima do limite, tamanho declarado de dados brutos maior que o disponível, seções com deslocamento fora do arquivo, assinatura MZ válida com assinatura PE ausente, tamanho de cabeçalho opcional inconsistente, entropia sobre seção sem dados e truncamento no meio de uma seção.
 
 
-Todos produzem erro tipado, sem exceção e sem falha de segmentação. O corpus de cinquenta mutações por inversão de bit, previsto no plano, entra como casos determinísticos quando o corpus existir; ele não existe ainda, e a afirmação de que a entrada malformada é rejeitada se apoia nos dez casos de borda, não em fuzzing exaustivo.
+Todos produzem erro tipado, sem exceção e sem falha de segmentação. O corpus de cinquenta mutações por inversão de bit previsto no plano foi escrito como casos determinísticos, e cada mutação declara o erro que se espera dela, de modo que uma mudança de comportamento no parser que passasse a devolver outro código quebra o ensaio. A varredura é fixa e não exaustiva: cobre os campos que o leitor consulta e não todo o espaço de entradas, pelo que a rejeição de entrada malformada está demonstrada para o corpus e não para todas as sequências de bytes possíveis.
 
 
 O portão de cobertura de ramo acima de 70\% não tem medição automática, porque a ferramenta de cobertura de ramo não está disponível no toolchain escolhido. Os testes exercitam os caminhos de erro de forma explícita, mas o número não é medido, e o texto diz isso.

@@ -24,7 +24,7 @@ src/opcoda_core/    núcleo C++20 puro, sem JUCE
   dsp/              motor granular, janelas, DC-blocker, limiter
   rt/               fila SPSC, troca de amostra, guard de alocação
 src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
-tests/              GoogleTest, 153 casos mais 6 do guard de alocação
+tests/              GoogleTest, 156 casos mais 6 do guard de alocação
 docs/               documentação acadêmica e técnica
 specs/              especificações por feature, do spec-kit
 ```
@@ -89,7 +89,7 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
 ## Estado
 
 Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
-faixas, grelha de bytes, MIDI por nota e CC, e estado do host. 153 casos de teste
+faixas, grelha de bytes, MIDI por nota e CC, e estado do host. 156 casos de teste
 e o guard de alocação verdes.
 
 Há um defeito conhecido e **não corrigido**, visível no Standalone: os seis

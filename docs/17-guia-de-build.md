@@ -163,9 +163,9 @@ barramento de eventos, que é o que permite ao host entregar notas.
 | Portão | Como verificar |
 | --- | --- |
 | A · Build | `.\tools\build.ps1 -Release` compila sem warnings sob `/W4 /WX` e a guarda de runtime de debug passa |
-| B · Testes | `.\tools\build.ps1` roda os 153 casos do `opcoda_tests` mais os 6 do guard de alocação, incluindo o T1 e o end-to-end |
+| B · Testes | `.\tools\build.ps1` roda os 156 casos do `opcoda_tests` mais os 6 do guard de alocação, incluindo o T1 e o end-to-end |
 | C · Tempo real | `opcoda_alloc_guard_test` e `SampleExchange.AudioThreadAllocatesNothingDuringSwap` provam zero alocação no callback e na troca de material |
-| D · Robustez | 10 casos de borda e truncamento, e `notepad.exe` real corrompido |
+| D · Robustez | 50 mutações de bit-flip com erro tipado esperado, 10 casos de borda, e `notepad.exe` real corrompido |
 | E · Interface | verificado na etapa S4, com a GUI |
 | F · Documentação | este guia e o README acompanham o código |
 

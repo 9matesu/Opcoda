@@ -46,9 +46,8 @@ tabela acima é o ponto honesto para registar isso.
 ## Contingências
 
 Grão acima de 100 ms com interpolação linear se houver dropout, como previsto no
-plano original. As 50 mutações de bit-flip do corpus do T3 entram como testes
-unitários determinísticos quando o corpus existir; os 10 casos de borda já estão
-automatizados.
+plano original. As 50 mutações de bit-flip do corpus do T3 e os 10 casos de borda
+estão automatizados, cada mutação com o erro tipado que se espera dela.
 
 Contingência desativada em 01/10: a troca de JUCE por iPlug2 estava prevista caso
 o SDK do VST3 travasse, e JUCE 8.0.14 compila e linka no toolset v145 do Visual
