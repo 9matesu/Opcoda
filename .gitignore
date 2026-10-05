@@ -72,3 +72,16 @@ desktop.ini
 opencode.local.json
 
 build-release/
+
+# Intermedios de LaTeX (o .tex, o .bib e o .pdf final ficam versionados)
+*.aux
+*.bbl
+*.blg
+*.lof
+*.lot
+*.out
+*.toc
+
+# *.log fica restrito a docs/ de proposito: e' uma extensao generica, e um
+# *.log global esconderia logs de build ou de teste que sao uteis ver.
+docs/*.log
