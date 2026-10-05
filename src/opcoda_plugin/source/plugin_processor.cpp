@@ -1,6 +1,5 @@
 #include "plugin_processor.h"
 
-#include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/pe/byte_to_sample.h"
 #include "opcoda_core/pe/pe_parser.h"
@@ -36,6 +35,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
 }
 
 dsp::GranularParams PluginProcessor::currentParams() const noexcept {
+    // getRawParameterValue da o ponteiro para o valor guardavel, e o valor e'
+    // o que o utilizador ve: nao e' normalizado. Confundir os dois espacos
+    // entrega ao motor 0.4 em vez de 40 e nao da erro nenhum — e um bug que so
+    // aparece como som esquisito.
     const auto value = [this](const char* id) {
         return static_cast<float>(*parameters_.getRawParameterValue(id));
     };
@@ -123,7 +126,10 @@ sourceName_ = juce::File(path).getFileName();
         sourceInfo_.sections.push_back(std::move(entry));
     }
 
-    sourceInfo_.entropyCurve = buildEntropyCurve(sourceBytes_.data(), size);
+    // A curva de entropia do ficheiro inteiro foi embora com o componente que a
+    // desenhava. O rodape passou a medir a entropia da janela de 256 bytes onde
+    // esta a cabeca de leitura, que e' o que interessa e custa um histograma por
+    // tique em vez de 320 no ingest.
 
     // O seletor arranca na primeira secao com dados, e nao em zero: o cabecalho
     // PE nao produz audio reconhecivel, e comecar la faria o instrumento soar
@@ -260,33 +266,6 @@ bool PluginProcessor::publishByteRange() {
         return false;
     }
     return true;
-}
-
-std::vector<float> PluginProcessor::buildEntropyCurve(const std::uint8_t* data,
-                                                     std::size_t size) {
-    // Janelas proporcionais ao tamanho, com um piso e um teto. Sem o piso, um
-    // binario de 200 KB teria uma janela de 1 byte e um histograma de 256
-    // celulas por ponto, que e' ruido. Sem o teto, um arquivo de 200 MB teria
-    // 1500 janelas e a curva ficaria ilegivel.
-    constexpr std::size_t kTargetPoints = 320;
-    constexpr std::size_t kMinWindow = 256;
-
-    const auto window = juce::jmax(kMinWindow, size / kTargetPoints);
-    const auto count = juce::jmax<std::size_t>(1, (size + window - 1) / window);
-    if (count > kTargetPoints * 2) {
-        return {};
-    }
-
-    std::vector<double> raw(count, 0.0);
-    const auto written = entropy::shannonCurve(data, size, window, raw.data(), count);
-
-    std::vector<float> curve;
-    curve.reserve(written);
-    for (std::size_t i = 0; i < written; ++i) {
-        // A escala do display e' 0 a 8 bits por byte.
-        curve.push_back(static_cast<float>(raw[i]));
-    }
-    return curve;
 }
 
 void PluginProcessor::drainIncomingQueue() noexcept {

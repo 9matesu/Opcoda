@@ -1,23 +1,69 @@
 #include "plugin_editor.h"
 
+#include "opcoda_core/entropy/shannon_entropy.h"
+#include "opcoda_core/pe/byte_to_position.h"
+
 namespace opcoda {
 namespace {
 
 constexpr int kHeaderHeight {54};
-constexpr int kMinDisplayHeight {130};
+
+// O display passou de 130-210 px para 200-320 px. Uma grelha com endereco,
+// dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis linhas de
+// 24 px, e a faixa de 14 px do estado e os 16 px do rodape. Com a altura de
+// antes a grelha ficava com tres linhas e meia, e o endianco do ficheiro ficava
+// fora do ecra quase sempre.
+constexpr int kMinDisplayHeight {200};
+constexpr int kMaxDisplayHeight {320};
+
+// Janela minima e' 560x420. A altura subiu de 380 porque uma grelha com
+// endereco, dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis
+// linhas de 24 px, e o painel de parametros precisa de 124 px para o titulo e os
+// seis knobs.
+//
+// A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
+// para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
+// acabar. E a 480 a grelha deixa de ter espaco para a coluna ASCII e passa a
+// omite-la, o que torna o comportamento do criterio 1.4.10 um caso real e nao um
+// ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
+// vozes, e nada mais.
+constexpr int kMinWidth {480};
+constexpr int kMinHeight {420};
+
+constexpr int kAddressFieldWidth {132};
+constexpr int kSnapButtonWidth {72};
+constexpr int kStatusHeight {14};
+constexpr int kFooterHeight {16};
 
 // Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
 // MOD & OUTPUT do mock ficaram de fora porque biquad, envelope e dry/wet nao
 // existem no nucleo.
+// Inteiro para uma caixa de valor.
+//
+// **juce::String {valor, 0} nao arredonda.** Em juce_String.cpp, writeDouble so
+// aplica a precisao ao stream quando numDecPlaces > 0; com zero o `o << n` sai
+// com a precisao por omissao, que e' 6 digitos significativos. O resultado e'
+// "28.756" onde se queria "29", e Nobody reparava porque 28.756 e' um valor
+// plausivel de densidade.
+//
+// O JUCE nao tem construtor de String a partir de float arredondado, portanto o
+// arredondamento tem de ser explicito. Helper em vez de repetir roundToInt nas
+// seis lambdas, para a razao ficar escrita uma vez.
+juce::String asInteger(float value) {
+    return juce::String {juce::roundToInt(value)};
+}
+
 const std::array<Knob::Spec, 6> kSpecs {
     Knob::Spec {"grain", "SIZE", "Tamanho de grao, em milissegundos", 40.0f,
-                [](float v) { return juce::String {v, 0} + " ms"; }},
+                [](float v) { return asInteger(v) + " ms"; }},
     Knob::Spec {"density", "DENSITY", "Densidade, em graos por segundo", 20.0f,
-                [](float v) { return juce::String {v, 0} + " /s"; }},
+                [](float v) { return asInteger(v) + " /s"; }},
     Knob::Spec {"position", "POSITION", "Posicao de leitura no material", 0.5f,
-                [](float v) { return juce::String {v * 100.0f, 0} + " %"; }},
+                [](float v) { return asInteger(v * 100.0f) + " %"; }},
     Knob::Spec {"spray", "SPRAY", "Spray, dispersao da posicao de inicio", 0.0f,
-                [](float v) { return juce::String {v * 100.0f, 0} + " %"; }},
+                [](float v) { return asInteger(v * 100.0f) + " %"; }},
+    // Estas duas ja estavam certas: com uma casa decimal o writeDouble entra no
+    // if e formata em fixo. Ficam como estava para nao mexer no que funciona.
     Knob::Spec {"pitch", "PITCH", "Afinacao, em semitons", 0.0f,
                 [](float v) { return juce::String {v, 1} + " st"; }},
     Knob::Spec {"volume", "VOLUME", "Volume, em decibels", 0.0f,
@@ -67,8 +113,8 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     startTimerHz(20);
 
     setResizable(true, true);
-    setResizeLimits(560, 380, 4096, 4096);
-    setSize(820, 470);
+    setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
+    setSize(900, 540);
     refresh();
 }
 
@@ -99,28 +145,30 @@ void PluginEditor::buildHeader() {
         addAndMakeVisible(*component);
     }
 
-    for (auto* component : {static_cast<juce::Component*>(&tabs_),
-                            static_cast<juce::Component*>(&curve_),
-                            static_cast<juce::Component*>(&voicesLed_),
-                            static_cast<juce::Component*>(&selector_)}) {
+    for (auto* component : {static_cast<juce::Component*>(&grid_),
+                            static_cast<juce::Component*>(&address_),
+                            static_cast<juce::Component*>(&snapButton_),
+                            static_cast<juce::Component*>(&voicesLed_)}) {
         addAndMakeVisible(*component);
     }
 
-    // O seletor escreve no Processor, que valida e publica na fila. Devolver
-    // true impede que o Processor reaja ao que ele proprio acabou de fazer.
-    selector_.onRangeChanged = [this](std::uint64_t start, std::uint64_t end) {
-        owner_.setByteRange(start, end);
-    };
+    // A grelha escreve o POSITION. O duplo clique e o botao alternam entre a
+    // regiao exacta e a secao PE mais proxima; o metodo do Processor e' quem
+    // decide o sentido da alternancia, porque e' ele quem guarda a regiao
+    // exacta anterior.
+    grid_.onCellActivated = [this](std::uint64_t address) { activateByte(address); };
+    grid_.onSnapRequested = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
+    address_.onAddressEntered = [this](std::uint64_t address) { moveRegionTo(address); };
 
-    // O duplo clique e a tecla Enter alternam entre a regiao exacta e a secao
-    // alinhada. O metodo do Processor e' quem decide o sentido da alternancia,
-    // porque e' ele quem guarda a regiao exacta anterior.
-    selector_.onSnapRequested = [this] {
-        static_cast<void>(owner_.snapByteRangeToSection());
-    };
+    snapButton_.setButtonText("ALINHAR");
+    snapButton_.setTooltip(
+        "Alterna entre a regiao exacta e a secao PE mais proxima. Substitui a "
+        "tecla Enter que o seletor de bytes usava para o mesmo.");
+    snapButton_.setName("Alinhar a regiao a uma secao PE");
+    snapButton_.onClick = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
 
-    for (auto* readout : {&entropyReadout_, &offsetReadout_, &peakReadout_, &rateReadout_,
-                          &voicesReadout_}) {
+    for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_, &peakReadout_,
+                          &rateReadout_, &voicesReadout_}) {
         addAndMakeVisible(*readout);
         readout->setInterceptsMouseClicks(false, false);
         // A cor de texto por omissao do Label e' quase preta e desaparece sobre
@@ -134,6 +182,33 @@ void PluginEditor::buildHeader() {
     loadButton_.setTooltip("Escolher um binario para sintetizar");
     loadButton_.setName("Carregar binario");
     loadButton_.onClick = [this] { chooseFile(); };
+}
+
+// Um ponto so para a visibilidade do header, porque ha duas razoes independentes
+// para uma peca nao estar la e nenhum dos lados pode prevailecer sobre o outro.
+//
+// Chamar isto de resized() e de refresh() e' o que mantem a verdade num sitio so:
+// resized() sabe a largura, refresh() sabe o conteudo, e cada um escreve a sua
+// metade. Se cada um chamasse setVisible por si, o timer de 20 Hz do refresh()
+// voltava a mostrar um chip que nao cabe, e a sobreposicao voltava a aparecer.
+void PluginEditor::updateHeaderVisibility() {
+    const auto& info = owner_.sourceInfo();
+
+    // Duas condicoes, e ambas tem de ser verdade. A peca e' escondida quando nao
+    // ha espaco OU quando nao ha conteudo — e nunca se desenha uma moldura vazia,
+    // que e' o mesmo motivo pelo qual os chips ja se escondiam por vazio.
+    dropHint_.setVisible(headerFitsHint_);
+    fileSize_.setVisible(headerFitsSize_ && info.sizeBytes > 0);
+    formatTag_.setVisible(headerFitsFormat_ && info.formatTag.isNotEmpty());
+}
+
+void PluginEditor::updateFooterVisibility() {
+    // Mesma regra do header: a largura decide se a caixa existe, e o conteudo
+    // decide se ha algo para escrever. Uma caixa a mais pequena e' pior do que
+    // nenhuma, porque o texto sai cortado e nao se percebe o que e'.
+    rateReadout_.setVisible(footerFitsRate_);
+    peakReadout_.setVisible(footerFitsPeak_);
+    entropyReadout_.setVisible(footerFitsEntropy_ && entropyReadout_.getText().isNotEmpty());
 }
 
 void PluginEditor::buildParameterPanel() {
@@ -167,96 +242,213 @@ void PluginEditor::resized() {
     // ---- header ----
     // Cursor explicito em vez de encadear removeFromLeft: aquele metodo devolve
     // um retangulo novo e NAO consome o original, entao encadear sobrepoe as
-    // pecas em vez de avanca-las.
+// pecas em vez de avanca-las.
     const auto header = area.removeFromTop(kHeaderHeight).reduced(10, 0);
     int x = header.getX();
 
-    powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), 16, header.getHeight()}
-                            .withSizeKeepingCentre(14, 14));
-    x += 16 + 6;
+    // As medidas do header em constantes com nome. O layout e' uma cadeia de
+    // larguras que tem de fechar, e numeros soltos nao se somam a olho.
+    constexpr int kLedWidth {16};
+    constexpr int kGap {6};
+    constexpr int kIdentityWidth {180};
+    constexpr int kIdentityGap {12};
+    constexpr int kLoadWidth {76};
+    constexpr int kNameGap {6};
+    constexpr int kMinNameWidth {40};
+    constexpr int kChipGap {4};
+    constexpr int kFormatWidth {78};
+    constexpr int kSizeWidth {58};
+    constexpr int kStripGap {10};
+    constexpr int kHintGap {8};
+    constexpr int kHintWidth {140};
+    constexpr int kVoicesWidth {78};
 
-    const int identityWidth = 180;
-    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, identityWidth, 19});
-    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 29, identityWidth, 13});
-    x += identityWidth + 12;
+    powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth, header.getHeight()}
+                             .withSizeKeepingCentre(14, 14));
+    x += kLedWidth + kGap;
 
-    // Lado direito: VOICES colado na borda, DRAG & DROP antes dele.
-    const int voicesRight = header.getRight();
-    voices_.setBounds(juce::Rectangle<int> {voicesRight - 78, header.getY(), 78, 16}
-                          .withSizeKeepingCentre(78, 16));
-    dropHint_.setBounds(juce::Rectangle<int> {voicesRight - 78 - 8 - 140, header.getY(),
-                                             140, 14}
-                            .withSizeKeepingCentre(140, 14));
+    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 19});
+    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 29, kIdentityWidth, 13});
+    x += kIdentityWidth + kIdentityGap;
 
-    // Faixa de arquivo na ordem do mock: botao, nome, formato, tamanho. A
-    // esquerda dela comeca depois do wordmark, e nao em x, senao o wordmark fica
-    // por baixo da faixa.
-    const int stripRight = dropHint_.getX() - 10;
-    fileSize_.setBounds(juce::Rectangle<int> {stripRight - 58, header.getY() + 17, 58, 16});
-    formatTag_.setBounds(juce::Rectangle<int> {fileSize_.getX() - 4 - 78, header.getY() + 17,
-                                              78, 16});
-    // O botao LOAD leva a peca quadrada mais o texto, entao precisa de ser mais
-    // largo que a peca. A 50 px a peca ocupava quase tudo e o texto saia em
-    // "LO", cortado.
-    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, 76, 28});
+    // Lado direito: VOICES colado a borda e sempre visivel. E' leitura de estado,
+    // e leitura de estado nao se esconde por falta de espaco.
+    voices_.setBounds(juce::Rectangle<int> {header.getRight() - kVoicesWidth, header.getY(),
+                                             kVoicesWidth, 16}
+                          .withSizeKeepingCentre(kVoicesWidth, 16));
 
-    const int nameLeft = loadButton_.getRight() + 6;
-    fileName_.setBounds(juce::Rectangle<int> {nameLeft, header.getY() + 14,
-                                              juce::jmax(40, formatTag_.getX() - 6 - nameLeft),
+    // Tudo o que fica a esquerda de VOICES tem de caber a serio. `leftLimit` e' o
+    // fim do bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no
+    // minimo. E' contra ele que cada peca decide se cabe.
+    const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
+
+    // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
+    // nem `edge`: `cursor` e' um membro de juce::Component e o /W4 trata a
+    // ocultacao como erro, e `edge` ja e' o cursor do rodape mais abaixo, na
+    // mesma funcao. O /W4 ja apanhou este mesmo tropeco duas vezes neste
+    // ficheiro.
+    int stripEdge = header.getRight() - kVoicesWidth;
+
+    // A ordem em que se sacrifica e' a ordem de importancia invertida.
+    //
+    // 1. A dica de arrasto primeiro, porque so interessa enquanto nao ha ficheiro
+    //    carregado: depois de carregar, o nome do ficheiro diz o essencial e a
+    //    dica e' redundante.
+    // 2. O formato a seguir, e o tamanho em ultimo: ambos sao informacao sobre o
+    //    material, mas menos importante do que o nome.
+    //
+    // Sem esta regra o chip de formato comeca em 174 px numa janela de 560 e o
+    // botao LOAD acaba em 300 — 126 px de sobreposicao que so nao se via porque
+    // os chips vazios ja se escondem, e por isso so aparecia depois de carregar
+    // um ficheiro.
+    headerFitsHint_ = !owner_.hasSource() && stripEdge - kHintGap - kHintWidth >= leftLimit;
+    dropHint_.setVisible(headerFitsHint_);
+    if (headerFitsHint_) {
+        stripEdge -= kHintGap;
+        dropHint_.setBounds(juce::Rectangle<int> {stripEdge - kHintWidth, header.getY(),
+                                                  kHintWidth, 14});
+        stripEdge -= kHintWidth + kStripGap;
+    }
+
+    // 2. O tamanho, na ponta direita da faixa.
+    headerFitsSize_ = stripEdge - kSizeWidth >= leftLimit;
+    if (headerFitsSize_) {
+        fileSize_.setBounds(juce::Rectangle<int> {stripEdge - kSizeWidth, header.getY() + 17,
+                                                  kSizeWidth, 16});
+        stripEdge -= kSizeWidth + kChipGap;
+    }
+
+    // 3. O formato, a seguir.
+    headerFitsFormat_ = stripEdge - kFormatWidth >= leftLimit;
+    if (headerFitsFormat_) {
+        formatTag_.setBounds(juce::Rectangle<int> {stripEdge - kFormatWidth, header.getY() + 17,
+                                                   kFormatWidth, 16});
+        stripEdge -= kFormatWidth + kChipGap;
+    }
+
+    // 4. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
+    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kLoadWidth, 28});
+    fileName_.setBounds(juce::Rectangle<int> {x + kLoadWidth + kNameGap, header.getY() + 14,
+                                              juce::jmax(kMinNameWidth,
+                                                         stripEdge - (x + kLoadWidth + kNameGap)),
                                               24});
 
-    // ---- display ----
-    const auto displayHeight = juce::jlimit(kMinDisplayHeight, 210, getHeight() / 2);
+    updateHeaderVisibility();
+
+// ---- display ----
+    const auto displayHeight =
+        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2);
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
-    // Seletor de bytes: 30 px logo abaixo do topo do display. A pega fisica, o
-    // mapa de secoes e a barra da regiao precisam de tres faixas distintas;
-    // em 22 px as tres colavam-se e o cursor sumia dentro da barra.
-    selector_.setBounds(displayBounds.reduced(1, 1)
-                            .withHeight(30)
-                            .withY(displayBounds.getY() + 1));
-
-    // Abas de secao na faixa de 18 px, logo abaixo do seletor.
-    tabs_.setBounds(displayBounds.reduced(1, 1)
-                        .withHeight(18)
-                        .withY(selector_.getBottom() + 1));
-
-    // A curva ocupa o resto, com 4 px de folga para a linha do topo e 24 px para
-    // o rodape de telemetria.
-    curve_.setBounds(displayBounds.reduced(5, 30)
-                         .withTrimmedBottom(24));
-
-    const int statusY = tabs_.getBottom() + 4;
+    // A linha de estado ocupa uma faixa propria no topo do display, e a grelha
+    // comeca abaixo dela. Fica no topo porque e' onde o erro tem de aparecer: o
+    // criterio 3.3.1 pede identificacao de erro, e um E_BAD_PE no rodape, em mono
+    // de 10 px, ao lado do pico e das vozes, e' uma coisa que passa sem ser lida.
+    //
+    // A faixa e' reservada, e nao sobreposta a texto solto: com o texto a 7 px do
+    // topo do display ele ficava dentro da area da grelha, e o fundo opaco da
+    // grelha tapava o "PRONTO" e o "RECUSADO". Tambem so uma captura mostra.
+    const auto statusY = displayBounds.getY();
     statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
-                             .withSizeKeepingCentre(14, 14));
-    status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY + 3,
-                                            displayBounds.getWidth() - 36 - 12, 14});
+                             .withSizeKeepingCentre(14, kStatusHeight));
+    status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY,
+                                            displayBounds.getWidth() - 36 - 12, kStatusHeight});
+
+    const auto footerY = displayBounds.getBottom() - kFooterHeight - 2;
+
+    // A altura da grelha e' a diferenca entre o fim da faixa de estado e o
+    // inicio do rodape. Passar footerY como altura — que e' uma coordenada
+    // absoluta e nao um tamanho — esticava a grelha 54 px para baixo, e a ultima
+    // linha de bytes ficava por cima das leituras.
+    const auto gridTop = statusY + kStatusHeight + 1;
+    grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
+                                          displayBounds.getWidth(), footerY - gridTop});
+
+    // O campo de endereco e o botao de alinhar ficam na linha do estado, a
+    // direita. Ao lado do texto e nao no rodape porque sao controles: e' a zona
+    // do display que ja tem moldura, e um campo de texto dentro do rodape de
+    // leituras seria indistinguivel de uma leitura.
+    const int controlY = displayBounds.getY() + 2;
+    snapButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kSnapButtonWidth,
+                                                controlY, kSnapButtonWidth, kStatusHeight + 2});
+    address_.setBounds(juce::Rectangle<int> {snapButton_.getX() - 6 - kAddressFieldWidth,
+                                             controlY, kAddressFieldWidth, kStatusHeight + 2});
 
     // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
     // por caixa. A versao anterior media cada caixa a partir da margem esquerda
     // a cada passo, o que fazia todas ocuparem o mesmo intervalo e se
     // sobreporem: so a ultima pintada aparecia, e o pico, a entropia e o offset
     // ficavam escondidos debaixo das outras.
-    const int footerY = displayBounds.getBottom() - 20;
+    //
+    // E pela mesma razao que o header, o rodape degrada em vez de espremer: as
+    // caixas tem largura fixa, e a 480 nao cabem todas. Sem isso a entropia fica
+    // com zero de largura e o REG sai cortado a meio, que e' pior do que nao
+    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro a taxa, que e'
+    // constante durante a sessao e por isso a menos informativa; depois o pico;
+    // a entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
+    // que o painel existe para mostrar.
     constexpr int footerHeight {16};
     const int margin = displayBounds.getX() + 12;
-    int edge = displayBounds.getRight() - 12;
+    const int footerRight = displayBounds.getRight() - 12;
 
-    voicesLed_.setBounds(juce::Rectangle<int> {edge - 12, footerY + 3, 12, 12});
-    edge -= 12 + 8;
+    constexpr int kLedBoxWidth {12};
+    constexpr int kBoxGap {8};
+    constexpr int kVoicesBoxWidth {74};
+    constexpr int kRateWidth {78};
+    constexpr int kPeakWidth {86};
+    constexpr int kPositionWidth {116};
+    constexpr int kRegionWidth {116};
+    constexpr int kMinEntropyWidth {96};
 
-    const auto put = [&edge, footerY](juce::Component& target, int width) {
+    // O que nunca sai: o LED e o numero de vozes, o endereco da cabeca de leitura
+    // e o intervalo da regiao. E' o que o painel existe para mostrar, e sao as
+    // tres leituras que respondem a pergunta "o que estou a ouvir".
+    const int essential = kLedBoxWidth + kBoxGap + kVoicesBoxWidth + kPositionWidth + kRegionWidth;
+    const auto room = footerRight - margin - essential;
+
+    // A partir daqui decide-se por ordem de prioridade, e a ordem esta' escrita
+    // na cadeia e nao numa frase ao lado: se a entropia fosse decidida primeiro e
+    // a taxa por ultimo, cada uma veria o que sobra depois das outras e a taxa
+    // sobrevivia a expense da entropia — que e' o inverso do que se quer.
+    //
+    // A entropia da janela da cabeca de leitura e' o dado que justifica o rodape,
+    // por isso tem prioridade absoluta. O pico e' util e sai a seguir. A taxa de
+    // amostragem e' constante durante a sessao e e' a leitura menos informativa de
+    // todas, por isso e' a primeira a cair.
+    footerFitsEntropy_ = room >= kMinEntropyWidth;
+    footerFitsPeak_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) >= kPeakWidth;
+    footerFitsRate_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) -
+                          (footerFitsPeak_ ? kPeakWidth + kBoxGap : 0) >=
+                      kRateWidth;
+
+    // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
+    // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
+    // poutineira estar.
+    int edge = footerRight;
+    const auto put = [&edge, footerY](juce::Component& target, int width, bool visible) {
+        if (!visible) {
+            return;
+        }
         target.setBounds(juce::Rectangle<int> {edge - width, footerY + 2, width, footerHeight});
-        edge -= width + 8;
+        edge -= width + kBoxGap;
     };
 
-    put(voicesReadout_, 74);
-    put(rateReadout_, 78);
-    put(peakReadout_, 86);
-    put(offsetReadout_, 116);
+    voicesLed_.setBounds(juce::Rectangle<int> {edge - kLedBoxWidth, footerY + 3, kLedBoxWidth, 12});
+    put(voicesReadout_, kVoicesBoxWidth, true);
+    put(positionReadout_, kPositionWidth, true);
+    put(offsetReadout_, kRegionWidth, true);
+    put(rateReadout_, kRateWidth, footerFitsRate_);
+    put(peakReadout_, kPeakWidth, footerFitsPeak_);
+
+    // A entropia ocupa o que sobra a esquerda, e por isso fica colada ao
+    // indicador de vozes: e' a unica das tres que cresce em vez de ter largura
+    // fixa, porque o numero que escreve — de 0 a 8 bits por byte — e' o mais
+    // variavel das leituras.
     entropyReadout_.setBounds(juce::Rectangle<int> {margin, footerY + 2,
-                                                    juce::jmax(0, edge - margin), footerHeight});
+                                                     juce::jmax(0, edge - margin), footerHeight});
+
+    updateFooterVisibility();
 
     area.removeFromTop(10);
 
@@ -309,17 +501,17 @@ void PluginEditor::refresh() {
                      ? juce::String {info.sizeBytes / (1024.0 * 1024.0), 2} + " MB"
                      : juce::String {});
 
-    // Chip vazio e' um retangulo cinza sem texto, que parece defeito. So
-    // aparece depois que ha algo para mostrar.
-    formatTag_.setVisible(info.formatTag.isNotEmpty());
-    fileSize_.setVisible(info.sizeBytes > 0);
+    // A visibilidade dos chips do header mora em updateHeaderVisibility(), que
+    // combina a largura com o conteudo. Escrever setVisible aqui desfazia a
+    // regra de largura ao fim de um tique do timer.
+    updateHeaderVisibility();
 
-    // Sem ficheiro nao ha secoes para listar. A moldura vazia no topo do display
-    // lia-se como elemento partido, entao a faixa so aparece com material
-    // carregado. A posicao da linha de estado nao muda: um alvo que salta
+    // Sem ficheiro a grelha mostra "SEM BINARIO" e nao uma moldura vazia. A linha
+    // de estado nao muda de sitio com o material a carregar: um alvo que salta
     // quando se carrega um binario e' pior do que um espaco constante.
-    tabs_.setVisible(owner_.hasSource());
-    selector_.setVisible(owner_.hasSource());
+    grid_.setVisible(owner_.hasSource());
+    address_.setVisible(owner_.hasSource());
+    snapButton_.setVisible(owner_.hasSource());
 
     Led::State ledState = Led::State::off;
     juce::String message;
@@ -344,72 +536,66 @@ void PluginEditor::refresh() {
     refreshTelemetry(info);
 }
 
-// Abas e curva so sao reenviadas quando o conteudo muda. Reconstruir o Path a
-// 20 Hz sem necessidade seria trabalho inutil no thread de interface, e o
-// rebuild de Path e' a parte mais cara do display.
+// Abas e grelha so sao reenviadas quando o conteudo muda. Reconstruir o desenho
+// da grelha a 20 Hz sem necessidade seria trabalho inutil na thread de interface.
 void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     const auto signature = info.name + juce::String {info.sizeBytes};
     if (loadedSignature_ != signature) {
         loadedSignature_ = signature;
-        tabs_.setSections(info.sections);
-        curve_.setCurve(info.entropyCurve);
-        selector_.setFileSize(static_cast<std::uint64_t>(info.sizeBytes));
-        selector_.setSections(info.sections);
-        curve_.repaint();
+
+        // O endereco do topo a zero e' decisão do proprio componente: um
+        // ficheiro novo recomeca no inicio, senao o segundo abria a meio do
+        // primeiro porque a viewport so e' nossa.
+        grid_.setSource(&owner_.sourceBytes(), static_cast<std::uint64_t>(info.sizeBytes));
+        grid_.setSections(info.sections);
+        address_.setHighestAddress(info.sizeBytes > 0
+                                       ? static_cast<std::uint64_t>(info.sizeBytes) - 1
+                                       : 0);
     }
 
-    // O seletor e' a vista da regiao do Processor. showRange nao emite o
-    // callback, entao esta linha nao pode gerar um ciclo com o seletor.
     const auto range = owner_.byteRange();
-    selector_.showRange(range.start, range.end);
+    grid_.setRegion(range.start, range.end);
 
-    // O mapa de secoes mostra onde a regiao ativa caiu, e so essa marca e'
-    // persistente: a aba clicada deixava um estado visual que nao controlava
-    // nada, e isso era pior do que nao ter selecao nenhuma.
-    tabs_.setSoundingRange(range.start, range.end);
+    // O endereco e' o que o Processor tem, e nao uma copia: showAddress nao emite
+    // o callback, entao esta linha nao pode gerar um ciclo com o campo.
+    address_.showAddress(range.start);
 
-    // A curva mostra a regiao selecionada, e nao o ficheiro inteiro. Mostrar
-    // sempre o ficheiro inteiro ao lado de uma regiao estreita mentiria sobre o
-    // que esta a soar.
-    if (info.sizeBytes > 0 && !range.empty()) {
-        curve_.setVisibleWindow(static_cast<float>(static_cast<double>(range.start) /
-                                                   static_cast<double>(info.sizeBytes)),
-                                static_cast<float>(static_cast<double>(range.end) /
-                                                   static_cast<double>(info.sizeBytes)));
-    } else {
-        curve_.setVisibleWindow(0.0f, 1.0f);
-    }
-
-    // As abas sao um mapa, e a marca segue a regiao ativa. A regiao pode
-    // atravessar secoes, por isso a marca e' por intersecao e nao por aba
-    // clicada.
-    tabs_.setSoundingRange(range.start, range.end);
+    // A cabeca de leitura vem do parametro. Se o host a moveu por automacao, o
+    // display segue o host e nao o contrario.
+    const auto position = readPosition();
+    const auto readHead = pe::byteForPosition(static_cast<double>(position), range);
+    grid_.setReadHead(readHead);
 
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
     const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
     const auto sounding = telemetry.sounding.load(std::memory_order_relaxed);
 
-    // A leitura de entropia segue o centro da regiao selecionada. O valor vem da
-    // curva ja recortada para a janela ativa, por isso continua a ser so uma
-    // fracao: a conversao para bytes da regiao vive na curva, e nao aqui.
-    const auto fraction = 0.5f;
-    curve_.setCursorFraction(fraction);
-
     setIfChanged(entropyReadout_,
-                 info.sections.empty()
-                     ? juce::String {}
-                     : juce::String {curve_.valueAt(fraction), 2} + " bits/byte");
+                 owner_.hasSource() && !range.empty()
+                     ? juce::String {entropyAtReadHead(readHead, range), 2} + " bits/byte"
+                     : juce::String {});
 
-    // O rodape escreve o offset real da regiao, que e' o que o seletor esta' a
-    // escolher. E' hex porque o utilizador esta' dentro de um binario, e o
-    // offset em hexadecimal e' o que aparece no resto das ferramentas.
+    // A cabeca de leitura em endereco. E' a leitura que responde a pergunta "o
+    // que estou a ouvir", e o que o clique na grelha acabou de escolher.
+    if (owner_.hasSource() && !range.empty()) {
+        setIfChanged(positionReadout_,
+                     "POS 0x" + juce::String::formatted(
+                                    "%08X", static_cast<unsigned long long>(readHead)));
+    } else {
+        setIfChanged(positionReadout_, juce::String {});
+    }
+
+    // O rodape escreve o intervalo real da regiao, que e' o material que alimenta
+    // o motor. E' hex porque o utilizador esta' dentro de um binario, e o offset
+    // em hexadecimal e' o que aparece no resto das ferramentas.
     if (range.empty()) {
         setIfChanged(offsetReadout_, juce::String {});
     } else {
         setIfChanged(offsetReadout_,
-                     "0x" + juce::String::formatted("%08X", range.start) + "-" +
-                         juce::String::formatted("%08X", range.end));
+                     juce::String::formatted("REG 0x%08X-0x%08X",
+                                             static_cast<unsigned long long>(range.start),
+                                             static_cast<unsigned long long>(range.end)));
     }
 
     setIfChanged(peakReadout_,
@@ -424,12 +610,87 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     // Sem material nao ha entropia nem offset para ler. Uma caixa vazia e' um
     // retangulo com moldura e nada dentro, que se le como defeito, e' o mesmo
     // motivo que esconde os chips vazios do cabecalho.
-    entropyReadout_.setVisible(entropyReadout_.getText().isNotEmpty());
+    //
+    // A entropia tem a sua regra propria, em updateFooterVisibility, porque
+    // depende tambem da largura. As outras duas so dependem do conteudo, e sao
+    // sempre largas o suficiente para escrever o que tem.
+    updateFooterVisibility();
+    positionReadout_.setVisible(positionReadout_.getText().isNotEmpty());
     offsetReadout_.setVisible(offsetReadout_.getText().isNotEmpty());
 
     // O LED de vozes nunca e' a unica pista: o numero ao lado e' o mesmo dado
     // em texto, que e' o que o criterio 1.4.1 do WCAG pede.
     voicesLed_.setState(sounding && activeVoices > 0 ? Led::State::ready : Led::State::off);
+}
+
+float PluginEditor::readPosition() const {
+    // O parametro e' a fonte da verdade. Guardar a fracao numa variavel do editor
+    // e' o caminho que faz o display e o host falarem um com o outro em zigue
+    // zague: o host mexe, o display reescreve, e o host volta a mexer.
+    //
+    // Neste JUCE, getValue() devolve a fracao normalizada. POSITION tem faixa
+    // 0 a 1, em que normalizado e' o valor, por isso a distincao nao aparece
+    // aqui — mas nao se pode estender a leitura aos outros cinco parametros sem
+    // converter, e por isso a conversao fica escrita.
+    if (const auto* parameter = owner_.parameters().getParameter("position")) {
+        return parameter->getNormalisableRange().convertFrom0to1(parameter->getValue());
+    }
+    return 0.0f;
+}
+
+double PluginEditor::entropyAtReadHead(std::uint64_t address,
+                                       const PluginProcessor::ByteRange& range) const {
+    // Janela de 256 bytes a partir da cabeca de leitura, recortada pela regiao.
+    // Recortar pela regiao e' obrigatorio: bytes de fora do material nao sao
+    // material, e medi-los era o mesmo erro que a curva do ficheiro inteiro ao
+    // lado de uma regiao estreita.
+    constexpr std::size_t kWindow {256};
+
+    const auto& bytes = owner_.sourceBytes();
+    if (bytes.empty() || address < range.start || address >= range.end) {
+        return 0.0;
+    }
+
+    const auto available = static_cast<std::uint64_t>(bytes.size()) - address;
+    const auto length =
+        juce::jmax<std::uint64_t>(1, juce::jmin<std::uint64_t>(kWindow, available));
+
+    return entropy::shannonBitsPerByte(bytes.data(), bytes.size(),
+                                       static_cast<std::size_t>(address),
+                                       static_cast<std::size_t>(length));
+}
+
+void PluginEditor::activateByte(std::uint64_t address) {
+    // O clique pode cair fora da regiao, e entao o material e' puxado para la
+    // primeiro. A ordem nao e' arbitraria: o POSITION e' uma fracao da regiao, e
+    // escrevelo antes de a regiao mudar apontaria para o sitio errado.
+    const auto range = owner_.byteRange();
+    if (address < range.start || address >= range.end) {
+        moveRegionTo(address);
+    }
+
+    const auto updated = owner_.byteRange();
+
+    // setValueNotifyingHost, e nao setValue: e' o que notifica o host, faz o
+    // knob seguir e fica no historico de automacao. E' o mesmo caminho que
+    // applyPendingControllerChanges usa para os CCs.
+    //
+    // Neste JUCE o valor e' normalizado. POSITION tem faixa 0 a 1, e
+    // positionForByte devolve uma fracao de 0 a 1, entao os dois espacos
+    // coincidem — e nao coincidir era um erro silencioso em vez de um visivel.
+    if (auto* parameter = owner_.parameters().getParameter("position")) {
+        parameter->setValueNotifyingHost(
+            static_cast<float>(pe::positionForByte(address, updated)));
+    }
+}
+
+void PluginEditor::moveRegionTo(std::uint64_t address) {
+    // O comprimento da regiao preserva-se, que e' a regra que o seletor de 30 px
+    // usava: mudar o inicio nao muda o tamanho da janela. O Processor valida e
+    // recorta o fim se o inicio novo empurrar a janela para fora do ficheiro.
+    const auto range = owner_.byteRange();
+    const auto length = juce::jmax<std::uint64_t>(range.length(), 64);
+    static_cast<void>(owner_.setByteRange(address, address + length));
 }
 
 void PluginEditor::chooseFile() {

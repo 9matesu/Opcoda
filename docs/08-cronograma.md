@@ -16,7 +16,7 @@ S3 continua inteira.
 | S2 motor, arrasto e DC-blocker | concluída | nada |
 | S3a MIDI, estado e guardas | concluída | nada: estado do host, gate por note-on, pedal de sustain e 2 CCs mapeados |
 | S3b T2 no Ableton | bloqueado | medir p99 e confirmar zero xruns em 5 minutos; exige DAW licenciado |
-| S4a GUI e display | concluída | nada: chassi, knobs, LEDs, display de entropia, mapa de seções, seletor de bytes e telemetria |
+| S4a GUI e display | concluída | nada: chassi, knobs, LEDs, grelha de bytes, campo de endereço e telemetria |
 | S4b T4 no Ableton | bloqueado | arrasto, os 6 parâmetros, os 2 CCs, 2 minutos por formato; exige DAW licenciado |
 | S5 congelamento e validação | por fazer | auditoria de documentação, pacote x64 |
 

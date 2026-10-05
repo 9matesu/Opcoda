@@ -1,7 +1,15 @@
 ---
 name: pe-parser-reviewer
 description: Revisa src/opcoda_core/pe/ antes de dar a tarefa por concluída. Use quando qualquer arquivo em src/opcoda_core/pe/ mudar, ou quando uma tarefa envolver parser PE, ingestão de binário ou os erros E_BAD_*. Verifica verificação de limites, aritmética que não transborda, recorte de SizeOfRawData, endianness e a tabela de erros tipados. É a fronteira de segurança do projeto: um erro aqui derruba o DAW.
-tools: read, grep, glob, bash
+tools:
+  read: true
+  grep: true
+  glob: true
+  bash: true
+  write: false
+  edit: false
+  patch: false
+  webfetch: false
 ---
 
 # Revisor do parser PE

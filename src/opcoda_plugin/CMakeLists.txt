@@ -8,8 +8,7 @@ juce_add_binary_data(OpcodaAssets
     NAMESPACE BinaryData
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/assets/knob-md.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/slider-cap.png)
+        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
@@ -62,12 +61,10 @@ target_sources(Opcoda
         source/led.h
         source/boxed_label.h
         source/display_panel.h
-        source/section_tabs.cpp
-        source/section_tabs.h
-        source/byte_selector.cpp
-        source/byte_selector.h
-        source/entropy_curve.cpp
-        source/entropy_curve.h
+        source/hex_grid.cpp
+        source/hex_grid.h
+        source/byte_address_field.cpp
+        source/byte_address_field.h
         source/assets.h
         source/palette.h)
 

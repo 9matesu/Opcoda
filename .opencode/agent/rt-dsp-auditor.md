@@ -1,7 +1,15 @@
 ---
 name: rt-dsp-auditor
 description: Revisa o caminho de áudio antes de dar a tarefa por concluída. Use quando src/opcoda_core/dsp/ ou src/opcoda_core/rt/ mudar, ou quando uma tarefa envolver processBlock, vozes, janela, DC-blocker, limiter, fila SPSC ou troca de amostra. Verifica tempo real rígido: zero alocação, zero trava, zero I/O, zero exceção, e que o estado não é destruído no consumer. É o portão C da constitution.
-tools: read, grep, glob, bash
+tools:
+  read: true
+  grep: true
+  glob: true
+  bash: true
+  write: false
+  edit: false
+  patch: false
+  webfetch: false
 ---
 
 # Auditor de tempo real

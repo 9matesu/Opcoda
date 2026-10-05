@@ -24,7 +24,7 @@ src/opcoda_core/    núcleo C++20 puro, sem JUCE
   dsp/              motor granular, janelas, DC-blocker, limiter
   rt/               fila SPSC, troca de amostra, guard de alocação
 src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
-tests/              GoogleTest, 87 casos mais 6 do guard de alocação
+tests/              GoogleTest, 141 casos mais 6 do guard de alocação
 docs/               documentação acadêmica e técnica
 specs/              especificações por feature, do spec-kit
 ```
@@ -44,10 +44,19 @@ São seis parâmetros automatizáveis: tamanho de grão, densidade, posição, s
 afinação e volume. As notas ligam o motor, o pedal de sustain segura as notas
 soltas, e os CCs 74 e 71 movem densidade e posição.
 
-O seletor de bytes escolhe que região do binário alimenta o motor, arrastando ou
-com as setas; duplo clique ou `Enter` alternam entre a região exata e a seção PE
-mais próxima. A região entra no estado do projeto, pelo mesmo caminho do ficheiro
-carregado.
+O display é uma grelha de bytes do binário carregado, com o endereço de cada
+linha à esquerda e os caracteres à direita. Clicar num byte move a cabeça de
+leitura para ele; se o byte estiver fora da região, a região é puxada para lá
+primeiro, com o mesmo comprimento. O campo hexadecimal à direita escreve o
+endereço da região, e o botão `ALINHAR` alterna entre a região exata e a seção PE
+mais próxima, como fazia o duplo clique. A região entra no estado do projeto,
+pelo mesmo caminho do ficheiro carregado.
+
+A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
+o knob `POSITION` e escreve o endereço no campo, e ambos têm foco e nome
+acessível. O 2.5.8 do WCAG 2.2 fica com exceção declarada, porque uma célula de
+um byte não tem 24 px de largura e a densidade é a função: ver
+`docs/10-acessibilidade-w3c.md`.
 
 ## Processo
 
@@ -80,8 +89,23 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
 ## Estado
 
 Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
-faixas, MIDI por nota e CC, estado do host e seletor de bytes. 124 casos de teste
+faixas, grelha de bytes, MIDI por nota e CC, e estado do host. 141 casos de teste
 e o guard de alocação verdes.
+
+Há um defeito conhecido e **não corrigido**, visível no Standalone: os seis
+parâmetros arrancam em valores que não são os defaults declarados em
+`createParameterLayout`. As caixas de valor mostram o que fica: `100 ms`,
+`13 /s`, `69 %`, onde os defaults são `40 ms`, `20 /s` e `50 %`. Foi confirmado
+em `c8006ae` compilado à parte, logo não vem da grelha.
+
+**A causa é o estado de sessão, não memória por inicializar.** O Standalone do
+JUCE 8 persiste o estado do plugin em `%APPDATA%\Opcoda\Opcoda.settings` e
+restaura-o no arranque; se esse ficheiro tiver parâmetros errados, o plugin abre
+com eles. **Apagar esse ficheiro traz os defaults de volta.** O mecanismo foi
+confirmado com o Dr. Memory, e o palpite inicial de memória não inicializada
+ficou refutado: nenhuma das leituras não inicializadas que ele reporta tem um
+frame do nosso código. O que ainda não está identificado é qual sessão escreveu
+os valores errados. Detalhe em `docs/16-arquitetura-implementacao.md`.
 
 Falta a validação no Ableton: T2 com medição de p99 e T4 de arrasto, parâmetros e
 CCs. As duas etapas estão **bloqueadas**, não atrasadas: não há DAW licenciado

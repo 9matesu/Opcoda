@@ -36,7 +36,7 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 124 casos verdes, incluindo o critério de 40 dB do T1 |
+| B · Testes | 141 casos verdes, incluindo o critério de 40 dB do T1 |
 | C · Tempo real | zero alocação no callback e na troca de material, com duas threads |
 | D · Robustez | entradas malformadas rejeitadas com erro tipado |
 | E · Interface | contraste, teclado e nome acessível (etapa S4) |

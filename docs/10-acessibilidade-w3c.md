@@ -24,19 +24,50 @@ Amostra: três páginas de docs e três telas da GUI (principal, parâmetros, di
 
 ## Critérios de aceite da GUI
 
-Verificados no protótipo em 03/10/2026, com o Standalone aberto em 822×498 e no
-mínimo de 562×408.
+Verificados no protótipo em 05/10/2026, com o Standalone aberto em 900×540 e no
+mínimo de 480×420. As três larguras foram fotografadas com a janela do plugin
+renderizada diretamente, porque a 480 é a que exercita a refluxo da grelha.
 
 | Critério WCAG | Regra no Opcoda | Status | Evidência |
 | --- | --- | --- | --- |
-| 2.1.1 Teclado | knobs, seletor de bytes e botões operam por teclado, sem armadilha de foco | **cumpre** | os knobs e o seletor são `juce::Slider`, que já entregam foco e ajuste com setas. O seletor aceita `Home` e `End` para os extremos do ficheiro, e `Enter` para alternar entre a região exata e a seção mais próxima |
-| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` desenha anel laranja quando `hasKeyboardFocus(true)`, `drawButtonBackground` desenha contorno no botão, e `drawLinearSlider` desenha contorno na pega do seletor |
-| 4.1.2 Nome, função e valor | cada controle expõe nome acessível à API do SO | **cumpre** | nome acessível é a descrição completa em português ("Tamanho de grao, em milissegundos"), não o rótulo curto do mock ("SIZE"), que seria inútil por leitor de tela. O seletor expõe `Value` em bytes, lido como `1024` e não como fração |
-| 2.5.8 Tamanho do alvo | alvos de no mínimo 24×24 px | **cumpre** | o menor alvo é o botão `LOAD` com 76×28; os knobs têm 62 px de diâmetro; a pega do seletor tem 18 px de altura numa faixa de 30 px |
+| 2.1.1 Teclado | knobs, campo de endereço, botão ALINHAR e botões operam por teclado, sem armadilha de foco | **cumpre** | os knobs são `juce::Slider`, que já entregam foco e ajuste com setas. `ByteAddressField` é um `TextEditor` com nome acessível: `Enter` confirma, `Esc` volta ao valor anterior, setas sobem e descem um byte e PageUp/PageDown saltam dezasseis. O `ALINHAR` é um `juce::TextButton`. Ver a ressalva do 2.5.8 para o que a grelha de bytes **não** faz |
+| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` desenha anel laranja quando `hasKeyboardFocus(true)`, `drawButtonBackground` desenha contorno no botão, e o `ByteAddressField` desenha contorno laranja à volta do campo quando `editor_.hasKeyboardFocus(true)` |
+| 4.1.2 Nome, função e valor | cada controle expõe nome acessível à API do SO | **cumpre** | nome acessível é a descrição completa em português ("Tamanho de grao, em milissegundos"), não o rótulo curto do mock ("SIZE"), que seria inútil por leitor de tela. O campo de endereço escreve o valor em hexadecimal, que é a unidade em que se lê. A grelha tem `setName` e `setHelpText`: o nome diz o que é e a ajuda diz que os dois caminhos de teclado estão noutro sítio, porque `Component` não expõe `setTooltip` a não ser por cabeçalho transitivo e a dica de rato não serviria para nada numa grelha que só se opera com o rato |
+| 2.5.8 Tamanho do alvo | alvos de no mínimo 24×24 px | **não cumpre, exceção declarada** | ver a ressalva abaixo |
 | 1.4.3 Contraste mínimo | texto a 4,5:1 sobre a superfície | **cumpre** | `textDark #1b1e22` sobre `chassis #c2c6c9` dá 9,1:1; `textSub #383d42` dá 5,1:1. O rodapé do display usa `textOnDark #c6cacc` sobre `#0e1013`, que dá 11,6:1 |
-| 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos |
-| 1.4.1 Uso de cor | LEDs e o estado da região nunca são o único sinal | **cumpre** | cada LED é acompanhado de rótulo. A região ativa nas abas de seção leva uma faixa preta de 2 px além do fundo laranja, e o rodapé escreve o offset em hexadecimal |
-| 1.4.10 Refluxo | interface utilizável a 200% de zoom sem rolagem horizontal | **parcial** | redimensiona de 560 a 4096 px sem rolagem, verificado por captura nos dois extremos, mas não há medição a 200% de zoom em display de baixa densidade |
+| 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos. A linha de estado fica no topo do display e não no rodapé: um `E_BAD_PE` em mono de 10 px ao lado do pico e das vozes é uma coisa que passa sem ser lida |
+| 1.4.1 Uso de cor | LEDs, a região ativa e a cabeça de leitura nunca são o único sinal | **cumpre** | cada LED é acompanhado de rótulo. Na grelha, a região ativa leva fundo laranja a 22 % **e** um filete de 1 px em cima e em baixo da linha: o fundo diz a quem vê cor, o filete diz a quem não vê. A cabeça de leitura é uma barra branca de 2 px na margem esquerda da célula, com fundo claro por baixo do texto. O rodapé escreve `POS` e `REG` em hexadecimal |
+| 1.4.10 Refluxo | interface utilizável a 200% de zoom sem rolagem horizontal | **parcial** | redimensiona de 560 a 4096 px sem rolagem, verificado por captura nos dois extremos. Abaixo de 520 px de largura a grelha **omite a coluna ASCII** em vez de cortar colunas de hexadecimal, que partiriam os endereços ao meio. Não há medição a 200% de zoom em display de baixa densidade |
+
+### Ressalva declarada ao 2.5.8
+
+**A grelha de bytes não cumpre o 2.5.8, e não há como fazê-la cumprir.** A célula
+é um byte, que é a unidade que a grelha existe para mostrar. Tem 24 px de altura
+e cerca de 17 de largura, e a cláusula alternativa do critério também não salva:
+um círculo de 24 px centrado em duas células vizinhas da mesma linha
+sobrepõe-se, porque 24 > 17.
+
+A densidade **é** a função. Um alvo de 24 px por byte numa grelha de dezasseis
+colunas daria 384 px de largura só para os alvos, e o ficheiro de 12 MB deixaria
+de caber em qualquer janela razoável.
+
+O que se fez em vez de aumentar o alvo:
+
+- **As linhas têm 24 px**, e não 12. O critério reprova pela largura, mas dar a
+  altura ao alvo não custa nada e ajuda o clique a esmo, que é o gesto mais
+  comum.
+- **O caminho de teclado existe e é completo.** Mover a cabeça de leitura é o
+  knob POSITION, com foco e setas. Mover o início da região é o campo de
+  endereço, com `Enter`, setas e PageUp/PageDown. São dois controles com nome e
+  valor próprios, não a mesma coisa desenhada outra vez.
+- **O duplo clique e o `ALINHAR`** dão teclado ao alinhamento de seção, que antes
+  estava na tecla `Enter` do seletor removido.
+
+Isto entra pelo mesmo caminho da lacuna do TSan em `docs/07-plano-testes.md`: uma
+limitação que a plataforma impõe, escrita e repetida nos artefatos entregues, e
+não omitida. Se a reauditoria do congelamento de código (etapa S5) exigir 2.5.8
+pleno, a saída é um modo de seleção por teclado na grelha com cursor de célula,
+que é trabalho novo e não uma correção.
 
 ### Duas decisões de desenho que afetam acessibilidade
 
@@ -50,13 +81,13 @@ par de tokens: um rótulo sem cor de texto própria herda a quase preta do
 `display #0e1013` dá 11,6:1. Regra geral: **quem decide a cor de fundo decide
 a cor do texto**, e por isso o rodapé não pode usar os tokens do chassi claro.
 
-A marca da região ativa nas abas é uma faixa preta de 2 px, e não só o fundo
-laranja. Suspen 4 px acima da base da aba: encostada ao fundo escuro a faixa
-desaparecia, e dentro do laranja mantém-se legível nos dois casos.
+O campo de endereço e o botão `ALINHAR` ficam na linha de estado, e não no
+rodapé. São controles, e o rodapé é um alinhamento de leituras: um campo de
+texto dentro do rodapé seria indistinguível de uma leitura.
 
 ## Encaminhamento
 
 Corrigir os links genéricos da proposta completa, fixar `lang="pt-BR"` no
 template e medir o refluxo a 200% de zoom em display de baixa densidade. O 1.4.1
-das abas e da curva fechou com a faixa preta na região ativa; o que resta de
-pendente entra na reauditoria no congelamento de código do MVP (etapa S5).
+da região ativa fechou com o filete de 1 px em cima e em baixo da linha da
+grelha; o 2.5.8 está com exceção declarada e à espera de decisão na S5.

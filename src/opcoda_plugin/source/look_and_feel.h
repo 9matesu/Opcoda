@@ -6,10 +6,10 @@
 
 namespace opcoda {
 
-// LookAndFeel do Opcoda. Existe para tres desenhos: o knob, o botao e o
-// cursor do seletor de bytes. Todo o resto fica no LookAndFeel padrao.
+// LookAndFeel do Opcoda. Existe para dois desenhos: o knob e o botao. Todo o
+// resto fica no LookAndFeel padrao.
 //
-// Os knobs sao juce::Slider de verdade, nao desenho customizado. Isso nao e
+// Os knobs sao juce::Slider de verdade, nao desenho customizado. Isso nao e'
 // padrao: e o que da foco por teclado, ajuste com setas e
 // AccessibilityHandler de graca, e sao exatamente os criterios que a
 // docs/10-acessibilidade-w3c.md exige.
@@ -32,56 +32,7 @@ public:
         setColour(juce::TextButton::textColourOnId, palette::textDark);
     }
 
-    void drawLinearSlider(juce::Graphics& g,
-                          int x,
-                          int y,
-                          int width,
-                          int height,
-                          float sliderPos,
-                          float minSliderPos,
-                          float maxSliderPos,
-                          juce::Slider::SliderStyle style,
-                          juce::Slider& slider) override {
-        // So o cursor do seletor usa a pega fisica. Os outros sliders lineares,
-        // se algum dia existirem, continuam com o desenho padrao.
-        if (slider.getProperties().getWithDefault("byteRangeSelector", false) !=
-            juce::var {true}) {
-            juce::LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, sliderPos,
-                                                   minSliderPos, maxSliderPos, style, slider);
-            return;
-        }
-
-        const auto& cap = assets::detail::sliderCap();
-        const float thumbHeight = juce::jmin(static_cast<float>(height), 18.0f);
-        const float thumbWidth = cap.isValid()
-            ? thumbHeight * (static_cast<float>(cap.getWidth()) /
-                             static_cast<float>(cap.getHeight()))
-            : 10.0f;
-        const auto thumb = juce::Rectangle<float> {
-            sliderPos - thumbWidth * 0.5f,
-            static_cast<float>(y) + (static_cast<float>(height) - thumbHeight) * 0.5f,
-            thumbWidth, thumbHeight};
-
-        if (cap.isValid()) {
-            // A pega marca o inicio da regiao. A barra da regiao e a faixa de
-            // posicao vivem no ByteSelector, por isso o cursor nao desenha
-            // nenhuma escala: seria a terceira leitura do mesmo numero.
-            g.drawImage(cap, thumb, juce::RectanglePlacement::centred);
-        } else {
-            // Sem a peca: cursor vetorial. Nao e' o caminho previsto, e' a rede
-            // para o binario nao falhar em silencio se o asset faltar.
-            g.setColour(palette::textOnDark);
-            g.fillRoundedRectangle(thumb, 2.0f);
-        }
-
-        // 2.7 Foco visivel. A peca nao sabe se o seletor tem o foco.
-        if (slider.hasKeyboardFocus(true)) {
-            g.setColour(palette::accent);
-            g.drawRoundedRectangle(thumb.expanded(2.0f), 2.0f, 1.5f);
-        }
-    }
-
-    // Knob: peca fisica do asset harness, com o arco de escala e o anel de
+// Knob: peca fisica do asset harness, com o arco de escala e o anel de
     // foco desenhados por cima em codigo. O corpo fica fixo; o valor move-se
     // no arco e no ponteiro.
     //

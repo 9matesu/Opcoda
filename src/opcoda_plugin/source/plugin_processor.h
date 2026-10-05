@@ -90,11 +90,7 @@ void setStateInformation(const void* data, int sizeInBytes) override;
             double entropy {0.0};
         };
 
-        std::vector<SectionInfo> sections;
-
-        // Curva de entropia por janela, ja normalizada em [0, 8]. Vem do mesmo
-        // shannonCurve do ensaio T1, entao o que se ve e o que se mediu.
-        std::vector<float> entropyCurve;
+std::vector<SectionInfo> sections;
     };
 
 // Seletor de bytes: escolhe qual regiao do binario alimenta o motor.
@@ -147,6 +143,19 @@ bool snapByteRangeToSection();
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
+    // Bytes crus do ficheiro carregado, para a grelha mostrar os bytes.
+    //
+    // E' a mesma razao que fez o ingest guardar o ficheiro em vez de o ler do
+    // disco outra vez: a alternativa e' I/O na thread de interface a cada
+    // redesenho. O vector nao muda de endereco quando o ingest atribui outro
+    // conteudo, por isso a grelha guarda um ponteiro para ele e nao uma copia.
+    //
+    // Pertence a thread de interface, que e' a unica que escreve. A thread de
+    // audio nunca a le: so ve o buffer ja convertido, pela fila.
+    [[nodiscard]] const std::vector<std::uint8_t>& sourceBytes() const noexcept {
+        return sourceBytes_;
+    }
+
     // Aplica na thread de interface os ultimos CCs recebidos.
     //
     // O caminho alternativo, escrever no parametro direto da thread de audio,
@@ -191,25 +200,13 @@ private:
     // Le o MidiBuffer do bloco e atualiza a contagem de notas. Roda na thread
     // de audio e nao aloca nem bloqueia: um MidiBuffer e' so uma lista de
     // mensagens com contadores ja resolvidos.
-    void readNotes(const juce::MidiBuffer& midi) noexcept;
-
-    // Curva de entropia por janela, normalizada em [0, 8]. Roda na thread de
-    // interface, no ingest, e nao no caminho de audio.
-    static std::vector<float> buildEntropyCurve(const std::uint8_t* data,
-                                                std::size_t size);
+void readNotes(const juce::MidiBuffer& midi) noexcept;
 
     void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
 
-    // Bytes crus do ficheiro carregado, para o seletor poder converter
-    // qualquer janela sem voltar a ler o disco.
-    //
-    // E' memoria que ja era alocada no ingest e que ficava de fora a seguir. O
-    // custo e' o tamanho do ficheiro, e a alternativa — reler do disco a cada
-    // movimento do seletor — pinge I/O na thread de interface e torna o
-    // arraste lento. Guardar e' a troca mais barata.
-    //
-    // Pertence a thread de interface, que e' a unica que escreve nela. A thread
-    // de audio nunca a le: so ve o buffer ja convertido, pela fila.
+    // Bytes crus do ficheiro carregado, para o seletor poder converter qualquer
+    // janela sem voltar a ler o disco. O accessor publico e' o sourceBytes()
+    // acima; este e' o vector.
     std::vector<std::uint8_t> sourceBytes_;
 
     // Converte a janela corrente e publica na fila. Devolve false sem mexer em

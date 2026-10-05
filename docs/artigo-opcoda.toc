@@ -1,0 +1,23 @@
+\babel@toc {brazil}{}\relax 
+\contentsline {section}{\numberline {1}RESUMO}{8}{section.1}%
+\contentsline {section}{\numberline {2}ABSTRACT}{8}{section.2}%
+\contentsline {section}{\numberline {3}Arquitetura de Binários e Engenharia Reversa Estática}{10}{section.3}%
+\contentsline {section}{\numberline {4}Teoria da Informação e Entropia}{10}{section.4}%
+\contentsline {section}{\numberline {5}Processamento Digital de Sinais e Síntese Granular}{11}{section.5}%
+\contentsline {section}{\numberline {6}Engenharia de Software em Tempo Real Rígido}{12}{section.6}%
+\contentsline {section}{\numberline {7}Abordagem e Etapas}{13}{section.7}%
+\contentsline {section}{\numberline {8}Arquitetura do Pipeline}{13}{section.8}%
+\contentsline {section}{\numberline {9}O Parser e a Verificação de Limites}{14}{section.9}%
+\contentsline {section}{\numberline {10}O Motor Granular e o Agendamento}{15}{section.10}%
+\contentsline {section}{\numberline {11}A Fronteira de Tempo Real}{16}{section.11}%
+\contentsline {section}{\numberline {12}A Interface}{16}{section.12}%
+\contentsline {section}{\numberline {13}Similar Systems}{17}{section.13}%
+\contentsline {section}{\numberline {14}Bateria de Testes}{18}{section.14}%
+\contentsline {section}{\numberline {15}Suíte de Testes Automatizados}{18}{section.15}%
+\contentsline {section}{\numberline {16}Resultado do Ensaio Espectral}{19}{section.16}%
+\contentsline {section}{\numberline {17}Resultado do Ensaio de Robustez}{19}{section.17}%
+\contentsline {section}{\numberline {18}Ensaios Bloqueados}{20}{section.18}%
+\contentsline {section}{\numberline {19}Defeito Conhecido e Não Corrigido}{20}{section.19}%
+\contentsline {section}{\numberline {20}Divergências de Documentação Corrigidas}{21}{section.20}%
+\contentsline {section}{\numberline {21}Trabalhos Futuros}{21}{section.21}%
+\contentsline {section}{\numberline {22}Glossário}{22}{section.22}%

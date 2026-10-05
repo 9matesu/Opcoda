@@ -1,7 +1,6 @@
 ---
 name: test-engineer
 description: Revisa os portões B e D antes de dar a tarefa por concluída. Use quando tests/ mudar, quando uma tarefa mencionar portão, cobertura, ensaio T1 a T4 ou fuzzing, ou quando algo falhou e a pergunta é se o teste que pega o defeito existe. Verifica que o teste falha antes da correção, que usa material real em vez de mock quando o bug só aparece com dado real, e que as asserções não passam por acidente.
-tools: read, grep, glob, bash
 ---
 
 # Engenheiro de testes

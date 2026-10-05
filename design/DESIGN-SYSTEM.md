@@ -95,23 +95,43 @@ nome do device, e à direita a faixa de arquivo: botão `LOAD`, nome em mono,
 
 ### 2. Display
 
-Fundo `#0e1013`, com 1 px de `#252b31` na moldura. Quatro faixas, de cima para
-baixo:
+Fundo `#0e1013`, com 1 px de `#252b31` na moldura. A faixa de display mede entre
+200 e 320 px, metade da altura da janela, e a janela mínima subiu de 560×380 para
+560×420 porque uma grelha de bytes precisa de seis linhas de 24 px para mostrar
+o endianço de um ficheiro inteiro.
 
-- **Seletor de bytes**, 30 px: mapa de seções PE no topo, proporcional ao
-  tamanho em disco, e barra da região selecionada na base. A pega física marca o
-  início. `Enter` ou duplo clique alterna entre a região exata e a seção mais
-  próxima.
-- **Mapa de seções**, 18 px: nome da seção em mono 9 px. A região ativa leva
-  fundo laranja **e** uma faixa preta de 2 px a 4 px da base, para não depender só
-  da cor.
-- **Linha de estado**, 14 px: `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO`,
-  com LED.
-- **Área da curva**, com grade de 24 px. A curva de entropia é recortada para a
-  região selecionada, e a escala é fixa em 0 a 8 bits por byte.
+De cima para baixo:
 
-- **Rodapé de telemetria**: entropia em bits por byte, região em hexadecimal,
-  `PK`, `RATE` e `VOICES`. Tudo em `textOnDark`, nunca nos tokens do chassi.
+- **Grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
+  bytes por linha em mono 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
+  de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas.
+  A viewport é ancorada num múltiplo de 16, para os endereços caírem em
+  round numbers como num hex dump.
+  - A **região ativa** leva fundo laranja a 22 % **e** um filete de 1 px em cima
+    e em baixo da linha: o fundo diz a quem vê cor, o filete diz a quem não vê.
+  - A **cabeça de leitura** é uma barra branca de 2 px na margem esquerda da
+    célula, com fundo claro a 16 % por baixo do texto.
+  - Os **bytes nulos** saem num tom a parte, como num hex dump, para se ver o
+    preenchimento de uma seção sem ler as duas colunas.
+  - Os **limites de seção** aparecem no gutter, na linha onde a seção começa, com
+    uma barra de 2 px a toda a altura da linha e o nome da seção à direita. Substitui
+    o mapa de seções de 18 px.
+  - Abaixo de 520 px de largura a coluna **ASCII é omitida**. Perder colunas de
+    hexadecimal partiria os endereços ao meio, e um endereço ao meio é pior do que
+    nenhum.
+  - O gutter **cresce com o ficheiro**: um PE acima de 4 GB tem endereços com mais
+    de oito dígitos, e o número não é cortado a meio.
+- **Linha de estado**, 14 px: `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO`, com
+  LED à esquerda. À direita, o campo hexadecimal do endereço da região e o botão
+  `ALINHAR`, que substitui a tecla `Enter` que o seletor removido usava para o
+  alinhamento de seção.
+- **Rodapé de telemetria**, 16 px: entropia em bits por byte na janela da cabeça
+  de leitura, `POS` com o endereço da cabeça, `REG` com o intervalo da região, `PK`,
+  taxa e `VOICES`. Tudo em `textOnDark`, nunca nos tokens do chassi.
+
+O display deixou de ter a barra de 30 px do seletor, o mapa de seções e a curva
+de entropia. A faixa de 30 px era um mapa do ficheiro inteiro com um cursor, e um
+ficheiro de 12 MB não cabe em grelha: o que a grelha dá em troca é o byte.
 
 ### 3. Painel de parâmetros
 
@@ -130,6 +150,9 @@ brilho andar com o controle. Rótulo em Inter 10 px acima, valor em `valBox`
 abaixo, com fonte mono.
 
 Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2.
+A célula da grelha de bytes é a exceção, e está declarada em
+`docs/10-acessibilidade-w3c.md`: tem 24 px de altura e cerca de 17 de largura, e a
+densidade é a função.
 
 O PNG é sempre só o desenho. Quem opera o controle é um `juce::Slider`, porque é
 ele que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
@@ -142,10 +165,9 @@ ele que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
 | Inter | `juce::Font {16.0f}` com a fonte do sistema, ou `Inter` embarcada |
 | JetBrains Mono | `juce::Font` monoespaçada, ou `JetBrains Mono` embarcada |
 | Knob com ponteiro | `juce::Slider` `RotaryHorizontalVerticalDrag` com `LookAndFeel` próprio |
-| Mapa de seções | `juce::Component` com `paint()` e `setInterceptsMouseClicks(false, false)` |
-| Seletor de bytes | `juce::Slider` linear deitado, subclasseado para o duplo clique |
+| Grelha de bytes | `juce::Component` com `paint()` e `cellRect()` partilhada entre o desenho e o clique |
+| Campo de endereço | `juce::TextEditor` com `AddressEditor` a retirar as setas |
 | Faixa de arquivo | `juce::Label` + `juce::TextButton` |
-| Curva de entropia | `juce::Component` com `paint()` e `juce::Path` |
 
 As peças físicas vêm de `I:\TG_I\opcoda-asset-harness` e são embutidas com
 `juce_add_binary_data`. O harness **não gera texto**: rótulos, valores e escalas

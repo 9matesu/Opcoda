@@ -1,0 +1,19 @@
+{
+  "titulo": "Opcoda: síntese granular em tempo real a partir da análise estática de binários executáveis",
+  "autor_ptbr": "Mateus Costa de Oliveira Santos\\\\[0.4em]Rafael Augusto Garcez Elisei\\\\[0.4em]Prof. Me. Warner Brezolin (orientador)",
+  "autor": "Mateus Costa de Oliveira Santos",
+  "instituicao": "Faculdade de Tecnologia Prof. Waldomiro May",
+  "local": "Cruzeiro/SP",
+  "data": "2026",
+  "orientador": "Prof. Me. Warner Brezolin",
+  "preambulo": "",
+  "artigo": true,
+  "docstyle": "opcoda",
+  "fonte": "Elaborado pelos autores (2026).",
+  "figuras": {
+    "pipeline": "pipeline",
+    "parser": "parser_defensivo",
+    "agendamento": "agendamento",
+    "grelha": "grelha"
+  }
+}

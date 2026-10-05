@@ -25,6 +25,7 @@ add_executable(opcoda_tests
     end_to_end_test.cpp
     sample_exchange_test.cpp
     byte_range_test.cpp
+    byte_position_test.cpp
     note_tracker_test.cpp)
 
 target_link_libraries(opcoda_tests PRIVATE opcoda_core GTest::gtest_main)

@@ -44,12 +44,6 @@ inline const juce::Image& buttonLarge() {
     return image;
 }
 
-inline const juce::Image& sliderCap() {
-    static const juce::Image image {decode(BinaryData::slidercap_png,
-                                           BinaryData::slidercap_pngSize)};
-    return image;
-}
-
 } // namespace detail
 
 } // namespace opcoda::assets

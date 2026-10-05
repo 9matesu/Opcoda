@@ -1,0 +1,43 @@
+\begin{tikzpicture}
+  \tikzstyle{pstep}=[draw, rounded corners=3pt, minimum height=0.85cm, align=center, font=\small, inner sep=5pt]
+  \tikzstyle{ok}=[pstep, fill=green!12]
+  \tikzstyle{rej}=[pstep, fill=red!14]
+  \tikzstyle{arr}=[->, >=stealth, thick]
+  \tikzstyle{lab}=[font=\tiny, fill=white, inner sep=1.5pt]
+
+  % Arquivo arbitrario e as quatro validacoes em linha
+  \node[draw, rounded corners=2pt, fill=gray!18, text width=2.9cm, align=center, font=\small] (f) at (0,0) {Arquivo arbitrário};
+
+  \node[rej, text width=2.5cm] (v1) at (3.6,0) {Assinatura MZ};
+  \node[rej, text width=2.5cm] (v2) at (7.0,0) {Cabeçalho PE};
+  \node[rej, text width=2.5cm] (v3) at (10.4,0) {Número de seções};
+  \node[rej, text width=2.5cm] (v4) at (13.8,0) {Limites por seção};
+
+  \draw[arr] (f.east) -- (v1.west);
+  \draw[arr] (v1.east) -- (v2.west);
+  \draw[arr] (v2.east) -- (v3.west);
+  \draw[arr] (v3.east) -- (v4.west);
+
+  % Codigo de erro de cada validacao, com fundo branco para nao cruzar seta
+  \node[font=\footnotesize\ttfamily, text=red!65!black, fill=white, inner sep=1pt, below=4pt of v1] {\texttt{E\_BAD\_MZ}};
+  \node[font=\footnotesize\ttfamily, text=red!65!black, fill=white, inner sep=1pt, below=4pt of v2] {\texttt{E\_BAD\_PE}};
+  \node[font=\footnotesize\ttfamily, text=red!65!black, fill=white, inner sep=1pt, below=4pt of v3] {\texttt{E\_TOO\_MANY}};
+  \node[font=\footnotesize\ttfamily, text=red!65!black, fill=white, inner sep=1pt, below=4pt of v4] {\texttt{E\_TRUNCATED}};
+
+  % Ramo aprovado: desce da ultima validacao
+  \node[ok, text width=3.2cm] (ok) at (13.8,-3.0) {Cópia defensiva no heap};
+  \draw[arr] (v4.south) -- ++(0,-1.9) -| (ok.north);
+  \node[font=\tiny, text=black!60, fill=white, inner sep=1pt, right=4pt of ok] {válido};
+
+  % Ramo rejeitado: as tres primeiras validacoes alimentam a caixa de erro,
+  % que fica na esquerda para as descidas nao cruzarem o ramo aprovado.
+  \node[draw, fill=red!8, rounded corners=3pt, text width=4.4cm, align=center, font=\small] (err) at (3.6,-4.6)
+    {Erro visível na interface\\\texttt{(código + mensagem)}};
+  \draw[arr, draw=red!65!black] (v1.south) -- ++(0,-0.5) -| (err.north);
+  \draw[arr, draw=red!65!black] (v2.south) -- ++(0,-0.5) -| (err.north);
+  \draw[arr, draw=red!65!black] (v3.south) -- ++(0,-0.5) -| (err.north);
+
+  % Nota
+  \node[draw, fill=white, rounded corners=2pt, align=left, font=\footnotesize, inner sep=5pt, text width=16.4cm] at (8.6,-6.6)
+    {A soma do offset com o tamanho é conferida em aritmética de 64 bits, para que \texttt{offset + tamanho} nunca transborde antes da comparação. O campo \texttt{SizeOfRawData} declarado pelo cabeçalho não é confiável: é recortado para o que existe no arquivo, e um valor declarado maior que o disponível retorna \texttt{E\_OOB}.};
+\end{tikzpicture}

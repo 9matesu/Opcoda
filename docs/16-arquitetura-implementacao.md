@@ -186,14 +186,13 @@ Cinco arquivos, cada um com uma responsabilidade só:
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `palette.h` | os tokens do `design/DESIGN-SYSTEM.md`, em hex único |
-| `look_and_feel.h` | desenho do knob, do botão e da pega do seletor |
+| `look_and_feel.h` | desenho do knob e do botão |
 | `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
 | `display_panel.h` | fundo escuro e grade de 24 px |
-| `section_tabs.h/.cpp` | mapa de seções PE, largura proporcional ao tamanho em disco |
-| `entropy_curve.h/.cpp` | curva de entropia com brilho em camadas e cursor |
-| `byte_selector.h/.cpp` | seletor de bytes: mapa de seções, barra da região e arraste |
+| `hex_grid.h/.cpp` | grelha de bytes: endereços, 16 colunas e coluna ASCII |
+| `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
 | `assets.h` | peças físicas do asset harness, embutidas e carregadas uma vez |
 | `plugin_editor.h/.cpp` | as três faixas e o layout |
 
@@ -236,13 +235,14 @@ sem precisar de um segundo layout.
 
 As abas de seção, a curva de entropia e a telemetria entraram na F008. O
 `ingest` deixou de descartar o `PeImage`: publica em `SourceInfo` o nome, o
-tamanho e, por seção, o nome, o offset, o tamanho em disco e a entropia, mais
-uma curva de entropia em janelas calculada com `entropy::shannonCurve`.
+tamanho e, por seção, o nome, o offset, o tamanho em disco e a entropia. A curva
+de entropia em janelas foi acrescentada depois e já não está: ver "A grelha de
+bytes", que substituiu o componente que a desenhava.
 
 O `PeImage` continua a ser local ao `ingest`, mas **os bytes crus não**: são
-guardados, porque o seletor precisa de converter uma janela nova sem reler o
-disco. A distinção é deliberada e está escrita em `plugin_processor.h`: o parse
-sai, os bytes ficam.
+guardados, porque a grelha precisa de os mostrar e porque o `Processor` precisa
+de converter uma janela nova sem reler o disco. A distinção é deliberada e está
+escrita em `plugin_processor.h`: o parse sai, os bytes ficam.
 
 A telemetria de pico, vozes ativas e estado de som sai de `processBlock` por
 `std::atomic`, lida pela thread de interface a 20 Hz. `refreshTelemetry` só
@@ -274,60 +274,188 @@ carregar um binário é pior do que um espaço constante.
 **Um `int cursor` local colide com `Component::cursor`.** O `/W4` trata a
 ocultação de membro como erro, e o build parou. Passou a chamar-se `edge`.
 
-### O seletor de bytes
+**Uma coordenada não é um tamanho.** A grelha recebeu
+`Rectangle {x, y, largura, footerY}`, em que `footerY` é a coordenada absoluta
+do rodapé no ecrã e não uma altura. Com a janela a 540 px de altura a diferença
+são 54 px, e a grelha invadia o rodapé: a última linha de bytes era desenhada
+por cima das leituras de pico e de vozes, e o resultado era texto ilegível
+empilhado. Passou a `footerY - gridTop`.
 
-O seletor escolhe uma região contígua `[start, end)` do ficheiro, e **não** um
-índice de seção. A distinção é o ponto: uma seção PE é um intervalo arredondado e
-alinhado, enquanto o que interessa é uma janela arbitrária, do tamanho que der,
-para poder atravessar o limite entre duas seções.
+**A linha de estado estava dentro da área da grelha.** O texto estava a 7 px do
+topo do display, que é onde a grelha começa, e o fundo opaco da grelha tapava
+`PRONTO` e `RECUSADO`. Deixava de ser visível exactamente o que o critério 3.3.1
+exige que se veja. Agora a faixa de estado tem 14 px próprios no topo e a grelha
+começa abaixo dela.
 
-**O seletor não é um parâmetro do host.** A Tabela 8 tem seis e o ensaio T4 mede
-seis; um sétimo parâmetro automatizável mudaria o que está escrito. O valor vive
-no `Processor`, entra no estado como `byteStart` e `byteEnd` ao lado do
-`sourcePath`, e o projeto abre com a mesma região selecionada sem acrescentar
-nada à tabela de parâmetros.
+Nenhum dos três aparece em teste nenhum, e nenhum dos três é de lógica: são
+medidas. Só uma captura de ecrã os mostra, e só depois de o valor já estar
+errado no ecrã.
 
-A região corrente é **`pe::ByteRange`, do núcleo**, e não uma struct no plugin. A
-regra de validação tem teste em `tests/byte_range_test.cpp` porque o núcleo não
-depende de JUCE e o `PluginProcessor` depende; duplicar a regra em dois sítios
-para ter testes seria o pior dos dois mundos. O mesmo vale para a decisão do
-alinhamento, que vive em `pe::sectionSnapToggle`: o duplo clique não "aponta
-para uma seção", ele **alterna** entre a região exata e a seção mais próxima.
-Sem a volta, pedir o alinhamento seria uma operação sem saída.
+### A grelha de bytes
 
-O `ingest` deixou de descartar os bytes crus. Guardá-los é memória que já era
-alocada e que ficava de fora a seguir; a alternativa, reler o disco a cada
-arrasto do seletor, punge I/O na thread de interface. O custo é o tamanho do
-ficheiro, e é declarado em `plugin_processor.h`.
+O seletor de 30 px foi substituído por uma grelha de bytes no formato de um hex
+dump: endereço à esquerda, dezasseis bytes por linha em hexadecimal, coluna
+ASCII à direita. A faixa antiga era um mapa do ficheiro inteiro com um cursor, e
+um ficheiro de 12 MB não cabe em grelha. O que a grelha dá em troca é o byte.
 
-O `ingest` arranca na primeira seção com dados, não em zero: o cabeçalho PE não
-produz áudio reconhecível, e começar lá faria o instrumento soar errado logo
-depois do primeiro arrasto.
+**O clique escreve o parâmetro `position`.** POSITION é um dos seis da Tabela 8,
+e a leitura de posição é o que o clique responde: escolher um byte é escolher de
+onde se lê. Se o byte estiver fora da região, o editor **puxa a região para lá
+antes** de escrever o POSITION, e a ordem não é arbitrária: o POSITION é uma
+fração da região, e escrevê-lo antes de a região mudar apontaria para o sítio
+errado. O comprimento da região preserva-se, que é a regra que o seletor antigo
+usava.
 
-**A curva mostra a região selecionada.** `EntropyCurve` recebeu
-`setVisibleWindow`, e o rodapé lê a entropia pela mesma janela. Mostrar sempre o
-ficheiro inteiro ao lado de uma região estreita mentiria sobre o que está a soar.
-Uma região mais estreita do que uma janela da curva não tem dois pontos para
-ligar, e inclui-se o ponto vizinho para o display não ficar vazio, que se leria
-como falta de material.
+O mapeamento entre o endereço e a fração vive em
+`src/opcoda_core/pe/byte_to_position.{h,cpp}`, no núcleo, e não no componente
+da grelha, pelo mesmo motivo que a `ByteRange`: o núcleo não depende de JUCE e
+é o que os sanitizers alcançam. Tem duas armadilhas que estão em teste:
 
-**As abas deixaram de ser comandos.** Clicar numa aba só mudava o rodapé, não o
-som: era um estado visual que não controlava nada. Agora são um mapa, com
-`setInterceptsMouseClicks(false, false)`, e a marca segue a região por interseção.
-A marca é uma faixa preta de 2 px dentro do laranja: o fundo diz onde está o som a
-quem vê cor, e a faixa diz a quem não vê. Suspen sa 4 px acima da base, porque
-encostada ao fundo escuro a faixa desapareceria.
+**O último byte não tem posição própria.** Com `B = end - 1` vem `k = length - 1`,
+fração 1.0, e o motor desliga a voz logo a seguir, porque em
+`granular_engine.cpp` a condição é `index + 1 >= sourceCount`. Um clique no
+último byte seria um clique em silêncio. O mapeamento é meio aberto em cima
+também, e o endereço mais alto com som é `end - 2`.
 
-O duplo clique e a tecla Enter chegam ao `Processor` por um `juce::Slider`
-subclasseado dentro do `ByteSelector`: o duplo clique padrão do `Slider`
-escreveria um valor de retorno e estragaria o início da região. A tecla Enter
-existe para o alinhamento ser possível só com teclado.
+**O caminho inverso arredonda, não trunca.** O motor trunca o índice para
+escolher a amostra; truncar também no display punha o cursor sistematicamente um
+byte à esquerda do que foi clicado, em 63 enderecos em mil num teste. Arredondar
+ao mais próximo centra o erro em zero: o endereço clicado volta exato e o desvio
+do índice que o motor trunca é de no máximo meio byte.
+
+A fração é um `float` de 24 bits de mantissa, que é a resolução real do
+parâmetro: distingue cada byte até uma região de 16 MB, e acima disso o cursor
+salta vários bytes. Não há correção possível sem mudar o tipo do parâmetro.
+
+**A grelha não desenha mais nada.** Os limites de seção aparecem no gutter, na
+linha onde a seção começa, com uma barra de 2 px a toda a altura da linha. Isso
+substitui as `SectionTabs`, que ocupavam 18 px para dizer a mesma coisa em menos
+sítio, e substitui a curva de entropia: o rodapé mede agora a entropia da janela
+de 256 bytes onde está a cabeça de leitura, que custa um histograma por tique em
+vez de 320 no `ingest`. A curva de entropia do ficheiro inteiro e o respetivo
+campo em `SourceInfo` saíram com o componente que os desenhava.
+
+**A região é mostrada com dois sinais**, fundo laranja a 22 % e um filete de 1 px
+em cima e em baixo da linha. O fundo diz a quem vê cor, o filete diz a quem não
+vê, que é o que o critério 1.4.1 pede.
+
+### Os dois caminhos de teclado
+
+A grelha é operada só com o rato. As células são pintadas e não são componentes,
+e um `Component` só não tem filhos acessíveis: não há como dar nome a 200
+células. O caminho de teclado não é a mesma coisa desenhada outra vez, são dois
+controlos com nome e valor próprios:
+
+- **POSITION**, o knob, que é um `juce::Slider` de verdade, move a cabeça de
+  leitura;
+- **`ByteAddressField`**, o campo hexadecimal, escreve o endereço da região. Aceita
+  `1F4`, `0x1F4` e `000001F4`; Enter confirma, Esc volta ao valor anterior, sair
+  do campo confirma, as setas sobem e descem um byte e PageUp/PageDown saltam
+  dezasseis.
+
+O `ALINHAR` substitui a tecla Enter que o seletor antigo usava para alternar
+entre a região exata e a seção mais próxima. O duplo clique na grelha continua a
+fazer a mesma coisa, e o duplo clique passa pelo mesmo teste de célula que o
+clique simples: um segundo clique no vão entre colunas não alinha nada, em vez de
+alinhar a seção a partir de um byte vizinho.
+
+O alvo de clique é 24 px de altura e cerca de 17 de largura. O critério 2.5.8
+pede 24 por 24, e a cláusula de espaçamento também não salva: um círculo de 24 px
+centrado em duas células vizinhas da mesma linha sobrepõe-se. Está declarado como
+exceção em `docs/10-acessibilidade-w3c.md`.
+
+**O endereço mede-se pelo ficheiro carregado.** Um PE acima de 4 GB tem endereços
+com mais de oito dígitos, e a coluna é alargada em vez de cortar o número a
+meio. Abaixo de 520 px de largura a coluna ASCII é omitida: perder os caracteres
+é perder contexto, e perder colunas de hexadecimal parte os endereços ao meio. É
+o que faz o critério 1.4.10 de refluxo — a janela estreita perde informação em
+vez de a truncar.
+
+### O que o `ingest` deixou de publicar
+
+O `PeImage` continua a ser local ao `ingest`, e os bytes crus continuam guardados
+porque a grelha precisa deles e o seletor precisava deles. O que saiu foi
+`SourceInfo::entropyCurve` e o respetivo `buildEntropyCurve`: a curva do ficheiro
+inteiro tinha um componente que a desenhava, e o rodapé passou a medir a janela da
+cabeça de leitura.
+
+### Defeito observado que não é desta alteração
+
+**Os seis parâmetros arrancam com valores que não são os defaults declarados.**
+Na captura de ecrã do Standalone, SIZE a 1 ms, DENSITY a 28.756 /s, POSITION a
+6.8 % — e os valores mudam entre execuções. Foi confirmado em `c8006ae`,
+compilado num worktree separado: os mesmos valores, logo não vem da grelha.
+
+**A causa é o estado de sessão do Standalone, não memória por inicializar.** O
+primeiro palpite foi memória não inicializada e estava errado; o que está
+estabelecido é o seguinte, por esta ordem:
+
+1. **Na saída do construtor os valores estão certos.** Instrumentado com
+   `fprintf`: `grain=0.393939`, `density=0.095477`, `position=0.500000`, que são
+   exatamente os defaults normalizados. O `AudioParameterFloat` aplica o default
+   como deve.
+2. **Sem `%APPDATA%\Opcoda\Opcoda.settings`, tudo está certo.** Apagado o
+   ficheiro, o Standalone abre com 40 ms, 20 /s, 50 %, 0 %, 0.0 st e 0.0 dB —
+   os defaults de `createParameterLayout`, verificados por captura duas vezes.
+3. **A ida e volta do estado preserva os valores.** Uma sessão sem material grava
+   o estado e sai com limpeza; o arranque seguinte restaura os mesmos defaults.
+   Portanto `copyState` e `replaceState` não estão partidos.
+4. **O Standalone do JUCE 8 persiste o estado entre sessões.** Em
+   `%APPDATA%\Opcoda\Opcoda.settings`, na chave `filterState`. E no arranque
+   chama `setStateInformation` a partir de
+   `juce::StandalonePluginHolder::init` — confirmado pelo AddressSanitizer, com
+   pilha completa:
+
+   ```
+   opcoda::PluginProcessor::setStateInformation      plugin_processor.cpp:415
+   juce::StandalonePluginHolder::init                juce_StandaloneFilterWindow.h:122
+   juce::StandalonePluginHolder::StandalonePluginHolder
+   ```
+
+Isto explica também um mistério que custou tempo: um `.exe` de `System32` que
+appeared na janela em todas as execuções. **Não era o ambiente** — era o
+`sourcePath` que o plugin tinha guardado, reingerido por `setStateInformation` na
+linha seguinte à reposição do estado.
+
+**O palpite de memória não inicializada está refutado.** Com o plugin compilado
+em `RelWithDebInfo` e Symbols, o Dr. Memory 2.6 reporta 35
+`UNINITIALIZED READ` e **nenhum tem um frame `opcoda::`** — as 35 são de
+fronteiras JUCE e do sistema operativo. As 3447 `INVALID HEAP ARGUMENT` são de
+caminhos de destruição, do JUCE. Não é leitura por inicializar no nosso código.
+
+**O que fica por explicar** é qual sessão escreveu valores errados no estado.
+Os candidatos nomeados, por ordem: os CCs 74 e 71 mapeados a densidade e
+posição a chegar de um controlador MIDI ligado — o próprio `Opcoda.settings`
+nomeia um *Arturia MiniLab mkII* como entrada MIDI —, ou automação do host.
+Não foi reproduzido numa sessão controlada com material, porque a automação do
+diálogo de ficheiro não é fiável o suficiente para servir de teste.
+
+**Contorno prático, e é real:** apagar `%APPDATA%\Opcoda\Opcoda.settings` traz
+os defaults de volta. É o que o passo 2 demonstra e o que qualquer pessoa pode
+fazer semesperar por uma correção.
+
+Não foi corrigido aqui: a origem dos valores errados não está identificada, e
+mexer às cegas num caminho que já escreve seis parâmetros seria trocar um sintoma
+por outro.
+
+### `String {valor, 0}` não arredonda — e estava nos seis formatadores
+
+Defeito pré-existente, **corrigido**. As caixas de valor mostravam a precisão
+toda — `28.756 /s` em vez de `29 /s` — e ninguém reparava porque um número com
+seis dígitos é plausível numa densidade.
+
+A causa está no JUCE, em `juce_String.cpp`: `writeDouble` só aplica a precisão ao
+stream quando `numDecPlaces > 0`. Com zero, o `o << n` sai com a precisão por
+omissão do stream, que é 6 dígitos significativos. `String(28.756f, 0)` dá
+`"28.756"`.
+
+`String` não tem construtor de float arredondado, portanto os seis formatadores
+de `kSpecs` passaram a usar `asInteger()`, que faz `roundToInt` explícito. Com uma
+casa decimal — PITCH e VOLUME — o `if` entra e o formato já estava certo; esses
+dois não se mexeram. O helper existe para a razão ficar escrita uma vez em vez
+de seis.
 
 ### Peças físicas do asset harness
-
-Os corpos dos knobs, o botão LOAD e a pega do seletor são PNGs gerados pelo
-harness em `opcoda-asset-harness`, embutidos com `juce_add_binary_data` a partir
-de `resources/assets`.
 
 **O harness não gera texto.** Todo o texto — rótulos, valores, escalas — é
 desenhado em código, porque texto gerado por modelo sai com letra errada e não
@@ -347,19 +475,17 @@ peça é um quadrado e o `LOAD` é uma faixa; esticar um PNG deformaria o bisel 
 continua a ser o `Slider`, e é ele que tem o foco por teclado e o
 `AccessibilityHandler`. Um PNG não tem nenhum dos dois.
 
-A pega do seletor é desenhada por `drawLinearSlider` no `LookAndFeel`, guardada
-pela propriedade `byteRangeSelector` do `Slider`. Sem essa guarda, um slider
-linear futuro herdaria a pega física sem querer.
-
 ### O que não está feito
 
-A curva é recortada para a região selecionada, mas **não há cursor de
-transporte**: a leitura de entropia segue o meio da região, e mover o início da
-região é o que move a leitura.
+**Não há tinta de entropia por linha.** O `design/stitch/03-byte-heatmap.png`
+mostra a entropa como cor de fundo das células, e é o passo natural a seguir:
+`entropy::shannonCurve` já dá a curva e a grelha já tem a linha. Fica de fora
+porque cor de fundo que codifica um número é o primeiro sinal a falhar o
+critério 1.4.1, e por isso precisa de uma segunda leitura, não só de um alfa.
 
-O seletor só move o início da região; **o fim vem do `Processor`**. Não há,
-por enquanto, um segundo controle para o fim da janela, e arrastar redefine a
-região para o mesmo comprimento.
+**A resolução do cursor é a do parâmetro.** Com uma região acima de 16 MB o
+`float` de 24 bits de mantissa já não distingue cada byte, e o cursor salta
+vários. O valor é exato, mas a resolução não é nossa.
 
 A validação no Ableton continua por fazer, e com ela o T2 e o T4.
 

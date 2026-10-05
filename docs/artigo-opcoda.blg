@@ -1,0 +1,81 @@
+This is BibTeX, Version 0.99e
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: artigo-opcoda.aux
+Reallocating 'name_of_file' (item size: 1) to 12 items.
+The style file: abntex2-alf.bst
+Reallocating 'name_of_file' (item size: 1) to 16 items.
+Reallocating 'name_of_file' (item size: 1) to 12 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'wiz_functions' (item size: 4) to 6000 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'wiz_functions' (item size: 4) to 9000 items.
+Database file #1: abntex2-options.bib
+Database file #2: referencias.bib
+Warning--entry type for "microsoftpe" isn't style-file defined
+--line 91 of file referencias.bib
+Warning--entry type for "pietrek1994" isn't style-file defined
+--line 98 of file referencias.bib
+Warning--entry type for "pietrek2002" isn't style-file defined
+--line 105 of file referencias.bib
+Warning--entry type for "steinbergvst3" isn't style-file defined
+--line 112 of file referencias.bib
+Warning--entry type for "clap2024" isn't style-file defined
+--line 119 of file referencias.bib
+Warning--entry type for "juce2026" isn't style-file defined
+--line 126 of file referencias.bib
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'glb_str_end' (item size: 4) to 20 items.
+Reallocating 'glb_str_ptr' (item size: 4) to 20 items.
+Reallocating 'global_strs' (item size: 1) to 4000000 items.
++---------------------------------------------------------+
+| Estilo bibliográfico abntex2-alf.bst versão v-1.9.7           |
+| Em caso de dúvidas ou problemas com este estilo procure |
+| http://www.abntex.net.br/                               |
++---------------------------------------------------------+
+You've used 17 entries,
+            6714 wiz_defined-function locations,
+            1287 strings with 11306 characters,
+and the built_in function-call counts, 17271 in all, are:
+= -- 1930
+> -- 245
+< -- 346
++ -- 461
+- -- 80
+* -- 991
+:= -- 2290
+add.period$ -- 63
+call.type$ -- 17
+change.case$ -- 104
+chr.to.int$ -- 32
+cite$ -- 16
+duplicate$ -- 1534
+empty$ -- 986
+format.name$ -- 368
+if$ -- 3623
+int.to.chr$ -- 0
+int.to.str$ -- 0
+missing$ -- 287
+newline$ -- 88
+num.names$ -- 80
+pop$ -- 361
+preamble$ -- 1
+purify$ -- 51
+quote$ -- 0
+skip$ -- 1621
+stack$ -- 1
+substring$ -- 748
+swap$ -- 567
+text.length$ -- 16
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 0
+while$ -- 114
+width$ -- 0
+write$ -- 250
+(There were 6 warnings)

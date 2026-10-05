@@ -1,15 +1,14 @@
 #pragma once
 
 #include "boxed_label.h"
-#include "byte_selector.h"
+#include "byte_address_field.h"
 #include "display_panel.h"
-#include "entropy_curve.h"
+#include "hex_grid.h"
 #include "knob.h"
 #include "led.h"
 #include "look_and_feel.h"
 #include "palette.h"
 #include "plugin_processor.h"
-#include "section_tabs.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_events/juce_events.h>
@@ -66,6 +65,45 @@ private:
     void refresh();
     void refreshTelemetry(const PluginProcessor::SourceInfo& info);
 
+    // O header e' montado da direita para a esquerda a partir de VOICES, e cada
+    // peca e' escondida quando ja nao ha espaco para ela a serio.
+    //
+    // As flags guardam a decisao de LARGURA, tomada em resized(); o conteudo vem
+    // do SourceInfo e muda quando um ficheiro carrega. Sao dois motivos
+    // independentes para uma peca nao estar la, e nenhum dos dois pode prevailecer
+    // sobre o outro: e' por isso que a visibilidade se combine num sitio so, em vez
+    // de cada um dos dois lados escrever setVisible por sua conta.
+    bool headerFitsHint_ {false};
+    bool headerFitsSize_ {false};
+    bool headerFitsFormat_ {false};
+    bool footerFitsRate_ {false};
+    bool footerFitsPeak_ {false};
+    bool footerFitsEntropy_ {false};
+
+    void updateHeaderVisibility();
+    void updateFooterVisibility();
+
+    // Clique numa celula: puxa a regiao para la se o byte estiver fora, e escreve
+    // o POSITION. A ordem e' a do else: primeiro move-se o material, depois a
+    // leitura, porque o POSITION e' relativo a regiao e nao ao ficheiro.
+    void activateByte(std::uint64_t address);
+
+    // Endereco escrito no campo: so move a regiao. O POSITION fica onde esta,
+    // que e' o comportamento do seletor antigo e o que faz sentido quando se esta
+    // a escolher material e nao a escolher um instante.
+    void moveRegionTo(std::uint64_t address);
+
+    // Le a fracao de leitura do parametro POSITION, e nao uma copia local. Ler o
+    // parametro e' o que impede o editor de brigar com a automacao do host: se o
+    // host moveu a cabeca, o editor mostra o que o host fez.
+    [[nodiscard]] float readPosition() const;
+
+    // Entropia da janela de 256 bytes a partir do endereco da cabeca de leitura,
+    // recortada pela regiao. Um histograma de 256 celulas por tique de 20 Hz nao
+    // se ouve.
+    [[nodiscard]] double entropyAtReadHead(std::uint64_t address,
+                                           const PluginProcessor::ByteRange& range) const;
+
     // Configura um rotulo sem fundo. Devolve void em vez de Label por valor
     // porque juce::Component tem construtor de copia deletado e nao declara
     // move, entao devolver por valor nao compila.
@@ -108,13 +146,17 @@ private:
     Led statusLed_ {Led::State::off};
     Led voicesLed_ {Led::State::off};
     DisplayPanel display_;
-    SectionTabs tabs_;
-    EntropyCurve curve_;
 
-    // Seletor de bytes. Fica acima das abas porque e' o controle que muda o que
-    // se ouve, e as abas sao o mapa do ficheiro. A ordem e' a ordem de uso:
-    // escolhe-se a regiao, e depois le-se onde ela caiu.
-    ByteSelector selector_;
+    // A grelha de bytes ocupa o display todo. Nao ha barra de posicao nem curva
+    // ao lado: a grelha mostra os bytes e cada linha traz o seu endereco, que e'
+    // mais informacao do que a barra dava.
+    HexGrid grid_;
+
+    // Os dois caminhos de teclado para o que o rato faz na grelha. O campo
+    // escreve o endereco da regiao; o botao substitui o Enter que o seletor
+    // antigo usava para alinhar a secao.
+    ByteAddressField address_;
+    juce::TextButton snapButton_;
 
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
@@ -126,6 +168,7 @@ private:
     // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
     // mock. Todas em texto, nunca so por cor.
     BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel positionReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
@@ -140,8 +183,8 @@ private:
     std::unique_ptr<juce::FileChooser> chooser_;
     bool dragHovered_ {false};
 
-    // Identidade do material carregado. A curva e as abas so sao reconstruidas
-    // quando isto muda, e nao a cada tique do timer.
+    // Identidade do material carregado. A grelha so e' reenviada quando isto
+    // muda, e nao a cada tique do timer.
     juce::String loadedSignature_;
 };
 

@@ -73,7 +73,7 @@ automatizáveis.
 
 ## Fora de escopo
 
-- Arrasto e soltar, mapa de seções e curva de entropia na interface: F008
+- Arrasto e soltar, grelha de bytes e telemetria na interface: F008
 - MIDI learn e CC: F009
 - Telemetria de vozes ativas para o rótulo: F007
 - Visual Ableton-style com design system do Stitch: F008

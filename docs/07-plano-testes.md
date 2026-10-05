@@ -30,6 +30,16 @@ Complemento qualitativo: teste de usabilidade com 5 usuários e escala SUS, mais
 
 O Windows não distribui runtime de ThreadSanitizer, nem no MSVC nem no LLVM, e o AddressSanitizer nativo do MSVC não cobre comportamento indefinido. O projeto ficou com um compilador só e o que ele entrega: ASan nativo, `/W4 /WX` e testes determinísticos.
 
+O **Dr. Memory** é a alternativa a essa limitação e está instalada como
+ferramenta de diagnóstico, não como dependência do produto: não entra no
+`CMakeLists` e nada no `docs/17` a referencia. Dá o que o ASan nativo não dá —
+distingue leitura de memória não inicializada de erros de heap — e foi o que
+resolveu o defeito dos parâmetros que arrancam errados, ao mostrar que o Standalone
+restaura o estado de sessão gravado em `%APPDATA%\Opcoda\Opcoda.settings`. Usa um
+build `RelWithDebInfo` à parte, porque sem PDB as pilhas saem só com endereços, e
+não pode correr sobre o build com ASan: as duas ferramentas instrumentam ao mesmo
+tempo.
+
 Consequência sobre os ensaios acima:
 
 | Ensaio | Situação | Como é verificado |
