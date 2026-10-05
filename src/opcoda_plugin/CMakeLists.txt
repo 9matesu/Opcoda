@@ -1,15 +1,5 @@
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 
-# Pecas fisicas vindas do asset harness, embutidas no binario. Ficam em
-# resources/assets e nao em src: sao arte, nao codigo, e o harness nunca escreve
-# dentro do plugin.
-juce_add_binary_data(OpcodaAssets
-    HEADER_NAME OpcodaAssets.h
-    NAMESPACE BinaryData
-    SOURCES
-        ${CMAKE_SOURCE_DIR}/resources/assets/knob-md.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png)
-
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
     PLUGIN_MANUFACTURER_CODE Opc0
@@ -65,12 +55,10 @@ target_sources(Opcoda
         source/hex_grid.h
         source/byte_address_field.cpp
         source/byte_address_field.h
-        source/assets.h
         source/palette.h)
 
 target_link_libraries(Opcoda
     PRIVATE
-        OpcodaAssets
         opcoda_core
         juce::juce_audio_processors
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois

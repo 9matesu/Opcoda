@@ -1,6 +1,5 @@
 #pragma once
 
-#include "assets.h"
 #include "boxed_label.h"
 #include "palette.h"
 
@@ -13,16 +12,16 @@ namespace opcoda {
 
 // Um knob: rotulo em cima, slider rotativo no meio, valor em baixo.
 //
-// O corpo e' a peca fisica do asset harness, desenhada uma vez e fixa. O que a
-// peca nao tem, e que o codigo desenha por cima: o arco de valor, o ponteiro,
-// o anel de foco e o texto. A divisao e' deliberada, porque e' ela que mantem
-// o que a constitution exige.
+// O corpo e' desenhado em codigo pelo LookAndFeel, desenhado uma vez e fixo. O
+// que o corpo nao tem, e que o codigo desenha por cima: o arco de valor, o
+// ponteiro, o anel de foco e o texto. A divisao e' deliberada, porque e' ela que
+// mantem o que a constitution exige.
 //
 // **Os knobs sao juce::Slider de verdade, nao desenho customizado.** Isso nao e'
-// padrao: e' o que da foco por teclado, ajuste com setas e AccessibilityHandler
+// padrao: e o que da foco por teclado, ajuste com setas e AccessibilityHandler
 // de graca, e sao exatamente os criterios que a docs/10-acessibilidade-w3c.md
-// exige. O corpo vem de um PNG, mas o PNG e' so o desenho de fundo: quem opera
-// o controle continua a ser o Slider, e e' ele que tem o foco.
+// exige. O corpo e' so o desenho de fundo: quem opera o controle continua a ser o
+// Slider, e e' ele que tem o foco.
 //
 // O rotulo curto e' o do mock. O nome accessible e' a descricao completa em
 // portugues: um nome accessible curto demais, so "SIZE", e' inutil para quem
