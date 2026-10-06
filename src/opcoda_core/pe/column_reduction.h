@@ -28,11 +28,11 @@ struct Column {
     float rms {0.0f};
     float entropyBits {0.0f};
 
-    // Bytes que a coluna representa. Existe para o ensaio poder provar que as
-    // colunas tesselam a regiao: somados tem de dar o comprimento da regiao, e
-    // nenhum pode ser zero. Sem este campo a propriedade seria invisivel e um
-    // off-by-one na particao passava despercebido.
-    std::uint32_t byteCount {0};
+// Bytes que a coluna representa. E' de 64 bits e nao de 32 porque uma coluna
+    // pode cobrir mais de 4 G num ficheiro enorme com poucas colunas, e truncar em
+    // silencio partiria o invariante de que a soma das contagens da o comprimento
+    // da regiao — que e' o invariante que o ensaio usa para provar a particao.
+    std::uint64_t byteCount {0};
 
     [[nodiscard]] bool silent() const noexcept { return minimum >= 0.0f && maximum <= 0.0f; }
 };
@@ -68,7 +68,10 @@ inline constexpr std::uint32_t kMaxSamplesPerColumn {512};
 // **O numero de colunas pode sair menor do que o pedido.** Com quatro bytes e novecentas
 // colunas, ha quatro colunas de um byte e nao novecentas de meio byte: uma coluna
 // sem byte nenhum nao tem minimo, nem maximo, nem entropia, e seria um rectangulo
-// vazio que se le como defeito. `out.size()` e' a verdade.
+// vazio que se le como defeito. Ha um tecto de 65536 colunas pelo mesmo motivo que o
+// parser recusa acima de kMaxSections: um `resize` que lance dentro de uma funcao
+// `noexcept` termina o processo, e o host vai abaixo connosco. `out.size()` e' a
+// verdade.
 //
 // Aloca em `out`, que e' a thread de interface. Nao aloca em nenhum sitio da
 // thread de audio: esta funcao nunca e' chamada de la.

@@ -36,7 +36,7 @@ TEST(Transport, PositionNeverReachesSilence) {
         // 40 voltas inteiras de 512 amostras, que e' o que cobre o embrulho
         // varias vezes e volta a passar pelo mesmo sitio do caminho.
         for (int block = 0; block < 40 * 512; ++block) {
-            const auto position = transport.advance(512);
+            const auto position = transport.advance(512, true);
             ASSERT_GE(position, 0.0f) << "bytes=" << bytes;
             ASSERT_LT(static_cast<double>(position), 1.0) << "bytes=" << bytes;
             ASSERT_LE(static_cast<double>(position), upper + 1e-6) << "bytes=" << bytes;
@@ -62,7 +62,7 @@ TEST(Transport, SmallestRegionHasAnAudibleFloor) {
     // blocos, 4608 amostras, e a volta ainda nao tinha fechado.
     const auto totalSamples = static_cast<int>(std::llround(Transport::kMinSeconds * kSampleRate));
     for (int sample = 0; sample < totalSamples; ++sample) {
-        (void)transport.advance(1);
+        (void)transport.advance(1, true);
     }
     ASSERT_LT(transport.positionFraction(), 0.2f);
 }
@@ -115,7 +115,7 @@ TEST(Transport, FullRegionIsTraversedWithinTheAnnouncedDuration) {
     int samples = 0;
     while (samples < budget) {
         const auto before = transport.positionFraction();
-        (void)transport.advance(1);
+        (void)transport.advance(1, true);
         ++samples;
         if (before > 0.5f && transport.positionFraction() < 0.5f) {
             break; // embrulhou
@@ -140,10 +140,10 @@ TEST(Transport, AdvanceMovesExactlyRateTimesSamples) {
     transport.play();
 
     // 1 s de regiao == 1 s de duracao == avanco de 1/48000 por amostra.
-    const auto perSample = transport.advance(0);
+    const auto perSample = transport.advance(0, true);
     ASSERT_NEAR(perSample, 0.0, 1e-9);
 
-    (void)transport.advance(4800);
+    (void)transport.advance(4800, true);
     const auto expected = static_cast<float>(4800.0 / 48000.0);
     ASSERT_NEAR(transport.positionFraction(), expected, 1e-6f);
 }
@@ -155,12 +155,12 @@ TEST(Transport, SeekIsAppliedOnceAndThenTheHeadAdvances) {
     transport.play();
 
     transport.seekToFraction(0.25);
-    ASSERT_NEAR(transport.advance(1), 0.25f + 1.0f / 48000.0f, 1e-6f);
+    ASSERT_NEAR(transport.advance(1, true), 0.25f + 1.0f / 48000.0f, 1e-6f);
 
     // Sem a geracao, voltar a escrever a mesma ancora a cada bloco prenderia a
     // cabeca em 0,25 para sempre. Este e' o teste dessa regressao.
     transport.seekToFraction(0.25);
-    (void)transport.advance(4800);
+    (void)transport.advance(4800, true);
     ASSERT_GT(transport.positionFraction(), 0.30f);
 }
 
@@ -169,7 +169,7 @@ TEST(Transport, SeekMovesTheHeadImmediately) {
     transport.prepare(kSampleRate);
     transport.setRegionLength(48000);
     transport.play();
-    (void)transport.advance(24000); // meio da regiao
+    (void)transport.advance(24000, true); // meio da regiao
 
     transport.seekToFraction(0.75);
 
@@ -177,7 +177,7 @@ TEST(Transport, SeekMovesTheHeadImmediately) {
     // onde esta a cabeca. Tem de aplicar a ancora na mesma: uma guarda de
     // numSamples <= 0 posta antes da ancora devolveria a posicao antiga, e o
     // teste apanha exatamente isso na primeira versao.
-    ASSERT_NEAR(transport.advance(0), 0.75f, 1e-6f);
+    ASSERT_NEAR(transport.advance(0, true), 0.75f, 1e-6f);
 }
 
 TEST(Transport, SeekIsClampedToTheRegion) {
@@ -187,13 +187,13 @@ TEST(Transport, SeekIsClampedToTheRegion) {
     transport.play();
 
     transport.seekToFraction(1.0);
-    ASSERT_LT(transport.advance(0), 1.0f);
+    ASSERT_LT(transport.advance(0, true), 1.0f);
 
     transport.seekToFraction(-3.0);
-    ASSERT_GE(transport.advance(0), 0.0f);
+    ASSERT_GE(transport.advance(0, true), 0.0f);
 
     transport.seekToFraction(std::nan(""));
-    ASSERT_GE(transport.advance(0), 0.0f);
+    ASSERT_GE(transport.advance(0, true), 0.0f);
 }
 
 TEST(Transport, StoppedTransportDoesNotAdvance) {
@@ -202,18 +202,27 @@ TEST(Transport, StoppedTransportDoesNotAdvance) {
     transport.setRegionLength(48000);
     transport.play();
 
-    (void)transport.advance(24000);
+    (void)transport.advance(24000, true);
     const auto at = transport.positionFraction();
     ASSERT_NEAR(at, 0.5f, 1e-5f);
 
-    // advance() e' chamado sem guarda e a posicao nao se mexe. Isto nao e' uma
-    // trivialidade: quem chama e' a thread de audio, e se um caller futuro chamar
-    // advance() sem olhar para isPlaying(), a cabeca desvia em silencio e o unico
-    // sintoma e' que o cursor do ecra mente.
+    // advance() e' chamado com o snapshot que o chamador leu de isPlaying(), e nao
+    // com um valor fixo. Isto nao e' uma trivialidade: quem chama e' a thread de
+    // audio, e um caller que passe `true` sem estar a tocar desloca a cabeca em
+    // silencio e o unico sintoma e' que o cursor do ecra mente.
+    //
+    // O teste tambem fixa o outro lado: passar `true` parado faz avancar, porque
+    // quem manda e' o snapshot e nao o atómico lido la dentro.
     transport.stop();
     ASSERT_FALSE(transport.isPlaying());
-    (void)transport.advance(48000);
+    (void)transport.advance(48000, false);
     ASSERT_FLOAT_EQ(transport.positionFraction(), at);
+
+    // E passar a lying data mesmo resultado, que e' o que torna o snapshot
+    // obrigatorio em vez de ser uma convenience.
+    const auto before = transport.positionFraction();
+    (void)transport.advance(48000, true);
+    EXPECT_NE(transport.positionFraction(), before);
 }
 
 TEST(Transport, EmptyRegionNeverDividesByZero) {
@@ -226,13 +235,13 @@ TEST(Transport, EmptyRegionNeverDividesByZero) {
     transport.setRegionLength(0);
     ASSERT_EQ(transport.durationSeconds(), 0.0);
     ASSERT_FALSE(transport.hasRegion());
-    ASSERT_EQ(transport.advance(512), 0.0f);
+    ASSERT_EQ(transport.advance(512, true), 0.0f);
 
     // E o caso de um byte, que tem posicao mas nao tem som: o byte mais alto que
     // produz som e' o end - 2, e num byte so nao ha nenhum.
     transport.setRegionLength(1);
     ASSERT_FALSE(transport.hasRegion());
-    ASSERT_EQ(transport.advance(512), 0.0f);
+    ASSERT_EQ(transport.advance(512, true), 0.0f);
 }
 
 TEST(Transport, ChangingRegionResetsTheHead) {
@@ -240,15 +249,55 @@ TEST(Transport, ChangingRegionResetsTheHead) {
     transport.prepare(kSampleRate);
     transport.setRegionLength(48000);
     transport.play();
-    (void)transport.advance(40000);
+    (void)transport.advance(40000, true);
 
     ASSERT_GT(transport.positionFraction(), 0.5f);
 
     // Mover a regiao pelo campo de endereco com o botao premido e' o caso comum.
     // A fracao antiga aponta para um sitio diferente do ficheiro novo.
     transport.setRegionLength(96000);
-    ASSERT_EQ(transport.positionFraction(), 0.0f);
-    ASSERT_NEAR(transport.durationSeconds(), 2.0, 1e-9);
+
+    // **O reset e' diferido para o bloco seguinte, e o teste tem de o depender.**
+    // A interface pede o reset e nao escreve em position_, que e' da thread de
+    // audio; logo o zero so aparece quando advance() consome o pedido. Ler
+    // positionFraction() antes disso devolve a posicao antiga, e era isso que a
+    // primeira versao deste ensaio fazia.
+    (void)transport.advance(0, true);
+    EXPECT_EQ(transport.positionFraction(), 0.0f);
+    EXPECT_NEAR(transport.durationSeconds(), 2.0, 1e-9);
+}
+
+// O reset nao pode engolir uma busca que chegou depois dele.
+TEST(Transport, ASeekAfterARegionChangeStillApplies) {
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(48000);
+    transport.play();
+    (void)transport.advance(24000, true);
+
+    // O reset e' pedido...
+    transport.setRegionLength(96000);
+    // ...e a busca chega a seguir, antes do proximo bloco. Marcar a geracao *actual*
+    // no consumo do reset descartaria esta busca e a cabeca ficaria em zero quando o
+    // utilizador acabava de a mover para tres quartos.
+    transport.seekToFraction(0.75);
+
+    ASSERT_NEAR(transport.advance(0, true), 0.75f, 1e-6f);
+}
+
+// Mas tem de descartar a busca que era do ficheiro antigo.
+TEST(Transport, ASearchBeforeARegionChangeIsDiscarded) {
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(48000);
+    transport.play();
+
+    transport.seekToFraction(0.9);
+    transport.setRegionLength(96000);
+
+    // A ancora de 0,9 apontava para 90 % da regiao velha. Depois da troca e' uma
+    // posicao sem sentido, e por isso o reset descarta-a.
+    ASSERT_EQ(transport.advance(0, true), 0.0f);
 }
 
 TEST(Transport, PrepareWithAnImpossibleSampleRateFallsBack) {
@@ -260,7 +309,7 @@ TEST(Transport, PrepareWithAnImpossibleSampleRateFallsBack) {
     // amostra. O motor faz o mesmo (granular_engine.cpp:45) e cai em 44100.
     ASSERT_NEAR(transport.durationSeconds(), 48000.0 / 44100.0, 1e-9);
     transport.play();
-    ASSERT_TRUE(std::isfinite(transport.advance(512)));
+    ASSERT_TRUE(std::isfinite(transport.advance(512, true)));
 }
 
 // Duas threads a competing play/stop enquanto uma terceira avanca: e' a prova de
@@ -293,7 +342,7 @@ TEST(Transport, PlayStopAndAdvanceFromThreeThreadsNeverTear) {
 
     std::thread mover([&] {
         for (int block = 0; block < 200000; ++block) {
-            const auto position = transport.advance(512);
+            const auto position = transport.advance(512, true);
             // Toda posicao devolvida tem de estar dentro da regiao, sempre.
             // Uma leitura rasgada mostraria um valor fora de [0, upper].
             EXPECT_GE(position, 0.0f);
@@ -336,7 +385,7 @@ TEST(Transport, PositionIsPublishedForTheDisplay) {
 
     ASSERT_FLOAT_EQ(transport.positionFraction(), 0.0f);
 
-    const auto returned = transport.advance(12000);
+    const auto returned = transport.advance(12000, true);
     // O display le o valor publicado, e nao o devolvido: se os dois divergissem, o
     // cursor do ecra ficaria atrasado em relacao ao que se ouve.
     EXPECT_FLOAT_EQ(transport.positionFraction(), returned);

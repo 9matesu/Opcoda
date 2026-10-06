@@ -23,6 +23,21 @@ namespace opcoda {
 // libera depois que a thread de audio devolveu o ponteiro pela fila de
 // retorno.
 using SampleBuffer = std::shared_ptr<const std::vector<float>>;
+// O que viaja pela fila: as amostras E a curva de entropia ja reduzida.
+//
+// **A curva viaja porque nao pode ser calculada na thread de audio.** O motor
+// modulava a dispersao dos graos pela entropia local, e media-a dentro de
+// processBlock: O(regiao) por troca de material, sem alocar nada — o histograma e'
+// de pilha — e portanto invisivel para o guard de alocacao. Com o transporte,
+// arrastar a regiao republica o material a cada evento de rato, e cada publicacao
+// virava uma passagem completa na thread de audio.
+//
+// A struct tem de continuar trivial para a SpscRing: dois ponteiros, nada mais.
+struct PublishedMaterial {
+    const std::vector<float>* samples {nullptr};
+    const float* entropyCurve {nullptr};
+};
+
 using SamplePtr = const std::vector<float>*;
 
 // AudioProcessor com editor minimo: a forma que carrega um binario e produz
@@ -46,7 +61,18 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    // A cauda e' o maior grao, porque e' o tempo que um grao que ja nasceu ainda
+    // tem para acabar depois de o gate fechar.
+    //
+    // **Devolver 0 era verdade antes do transporte e passou a ser mentira.** Sem
+    // transporte so havia notas, e uma nota acabava com o gate. Com o botao, o gate
+    // fecha no STOP e ha ate' 100 ms de graos em voo — e o host, avisado de que nao
+    // ha cauda, corta-os. Carregar STOP sem uma tecla premida passava a dar um
+    // corte duro a meio de um grao, e a rampa de 5 ms do gate protecte precisamente
+    // o sitio que o corte apagava.
+    double getTailLengthSeconds() const override {
+        return static_cast<double>(dsp::GranularEngine::kMaxGrainMs) / 1000.0;
+    }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -158,6 +184,11 @@ bool snapByteRangeToSection();
     // thread de interface. A thread de audio nunca os chama: ela so' chama
     // advance(), e isso acontece dentro de processBlock.
     [[nodiscard]] bool isTransportPlaying() const noexcept { return transport_.isPlaying(); }
+
+    // Verdadeiro quando a regiao actual produz som. Com menos de tres bytes nao ha
+    // posicao que o motor leia, e o botao de reproducao tem de ficar desativado em
+    // vez de aceitar o toque e produzir um drone de uma amostra.
+    [[nodiscard]] bool hasPlayableRegion() const noexcept { return transport_.hasRegion(); }
 
     void startTransport() noexcept { transport_.play(); }
     void stopTransport() noexcept { transport_.stop(); }
@@ -300,12 +331,16 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
     // publica o material novo e recolhe o ponteiro que a thread de audio ja
     // terminou de usar.
-    rt::SpscRing<SamplePtr, 4> incoming_;
-    rt::SpscRing<SamplePtr, 4> returned_;
+    rt::SpscRing<PublishedMaterial, 4> incoming_;
+    rt::SpscRing<PublishedMaterial, 4> returned_;
 
     // Donos de toda a memoria de amostra. So a thread de interface escreve
     // aqui, e so remove um buffer depois que a thread de audio o devolveu.
     std::vector<SampleBuffer> owned_;
+
+    // A curva de entropiareduzida que acompanha cada buffer. Vive ao lado de
+    // owned_ com o mesmo indice, e viaja com o ponteiro na fila.
+    std::vector<std::vector<float>> entropyCurves_;
 
     std::atomic<SamplePtr> live_ {nullptr};
     juce::String lastError_;

@@ -31,9 +31,30 @@ void Transport::prepare(double sampleRate) noexcept {
 
 void Transport::reset() noexcept {
     stop();
-    position_ = 0.0;
-    appliedSeekGeneration_ = seekGeneration_.load(std::memory_order_acquire);
-    publishedPosition_.store(0.0, std::memory_order_relaxed);
+    requestReset();
+}
+
+// O reset e' um pedido, e nao uma escrita.
+//
+// **posicao_ e' da thread de audio e so dela.** A primeira versao escrevia
+// posicao_ = 0 aqui e em setRegionLength, e os dois sao chamados da thread de
+// interface — setRegionLength em CADA arrasto do campo de endereco. A thread de
+// audio podia estar dentro de advance() a ler e a escrever a mesma variavel. Em x64
+// um double alinhado nao rasga, portanto nunca houve valor lixo, mas havia uma
+// escrita perdida e o contrato escrito no cabecalho era falso.
+//
+// O pedido viaja por uma marca, tal como a ancora, e advance() consome-o. O
+// resultado e' que a interface nunca escreve em estado da thread de audio.
+//
+// **A marca guarda a geracao da ancora tal como estava no pedido.** Marcar a
+// geracao *actual* no consumo descartaria uma busca que chegou depois do reset e
+// antes do bloco seguinte, e a cabeca ficaria em zero quando o utilizador tinha
+// acabado de a mover. O que se quer e' descartar a ancora que era a do ficheiro
+// antigo, e poupar a que chegou depois.
+void Transport::requestReset() noexcept {
+    resetRequested_.store(true, std::memory_order_relaxed);
+    resetSeekGeneration_.store(seekGeneration_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
 }
 
 void Transport::setRegionLength(std::uint64_t bytes) noexcept {
@@ -42,9 +63,8 @@ void Transport::setRegionLength(std::uint64_t bytes) noexcept {
     // Mudar a regiao com o transporte a tocar e' o caso comum, porque o campo de
     // endereco move a regiao enquanto o botao esta' premido. Repor a posicao a
     // zero e' o comportamento honesto: a fracao antiga aponta para um sitio
-    // diferente do ficheiro novo, e mantela seria ler onde nao ha material.
-    position_ = 0.0;
-    publishedPosition_.store(0.0, std::memory_order_relaxed);
+    // diferente do ficheiro novo, e mantê-la seria ler onde nao ha material.
+    requestReset();
 }
 
 void Transport::seekToFraction(double fraction) noexcept {
@@ -88,7 +108,7 @@ double Transport::upperBound() const noexcept {
     return std::max(0.0, 1.0 - 2.0 / static_cast<double>(bytes));
 }
 
-float Transport::advance(int numSamples) noexcept {
+float Transport::advance(int numSamples, bool playingSnapshot) noexcept {
     const auto upper = upperBound();
     if (upper <= 0.0) {
         // Regiao vazia ou de um byte: nao ha posicao que produza som, e 1,0 e'
@@ -97,6 +117,17 @@ float Transport::advance(int numSamples) noexcept {
         position_ = 0.0;
         publishedPosition_.store(0.0, std::memory_order_relaxed);
         return 0.0f;
+    }
+
+    // O reset pedido e' consumido aqui, no unico sitio que pode mudar a posicao.
+    // E' o que mantem o invariante de que posicao_ e' escrita so' por advance().
+    //
+    // A geracao gravada e' a do momento do pedido, nao a de agora: uma busca que
+    // chegou depois do reset tem de ser aplicada, e uma que ja era a do ficheiro
+    // antigo tem de ser descartada.
+    if (resetRequested_.exchange(false, std::memory_order_acquire)) {
+        position_ = 0.0;
+        appliedSeekGeneration_ = resetSeekGeneration_.load(std::memory_order_relaxed);
     }
 
     // A ancora aplica-se uma vez por seekToFraction, e nao a cada bloco.
@@ -113,16 +144,11 @@ float Transport::advance(int numSamples) noexcept {
         position_ = isUsableFraction(anchor) ? std::min(anchor, upper) : 0.0;
     }
 
-    // **O avanco so' acontece a tocar.** O que chama advance e' a thread de audio,
-    // e ela chama-o quando o transporte esta' em reproducao; mas a classe nao
-    // assenta nesse cuidado de quem chama. Parado, advance() devolve a posicao
-    // onde esta e nao a move, porque um caller futuro que o chame sem guarda
-    // deslocaria a cabeca em silencio, e esse e' o tipo de defeito que so aparece
-    // quando ninguem esta' a ver o display.
-    //
-    // A ancora, pelo contrario, aplica-se parada ou a tocar: quem posiciona o
-    // knob antes de carregar em reproducao espera comecar dali.
-    if (numSamples > 0 && playing_.load(std::memory_order_acquire)) {
+    // **O `playing` vem do snapshot que o chamador passou.** Rele-lo aqui seria
+    // uma segunda leitura do atómico, e o intervalo entre ela e a do chamador e' o
+    // intervalo em que a cabeca avanca e o gate nao, ou o contrario. O sintoma e'
+    // ate' um bloco de audio parado, que nem e' silencio nem e' clique.
+    if (numSamples > 0 && playingSnapshot) {
         const auto step = fractionPerSample();
         if (step > 0.0) {
             position_ += step * static_cast<double>(numSamples);

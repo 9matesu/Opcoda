@@ -2,6 +2,7 @@
 
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/pe/byte_to_sample.h"
+#include "opcoda_core/pe/column_reduction.h"
 #include "opcoda_core/pe/pe_parser.h"
 
 #include <algorithm>
@@ -64,7 +65,9 @@ void PluginProcessor::prepareToPlay(double sampleRate, int maximumExpectedSample
 
 void PluginProcessor::releaseResources() {
     engine_.reset();
-    transport_.reset();
+    // O transporte e' reposto pela via do pedido, nao por escrito directo: quem
+    // escreve em position_ e' advance(), e so' advance' escreve.
+transport_.reset();
     incoming_.clear();
     returned_.clear();
     owned_.clear();
@@ -262,12 +265,34 @@ bool PluginProcessor::publishByteRange() {
         return false;
     }
 
+    // A curva de entropia e' calculada AQUI, na thread de interface, e nao no
+    // motor. Sao 256 pontos da regiao, e o custo e' irrelevante fora do callback —
+    // enquanto dentro do callback era uma passagem completa por troca de material.
+    std::vector<float> curve(dsp::GranularEngine::kMaxEntropyPoints, 0.0f);
+    {
+        std::vector<pe::Column> columns;
+        constexpr std::uint32_t kCurveColumns {256};
+        if (pe::reduceToColumns(sourceBytes_.data(), size, range.start, range.end,
+                                kCurveColumns, columns)) {
+            for (std::size_t i = 0; i < curve.size(); ++i) {
+                const auto index = (i * columns.size()) / curve.size();
+                curve[i] = index < columns.size() ? columns[index].entropyBits : 0.0f;
+            }
+        }
+        // Sem colunas a curva fica a zeros e o motor usa o valor medio, que e' o
+        // mesmo que a curva desativada daria.
+    }
+
     // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
     // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
     // produtor, e uma alocacao ali custaria o contrato de tempo real.
     owned_.push_back(std::move(buffer));
-    if (!incoming_.push(owned_.back().get())) {
+    entropyCurves_.push_back(std::move(curve));
+
+    const PublishedMaterial material {owned_.back().get(), entropyCurves_.back().data()};
+    if (!incoming_.push(material)) {
         owned_.pop_back();
+        entropyCurves_.pop_back();
         lastError_ = "E_BUSY";
         return false;
     }
@@ -283,27 +308,43 @@ bool PluginProcessor::publishByteRange() {
 }
 
 void PluginProcessor::drainIncomingQueue() noexcept {
-    SamplePtr incoming {nullptr};
+    PublishedMaterial incoming {};
     while (incoming_.pop(incoming)) {
         const auto previous = live_.load(std::memory_order_relaxed);
         if (previous != nullptr) {
             // Devolve o ponteiro antigo antes de trocar, para que a interface
             // nunca libere memoria que a thread de audio ainda esta lendo.
-            returned_.push(previous);
+            returned_.push({previous, nullptr});
         }
-        live_.store(incoming, std::memory_order_release);
-        engine_.setSource(incoming->data(), incoming->size());
+        live_.store(incoming.samples, std::memory_order_release);
+        // **So' copia o ponteiro da curva.** A medicao foi feita na interface; aqui
+        // ha um copy_n de no maximo 1024 floats e nada mais. A versao anterior
+        // media a entropia do material inteiro dentro deste metodo, que e' chamado
+        // de processBlock.
+        engine_.setSource(incoming.samples->data(), incoming.samples->size(),
+                          incoming.entropyCurve, dsp::GranularEngine::kMaxEntropyPoints);
     }
 }
 
 void PluginProcessor::releaseReturnedBuffers() {
-    SamplePtr returned {nullptr};
+    PublishedMaterial returned {};
     while (returned_.pop(returned)) {
-        owned_.erase(std::remove_if(owned_.begin(), owned_.end(),
-                                    [returned](const SampleBuffer& held) {
-                                        return held.get() == returned;
-                                    }),
-                     owned_.end());
+        const auto index = static_cast<std::size_t>(
+            std::find_if(owned_.begin(), owned_.end(),
+                         [&returned](const SampleBuffer& held) {
+                             return held.get() == returned.samples;
+                         }) -
+            owned_.begin());
+
+        if (index < owned_.size()) {
+            owned_.erase(owned_.begin() + static_cast<std::ptrdiff_t>(index));
+            // A curva segue o buffer. Esvaziar so' as amostras deixaria o indice
+            // desalinhado e a proxima publicacao escreveria a curva no sitio errado.
+            if (index < entropyCurves_.size()) {
+                entropyCurves_.erase(entropyCurves_.begin() +
+                                     static_cast<std::ptrdiff_t>(index));
+            }
+        }
     }
 }
 
@@ -379,7 +420,7 @@ const auto numSamples = buffer.getNumSamples();
 
     auto params = currentParams();
     if (playing) {
-        params.position = transport_.advance(numSamples);
+        params.position = transport_.advance(numSamples, playing);
     }
 
     // O OR com as notas e' o que faz o botao funcionar sem MIDI: o motor so'

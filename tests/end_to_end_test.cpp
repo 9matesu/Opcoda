@@ -135,7 +135,7 @@ std::vector<float> renderThroughTransport(const std::vector<std::uint8_t>& bytes
     for (int i = 0; i < blocks; ++i) {
         const auto playing = transport.isPlaying();
         if (playing) {
-            params.position = transport.advance(kBlock);
+            params.position = transport.advance(kBlock, true);
             if (headPositions != nullptr) {
                 headPositions->push_back(transport.positionFraction());
             }

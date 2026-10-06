@@ -349,10 +349,13 @@ void PluginEditor::refreshPlayButton() {
     }
 
     // **Desativado e nao invisivel, e nao activo-a-fingir.** Sem material nao ha
-    // regiao para percorrer; e com o host parado nao ha callback que produza o
-    // som. Um botao que aceita o toque e nao faz nada e' pior do que um botao que
-    // recusa, porque o primeiro faz o utilizador achar que o plugin avariou.
-    const auto canPlay = owner_.hasSource() && !owner_.hostTransportIsKnownToBeStopped();
+    // regiao para percorrer; com uma regiao de um ou dois bytes nao ha posicao que
+    // produza som, porque o motor precisa de `index + 1` e `hasRegion()` e' `>= 3`;
+    // e com o host parado nao ha callback que produza o som. Um botao que aceita o
+    // toque e nao faz nada e' pior do que um botao que recusa, porque o primeiro faz
+    // o utilizador achar que o plugin avariou.
+    const auto canPlay = owner_.hasSource() && owner_.hasPlayableRegion() &&
+                         !owner_.hostTransportIsKnownToBeStopped();
     playButton_.setEnabled(canPlay);
 }
 

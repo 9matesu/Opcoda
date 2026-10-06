@@ -158,12 +158,18 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
 
     const auto violations = allocationsInsideAudioWindow([&] {
         for (int block = 0; block < 200; ++block) {
-            // A ordem e' a do PluginProcessor::processBlock: advance primeiro,
-            // depois o gate com o mesmo booleano.
-            if (transport.isPlaying()) {
-                params.position = transport.advance(kBlock);
+            // A ordem e' a de PluginProcessor::processBlock: advance primeiro,
+            // depois o gate — e o gate usa o MESMO booleano que decidiu o advance.
+            //
+            // Rele o atómico duas vezes, como a primeira versao fazia, seria uma
+            // segunda leitura entre o advance e o setSounding. Se o utilizador
+            // carregasse STOP nesse intervalo, a posicao seria de um estado e o
+            // gate de outro, e o sintoma seria ate' um bloco de audio parado.
+            const auto playing = transport.isPlaying();
+            if (playing) {
+                params.position = transport.advance(kBlock, playing);
             }
-            engine.setSounding(transport.isPlaying());
+            engine.setSounding(playing);
             engine.processBlock(left.data(), right.data(), kBlock, params);
         }
     });
@@ -173,6 +179,45 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
 
     // E a prova de que o teste acima mediu alguma coisa: a posicao andou.
     EXPECT_GT(transport.positionFraction(), 0.0f);
+}
+
+// **O setSource de quatro argumentos e' o caminho de audio, e nao aloca nem mede.**
+//
+// O guard de alocacao e' cego ao custo de CPU: o setSource antigo media a entropia
+// de toda a regiao dentro de processBlock, e nao alocava nada — o histograma era de
+// pilha — pelo que este teste passava com 12 milhoes de operacoes dentro da janela
+// de audio. E' o mesmo caminho que o TSan nao veria.
+TEST(AllocGuard, PublishingAPrecomputedCurveAllocatesNothing) {
+    constexpr double kSampleRate = 44100.0;
+    constexpr int kBlock = 256;
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    std::vector<float> source(1u << 20);
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        source[i] = std::sin(static_cast<float>(i) * 0.001f);
+    }
+
+    std::vector<float> curve(GranularEngine::kMaxEntropyPoints);
+    for (std::size_t i = 0; i < curve.size(); ++i) {
+        curve[i] = 5.5f + 0.01f * static_cast<float>(i);
+    }
+
+    std::vector<float> left(kBlock);
+    std::vector<float> right(kBlock);
+    GranularParams params;
+    params.densityGrainsPerSec = 120.0f;
+
+    const auto violations = allocationsInsideAudioWindow([&] {
+        engine.setSource(source.data(), source.size(), curve.data(), curve.size());
+        engine.setSounding(true);
+        for (int block = 0; block < 50; ++block) {
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+    });
+
+    EXPECT_EQ(violations, 0u);
 }
 
 TEST(AllocGuard, WindowIsReleasedAfterScope) {

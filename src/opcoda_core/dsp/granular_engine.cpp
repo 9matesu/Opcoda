@@ -85,35 +85,35 @@ void GranularEngine::reset() noexcept {
 }
 
 void GranularEngine::setSource(const float* samples, std::size_t count) noexcept {
+    // Curva zero: o motor passa a modular a dispersao por 4,0 bits, que e' a media
+    // de um executavel. Quem tem a curva verdadeira passa a versao de quatro
+    // argumentos, e o nucleo nunca faz trabalho de interface.
+    setSource(samples, count, nullptr, 0);
+}
+
+void GranularEngine::setSource(const float* samples,
+                               std::size_t count,
+                               const float* entropyCurve,
+                               std::size_t entropyPoints) noexcept {
     source_ = samples;
     sourceCount_ = (samples != nullptr) ? count : 0;
     entropyPointCount_ = 0;
 
-    if (source_ == nullptr || sourceCount_ == 0) {
-        return;
-    }
-
-    const std::size_t step = std::max<std::size_t>(1, sourceCount_ / kMaxEntropyPoints);
-    std::size_t index = 0;
-    while (index < sourceCount_ && entropyPointCount_ < kMaxEntropyPoints) {
-        const std::size_t length = std::min(step, sourceCount_ - index);
-        std::array<std::uint32_t, 256> histogram {};
-        for (std::size_t i = 0; i < length; ++i) {
-            const auto byte = static_cast<std::uint8_t>(
-                std::clamp(source_[index + i], -1.0f, 1.0f) * 127.0f + 127.0f);
-            ++histogram[byte];
-        }
-        const double n = static_cast<double>(length);
-        double sum = 0.0;
-        for (const auto occurrences : histogram) {
-            if (occurrences == 0) {
-                continue;
-            }
-            const double p = static_cast<double>(occurrences) / n;
-            sum += p * std::log2(p);
-        }
-        entropyCurve_[entropyPointCount_++] = static_cast<float>(-sum);
-        index += length;
+    // **A curva e' copiada, nao calculada.** A versao anterior media a entropia de
+    // todo o material dentro de processBlock, o que e' O(regiao) na thread de audio:
+    // 12 milhoes de leituras de float para um ficheiro de 12 MB. Nao aloca nada, o
+    // array do histograma e' de pilha, e por isso o guard de alocacao passava e era
+    // cego para isto.
+    //
+    // Com o transporte, arrastar a regiao republica o material a cada evento de
+    // rato, e cada publicacao era uma passagem completa na thread de audio. Varios
+    // ms de pico por evento e' xrun. Quem calcula e' pe::reduceToColumns, na thread
+    // de interface.
+    if (source_ != nullptr && sourceCount_ > 0 && entropyCurve != nullptr &&
+        entropyPoints > 0) {
+        const auto take = std::min(entropyPoints, kMaxEntropyPoints);
+        std::copy_n(entropyCurve, take, entropyCurve_.begin());
+        entropyPointCount_ = take;
     }
 }
 

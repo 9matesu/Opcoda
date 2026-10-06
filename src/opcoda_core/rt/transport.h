@@ -99,19 +99,26 @@ public:
         return playing_.load(std::memory_order_acquire);
     }
 
-    // Verdadeiro quando ha regiao com material. Com regiao vazia o transporte
-    // pode ser posto a tocar e nao produz posicao valida, e quem decide o que
-    // fazer com isso e' a interface, nao o nucleo.
+    // Verdadeiro quando ha regiao com material suficiente para produzir som.
+    //
+    // **O predicado e' `>= 3`, e nao `>= 1` nem `>= 2`.** Com dois bytes,
+    // upperBound() da 1 - 2/2 = 0 e advance() congelava em zero para sempre com o
+    // gate aberto: um drone de uma amostra com o cursor parado e um botao que parece
+    // funcionar. Com tres ha uma posicao util, que e' o que `end - 2` exige.
     [[nodiscard]] bool hasRegion() const noexcept {
-        return regionBytes_.load(std::memory_order_acquire) >= 2;
+        return regionBytes_.load(std::memory_order_acquire) >= 3;
     }
 
     // **Thread de audio, uma vez por bloco.** Devolve a fracao de posicao a usar
     // neste bloco, ja avancada e ja recortada.
     //
+    // `playingSnapshot` tem de ser o valor que o chamador leu de isPlaying(). Passar
+    // o resultado em vez de o reler dentro e' o que garante que a posicao e o gate
+    // vem do mesmo estado: com o atómico lido duas vezes, o intervalo entre as duas
+    // leituras produz ate' um bloco de audio com a posicao congelada e o gate aberto.
     // Nao aloca, nao trava e nao le ficheiros. E' a unica funcao que escreve em
     // posicao_.
-    [[nodiscard]] float advance(int numSamples) noexcept;
+    [[nodiscard]] float advance(int numSamples, bool playingSnapshot) noexcept;
 
     // Posicao corrente, para o display. Le o valor publicado pela thread de audio
     // e nao posicao_, que e' dela.
@@ -136,10 +143,15 @@ private:
     // Lado de cima da posicao. Abaixo de 1,0 porque 1,0 e' silencio.
     [[nodiscard]] double upperBound() const noexcept;
 
+    // Pede ao bloco seguinte que reponha a posicao a zero. Nao escreve em
+    // posicao_: quem escreve e' advance(), e so' advance' escreve.
+    void requestReset() noexcept;
+
     double sampleRate_ {44100.0};
 
-    // De uma thread so: posicao_ e' escrita exclusivamente por advance(), que so
-    // a thread de audio chama.
+    // De uma thread so: posicao_ e' escrita exclusivamente por advance(), que so a
+    // thread de audio chama, e nao por mais nada. reset() e setRegionLength()
+    // pedem o reset por requestReset() e nao escrevem aqui.
     double position_ {0.0};
     std::uint64_t appliedSeekGeneration_ {0};
 
@@ -147,6 +159,8 @@ private:
     std::atomic<bool> playing_ {false};
     std::atomic<double> anchor_ {0.0};
     std::atomic<std::uint64_t> seekGeneration_ {0};
+    std::atomic<bool> resetRequested_ {false};
+    std::atomic<std::uint64_t> resetSeekGeneration_ {0};
     std::atomic<double> publishedPosition_ {0.0};
 };
 

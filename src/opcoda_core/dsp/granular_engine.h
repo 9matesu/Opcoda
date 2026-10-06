@@ -39,6 +39,10 @@ public:
     static constexpr float kMaxGrainMs = 100.0f;
     static constexpr float kMinGrainMs = 1.0f;
 
+// Numero de pontos da curva de entropia. Publico porque quem calcula a curva na
+    // thread de interface tem de saber quantos pontos o motor aceita.
+    static constexpr std::size_t kMaxEntropyPoints {1024};
+
     void prepare(double sampleRate, int maximumBlockSize) noexcept;
     void reset() noexcept;
 
@@ -46,6 +50,25 @@ public:
     [[nodiscard]] double sampleRate() const noexcept { return sampleRate_; }
 
     void setSource(const float* samples, std::size_t count) noexcept;
+
+    // Publica o material E a curva de entropia ja reduzida, que e' o que a thread de
+    // interface deve passar.
+    //
+    // **A curva nunca e' calculada na thread de audio.** A versao de um argumento
+    // calcula-a, e isso e' O(region) dentro de processBlock: para 12 MB sao 12
+    // milhoes de leituras de float, e nao aloca nada — o array do histograma e' de
+    // pilha — pelo que o guard de alocacao passa e e' cego para isto. Com o
+    // transporte, arrastar a regiao republica o material a cada evento de rato, e
+    // cada publicacao era uma passagem completa na thread de audio. Varios ms de
+    // pico por evento e' xrun.
+    //
+    // Quem calcula e' pe::reduceToColumns, na thread de interface, e a curva que
+    // entra aqui tem no maximo kMaxEntropyPoints pontos. Se for nullptr, o motor usa
+    // 4,0 bits, que e' o valor medio de um executavel, e nao calcula nada.
+    void setSource(const float* samples,
+                   std::size_t count,
+                   const float* entropyCurve,
+                   std::size_t entropyPoints) noexcept;
 
     [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
     [[nodiscard]] std::size_t sourceSize() const noexcept { return sourceCount_; }
@@ -76,7 +99,6 @@ private:
     void startGrain(int voice, const GranularParams& params, double entropy) noexcept;
     void applyGate(float* left, float* right, int numSamples) noexcept;
 
-    static constexpr std::size_t kMaxEntropyPoints = 1024;
 
     double sampleRate_ {44100.0};
 

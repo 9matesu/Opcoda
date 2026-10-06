@@ -36,7 +36,7 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 191 casos na suíte principal mais 7 do guard de alocação, incluindo o critério de 40 dB do T1 |
+| B · Testes | 196 casos na suíte principal mais 8 do guard de alocação, incluindo o critério de 40 dB do T1 |
 | C · Tempo real | zero alocação no callback e na troca de material, com duas threads, e também durante a reprodução do transporte |
 | D · Robustez | 50 mutações de bit-flip e 10 casos de borda, todas com erro tipado |
 | E · Interface | contraste, teclado e nome acessível. **O 2.5.8 fechou em 06/10/2026** com a caret de teclado do `ByteDisplay`, e a exceção declarada foi retirada |

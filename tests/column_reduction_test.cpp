@@ -148,9 +148,15 @@ TEST(ColumnReduction, ZeroCrossingRegionIsNotSilent) {
 
 // A propriedade que o FR-018 exige: as colunas tesselam a regiao. Nem um byte
 // saltado, nem um byte lido duas vezes.
-TEST(ColumnReduction, PartialLastColumnReadsEveryByteExactlyOnce) {
+TEST(ColumnReduction, PartialLastColumnPartitionsTheRegionExactly) {
     // 1000 e 256 nao se dividem: e' o caso em que uma divisao float erraria o
     // indice ao longo de toda a segunda metade.
+    //
+    // **O nome antigo dizia "ReadsEveryByteExactlyOnce" e era uma promessa a mais.**
+    // Com o passo maior do que 1 as colunas NAO leem cada byte: leem uma amostra.
+    // O invariante que este ensaio prova e' de particao — as colunas tesselam a
+    // regiao — e nao de leitura. O nome antigo ia induzir o proximo leitor a
+    // procurar uma garantia que nao existe.
     for (const auto length : {std::uint64_t {3}, std::uint64_t {7}, std::uint64_t {1000},
                               std::uint64_t {255}, std::uint64_t {65537}}) {
         for (const auto columns : {1u, 2u, 7u, 64u, 256u, 1000u, 4096u}) {
@@ -289,7 +295,7 @@ std::vector<std::uint8_t> pseudoRandom(std::size_t size) {
 }
 
 TEST(ColumnReduction, SamplingIsCappedButStillTracksRealMaterial) {
-    // 4 MB com 256 colunas: 16 384 bytes por coluna, contra um tecto de 64
+    // 4 MB com 256 colunas: 16 384 bytes por coluna, contra um tecto de 512
     // amostras. Sao 256 leituras por coluna em vez de 16 384.
     const auto size = std::size_t {4} * 1024 * 1024;
     const auto bytes = pseudoRandom(size);
@@ -324,8 +330,8 @@ TEST(ColumnReduction, SamplingIsCappedButStillTracksRealMaterial) {
 // com entropia zero. Nenhum sanitizer apanha isso: a leitura estava dentro do
 // buffer e era correcta byte a byte.
 TEST(ColumnReduction, SamplingStepIsOddSoItCannotLockToOneByteValue) {
-    // 4 MB em 256 colunas: 16 384 bytes por coluna, passo de 33, ~497 amostras.
-    // A coluna esta' alinhada, que e' a condicao em que um passo par se prende.
+    // 4 MB em 256 colunas: 16 384 bytes por coluna. Com o tecto de 512 amostras o
+    // passo e' 32, forcado a 33.
     const auto size = std::size_t {4} * 1024 * 1024;
     const auto bytes = pattern(size, ascending);
 
@@ -334,16 +340,68 @@ TEST(ColumnReduction, SamplingStepIsOddSoItCannotLockToOneByteValue) {
     ASSERT_EQ(columns.size(), 256u);
 
     for (const auto& column : columns) {
-        EXPECT_EQ(column.byteCount, static_cast<std::uint32_t>(size / 256));
+        EXPECT_EQ(column.byteCount, static_cast<std::uint64_t>(size / 256));
 
         // Com passo par, `inicio + k*passo` percorre um subconjunto de restos da
         // divisao por 256 — 8 restos com passo 32 — e a entropia lia perto de 3.
-        // Com passo impar, leem-se quase todos os 256 valores.
         EXPECT_GT(column.entropyBits, 7.4f)
             << "o passo prendeu-se a um resto da divisao por 256";
         EXPECT_LT(column.minimum, -0.9f);
         EXPECT_GT(column.maximum, 0.9f);
     }
+}
+
+// **O tecto de 512 amostras tem de valer em colunas ENORMES.** Foi aqui que a
+// revisao apanhou o defeito: o passo era limitado a 255, e limitá-lo BAIXAVA o
+// passo e portanto MULTIPLICAVA as amostras. Acima de 130 560 bytes por coluna o
+// custo crescia com o ficheiro — exactamente o que o tecto existe para impedir.
+TEST(ColumnReduction, SampleCountStaysCappedOnEnormousColumns) {
+    // Uma coluna so' com 268 MB: com o defeito seriam 1 052 689 amostras, 2 056 vezes
+    // o tecto.
+    const auto bytes = std::vector<std::uint8_t>(std::size_t {1} << 22, 0x42);
+
+    std::vector<Column> columns;
+    ASSERT_TRUE(reduceToColumns(bytes.data(), bytes.size(), 0, bytes.size(), 1, columns));
+    ASSERT_EQ(columns.size(), 1u);
+    EXPECT_EQ(columns[0].byteCount, bytes.size());
+
+    // Com uma regiao constante a entropia e' zero e o envelope e' o valor do byte,
+    // o que torna este ensaio sobre contagem de amostras e nao sobre medida.
+    for (const auto count : {std::uint32_t {1}, std::uint32_t {16},
+                            static_cast<std::uint32_t>(bytes.size())}) {
+        std::vector<Column> probe;
+        const auto sub = static_cast<std::uint64_t>(count);
+        ASSERT_TRUE(reduceToColumns(bytes.data(), bytes.size(), 0, sub, 1, probe));
+        EXPECT_EQ(probe.size(), 1u) << "count=" << count;
+        EXPECT_EQ(probe[0].byteCount, sub) << "count=" << count;
+    }
+}
+
+// O tecto de colunas existe pelo mesmo motivo que kMaxSections no parser: um
+// `resize` que lance dentro de uma funcao noexcept chama std::terminate.
+TEST(ColumnReduction, ColumnCountIsCappedRatherThanAllocated) {
+    const auto bytes = pattern(4096, ascending);
+
+    // Pedir 4 294 967 295 colunas para 4096 bytes. Sem tecto isto alocava a conta
+    // completa antes de ser aparado ao numero de bytes.
+    std::vector<Column> columns;
+    ASSERT_TRUE(reduceToColumns(bytes.data(), bytes.size(), 0, bytes.size(),
+                                0xFFFFFFFFu, columns));
+    EXPECT_EQ(columns.size(), 4096u);
+    EXPECT_EQ(totalBytes(columns), 4096u);
+}
+
+// `size == 0` com ponteiro nao nulo e um `end == start` com valor nao nulo: casos
+// que a suite nao fixava e que dependem de guardas differentes.
+TEST(ColumnReduction, DegenerateBuffersAreRefused) {
+    const std::uint8_t probe {0};
+    std::vector<Column> columns;
+
+    EXPECT_FALSE(reduceToColumns(&probe, 0, 0, 0, 8, columns));
+    EXPECT_FALSE(reduceToColumns(&probe, 0, 0, 1, 8, columns));
+    EXPECT_FALSE(reduceToColumns(&probe, 10, 5, 5, 8, columns));
+    EXPECT_FALSE(reduceToColumns(&probe, 10, 10, 10, 8, columns));
+    EXPECT_TRUE(columns.empty());
 }
 
 

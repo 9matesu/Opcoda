@@ -38,13 +38,16 @@ double bitsFromHistogram(const std::array<std::uint32_t, 256>& histogram,
     return -sum;
 }
 
-// Tecto do passo, e o maior impar abaixo de 256.
+// Tecto de colunas.
 //
-// O tecto existe pela razao do impar: um passo maior do que a janela do
-// histograma pode nao apanhar nenhum exemplar de um valor de byte, e a entropia
-// passaria a medir o passo em vez dos dados. Abaixo de 256 e impar, a amostra
-// percorre restos diferentes da divisao por 256.
-constexpr std::uint64_t kMaxOddStride {255};
+// Existe pelo mesmo motivo que kMaxSections no parser: `columns` chega de uma
+// chamada e a funcao e' `noexcept`, e um `resize` que lance bad_alloc dentro de uma
+// funcao noexcept chama std::terminate e derruba o host. O parser recusa acima do
+// teto **antes** de alocar, e aqui e' igual.
+//
+// 65536 e' muito acima do que o display produz: columnCountForWidth() vai ate 8192
+// colunas, e o zoom chega a multiplicar isso por 8.
+constexpr std::uint64_t kMaxColumns {65536};
 
 } // namespace
 
@@ -76,7 +79,8 @@ bool reduceToColumns(const std::uint8_t* data,
     // Uma coluna por byte, no maximo. Uma coluna sem byte nenhum nao tem minimo
     // nem maximo nem entropia, e seria um rectangulo vazio no ecra.
     const auto wanted = static_cast<std::uint64_t>(columns);
-    const auto actual = static_cast<std::uint32_t>(std::min(wanted, length));
+    const auto capped = std::min(wanted, kMaxColumns);
+    const auto actual = static_cast<std::uint32_t>(std::min(capped, length));
     if (actual == 0) {
         return false;
     }
@@ -100,26 +104,29 @@ bool reduceToColumns(const std::uint8_t* data,
         const auto bytes = columnLength + (column < remainder ? 1u : 0u);
 
         auto& target = reduced[static_cast<std::size_t>(column)];
-        target.byteCount = static_cast<std::uint32_t>(std::min<std::uint64_t>(bytes,
-                                                                              0xFFFFFFFFull));
+
+        // **Oito bytes, e nao quatro.** Uma coluna pode cobrir mais de 4 G num
+        // ficheiro enorme com poucas colunas, e um uint32 truncado em silencio
+        // quebrava o invariante de que a soma das contagens da o comprimento da
+        // regiao — que e' o invariante que o ensaio usa para provar a particao.
+        target.byteCount = bytes;
 
         const auto columnStart = cursor;
         const auto columnEnd = cursor + bytes;
 
-        // **O passo tem de ser impar, e nao e' um detalhe.** O histograma tem 256
-        // caixas, e um passo par partilha factores com 256: um passo de 256 numa
-        // coluna alinhada caia sempre no mesmo resto da divisao por 256 e lia o
-        // mesmo byte em todas as amostras. Numa regiao de bytes ascendentes dava
-        // minimo igual a maximo igual a -1 e entropia zero numa coluna que devia
-        // estar cheia — e o AddressSanitizer nao apanha nada, porque a leitura
-        // estava dentro do buffer.
+        // **O passo e' levantado, nunca abaixado.**
         //
-        // Um passo impar e' primo com 256, entao `inicio + k*passo` percorre
-        // restos diferentes da divisao por 256 conforme k cresce. Com colunas
-        // pequenas o passo e' 1 e a reducao e' exacta; com colunas grandes o passo
-        // e' impar e a amostra ja nao fica presa a um resto.
-        auto stride = std::max<std::uint64_t>(1, bytes / sampleCap);
-        stride = std::min<std::uint64_t>(stride, kMaxOddStride);
+        // O objectivo e' um numero de amostras por coluna, e nao um numero de passo.
+        // Um passo de 255 num tecto de 512 amostras daria 512 amostras de uma coluna
+        // de 130 KB e 1 052 689 de uma coluna de 268 MB: o custo cresceria com o
+        // ficheiro, que e' exactamente o que o tecto existe para impedir.
+        //
+        // O passo sobe, forcado a impar. Impar porque 256 = 2^8 e logo
+        // gcd(impar, 256) = 1, entao `inicio + k*passo` percorre restos diferentes da
+        // divisao por 256 conforme k cresce. Com passo par que partilhe factores com
+        // 256, uma coluna alinhada de bytes ascendentes lia sempre o mesmo byte e dava
+        // min = max = -1 com entropia zero, numa coluna cheia.
+        auto stride = std::max<std::uint64_t>(1, (bytes + sampleCap - 1) / sampleCap);
         if ((stride % 2) == 0) {
             ++stride;
         }
