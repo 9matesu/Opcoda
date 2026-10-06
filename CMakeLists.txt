@@ -29,7 +29,8 @@ add_library(opcoda_core STATIC
     src/opcoda_core/dsp/window.cpp
     src/opcoda_core/dsp/granular_engine.cpp
     src/opcoda_core/rt/alloc_guard.cpp
-    src/opcoda_core/rt/note_tracker.cpp)
+    src/opcoda_core/rt/note_tracker.cpp
+    src/opcoda_core/rt/transport.cpp)
 
 target_include_directories(opcoda_core PUBLIC src)
 target_compile_options(opcoda_core PUBLIC /W4 /permissive- /Zc:__cplusplus /utf-8 /EHsc)

@@ -55,10 +55,16 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
 
 void PluginProcessor::prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) {
     engine_.prepare(sampleRate, maximumExpectedSamplesPerBlock);
+    // O transporte precisa da taxa de amostragem para saber quantos bytes por
+    // amostra consome, e e' a unica vez que a recebe: depois do primeiro bloco o
+    // host pode mudar a taxa sem avisar, e quem continua a ter a verdade e' o
+    // metodo de prepare.
+    transport_.prepare(sampleRate);
 }
 
 void PluginProcessor::releaseResources() {
     engine_.reset();
+    transport_.reset();
     incoming_.clear();
     returned_.clear();
     owned_.clear();
@@ -265,6 +271,14 @@ bool PluginProcessor::publishByteRange() {
         lastError_ = "E_BUSY";
         return false;
     }
+
+    // O transporte so sabe o comprimento da regiao quando lha dizemos. Sem
+    // esta linha a duracao de uma volta seria a do material anterior, e o
+    // primeiro transporte depois de carregar um ficheiro arrastaria a duracao do
+    // ficheiro que estava la antes.
+    transport_.setRegionLength(range.length());
+    telemetry_.playDurationSeconds.store(transport_.durationSeconds(),
+                                          std::memory_order_relaxed);
     return true;
 }
 
@@ -353,17 +367,36 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     readNotes(midi);
 
 const auto numSamples = buffer.getNumSamples();
-    engine_.setSounding(notes_.sounding());
+
+    // Transporte e gate. A ordem e' o que impede som sem posicao ou posicao sem
+    // som: o advance vem primeiro, e o mesmo booleano local decide a posicao que
+    // entra nos params e o gate que entra no motor.
+    //
+    // **Um booleano local e nao duas leituras do atomico.** Se o utilizador carregar
+    // em stop entre as duas, a posicao e' de um estado e o gate de outro, e o
+    // resultado e' audio a sair de uma regiao que o transporte ja largou.
+    const auto playing = transport_.isPlaying();
+
+    auto params = currentParams();
+    if (playing) {
+        params.position = transport_.advance(numSamples);
+    }
+
+    // O OR com as notas e' o que faz o botao funcionar sem MIDI: o motor so'
+    // precisa de gate aberto para produzir, e gate aberto sem nota e' exactamente
+    // o que o transporte e'. A rampa de 5 ms do applyGate continua a valer, porque
+    // setSounding e' a mesma porta que as notas usam.
+    engine_.setSounding(notes_.sounding() || playing);
     engine_.processBlock(buffer.getWritePointer(0),
                          buffer.getWritePointer(1),
                          numSamples,
-                         currentParams());
+                         params);
 
     publishTelemetry(buffer);
 }
 
-// Publica o pico do bloco e as vozes ativas. Roda depois do motor e antes de
-// sair: a leitura e' sobre o bloco que acabou de ser escrito.
+// Publica o pico do bloco, as vozes ativas e a posicao do transporte. Roda depois
+// do motor e antes de sair: a leitura e' sobre o bloco que acabou de ser escrito.
 void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept {
     float peak = 0.0f;
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
@@ -379,7 +412,15 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
     // ordenacao que interessa e' dentro do proprio bloco, que ja terminou.
     telemetry_.peakDb.store(decibels, std::memory_order_relaxed);
     telemetry_.activeVoices.store(engine_.lastActiveVoices(), std::memory_order_relaxed);
-    telemetry_.sounding.store(notes_.sounding(), std::memory_order_relaxed);
+
+    // O `sounding` e' o mesmo OU que o motor recebeu, e nao notes_.sounding(): o
+    // rodape e' a resposta a "esta a sair som", e durante o transporte a resposta
+    // e' sim mesmo sem nota nenhuma.
+    const auto audible = notes_.sounding() || transport_.isPlaying();
+    telemetry_.sounding.store(audible, std::memory_order_relaxed);
+    telemetry_.playing.store(transport_.isPlaying(), std::memory_order_relaxed);
+    telemetry_.playheadFraction.store(transport_.positionFraction(),
+                                      std::memory_order_relaxed);
 }
 
 

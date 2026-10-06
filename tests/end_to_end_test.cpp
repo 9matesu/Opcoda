@@ -8,6 +8,7 @@
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/pe/byte_to_sample.h"
 #include "opcoda_core/pe/pe_parser.h"
+#include "opcoda_core/rt/transport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,7 @@ using opcoda::dsp::GranularEngine;
 using opcoda::dsp::GranularParams;
 using opcoda::pe::parseFile;
 using opcoda::pe::toSamples;
+using opcoda::rt::Transport;
 
 namespace {
 
@@ -89,6 +91,60 @@ AudioStats stats(const std::vector<float>& signal) {
         result.mean = sum / static_cast<double>(signal.size());
     }
     return result;
+}
+
+// O caminho do transporte: o binario entra, a regiao e' percorrida sem uma unica
+// nota MIDI, e sai audio.
+//
+// Reproduz o que PluginProcessor::processBlock faz, e nao o plugin: este
+// executavel nao linka JUCE, e a cadeia do nucleo e' a mesma. O que o teste prova
+// e que o transporte comanda o motor, e nao que o botao esta ligado.
+std::vector<float> renderThroughTransport(const std::vector<std::uint8_t>& bytes,
+                                          int blocks = 200,
+                                          std::vector<float>* headPositions = nullptr) {
+    constexpr int kBlock = 256;
+
+    const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
+    if (!parsed.ok()) {
+        return {};
+    }
+    const auto& section = parsed.image.sections[0];
+    const auto samples = toSamples(bytes.data(), section.rawOffset, section.rawSize);
+
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(samples.size());
+    transport.play();
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+    // A engine NUNCA recebe setSounding(true) nesta cadeia. O gate e' aberto
+    // exclusivamente pelo transporte, e e' isso que o teste esta a provar.
+    engine.setSource(samples.data(), samples.size());
+
+    GranularParams params;
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 40.0f;
+    params.volumeDb = 0.0f;
+
+    std::vector<float> left(kBlock, 0.0f);
+    std::vector<float> right(kBlock, 0.0f);
+    std::vector<float> out;
+    out.reserve(static_cast<std::size_t>(kBlock) * static_cast<std::size_t>(blocks));
+
+    for (int i = 0; i < blocks; ++i) {
+        const auto playing = transport.isPlaying();
+        if (playing) {
+            params.position = transport.advance(kBlock);
+            if (headPositions != nullptr) {
+                headPositions->push_back(transport.positionFraction());
+            }
+        }
+        engine.setSounding(playing);
+        engine.processBlock(left.data(), right.data(), kBlock, params);
+        out.insert(out.end(), left.begin(), left.end());
+    }
+    return out;
 }
 
 } // namespace
@@ -166,6 +222,69 @@ TEST(EndToEnd, TruncatedRealBinaryIsRejected) {
     } else {
         EXPECT_NE(parsed.error, opcoda::pe::PeError::kOk);
     }
+}
+
+TEST(EndToEnd, TransportPlayProducesAudioWithoutMidi) {
+    // A Historia 1 da specs/008-transporte-e-vistas: uma pessoa que abre o
+    // Opcoda pela primeira vez nao tem teclado MIDI, e sem isto nao ha way de
+    // ouvir o material. Este teste e' a prova de que o caminho existe.
+    const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
+    ASSERT_FALSE(bytes.empty()) << "notepad.exe nao encontrado";
+
+    std::vector<float> heads;
+    const auto audio = renderThroughTransport(bytes, 200, &heads);
+    ASSERT_FALSE(audio.empty());
+
+    const auto measured = stats(audio);
+    EXPECT_TRUE(measured.allFinite) << "saida contem NaN ou infinito";
+    EXPECT_GT(measured.peak, 0.01f)
+        << "o transporte produziu audio mudo; o gate nao foi aberto pelo transporte";
+    EXPECT_LE(measured.peak, 1.0f) << "limitador deixou passar acima do teto";
+
+    // A cabeca andou. Sem esta asercao o teste passa com um transporte parado a
+    // devolver sempre a mesma posicao, que e' o modo de falha mais provavel.
+    ASSERT_EQ(heads.size(), 200u);
+    EXPECT_GT(heads.back(), heads.front());
+    EXPECT_LT(heads.back(), 1.0f);
+}
+
+TEST(EndToEnd, StalledTransportIsSilent) {
+    // O contrario do teste anterior, e pelo mesmo motivo: um transporte parado
+    // tem de ser mudo. Se este teste falhasse, o teste de cima passaria sem
+    // gate nenhum, porque a rampa do motor ja teria aberto a porta sozinha.
+    const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
+    ASSERT_FALSE(bytes.empty());
+
+    const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
+    ASSERT_TRUE(parsed.ok());
+    const auto& section = parsed.image.sections[0];
+    const auto samples = toSamples(bytes.data(), section.rawOffset, section.rawSize);
+
+    constexpr int kBlock = 256;
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(samples.size());
+    // play() de proposito omitido.
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+    engine.setSource(samples.data(), samples.size());
+
+    GranularParams params;
+    params.densityGrainsPerSec = 40.0f;
+
+    std::vector<float> left(kBlock, 0.0f);
+    std::vector<float> right(kBlock, 0.0f);
+    std::vector<float> out;
+
+    for (int i = 0; i < 200; ++i) {
+        const auto playing = transport.isPlaying();
+        engine.setSounding(playing);
+        engine.processBlock(left.data(), right.data(), kBlock, params);
+        out.insert(out.end(), left.begin(), left.end());
+    }
+
+    EXPECT_LT(stats(out).peak, 1.0e-4f) << "transporte parado produziu audio";
 }
 
 TEST(EndToEnd, ParseFileReadsFromDisk) {

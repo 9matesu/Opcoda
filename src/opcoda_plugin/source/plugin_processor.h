@@ -4,6 +4,7 @@
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
+#include "opcoda_core/rt/transport.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -137,9 +138,90 @@ bool snapByteRangeToSection();
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};
+
+        // Transporte. Sao tres campos e nao um, porque o display precisa de duas
+        // coisas diferentes: *onde* esta a cabeca e *quanto tempo* dura a volta.
+        // publishedPosition vem da thread de audio a cada bloco, e as outras duas
+        // sao estado da interface lido de lado.
+        std::atomic<float> playheadFraction {0.0f};
+        std::atomic<double> playDurationSeconds {0.0};
+        std::atomic<bool> playing {false};
     };
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
+
+    // Transporte de audicao: percorre a regiao sem nota MIDI, para se ouvir o
+    // material sem teclado. E' o que torna a forma de onda navegavel audivel, e
+    // nao so visivel.
+    //
+    // Os tres metodos sao a interface publica do transporte, e sao chamados da
+    // thread de interface. A thread de audio nunca os chama: ela so' chama
+    // advance(), e isso acontece dentro de processBlock.
+    [[nodiscard]] bool isTransportPlaying() const noexcept { return transport_.isPlaying(); }
+
+    void startTransport() noexcept { transport_.play(); }
+    void stopTransport() noexcept { transport_.stop(); }
+    void toggleTransport() noexcept {
+        if (transport_.isPlaying()) {
+            transport_.stop();
+        } else {
+            transport_.play();
+        }
+    }
+
+    // Ancora de busca do transporte. O valor vem do parametro POSITION, e so
+    // quando o utilizador o move: se o editor escrevesse isto a cada quadro, o
+    // transporte voltava ao ponto de ancoragem sessenta vezes por segundo e a
+    // cabeca nunca passava dele.
+    void seekTransportTo(float fraction) noexcept { transport_.seekToFraction(fraction); }
+
+    [[nodiscard]] float transportPosition() const noexcept {
+        return transport_.positionFraction();
+    }
+
+    [[nodiscard]] double transportDurationSeconds() const noexcept {
+        return transport_.durationSeconds();
+    }
+
+    // Verdadeiro quando o host esta' a correr o transporte.
+    //
+    // **Sem isto o botao de reproducao mente.** O motor so' existe enquanto o host
+    // chama processBlock, e um host parado nao chama. Um botao que aceita o toque
+    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque, e
+    // por isso a interface desativa-o e diz porquê.
+    //
+    // getPlayHead() pode ser nulo: e' o que acontece num teste sem host, e o
+    //nullptr e' resposta valida e nao um erro.
+    // **Verdadeiro apenas quando sabemos que o host esta' parado.** E o inverso de
+    // "o host esta' a tocar", e a distincao e' o ponto.
+    //
+    // Sem isto o botao de reproducao mente. O motor so' existe enquanto o host
+    // chama processBlock, e um host parado nao chama: um botao que aceita o toque
+    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque.
+    //
+    // A distincao esta' no que acontece quando o host nao diz nada. getPosition()
+    // devolve nullopt num host que nao fornece informacao de tempo, e nesse caso a
+    // resposta e' `false` — nao sabemos que parou. Tratar o desconhecido como
+    // parado desabilitaria o botao para sempre em qualquer host que nao de tempo,
+    // e o Standalone sem dispositivo de audio e' um deles.
+    [[nodiscard]] bool hostTransportIsKnownToBeStopped() const noexcept {
+        const auto* head = getPlayHead();
+        if (head == nullptr) {
+            // Sem host nenhum nao ha quem mande. Num teste, isto e' o que evita
+            // que o botao fique travado.
+            return false;
+        }
+
+        // A API actual do JUCE 8 e' getPosition(), que devolve um Optional.
+        // CurrentPositionInfo com isPlaying foi depreciada, e por isso nao e'
+        // usada: um aviso de depreciacao num /WX parte o build, e vale a pena que
+        // o portao aponte o uso de API velha.
+        const auto position = head->getPosition();
+        if (!position.hasValue()) {
+            return false; // host sem informacao de tempo: desconhecido, nao parado
+        }
+        return !position->getIsPlaying();
+    }
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
@@ -246,6 +328,13 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // A regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter testes.
     // Aqui so se traduz MidiMessage em Event, que e' a parte fina.
     rt::NoteTracker notes_;
+
+    // Transporte de audicao. Vive ao lado da engine e nao dentro dela porque sao
+    // duas perguntas diferentes: a engine pergunta "que som produzir agora" e o
+    // transporte pergunta "de onde comecar". O motor recebe a posicao ja
+    // resolvida, e continua a nao saber que existe um transporte.
+    rt::Transport transport_;
+
     Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;

@@ -2,6 +2,7 @@
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/rt/alloc_guard.h"
+#include "opcoda_core/rt/transport.h"
 
 #include <cmath>
 #include <thread>
@@ -10,6 +11,7 @@
 using opcoda::dsp::GranularEngine;
 using opcoda::dsp::GranularParams;
 using opcoda::rt::ScopedAudioThread;
+using opcoda::rt::Transport;
 
 namespace {
 
@@ -121,6 +123,56 @@ TEST(AllocGuard, SustainedPlaybackStaysClean) {
 
     EXPECT_EQ(violations, 0u)
         << "tempo real violado em " << kBlocks << " blocos de " << kBlock;
+}
+
+TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
+    // O caminho novo: transporte em reproducao, com o gate aberto por ele e nao
+    // por nota nenhuma.
+    //
+    // Este teste e' a razao de o transporte estar no nucleo e nao no editor. Se
+    // estivesse na thread de interface, esta asercao nao teria nada que verificar
+    // e o portao C passaria a falar de um caminho de audio que nunca foi medido.
+    constexpr double kSampleRate = 44100.0;
+    constexpr int kBlock = 256;
+
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(16384);
+    transport.play();
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    std::vector<float> source(16384);
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        source[i] = std::sin(static_cast<float>(i) * 0.01f);
+    }
+    engine.setSource(source.data(), source.size());
+
+    std::vector<float> left(kBlock);
+    std::vector<float> right(kBlock);
+
+    GranularParams params;
+    params.densityGrainsPerSec = 120.0f;
+    params.grainSizeMs = 40.0f;
+
+    const auto violations = allocationsInsideAudioWindow([&] {
+        for (int block = 0; block < 200; ++block) {
+            // A ordem e' a do PluginProcessor::processBlock: advance primeiro,
+            // depois o gate com o mesmo booleano.
+            if (transport.isPlaying()) {
+                params.position = transport.advance(kBlock);
+            }
+            engine.setSounding(transport.isPlaying());
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+    });
+
+    EXPECT_EQ(violations, 0u)
+        << "transporte alocou " << violations << " vez(es) dentro da janela de audio";
+
+    // E a prova de que o teste acima mediu alguma coisa: a posicao andou.
+    EXPECT_GT(transport.positionFraction(), 0.0f);
 }
 
 TEST(AllocGuard, WindowIsReleasedAfterScope) {
