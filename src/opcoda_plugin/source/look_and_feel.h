@@ -13,7 +13,7 @@ namespace opcoda {
 // resto fica no LookAndFeel padrao.
 //
 // **As pecas sao desenhadas em codigo, e nao vem nenhuma imagem do binario.**
-// Foi uma decisao, e nao uma falta de arte: knob-md.png eram 186x192 pixéis para
+// Foi uma decisao, e nao uma falta de arte: knob-md.png eram 186x192 pixels para
 // pintar um disco de 62, e button-large.png obrigava a desenhar uma peca
 // quadrada ao lado do texto porque esticar o bisel de 2 px o deixava com 1 px de
 // um lado e 4 px do outro. Com Path o corpo escala, o bisel tem a espessura que
@@ -128,7 +128,7 @@ public:
     // Botao com bisel: borda clara em cima e escura embaixo, que e' a leitura de
     // tecla fisica. Pressionado inverte o bisel e afunda 1 px.
     //
-    // Os quatro estados — repouso, sobreposto, premido e ligado — sao
+    // Os quatro estados - repouso, sobreposto, premido e ligado - sao
     // distinguiveis sem cor. O ligado ganha uma barra de 1 px no lado esquerdo
     // porque o laranja sobre o chassis claro da 2,4:1
     // (design/DESIGN-SYSTEM.md:65), e um botao cuja unica pista de estado e' essa
