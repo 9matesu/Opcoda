@@ -1,0 +1,4 @@
+Metodo;ValorFinal;PesoFinal;Capacidade;ItensSelecionados;Iteracoes;TempoMs;Valido;Parametros
+Subida de Encosta;41.0000;50.0000;50.0000;6;134;0;sim;N=15,Capacidade=50
+Subida de Encosta com Tentativas;41.0000;50.0000;50.0000;6;1286;1;sim;TMAX=10,N=15
+Têmpera Simulada;38.0000;49.0000;50.0000;5;90;0;sim;TempInicial=100,TempFinal=1,FatorRedutor=0,95,N=15

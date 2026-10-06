@@ -1,0 +1,8 @@
+Esta pasta armazena os arquivos CSV gerados pela aplicacao ao executar a Analise Comparativa.
+
+Cada execucao cria um arquivo no formato:
+    analise_AAAAMMDD_HHMMSS.csv
+
+Esse CSV e lido pelo script ferramentas/gerar-pdf.ps1 para produzir o PDF final.
+
+Nenhum resultado pre-calculado ou inventado deve ser colocado aqui. Somente saidas reais da execucao do programa.

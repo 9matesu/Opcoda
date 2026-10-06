@@ -1,0 +1,228 @@
+<Window x:Class="OpcodaOtimizacao.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Opcoda" Height="750" Width="1200"
+        Background="#2D2D30"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Border Background="#1E1E1E" BorderBrush="#555" BorderThickness="0,0,0,1" Padding="10,6">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="OptionsBtn" Content="Options" Margin="0,0,10,0" Click="OnOptionsClick"
+                            Background="#3E3E42" Foreground="#FFF" BorderBrush="#555" BorderThickness="1" Padding="10,5"/>
+                    <TextBlock Text="OPCODA" Foreground="#FF8C00" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                    <Separator Width="1" Background="#555" Margin="0,2,10,2"/>
+                    <Button Content="LOAD" Margin="0,0,10,0" Click="OnLoadClick"
+                            Background="#FF8C00" Foreground="#0A0A0A" FontWeight="Bold" BorderBrush="#FF8C00" BorderThickness="1" Padding="10,5"/>
+                    <TextBlock Text="{Binding NomeArquivo}" Foreground="#FFF" VerticalAlignment="Center" Margin="0,0,15,0" FontSize="13"/>
+                    <TextBlock Text="{Binding InfoArquivo}" Foreground="#B0B0B0" FontSize="12" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,0,0,0">
+                        <TextBlock Text="VOICES" Foreground="#FFD700" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="1" Foreground="#FFF" FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Popup x:Name="OptionsPopup" StaysOpen="False" AllowsTransparency="True" PlacementTarget="{Binding ElementName=OptionsBtn}" Placement="Bottom">
+                <Border Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" Padding="0" MinWidth="200" Margin="0,2,0,0">
+                    <StackPanel>
+                        <Button Content="Sobre o Sistema" Click="OnMenuSobreClick"
+                                Background="#0A0A0A" Foreground="#FFFFFF" BorderBrush="#333" BorderThickness="0,0,0,1"
+                                HorizontalContentAlignment="Left" Padding="14,8" FontSize="13"/>
+                        <Button Content="Algoritmos Genéticos" Click="OnMenuAGClick"
+                                Background="#0A0A0A" Foreground="#FFFFFF" BorderThickness="0"
+                                HorizontalContentAlignment="Left" Padding="14,8" FontSize="13"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="380"/>
+                <ColumnDefinition Width="*" MinWidth="450"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0" LastChildFill="False" Margin="8">
+                <Border DockPanel.Dock="Top" Background="#0A0A0A" BorderBrush="#555" BorderThickness="1" Height="250" Padding="8">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding ConteudoHex}" FontFamily="Consolas" FontSize="12" Foreground="#E0E0E0"/>
+                    </ScrollViewer>
+                </Border>
+                <Border DockPanel.Dock="Top" Background="#0A0A0A" BorderBrush="#555" BorderThickness="0,1,0,0" Padding="10,4" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding BitsPorByte}" Foreground="#FFD700" FontSize="12" Margin="0,0,15,0"/>
+                        <TextBlock Text="{Binding FrequenciaInfo}" Foreground="#B0B0B0" FontSize="12" Margin="0,0,15,0"/>
+                        <TextBlock Text="{Binding PosicaoInfo}" Foreground="#B0B0B0" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+                <Border DockPanel.Dock="Bottom" Background="#1E1E1E" BorderBrush="#555" BorderThickness="1" Padding="10" Margin="0,6,0,0">
+                    <StackPanel>
+                        <TextBlock Text="1 - GRANULAR ENGINE" Foreground="#FF8C00" FontWeight="Bold" FontSize="13" Margin="0,0,0,8"/>
+                        <UniformGrid Columns="6" Rows="1">
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="SIZE" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="40 ms" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="DENSITY" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="20 /s" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="POSITION" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="50 %" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="SPRAY" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="0 %" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="PITCH" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="0.0 st" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                            <StackPanel HorizontalAlignment="Center"><TextBlock Text="VOLUME" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/><Ellipse Width="38" Height="38" Fill="#3E3E42" Stroke="#FF8C00" StrokeThickness="2" Margin="0,3"/><TextBlock Text="0.0 dB" Foreground="#B0B0B0" FontSize="11" HorizontalAlignment="Center"/></StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+            </DockPanel>
+
+            <Border Grid.Column="1" Background="#1E1E1E" BorderBrush="#555" BorderThickness="1" Margin="8" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="OTIMIZAÇÃO" Foreground="#FF8C00" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
+
+                    <GroupBox DockPanel.Dock="Top" Header="Configuração do Problema" Foreground="#FFF" BorderBrush="#555" Margin="0,0,0,8">
+                        <StackPanel Margin="6">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Tipo:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                <ComboBox SelectedIndex="{Binding ConfiguracaoVm.TipoIdx}" Width="130" BorderBrush="#FF8C00" FontSize="13" Foreground="#FFD700">
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="Background" Value="#1E1E1E"/>
+                                            <Setter Property="Foreground" Value="#FFD700"/>
+                                            <Setter Property="Padding" Value="8,4"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                    <ComboBox.Template>
+                                        <ControlTemplate TargetType="ComboBox">
+                                            <Grid>
+                                                <ToggleButton x:Name="ToggleBtn" Focusable="False" ClickMode="Press"
+                                                    IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                                    <ToggleButton.Template>
+                                                        <ControlTemplate TargetType="ToggleButton">
+                                                            <Border Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" CornerRadius="2">
+                                                                <Grid>
+                                                                    <ContentPresenter Margin="8,4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                        Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                        ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                                    <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="#FFD700" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </ToggleButton.Template>
+                                                </ToggleButton>
+                                                <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                                    <Border Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" MinWidth="{Binding ActualWidth, ElementName=ToggleBtn}">
+                                                        <ScrollViewer MaxHeight="200">
+                                                            <ItemsPresenter/>
+                                                        </ScrollViewer>
+                                                    </Border>
+                                                </Popup>
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </ComboBox.Template>
+                                    <ComboBoxItem Content="FIXO"/>
+                                    <ComboBoxItem Content="ALEATÓRIO"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Tamanho:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding ConfiguracaoVm.TamanhoTexto}" Width="90" Background="#0A0A0A" Foreground="#FFD700" BorderBrush="#555" FontSize="13" FontFamily="Consolas"/>
+                            </StackPanel>
+                            <Button Content="GERAR PROBLEMA" Command="{Binding ConfiguracaoVm.GerarProblemaCommand}" HorizontalAlignment="Left"
+                                    Background="#FF8C00" Foreground="#0A0A0A" FontWeight="Bold" BorderBrush="#FF8C00" BorderThickness="1" Padding="12,6" FontSize="13"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox DockPanel.Dock="Top" Header="Método de Otimização" Foreground="#FFF" BorderBrush="#555" Margin="0,0,0,8">
+                        <StackPanel Margin="6">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Método:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                <ComboBox SelectedIndex="{Binding MetodosVm.MetodoIdx}" Width="240" BorderBrush="#FF8C00" FontSize="13" Foreground="#FFD700">
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="Background" Value="#1E1E1E"/>
+                                            <Setter Property="Foreground" Value="#FFD700"/>
+                                            <Setter Property="Padding" Value="8,4"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                    <ComboBox.Template>
+                                        <ControlTemplate TargetType="ComboBox">
+                                            <Grid>
+                                                <ToggleButton x:Name="ToggleBtnM" Focusable="False" ClickMode="Press"
+                                                    IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                                    <ToggleButton.Template>
+                                                        <ControlTemplate TargetType="ToggleButton">
+                                                            <Border Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" CornerRadius="2">
+                                                                <Grid>
+                                                                    <ContentPresenter Margin="8,4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                        Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                        ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                                    <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="#FFD700" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </ToggleButton.Template>
+                                                </ToggleButton>
+                                                <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                                    <Border Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" MinWidth="{Binding ActualWidth, ElementName=ToggleBtnM}">
+                                                        <ScrollViewer MaxHeight="200">
+                                                            <ItemsPresenter/>
+                                                        </ScrollViewer>
+                                                    </Border>
+                                                </Popup>
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </ComboBox.Template>
+                                    <ComboBoxItem Content="Subida de Encosta"/>
+                                    <ComboBoxItem Content="Subida de Encosta com Tentativas"/>
+                                    <ComboBoxItem Content="Têmpera Simulada"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6" Visibility="{Binding MetodosVm.VisibilidadeTMax}">
+                                <TextBlock Text="TMAX:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding MetodosVm.TMaxTexto}" Width="90" Background="#0A0A0A" Foreground="#FFD700" BorderBrush="#555" FontSize="13" FontFamily="Consolas"/>
+                            </StackPanel>
+                            <StackPanel Visibility="{Binding MetodosVm.VisibilidadeTempera}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Temp. Inicial:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding MetodosVm.TempInicialTexto}" Width="90" Background="#0A0A0A" Foreground="#FFD700" BorderBrush="#555" FontSize="13" FontFamily="Consolas"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Temp. Final:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding MetodosVm.TempFinalTexto}" Width="90" Background="#0A0A0A" Foreground="#FFD700" BorderBrush="#555" FontSize="13" FontFamily="Consolas"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Fator Redutor:" Foreground="#B0B0B0" FontSize="13" Width="100" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding MetodosVm.FatorRedutorTexto}" Width="90" Background="#0A0A0A" Foreground="#FFD700" BorderBrush="#555" FontSize="13" FontFamily="Consolas"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="EXECUTAR" Command="{Binding MetodosVm.ExecutarCommand}" Margin="0,0,10,0"
+                                        Background="#FF8C00" Foreground="#0A0A0A" FontWeight="Bold" BorderBrush="#FF8C00" BorderThickness="1" Padding="12,6" FontSize="13"/>
+                                <Button Content="ANÁLISE COMPARATIVA" Command="{Binding MetodosVm.AnaliseComparativaCommand}"
+                                        Background="#3E3E42" Foreground="#FFF" BorderBrush="#555" BorderThickness="1" Padding="12,6" FontSize="13"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="RESULTADO / SAÍDA" Foreground="#FF8C00" FontWeight="Bold" FontSize="13" Margin="0,0,0,4"/>
+                        <Border Grid.Row="1" Background="#0A0A0A" BorderBrush="#FF8C00" BorderThickness="1" Padding="12" MinHeight="220">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding SaidaCombinada}" FontFamily="Consolas" FontSize="13" Foreground="#FFFFFF" TextWrapping="Wrap" LineHeight="20"/>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#0A0A0A" BorderBrush="#555" BorderThickness="0,1,0,0" Padding="10,4">
+            <TextBlock Text="{Binding StatusRodape}" Foreground="#B0B0B0" FontSize="12"/>
+        </Border>
+    </Grid>
+</Window>

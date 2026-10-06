@@ -72,3 +72,11 @@ desktop.ini
 opencode.local.json
 
 build-release/
+
+# Artefatos .NET (subprojeto OpcodaOtimizacao)
+src/OpcodaOtimizacao/bin/
+src/OpcodaOtimizacao/obj/
+src/OpcodaOtimizacao.Tests/bin/
+src/OpcodaOtimizacao.Tests/obj/
+*.nupkg
+TestResults/

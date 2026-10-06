@@ -1,0 +1,25 @@
+<Window x:Class="OpcodaOtimizacao.Views.SobreWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sobre o Sistema" Height="480" Width="620"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <TextBlock Text="Sobre o Sistema" FontSize="18" FontWeight="Bold" Foreground="#FF8C00" Margin="0,0,0,14"/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#FFFFFF" FontSize="13" LineHeight="20"
+                       Text="Este sistema é um protótipo acadêmico relacionado ao projeto Opcoda (Op-code + Coda), que pesquisa a sonificação de arquivos executáveis (PE/.exe). A aplicação demonstra a aplicação de métodos de otimização combinatória para selecionar segmentos de dados binários de forma a maximizar a diversidade estatística dos blocos utilizados na sonificação."/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#FFFFFF" FontSize="13" LineHeight="20"
+                       Text="O problema é modelado como um Problema da Mochila 0/1, onde cada bloco do arquivo possui peso (tamanho) e valor (diversidade medida por entropia de Shannon). Os algoritmos implementados são Subida de Encosta, Subida de Encosta com Tentativas e Têmpera Simulada."/>
+            <Separator Background="#555555" Margin="0,12"/>
+            <TextBlock FontSize="15" FontWeight="Bold" Margin="0,0,0,8" Foreground="#FFD700" Text="Dados da Disciplina"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13" Text="{Binding Disciplina}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13" Text="{Binding Docente}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13" Text="{Binding Instituicao}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13" Text="{Binding Semestre}"/>
+            <Separator Background="#555555" Margin="0,12"/>
+            <TextBlock FontSize="15" FontWeight="Bold" Margin="0,0,0,8" Foreground="#FFD700" Text="Discentes"/>
+            <TextBlock TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13" Text="{Binding Discentes}"/>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

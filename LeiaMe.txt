@@ -1,0 +1,276 @@
+================================================================
+LEIA-ME - OPCODA OTIMIZAÇÃO DE SEGMENTOS BINÁRIOS
+Trabalho Acadêmico - Programação Linear / Meta-heurísticas
+================================================================
+
+Este documento contém instruções completas para compilar, executar
+e validar o protótipo acadêmico relacionado ao projeto Opcoda.
+
+----------------------------------------------------------------
+1. REQUISITOS DO SISTEMA
+----------------------------------------------------------------
+
+- Sistema operacional: Windows 10 ou 11 (64 bits)
+- .NET SDK: versão 9.0 ou superior
+  Verificar instalação:
+      dotnet --version
+  Caso não tenha, baixe em: https://dotnet.microsoft.com/download/dotnet/9.0
+
+- Não há dependências externas além do .NET SDK.
+  Nenhum banco de dados, API, serviço de IA ou conexão com internet
+  é necessário para executar o programa.
+
+----------------------------------------------------------------
+2. ESTRUTURA DO REPOSITÓRIO
+----------------------------------------------------------------
+
+O trabalho está isolado na branch de desenvolvimento e ocupa as
+seguintes pastas (nenhum outro arquivo do repositório foi alterado):
+
+    src/OpcodaOtimizacao/           -> aplicativo WPF principal
+    src/OpcodaOtimizacao.Tests/     -> testes automatizados (xUnit)
+    docs/                           -> documentação acadêmica
+    results/                        -> resultados exportados (CSV)
+    ferramentas/                    -> script para gerar PDF
+    README_OPCODA_OTIMIZACAO.md     -> visão geral
+    LeiaMe.txt                      -> este arquivo
+
+----------------------------------------------------------------
+3. RESTAURAR DEPENDÊNCIAS
+----------------------------------------------------------------
+
+Na raiz do repositório, execute:
+
+    dotnet restore src/OpcodaOtimizacao/OpcodaOtimizacao.csproj
+    dotnet restore src/OpcodaOtimizacao.Tests/OpcodaOtimizacao.Tests.csproj
+
+Isso baixa os pacotes NuGet necessários (apenas Microsoft.NET.Test.Sdk,
+xunit e xunit.runner.visualstudio para os testes).
+
+----------------------------------------------------------------
+4. COMPILAR
+----------------------------------------------------------------
+
+    dotnet build src/OpcodaOtimizacao/OpcodaOtimizacao.csproj
+
+Saída esperada: "Compilação com êxito. 0 Aviso(s) 0 Erro(s)".
+
+----------------------------------------------------------------
+5. EXECUTAR OS TESTES AUTOMATIZADOS
+----------------------------------------------------------------
+
+    dotnet test src/OpcodaOtimizacao.Tests/OpcodaOtimizacao.Tests.csproj
+
+Saída esperada: "Aprovado! - Com falha: 0, Aprovado: 21".
+
+Os testes cobrem:
+- cálculo da função objetivo;
+- validação da capacidade;
+- geração de solução válida;
+- geração de vizinhos;
+- reparação de soluções inválidas;
+- aceitação da Têmpera Simulada;
+- comportamento em instâncias pequenas;
+- geração aleatória;
+- caso em que todos os itens excedem a capacidade;
+- caso em que todos os itens cabem;
+- caso com valores iguais;
+- itens de peso zero.
+
+----------------------------------------------------------------
+6. EXECUTAR O PROGRAMA
+----------------------------------------------------------------
+
+    dotnet run --project src/OpcodaOtimizacao/OpcodaOtimizacao.csproj
+
+Ou diretamente o executável compilado:
+
+    src\OpcodaOtimizacao\bin\Debug\net9.0-windows\OpcodaOtimizacao.exe
+
+A janela "Menu Principal" aparecerá com quatro botões:
+
+    [Sobre]
+    [Configurações]
+    [Métodos Básicos]
+    [Algoritmos Genéticos]
+
+----------------------------------------------------------------
+7. USAR EM MODO FIXO
+----------------------------------------------------------------
+
+1. Clique em [Configurações].
+2. Em "Tipo de Execução", selecione FIXO.
+3. Clique em [Gerar Problema].
+4. A tabela com índice, peso, valor, entropia, %Zero e tamanho
+   em bytes será exibida na área de exibição inferior.
+5. Feche a janela de configurações.
+6. Clique em [Métodos Básicos].
+7. Selecione um método (ex.: Subida de Encosta).
+8. Clique em [Executar].
+9. O resultado aparece na área inferior.
+
+O modo FIXO sempre produz exatamente a mesma instância (15 itens,
+capacidade 50), garantindo reprodutibilidade.
+
+----------------------------------------------------------------
+8. USAR EM MODO ALEATÓRIO
+----------------------------------------------------------------
+
+1. Abra [Configurações].
+2. Selecione ALEATÓRIO.
+3. Informe o tamanho (inteiro >= 1) no campo "Tamanho do Problema".
+4. Clique em [Gerar Problema].
+5. O sistema gera automaticamente uma instância válida com pesos,
+   valores, entropias e proporções de zero aleatórias.
+6. Proceda como no modo FIXO para executar os algoritmos.
+
+Valores inválidos (zero, negativo, texto) são rejeitados com mensagem
+de erro clara, sem travar o programa.
+
+----------------------------------------------------------------
+9. CONFIGURAR DADOS DOS DISCENTES
+----------------------------------------------------------------
+
+Abra o arquivo:
+
+    src/OpcodaOtimizacao/DadosAcademicos.cs
+
+Substitua os placeholders:
+
+    public const string Disciplina = "[PREENCHER]";
+    public const string Docente    = "[PREENCHER]";
+    public const string Discentes  = "- [PREENCHER]\n- [PREENCHER]";
+    public const string Instituicao = "[PREENCHER]";
+    public const string Semestre    = "[PREENCHER]";
+
+Recompile e rode novamente. Os dados aparecerão na tela "Sobre".
+
+----------------------------------------------------------------
+10. EXECUTAR CADA ALGORITMO
+----------------------------------------------------------------
+
+Em [Métodos Básicos]:
+
+- Subida de Encosta:
+    Basta clicar em [Executar]. Determinístico dada a seed inicial.
+
+- Subida de Encosta com Tentativas:
+    Selecione o método. Aparecerá o campo TMAX (número de tentativas).
+    Informe um inteiro >= 1 (padrão 10) e clique em [Executar].
+
+- Têmpera Simulada:
+    Selecione o método. Aparecerão três campos:
+        Temperatura Inicial (padrão 100)
+        Temperatura Final   (padrão 1)
+        Fator Redutor       (padrão 0.95)
+    Ajuste conforme orientação do professor e clique em [Executar].
+
+Cada execução registra:
+    - valor final da solução;
+    - peso utilizado;
+    - capacidade;
+    - quantidade de itens selecionados;
+    - tempo de execução (ms);
+    - número de iterações;
+    - parâmetros utilizados;
+    - índices escolhidos.
+
+----------------------------------------------------------------
+11. ANÁLISE COMPARATIVA
+----------------------------------------------------------------
+
+1. Gere um problema em [Configurações] (FIXO ou ALEATÓRIO).
+2. Abra [Métodos Básicos].
+3. Preencha os parâmetros desejados (TMAX, temperaturas, fator).
+4. Clique em [Análise Comparativa].
+5. O programa executa os três métodos com a MESMA instância e
+   apresenta os três resultados lado a lado.
+6. Um arquivo CSV é gravado em:
+
+       results/analise_AAAAMMDD_HHMMSS.csv
+
+   contendo todas as métricas para posterior geração do PDF.
+
+Os padrões usados pela análise estão definidos em:
+
+    src/OpcodaOtimizacao/Services/AnaliseComparativaService.cs
+    classe ConfiguracaoComparativa
+
+Alterar ali ajusta os defaults sem mexer na interface.
+
+----------------------------------------------------------------
+12. GERAR O PDF DA ANÁLISE COMPARATIVA
+----------------------------------------------------------------
+
+Após rodar a Análise Comparativa pelo menos uma vez, execute:
+
+    powershell -ExecutionPolicy Bypass -File ferramentas/gerar-pdf.ps1
+
+O script lê o CSV mais recente em results/ e produz:
+
+    results/analise-comparativa.pdf
+
+O PDF contém:
+    - identificação do trabalho;
+    - descrição do problema;
+    - configuração utilizada;
+    - tabela de resultados;
+    - comparação entre métodos;
+    - discussão;
+    - conclusão.
+
+Não há números inventados: tudo vem da execução real.
+
+----------------------------------------------------------------
+13. ONDE FICAM OS RESULTADOS
+----------------------------------------------------------------
+
+    results/                          -> CSVs gerados pela aplicação
+    docs/modelagem.md                 -> formulação matemática
+    docs/algoritmos.md                -> pseudocódigo e parâmetros
+    docs/analise-comparativa.md       -> metodologia e interpretação
+    docs/REQUISITOS_PROFESSOR.md      -> checklist do enunciado
+
+----------------------------------------------------------------
+14. POSSÍVEIS PROBLEMAS E SOLUÇÕES
+----------------------------------------------------------------
+
+Problema: "dotnet não é reconhecido"
+Solução: instale o .NET SDK 9 e abra um novo terminal.
+
+Problema: erro de compilação citando JUCE/CMake
+Solução: o build C++ original do Opcoda NÃO interfere neste projeto.
+Compile apenas o csproj indicado acima, ignorando o CMakeLists.txt.
+
+Problema: janela abre mas some imediatamente
+Solução: rode via "dotnet run" para ver exceções no console.
+
+Problema: CSV não aparece após Análise Comparativa
+Solução: verifique se há permissão de escrita na pasta results/.
+O programa cria a pasta automaticamente se não existir.
+
+Problema: "Módulo em Desenvolvimento" aparece ao clicar em
+Algoritmos Genéticos
+Solução: esperado. Conforme o enunciado, esse módulo ainda não foi
+implementado nesta atividade.
+
+----------------------------------------------------------------
+15. VALIDAÇÃO FINAL
+----------------------------------------------------------------
+
+Antes de entregar, confirme:
+
+[ ] dotnet build termina sem erros
+[ ] dotnet test: 21 aprovados, 0 falhas
+[ ] Programa abre e mostra as 4 telas solicitadas
+[ ] Modo FIXO gera instância reproduzível
+[ ] Modo ALEATÓRIO valida entrada incorreta
+[ ] Subida de Encosta retorna solução válida (peso <= capacidade)
+[ ] Subida com Tentativas respeita TMAX
+[ ] Têmpera Simulada usa os três parâmetros informados
+[ ] Análise Comparativa exporta CSV em results/
+[ ] Tela "Algoritmos Genéticos" exibe exatamente
+    "Módulo em Desenvolvimento"
+================================================================
+FIM DO LEIA-ME
+================================================================
