@@ -1,6 +1,7 @@
 #pragma once
 
 #include "boxed_label.h"
+#include "animator.h"
 #include "hex_grid.h"
 #include "palette.h"
 #include "plugin_processor.h"
@@ -75,14 +76,38 @@ public:
     // Cabeca de reproducao, em fracao da regiao, tal como a publicada pela thread
     // de audio. Fica separada da cabeca de leitura porque sao coisas diferentes: a
     // primeira anda sozinha com o transporte, a segunda responde ao knob.
+    //
+    // A primeira chamada despista e nao anima: o alvo vem de uma fracao e o valor de
+    // outra escala, e animar entre as duas daria um varrimento falso de ecra a
+    // ecra.
     void setPlayhead(float fraction, bool visible) {
-        playheadFraction_ = fraction;
         playheadVisible_ = visible;
+
+        if (!playheadAnimated_ || !visible) {
+            playheadFraction_.jumpTo(fraction);
+        } else {
+            playheadFraction_.set(fraction);
+        }
+        playheadAnimated_ = visible;
+
         repaint();
     }
 
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
+
+    // Nivel de saida da ultima telemetria, em dB.
+    //
+    // **O medidor e' a peca animada que responde ao que se ouve**, e e' o unico
+    // elemento do display que se mexe quando o transporte esta' parado e ha som. A
+    // subida e' rapida e a queda e' lenta, que e' o comportamento de um medidor de
+    // verdade: um medidor que cai tao depressa quanto sobe le-se como ruido.
+    void setOutputLevel(float decibels);
+
+    // Avanca a animacao. Chamado pelo editor a 60 Hz; nunca pelo paint, porque o
+    // paint e' chamado varias vezes por quadro e um easing dentro dele correria
+    // mais rapido que o tempo.
+    void tickAnimation(float deltaSeconds);
 
     // Endereco escolhido por clique nas vistas novas. Quem decide o que se escreve
     // com ele e' o editor, como no hex.
@@ -148,7 +173,38 @@ private:
     void paintSectionTicks(juce::Graphics& g);
     void paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area);
     void paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>& area);
+    // **A animacao nao e' um extra e' um caminho de leitura.** A cabeca de leitura e a
+    // de reproducao andam sempre por coerencia com a do knob, que salta de 50 em 50
+    // milissegundos. Deslizar em vez de saltar e' o que faz o display parecer vivo,
+    // e custa uma divisao e uma exponencial por quadro.
+    //
+    // **Meia-vidas diferentes para coisas diferentes.** A cabeca de reproducao e' a
+    // mais rapida, porque e' a unica que se mexe sem a mao do utilizador e um atraso
+    // nela parece o display em falta. A da cabeca de leitura e' mais lenta, porque
+    // segue o knob e um salto ali seria uma mentira sobre o movimento real.
+    static constexpr float kPlayheadHalfLife {0.030f};
+    static constexpr float kReadHeadHalfLife {0.060f};
+    static constexpr float kModeHalfLife {0.090f};
+
+    // Metade-vida de queda do medidor, e as duas constantes da faixa.
+    static constexpr float kLevelHalfLife {0.080f};
+    static constexpr float kLevelFloorDb {-60.0f};
+    static constexpr float kLevelHeight {3.0f};
+
     void paintFocusRing(juce::Graphics& g);
+    void paintOutputLevel(juce::Graphics& g);
+
+    // De dB para [0, 1] na faixa do medidor.
+    [[nodiscard]] static float normalisedLevel(float decibels) noexcept;
+
+    Eased readHeadFraction_;
+    Eased playheadFraction_;
+    Eased modeFade_;
+    Eased outputLevel_;
+
+    bool readHeadAnimated_ {false};
+    bool playheadAnimated_ {false};
+    bool levelAnimated_ {false};
 
     // Ultimo endereco que produz som dentro da regiao: `end - 2`.
     //
@@ -183,8 +239,7 @@ private:
     std::uint64_t readHead_ {0};
     std::uint64_t caret_ {0};
     bool caretMoved_ {false};
-    float playheadFraction_ {0.0f};
-    bool playheadVisible_ {false};
+    float playheadVisible_ {false};
 
     ViewMode mode_ {ViewMode::waveform};
 

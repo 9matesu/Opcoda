@@ -94,14 +94,21 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     setLookAndFeel(&lookAndFeel_);
 
     makePlainLabel(title_, "Opcoda", palette::textDark, BoxedLabel::sansFont(14.0f, true));
-    makePlainLabel(subtitle_, "Granular Synthesizer", palette::textSub,
-                   BoxedLabel::sansFont(10.0f));
-    makePlainLabel(dropHint_, "DRAG & DROP BINARY", palette::textField,
-                   BoxedLabel::monoFont(9.0f));
-    makePlainLabel(voices_, "VOICES  8", palette::textSub, BoxedLabel::monoFont(10.0f));
+    // **O subtítulo, o contador de vozes do cabeçalho, a dica de arrasto e o título do
+    // módulo saíram todos, e cada um tinha um duplo algures no ecrã.**
+    //
+    //   - "Granular Synthesizer" dizia o que o título "Opcoda" ja diz ao lado;
+    //   - "VOICES 8" no cabeçalho duplicava o rodapé, que escreve VOICES a cada
+    //     tique com o número real e não o máximo;
+    //   - "DRAG & DROP BINARY" duplicava a linha de estado, que escreve a mesma
+    //     instrução por extenso enquanto não há material;
+    //   - "1 - GRANULAR ENGINE" nomeava um módulo que é o único, e o "1" prometia
+    //     um segundo que nunca existiu.
+    //
+    // Nenhum deles levava informacao que nao estivesse escrita noutro sitio. O que
+    // fica no cabeçalho é o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
+    // tamanho.
     makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::monoFont(10.0f));
-    makePlainLabel(engineTitle_, "1 - GRANULAR ENGINE", palette::textDark,
-                   BoxedLabel::sansFont(10.0f, true));
 
     fileName_.setText("-", juce::dontSendNotification);
 
@@ -110,9 +117,17 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     buildParameterPanel();
 
     // A thread de interface e' a dona da memoria de amostra, entao e' ela que
-    // libera o que a thread de audio ja devolveu. 20 Hz nao competem com a
-    // audio e bastam para a leitura parecer viva.
-    startTimerHz(20);
+    // libera o que a thread de audio ja devolveu.
+    //
+    // **60 Hz e nao 20 Hz, e a razao e' a animacao.** A 20 Hz cada quadro dura
+    // 50 ms, e uma meia-vida de 60 ms da menos de dois quadros por meia-vida: isso
+    // e' degrau e nao suavizacao. O custo da subida e' um repaint do display a mais
+    // por segundo, e o desenho custa O(colunas) e nao O(bytes), porque a reducao
+    // esta' memorizada.
+    //
+    // O texto nao vira ruido a 60 Hz porque setIfChanged so escreve quando o texto
+    // muda, e trocar o texto de um Label dispara um evento de acessibilidade.
+    startTimerHz(60);
 
     setResizable(true, true);
     setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
@@ -134,9 +149,6 @@ void PluginEditor::makePlainLabel(juce::Label& label,
 void PluginEditor::buildHeader() {
     for (auto* component : {static_cast<juce::Component*>(&powerLed_),
                             static_cast<juce::Component*>(&title_),
-                            static_cast<juce::Component*>(&subtitle_),
-                            static_cast<juce::Component*>(&dropHint_),
-                            static_cast<juce::Component*>(&voices_),
                             static_cast<juce::Component*>(&loadButton_),
                             static_cast<juce::Component*>(&fileName_),
                             static_cast<juce::Component*>(&formatTag_),
@@ -289,8 +301,7 @@ void PluginEditor::updateHeaderVisibility() {
 
     // Duas condicoes, e ambas tem de ser verdade. A peca e' escondida quando nao
     // ha espaco OU quando nao ha conteudo — e nunca se desenha uma moldura vazia,
-    // que e' o mesmo motivo pelo qual os chips ja se escondiam por vazio.
-    dropHint_.setVisible(headerFitsHint_);
+    // que e' o mesmo motivo pelo qual os chips se escondem por vazio.
     fileSize_.setVisible(headerFitsSize_ && info.sizeBytes > 0);
     formatTag_.setVisible(headerFitsFormat_ && info.formatTag.isNotEmpty());
 }
@@ -359,8 +370,6 @@ void PluginEditor::pushTransportAnchor() {
 }
 
 void PluginEditor::buildParameterPanel() {
-    addAndMakeVisible(engineTitle_);
-
     for (const auto& spec : kSpecs) {
         knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
         addAndMakeVisible(*knobs_.back());
@@ -397,7 +406,10 @@ void PluginEditor::resized() {
     // larguras que tem de fechar, e numeros soltos nao se somam a olho.
     constexpr int kLedWidth {16};
     constexpr int kGap {6};
-    constexpr int kIdentityWidth {180};
+    // O wordmark e' a unica coisa com largura propria que nao e' uma cadeia: o nome
+    // do plugin nao cresce com a janela, e 180 px era a largura que o subtitulo
+    // "Granular Synthesizer" exigia. Com ele fora, o titulo precisa de metade.
+    constexpr int kIdentityWidth {96};
     constexpr int kIdentityGap {12};
     constexpr int kLoadWidth {76};
     constexpr int kNameGap {6};
@@ -405,28 +417,21 @@ void PluginEditor::resized() {
     constexpr int kChipGap {4};
     constexpr int kFormatWidth {78};
     constexpr int kSizeWidth {58};
-    constexpr int kStripGap {10};
-    constexpr int kHintGap {8};
-    constexpr int kHintWidth {140};
-    constexpr int kVoicesWidth {78};
 
     powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth, header.getHeight()}
                              .withSizeKeepingCentre(14, 14));
     x += kLedWidth + kGap;
 
-    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 19});
-    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 29, kIdentityWidth, 13});
+    // O titulo centrado na altura do cabeçalho. Estava a 10 px do topo porque
+    // tinha um subtitulo por baixo; sem ele, centrar vertical e' o que evita o
+    // wordmark parecer colado ao topo da faixa.
+    title_.setBounds(juce::Rectangle<int> {x, header.getY(), kIdentityWidth, header.getHeight()}
+                         .withSizeKeepingCentre(kIdentityWidth, 19));
     x += kIdentityWidth + kIdentityGap;
 
-    // Lado direito: VOICES colado a borda e sempre visivel. E' leitura de estado,
-    // e leitura de estado nao se esconde por falta de espaco.
-    voices_.setBounds(juce::Rectangle<int> {header.getRight() - kVoicesWidth, header.getY(),
-                                             kVoicesWidth, 16}
-                          .withSizeKeepingCentre(kVoicesWidth, 16));
-
-    // Tudo o que fica a esquerda de VOICES tem de caber a serio. `leftLimit` e' o
-    // fim do bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no
-    // minimo. E' contra ele que cada peca decide se cabe.
+    // Tudo o que fica a partir daqui tem de caber a serio. `leftLimit` e' o fim do
+    // bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no minimo. E'
+    // contra ele que cada peca decide se cabe.
     const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
 
     // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
@@ -434,30 +439,21 @@ void PluginEditor::resized() {
     // ocultacao como erro, e `edge` ja e' o cursor do rodape mais abaixo, na
     // mesma funcao. O /W4 ja apanhou este mesmo tropeco duas vezes neste
     // ficheiro.
-    int stripEdge = header.getRight() - kVoicesWidth;
-
-    // A ordem em que se sacrifica e' a ordem de importancia invertida.
     //
-    // 1. A dica de arrasto primeiro, porque so interessa enquanto nao ha ficheiro
-    //    carregado: depois de carregar, o nome do ficheiro diz o essencial e a
-    //    dica e' redundante.
-    // 2. O formato a seguir, e o tamanho em ultimo: ambos sao informacao sobre o
-    //    material, mas menos importante do que o nome.
+    // **A borda direita e' a borda do cabecalho.** Antes havia um bloco VOICES de 78
+    // px a que a cadeia se encostava, e ele saiu por repetir o rodapé.
+    int stripEdge = header.getRight();
+
+    // A ordem em que se sacrifica e' a ordem de importancia invertida: primeiro o
+    // formato, e o tamanho em ultimo. Ambos sao informacao sobre o material, mas
+    // menos importante do que o nome.
     //
     // Sem esta regra o chip de formato comeca em 174 px numa janela de 560 e o
     // botao LOAD acaba em 300 — 126 px de sobreposicao que so nao se via porque
     // os chips vazios ja se escondem, e por isso so aparecia depois de carregar
     // um ficheiro.
-    headerFitsHint_ = !owner_.hasSource() && stripEdge - kHintGap - kHintWidth >= leftLimit;
-    dropHint_.setVisible(headerFitsHint_);
-    if (headerFitsHint_) {
-        stripEdge -= kHintGap;
-        dropHint_.setBounds(juce::Rectangle<int> {stripEdge - kHintWidth, header.getY(),
-                                                  kHintWidth, 14});
-        stripEdge -= kHintWidth + kStripGap;
-    }
 
-    // 2. O tamanho, na ponta direita da faixa.
+    // 1. O tamanho, na ponta direita da faixa.
     headerFitsSize_ = stripEdge - kSizeWidth >= leftLimit;
     if (headerFitsSize_) {
         fileSize_.setBounds(juce::Rectangle<int> {stripEdge - kSizeWidth, header.getY() + 17,
@@ -465,7 +461,7 @@ void PluginEditor::resized() {
         stripEdge -= kSizeWidth + kChipGap;
     }
 
-    // 3. O formato, a seguir.
+    // 2. O formato, a seguir.
     headerFitsFormat_ = stripEdge - kFormatWidth >= leftLimit;
     if (headerFitsFormat_) {
         formatTag_.setBounds(juce::Rectangle<int> {stripEdge - kFormatWidth, header.getY() + 17,
@@ -473,7 +469,7 @@ void PluginEditor::resized() {
         stripEdge -= kFormatWidth + kChipGap;
     }
 
-    // 4. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
+    // 3. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
     loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kLoadWidth, 28});
     fileName_.setBounds(juce::Rectangle<int> {x + kLoadWidth + kNameGap, header.getY() + 14,
                                               juce::jmax(kMinNameWidth,
@@ -689,8 +685,11 @@ constexpr int kLedBoxWidth {12};
     }
 
     // ---- painel de parametros ----
-    engineTitle_.setBounds(area.removeFromTop(16).reduced(2, 0));
-
+    //
+    // Nao ha titulo de modulo. Era "1 - GRANULAR ENGINE", e o "1" prometia um
+    // segundo modulo que nunca existiu; o que preenchia aquela linha era um titulo
+    // de uma secção que e' a unica do painel.
+    //
     // Os seis knobs ficam sempre em uma linha, como no mock. Quebrar em duas
     // linhas foi tentado e e' pior: a altura que sobra nao comporta um knob com
     // titulo e valor, e os knobs despencam para poucos pixels. O diametro do
@@ -715,6 +714,21 @@ constexpr int kLedBoxWidth {12};
 }
 
 void PluginEditor::timerCallback() {
+    // O delta e' medido e nao assumido. Assumir 1/60 numa animacao que depende do
+    // tempo deixa a velocidade depender da taxa de quadros real, que no Windows
+    // varia entre 60 e 144 Hz conforme a ligacao do monitor.
+    //
+    // `getMillisecondCounterHiRes` e nao `getMillisecondCounter`: o contador
+    // inteiro tem 15 ms de resolucao a 144 Hz, e um quadro de 144 Hz dura 7 ms. Com
+    // o contador inteiro o delta seria 0 ou 15 ms alternadamente, e a animacao
+    // dava um soluço a cada dois quadros.
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    const auto delta = lastTick_ > 0.0 ? static_cast<float>((now - lastTick_) / 1000.0)
+                                        : 1.0f / 60.0f;
+    lastTick_ = now;
+
+    grid_.tickAnimation(delta);
+
     refresh();
 }
 
@@ -920,6 +934,7 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     // nucleo de lado mostraria o ultimo bloco, nao este.
     grid_.setPlayhead(telemetry.playheadFraction.load(std::memory_order_relaxed),
                       transportPlaying);
+    grid_.setOutputLevel(peak);
 
     setIfChanged(transportReadout_,
                      juce::String::formatted("TP 0x%08X  %.1f/%.1fs",

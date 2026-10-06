@@ -83,7 +83,6 @@ private:
     // independentes para uma peca nao estar la, e nenhum dos dois pode prevailecer
     // sobre o outro: e' por isso que a visibilidade se combine num sitio so, em vez
     // de cada um dos dois lados escrever setVisible por sua conta.
-    bool headerFitsHint_ {false};
     bool headerFitsSize_ {false};
     bool headerFitsFormat_ {false};
     bool footerFitsRate_ {false};
@@ -210,11 +209,7 @@ private:
     void updateViewButtons();
 
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel dropHint_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voices_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel status_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel engineTitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
 
     // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
     // mock. Todas em texto, nunca so por cor.
@@ -238,6 +233,10 @@ private:
     // Identidade do material carregado. A grelha so e' reenviada quando isto
     // muda, e nao a cada tique do timer.
     juce::String loadedSignature_;
+
+    // Instante do ultimo tique, em milissegundos de alta resolucao. Medido e nao
+    // assumido: uma animacao que pressupoe 1/60 muda de velocidade conforme o monitor.
+    double lastTick_ {0.0};
 
     // Ultima ancora de busca escrita no transporte, e a posicao que a produziu.
     //

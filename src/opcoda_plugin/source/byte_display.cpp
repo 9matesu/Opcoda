@@ -115,6 +115,53 @@ void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
     repaint();
 }
 
+void ByteDisplay::setOutputLevel(float decibels) {
+    // O piso e' -60 dB e nao -inf. Um medidor que desaparece quando o sinal e'
+    // pequeno deixa de dizer "ha sinal fraco" e passa a dizer "nao ha sinal", que
+    // sao coisas diferentes. O texto do rodape ja distingue os dois com PK -inf.
+    const auto clamped = std::clamp(decibels, kLevelFloorDb, 0.0f);
+
+    // **A primeira leitura e' um salto, as seguintes deslizam.** O alvo e' uma
+    // posicao na barra e o valor esta' no mesmo espaco, mas animar desde zero no
+    // primeiro bloco faria a barra varrer o ecra de uma vez.
+    if (!levelAnimated_) {
+        outputLevel_.jumpTo(normalisedLevel(clamped));
+        levelAnimated_ = true;
+    } else {
+        outputLevel_.set(normalisedLevel(clamped));
+    }
+
+    repaint();
+}
+
+float ByteDisplay::normalisedLevel(float decibels) noexcept {
+    const auto span = 0.0f - kLevelFloorDb;
+    return std::clamp((decibels - kLevelFloorDb) / span, 0.0f, 1.0f);
+}
+
+void ByteDisplay::tickAnimation(float deltaSeconds) {
+    if (!playheadVisible_) {
+        playheadFraction_.jumpTo(0.0f);
+    }
+
+    const auto before = readHeadFraction_.value() + playheadFraction_.value() +
+                        modeFade_.value();
+
+    readHeadFraction_.tick(deltaSeconds, kReadHeadHalfLife);
+    playheadFraction_.tick(deltaSeconds, kPlayheadHalfLife);
+    modeFade_.tick(deltaSeconds, kModeHalfLife);
+    outputLevel_.tick(deltaSeconds, kLevelHalfLife);
+
+    // Repintar so quando algo se mexeu de verdade. Um repaint por quadro sem
+    // diferenca visivel e' o preco de uma animacao mal feita, e o editor tem mais
+    // coisas para pintar a 60 Hz.
+    const auto after = readHeadFraction_.value() + playheadFraction_.value() +
+                       modeFade_.value() + outputLevel_.value();
+    if (std::abs(after - before) > 1.0e-4f) {
+        repaint();
+    }
+}
+
 void ByteDisplay::setMode(ViewMode mode) {
     if (mode == mode_) {
         return;
@@ -198,6 +245,17 @@ void ByteDisplay::setReadHead(std::uint64_t address) {
     // a caret no meio e as setas nao mexiam em nada.
     if (!caretMoved_) {
         caret_ = address;
+    }
+
+    // A primeira chamada e' um salto, as seguintes deslizam. Sem esta distincao o
+    // primeiro desenho animava desde zero e a cabeca de leitura varreria o ecra
+    // inteiro ao carregar um ficheiro.
+    const auto fraction = fractionOf(address);
+    if (!readHeadAnimated_) {
+        readHeadFraction_.jumpTo(fraction);
+        readHeadAnimated_ = true;
+    } else {
+        readHeadFraction_.set(fraction);
     }
 
     repaint();
@@ -448,6 +506,35 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
     }
 
     paintFocusRing(g);
+
+    paintOutputLevel(g);
+}
+
+void ByteDisplay::paintOutputLevel(juce::Graphics& g) {
+    const auto bounds = getLocalBounds().toFloat().reduced(kPadding);
+    const auto barHeight = kLevelHeight;
+
+    // No topo do display, e nao em baixo: o rodape e' do editor e esta la a telemetria
+    // escrita, e um medidor ao pe de uma lista de leituras confundia-se com mais uma
+    // leitura. Aqui em cima ele responde ao que se ouve sem competir com nada.
+    const auto bar = juce::Rectangle<float> {bounds.getX(), bounds.getY() + 2.0f,
+                                             bounds.getWidth(), barHeight};
+
+    // A calha, sempre visivel. Um medidor sem calha desaparece quando o sinal
+    // desaparece, e sem ele nao se sabe se o medidor esta' a trabalhar.
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.fillRect(bar);
+
+    const auto level = outputLevel_.value();
+    const auto filled = bar.withWidth(bar.getWidth() * level);
+    if (filled.getWidth() > 0.0f) {
+        // A cor muda perto do topo: o medidor tem de avisar antes do limitador
+        // meter, e so a cor e o que diz. Por isso o valor em texto no rodape
+        // importa — sem ele, quem nao distingue o verde do laranja nao sabe.
+        const auto hot = level > 0.85f;
+        g.setColour(palette::alpha(hot ? palette::accentWarn : palette::okBright, 0.9f));
+        g.fillRect(filled);
+    }
 }
 
 void ByteDisplay::paintWaveform(juce::Graphics& g) {
@@ -576,7 +663,7 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
 }
 
 void ByteDisplay::paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area) {
-    const auto fraction = fractionOf(readHead_);
+    const auto fraction = readHeadFraction_.value();
     if (fraction < 0.0f || fraction > 1.0f) {
         return;
     }
@@ -597,7 +684,7 @@ void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>&
         return;
     }
 
-    const auto fraction = std::clamp(playheadFraction_, 0.0f, 1.0f);
+    const auto fraction = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
     const auto x = area.getX() + fraction * area.getWidth();
 
     // Triangulo em cima e barra em baixo. A barra e' o mesmo sinal que a cabeca de
