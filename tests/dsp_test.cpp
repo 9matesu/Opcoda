@@ -6,11 +6,15 @@
 #include "opcoda_core/dsp/window.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <vector>
 
 using opcoda::dsp::DcBlocker;
 using opcoda::dsp::windowName;
+using opcoda::dsp::Grain;
+using opcoda::dsp::GrainTelemetry;
+using opcoda::dsp::GrainView;
 using opcoda::dsp::GranularEngine;
 using opcoda::dsp::GranularParams;
 using opcoda::dsp::Limiter;
@@ -560,4 +564,372 @@ TEST(GranularEngineGate, ResetClosesGate) {
     EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
     rig.process(8);
     EXPECT_LT(rig.peak(), 1.0e-6f);
+}
+// ---------------------------------------------------------------------------
+// Telemetria dos graos
+//
+// O display le estes numeros para desenhar cada grao onde ele esta' a ler o
+// material. O que interessa testar aqui nao e' o desenho: e' que a publicacao
+// nunca minta sobre quantos graos existem nem sobre onde estao.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Um array de graos com as vozes indicadas vivas. As mortas ficam com posicao
+// 0,99 de proposito: e' o que sobraria num slot se o publish escrevesse no
+// indice da voz em vez de compactar, e e' por isso que da para distinguir as
+// duas implementacoes.
+std::array<Grain, GranularEngine::kMaxVoices> voicesWith(
+    const std::vector<int>& activeVoiceIndices,
+    double positionStep = 0.1) {
+    std::array<Grain, GranularEngine::kMaxVoices> voices {};
+    for (auto& grain : voices) {
+        grain.active = false;
+        grain.position = 0.99;
+    }
+
+    double position = positionStep;
+    int grainCount = 0;
+    for (const int voice : activeVoiceIndices) {
+        auto& grain = voices[static_cast<std::size_t>(voice)];
+        grain.active = true;
+        grain.position = position;
+        // O ganho sobe com a voz: com um valor igual em todas, um erro de slot
+        // nao se distingue no ganho e o campo passa sem cobertura.
+        // 0,25 a 1,0. O motor nunca produz acima de ~0,25 com volume a 0 dB, mas
+        // aqui o que interessa e' que cada voz tenha um valor diferente, para um
+        // erro de slot aparecer no ganho e nao so na posicao.
+        grain.gain = 0.25f + 0.25f * static_cast<float>(grainCount);
+        grain.windowIndex = 250;
+        grain.remaining = 750;
+        position += positionStep;
+        ++grainCount;
+    }
+    return voices;
+}
+
+std::array<GrainView, GrainTelemetry::kMaxVoices> readAll(
+    const GrainTelemetry& telemetry, int* countOut) {
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+    *countOut = telemetry.read(views);
+    return views;
+}
+
+} // namespace
+
+TEST(GrainTelemetry, NaNGainIsPublishedAsZeroAndNotAsNaN) {
+    // O clamp nao trata NaN — clamp(NaN) devolve NaN. Um NaN publicado propaga-se
+    // em silencio para o brilho do grao e apaga-o, sem erro nenhum. O guard
+    // isfinite e' o que impede isso, e este teste e' o que o segura: sem ele
+    // todos os outros continuavam a passar.
+    auto voices = voicesWith({0});
+    voices[0].gain = std::numeric_limits<float>::quiet_NaN();
+
+    GrainTelemetry telemetry;
+    telemetry.publish(voices);
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+    ASSERT_EQ(count, 1);
+    EXPECT_TRUE(std::isfinite(views[0].gain));
+    EXPECT_FLOAT_EQ(views[0].gain, 0.0f);
+}
+
+TEST(GrainTelemetry, NaNPositionIsPublishedAsZeroAndNotAsNaN) {
+    // A posicao tem o mesmo problema do ganho, e a mesma razao: um NaN aqui
+    // manda o grao para fora do ecra sem dar erro. O guard e' o mesmo isfinite.
+    auto voices = voicesWith({0});
+    voices[0].position = std::numeric_limits<double>::quiet_NaN();
+
+    GrainTelemetry telemetry;
+    telemetry.publish(voices);
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+    ASSERT_EQ(count, 1);
+    EXPECT_TRUE(std::isfinite(views[0].position));
+    EXPECT_FLOAT_EQ(views[0].position, 0.0f);
+}
+
+TEST(GrainTelemetry, ActiveGrainsAreCompactedToTheFront) {
+    // Vozes 1, 2 e 3 soam; a 0 e as detras estao paradas. O count que a
+    // interface le tem de servir de indice, ou seja, os slots 0, 1 e 2 tem de
+    // ser as vozes 1, 2 e 3. Escrevendo no indice da voz, o slot 0 traria a voz
+    // 0 parada, com a posicao 0,99 que o publish nao tocou.
+    GrainTelemetry telemetry;
+    telemetry.publish(voicesWith({1, 2, 3}));
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+
+    EXPECT_EQ(count, 3);
+    EXPECT_FLOAT_EQ(views[0].position, 0.1f);
+    EXPECT_FLOAT_EQ(views[1].position, 0.2f);
+    EXPECT_FLOAT_EQ(views[2].position, 0.3f);
+
+    // O ganho tambem tem de vir no slot certo. Sem estas tres linhas o gain
+    // nao tinha cobertura nenhuma: trocar a store por 0,0,0f mantinha os nove
+    // testes a verde, e o brilho dos graos podia ser achatado sem ninguem ver.
+    EXPECT_FLOAT_EQ(views[0].gain, 0.25f);
+    EXPECT_FLOAT_EQ(views[1].gain, 0.5f);
+    EXPECT_FLOAT_EQ(views[2].gain, 0.75f);
+}
+
+TEST(GrainTelemetry, InactiveVoicesInTheMiddleDoNotTakeASlot) {
+    // Vozes 0, 2, 3 e 5 soam, com as outras paradas entre elas. Se o publish
+    // escrevesse no indice da voz em vez de compactar, os slots lidos seriam o
+    // grao parado e tres activos, e a posicao do primeiro sairia errada.
+    //
+    // **O mesmo teste com as oito vozes activas nao serviria para isto:** ai a
+    // compactacao e a escrita pelo indice dao o mesmo resultado, e o teste
+    // passava com a compactacao estragada.
+    GrainTelemetry telemetry;
+    telemetry.publish(voicesWith({0, 2, 3, 5}));
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+
+    ASSERT_EQ(count, 4);
+    EXPECT_FLOAT_EQ(views[0].position, 0.1f);
+    EXPECT_FLOAT_EQ(views[1].position, 0.2f);
+    EXPECT_FLOAT_EQ(views[2].position, 0.3f);
+    EXPECT_FLOAT_EQ(views[3].position, 0.4f);
+
+    // E o ganho tambem segue a voz, para um erro de slot se mostrar aqui
+    // mesmo quando as posicoes por acaso batem certo.
+    EXPECT_FLOAT_EQ(views[0].gain, 0.25f);
+    EXPECT_FLOAT_EQ(views[1].gain, 0.5f);
+    EXPECT_FLOAT_EQ(views[2].gain, 0.75f);
+    EXPECT_FLOAT_EQ(views[3].gain, 1.0f);
+}
+
+TEST(GrainTelemetry, PhaseIsWindowIndexOverTheGrainLength) {
+    // windowIndex e remaining somam o comprimento original do grao: 250 de 1000
+    // e' um quarto da janela.
+    GrainTelemetry telemetry;
+    telemetry.publish(voicesWith({0}));
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+    ASSERT_EQ(count, 1);
+    EXPECT_FLOAT_EQ(views[0].phase, 0.25f);
+}
+
+TEST(GrainTelemetry, GrainWithNoWindowProgressPublishesZeroPhaseAndNotNaN) {
+    // **Este estado nao e' alcancavel pelo GranularEngine:** o startGrain poe
+    // remaining = activeWindowLength_ e o renderVoice limpa `active` antes de os
+    // dois contadores chegarem a zero em conjunto. O guard existe porque o
+    // `publish` e' publico e recebe um array do chamador, portanto tem de valer
+    // por si. Removing-lo produz um NaN real e este teste falha, o que e'
+    // precisamente o que o torna util.
+    //
+    // Um NaN nao rebenta o display: propaga-se em silencio para a posicao do
+    // desenho e some o unico sinal de que ha graos.
+    auto voices = voicesWith({0});
+    voices[0].windowIndex = 0;
+    voices[0].remaining = 0;
+
+    GrainTelemetry telemetry;
+    telemetry.publish(voices);
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+    ASSERT_EQ(count, 1);
+    EXPECT_TRUE(std::isfinite(views[0].phase));
+    EXPECT_FLOAT_EQ(views[0].phase, 0.0f);
+}
+
+TEST(GrainTelemetry, PositionRunningPastTheEndIsClampedToOne) {
+    // Um grao com pitch a subir avanca para alem de 1,0 e so volta a entrar na
+    // leitura por um wrap. Publicar o valor cru punha o grao fora do ecra a
+    // direita, e a leitura seguinte do drawRoutine saltava para o ecra inteiro.
+    auto voices = voicesWith({0});
+    voices[0].position = 1.4;
+
+    GrainTelemetry telemetry;
+    telemetry.publish(voices);
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+    ASSERT_EQ(count, 1);
+    EXPECT_FLOAT_EQ(views[0].position, 1.0f);
+}
+
+TEST(GrainTelemetry, ReadLeavesSlotsPastTheCountUntouched) {
+    // O `out` do editor vive entre quadros, entao um read que espalhasse por
+    // `out` inteiro deixaria graos velhos no ecra em cada quadro em que o
+    // count encolhe. O contrato e' preencher so os slots devolvidos.
+    GrainTelemetry telemetry;
+    telemetry.publish(voicesWith({0, 1, 2}));
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+    for (auto& view : views) {
+        view = GrainView {-1.0f, -1.0f, -1.0f};
+    }
+
+    const int count = telemetry.read(views);
+    ASSERT_EQ(count, 3);
+    for (int i = count; i < GrainTelemetry::kMaxVoices; ++i) {
+        EXPECT_FLOAT_EQ(views[static_cast<std::size_t>(i)].position, -1.0f)
+            << "o slot " << i << " foi escrito fora do count";
+    }
+}
+
+TEST(GrainTelemetry, AGrainThatDiesInALaterBlockIsNoLongerPublished) {
+    // O publish corre no fim de cada bloco, portanto um grao que cruza a fronteira
+    // de um bloco e morre no seguinte tem de ja nao estar publicado no fim desse.
+    // Sem isto, o display mostraria um grao parado no fim da varredura, o que e'
+    // indistinguivel de um vivo.
+    //
+    // 20 ms a 44,1 kHz sao 882 amostras, um poco mais de tres blocos de 256.
+    // Com densidade baixa nasce um grao de cada em varios, e ele atravessa a
+    // fronteira de um bloco e morre noutro — que e' o caminho do writeIndex a
+    // recomecar em zero, o unico em que um grao sobrevive ao fim do bloco.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 256);
+
+    std::vector<float> material(48000, 0.4f);
+    engine.setSource(material.data(), material.size());
+
+    GranularParams params;
+    params.grainSizeMs = 20.0f;
+    params.densityGrainsPerSec = 10.0f; // um grao a cada ~17 blocos de 256
+    params.spray = 0.0f;
+    params.pitchSemitones = 0.0f;
+    params.position = 0.5f;
+
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+
+    // A densidade e' toda calculada a partir do acumulador de fase, portanto o
+    // grao nao nasce num bloco fixo: o teste espera que ele apareca.
+    int blocksUntilBorn = 0;
+    while (engine.telemetry().read(views) == 0 && blocksUntilBorn < 60) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        ++blocksUntilBorn;
+    }
+    ASSERT_LT(blocksUntilBorn, 60) << "nenhum grao nasceu em 60 blocos";
+    ASSERT_EQ(engine.telemetry().read(views), 1) << "esperava um grao vivo";
+
+    // Duracao do grao: 882 amostras contra 256 por bloco. Cinco blocos dao 1280
+    // amostras, que e' mais do que o grao precisa, mesmo que ele nasca no ultimo
+    // instante do bloco em que foi publicado.
+    constexpr int kGrainBlocks = 5;
+    int blocksAlive = 0;
+    while (engine.telemetry().read(views) > 0 && blocksAlive < kGrainBlocks) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        ++blocksAlive;
+    }
+
+    EXPECT_EQ(engine.telemetry().read(views), 0)
+        << "o grao durou mais do que " << kGrainBlocks
+        << " blocos de 256 e continua publicado, aparecendo parado no ecra";
+    EXPECT_LT(blocksAlive, kGrainBlocks)
+        << "o grao sobreviveu a mais blocos do que 20 ms permiten";
+}
+
+TEST(GrainTelemetry, ProcessBlockPublishesTheGrainsItRendered) {
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 512);
+
+    std::vector<float> material(48000);
+    for (std::size_t i = 0; i < material.size(); ++i) {
+        material[i] = static_cast<float>(std::sin(static_cast<double>(i) * 0.05) * 0.5);
+    }
+    engine.setSource(material.data(), material.size());
+
+    GranularParams params;
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 200.0f;
+    params.position = 0.5f;
+
+    std::vector<float> left(512, 0.0f);
+    std::vector<float> right(512, 0.0f);
+
+    // A densidade e' alta para aparecer no primeiro bloco, mas o teste nao
+    // assume que apareca: le ate aparecer, e falha se nao aparecer em 20.
+    int count = 0;
+    for (int block = 0; block < 20 && count == 0; ++block) {
+        engine.processBlock(left.data(), right.data(), 512, params);
+        std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+        count = engine.telemetry().read(views);
+    }
+
+    ASSERT_GT(count, 0);
+    EXPECT_LE(count, GranularEngine::kMaxVoices);
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+    count = engine.telemetry().read(views);
+
+    // **O count tem de bater certo com o motor, e nao com o intervalo.** O
+    // clamp garante que cada posicao esta' em [0, 1], portanto um teste de
+    // intervalo passa mesmo com todo o publish a escrever zero. E' o
+    // activeVoiceCount que diz se o numero que a interface desenha e' o numero
+    // de graos que o motor renderizou.
+    EXPECT_EQ(count, engine.activeVoiceCount());
+
+    for (int i = 0; i < count; ++i) {
+        const auto& view = views[static_cast<std::size_t>(i)];
+        EXPECT_GE(view.position, 0.0f);
+        EXPECT_LE(view.position, 1.0f);
+        EXPECT_GE(view.phase, 0.0f);
+        EXPECT_LE(view.phase, 1.0f);
+        EXPECT_TRUE(std::isfinite(view.gain));
+    }
+
+    // **A posicao tem de satisfazer a identidade fechada, nao um intervalo.**
+    // Com spray e pitch a zero o grao nasce em position e avanca readStep por
+    // amostra, e a fase publicada e' windowIndex / comprimento. Logo:
+    //
+    //     posicao - position  ==  fase * comprimento / sourceCount
+    //
+    // Isto vale para qualquer grao, em qualquer bloco, porque o comprimento e o
+    // tamanho da fonte sao fixos e o pitch e' zero. Um teste de intervalo
+    // admissivel nao serviria: a tolerancia seria maior que a propria variacao,
+    // e ate uma permutacao dos oito slots passaria.
+    const double grainLength = 0.040 * kSampleRate; // amostras
+    for (int i = 0; i < count; ++i) {
+        const auto& view = views[static_cast<std::size_t>(i)];
+        EXPECT_NEAR(static_cast<double>(view.position) - 0.5,
+                    static_cast<double>(view.phase) * grainLength /
+                        static_cast<double>(material.size()),
+                    1.0e-4);
+    }
+}
+
+TEST(GrainTelemetry, ClosingTheMaterialStopsPublishingGrains) {
+    // O caminho sem material devolve antes de renderizar, e e' por isso que o
+    // publish foi posto tambem la. Sem ele, os graos do ultimo bloco com
+    // material ficariam no ecra para sempre depois de fechar o ficheiro.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 512);
+
+    std::vector<float> material(48000);
+    for (std::size_t i = 0; i < material.size(); ++i) {
+        material[i] = static_cast<float>(std::sin(static_cast<double>(i) * 0.05) * 0.5);
+    }
+    engine.setSource(material.data(), material.size());
+
+    GranularParams params;
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 400.0f;
+    params.position = 0.5f;
+
+    std::vector<float> left(512, 0.0f);
+    std::vector<float> right(512, 0.0f);
+
+    int beforeClosing = 0;
+    for (int block = 0; block < 20 && beforeClosing == 0; ++block) {
+        engine.processBlock(left.data(), right.data(), 512, params);
+        std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+        beforeClosing = engine.telemetry().read(views);
+    }
+    ASSERT_GT(beforeClosing, 0);
+
+    engine.setSource(nullptr, 0);
+    engine.processBlock(left.data(), right.data(), 512, params);
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+    EXPECT_EQ(engine.telemetry().read(views), 0);
 }

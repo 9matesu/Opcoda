@@ -176,6 +176,17 @@ bool snapByteRangeToSection();
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
 
+    // Onde esta' cada grao. A thread de audio publica uma vez por bloco renderizado;
+    // o editor le isto a 60 Hz para desenhar os graos sobre a forma de onda.
+    //
+    // **Isto e' leitura de lado. O que nao se pode e' chamar processBlock() a
+    // partir da thread de interface**, porque esse seria o caminho que escreve
+    // no motor. O read() em si so escreve no array de quem chama, e nao toca em
+    // nada do motor.
+    [[nodiscard]] const dsp::GrainTelemetry& grainTelemetry() const noexcept {
+        return engine_.telemetry();
+    }
+
     // Transporte de audicao: percorre a regiao sem nota MIDI, para se ouvir o
     // material sem teclado. E' o que torna a forma de onda navegavel audivel, e
     // nao so visivel.

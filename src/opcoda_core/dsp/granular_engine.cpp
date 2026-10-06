@@ -99,6 +99,24 @@ void GranularEngine::setSource(const float* samples,
     sourceCount_ = (samples != nullptr) ? count : 0;
     entropyPointCount_ = 0;
 
+    // **Sem material nao ha graos.** Fechar o ficheiro deixava as vozes com
+    // active = true, e elas continuavam a contar em lastActiveVoices_ e a ser
+    // publicadas: o display mostraria graos a ler um ficheiro que ja nao esta' la.
+    //
+    // **Hoje este ramo so corre no arranque.** O `publishByteRange` do
+    // processador recusa um buffer vazio e o sourceBytes_ nunca e' limpo em lado
+    // nenhum, portanto em producao o count == 0 so acontece antes de carregar o
+    // primeiro ficheiro, onde o reset() ja postou as vozes a zero. Isto e' uma
+    // invariante do motor, nao um caminho de interface: o motor nao deve depender
+    // de ninguem se lembrar de fechar as vozes. Um "fechar ficheiro" a vir pelo
+    // lado da interface passa por aqui com count == 0 e passa a ser necessario.
+    if (sourceCount_ == 0) {
+        for (auto& voice : voices_) {
+            voice.active = false;
+        }
+        lastActiveVoices_ = 0;
+    }
+
     // **A curva e' copiada, nao calculada.** A versao anterior media a entropia de
     // todo o material dentro de processBlock, o que e' O(regiao) na thread de audio:
     // 12 milhoes de leituras de float para um ficheiro de 12 MB. Nao aloca nada, o
@@ -190,6 +208,10 @@ void GranularEngine::processBlock(float* left,
         // O gate avanca mesmo sem material, senao fica congelado no meio da
         // rampa e a primeira nota depois de carregar entra com ganho parcial.
         applyGate(left, right, numSamples);
+        // Publica mesmo assim. Sem material nao ha graos, e o display tem de
+        // deixar de os desenhar: se este caminho nao publicasse, o ultimo
+        // publish continuaria na tela depois do ficheiro ser fechado.
+        telemetry_.publish(voices_);
         return;
     }
 
@@ -293,6 +315,12 @@ void GranularEngine::processBlock(float* left,
     limiterRight_.processBlock(right, numSamples);
 
     lastActiveVoices_ = activeVoiceCount();
+
+    // Publica no fim, e nao dentro do renderVoice: a partir daqui as janelas e as
+    // posicoes de todos os graos deste bloco ja estao escritas, e e' o que a
+    // thread de interface vai ler a seguir. Uma vez por bloco e' o suficiente
+    // porque o display corre a 60 Hz e o bloco dura menos.
+    telemetry_.publish(voices_);
 }
 
 void GranularEngine::applyGate(float* left, float* right, int numSamples) noexcept {
