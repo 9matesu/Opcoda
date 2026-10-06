@@ -106,6 +106,7 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     fileName_.setText("-", juce::dontSendNotification);
 
     buildHeader();
+    buildViewButtons();
     buildParameterPanel();
 
     // A thread de interface e' a dona da memoria de amostra, entao e' ela que
@@ -158,7 +159,7 @@ void PluginEditor::buildHeader() {
     // regiao exacta e a secao PE mais proxima; o metodo do Processor e' quem
     // decide o sentido da alternancia, porque e' ele quem guarda a regiao
     // exacta anterior.
-    grid_.onCellActivated = [this](std::uint64_t address) { activateByte(address); };
+    grid_.onAddressActivated = [this](std::uint64_t address) { activateByte(address); };
     grid_.onSnapRequested = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
     address_.onAddressEntered = [this](std::uint64_t address) { moveRegionTo(address); };
 
@@ -207,6 +208,73 @@ void PluginEditor::buildHeader() {
 // resized() sabe a largura, refresh() sabe o conteudo, e cada um escreve a sua
 // metade. Se cada um chamasse setVisible por si, o timer de 20 Hz do refresh()
 // voltava a mostrar um chip que nao cabe, e a sobreposicao voltava a aparecer.
+void PluginEditor::buildViewButtons() {
+    // Os rotulos sao curtos de proposito. O nome accessivel de cada um e' a
+    // descricao completa, e o texto de ajuda explica a tecla: um rotulo de 15
+    // caracteres num botao de 60 px sairia cortado, e um rotulo cortado e' pior do
+    // que um rotulo curto com um nome accessivel por tras.
+    struct Spec {
+        juce::TextButton* button;
+        const char* shortLabel;
+        const char* spokenName;
+        const char* hint;
+        ByteDisplay::ViewMode mode;
+    };
+
+    const Spec specs[] = {
+        {&viewWaveButton_, "WAV", "Forma de onda do material", "Tecla 1", ByteDisplay::ViewMode::waveform},
+        {&viewHexButton_, "HEX", "Grelha de bytes do material", "Tecla 2", ByteDisplay::ViewMode::hex},
+        {&viewEntropyButton_, "ENT", "Curva de entropia do material", "Tecla 3", ByteDisplay::ViewMode::entropy},
+    };
+
+    for (auto* button : {static_cast<juce::Component*>(&viewWaveButton_),
+                         static_cast<juce::Component*>(&viewHexButton_),
+                         static_cast<juce::Component*>(&viewEntropyButton_)}) {
+        addAndMakeVisible(*button);
+    }
+
+    for (const auto& spec : specs) {
+        spec.button->setButtonText(spec.shortLabel);
+        spec.button->setClickingTogglesState(true);
+        spec.button->setTooltip(juce::String {spec.spokenName} + ". " + spec.hint);
+        spec.button->setName(spec.spokenName);
+    }
+
+    // Os tres botoes nao estao em grupo: cada um e' independente e e' o LookAndFeel
+    // que desenha o estado ligado. Um juce::ButtonGroup daria exclusao mutua de
+    // graca, mas traria um listener que so serve para reescrever o que
+    // updateViewButtons ja escreve a partir do modo.
+    viewWaveButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::waveform);
+        updateViewButtons();
+    };
+    viewHexButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::hex);
+        updateViewButtons();
+    };
+    viewEntropyButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::entropy);
+        updateViewButtons();
+    };
+
+    updateViewButtons();
+}
+
+void PluginEditor::updateViewButtons() {
+    const auto mode = grid_.mode();
+
+    const auto mark = [&mode](juce::TextButton& button, ByteDisplay::ViewMode candidate) {
+        const auto on = mode == candidate;
+        if (button.getToggleState() != on) {
+            button.setToggleState(on, juce::dontSendNotification);
+        }
+    };
+
+    mark(viewWaveButton_, ByteDisplay::ViewMode::waveform);
+    mark(viewHexButton_, ByteDisplay::ViewMode::hex);
+    mark(viewEntropyButton_, ByteDisplay::ViewMode::entropy);
+}
+
 void PluginEditor::updateHeaderVisibility() {
     const auto& info = owner_.sourceInfo();
 
@@ -563,6 +631,54 @@ constexpr int kLedBoxWidth {12};
 
     area.removeFromTop(10);
 
+    // ---- selector de vista ----
+    //
+    // Fica em cima do painel de parametros e nao dentro do display: e' um
+    // instrumento de navegacao, e um instrumento que fica dentro da coisa que ele
+    // instrumenta desaparece quando a coisa muda. Tres botoes de 46 px com 4 de
+    // vao sao 150 px, e a 480 de janela ainda sobra para metade deles.
+    //
+    // O botao activo tem o mesmo tratamento visual do PLAY ligado: barra de acento
+    // a esquerda. E' o mesmo sinal, e o display inteiro tem assim uma linguagem so.
+    {
+        constexpr int kViewButtonWidth {46};
+        constexpr int kViewButtonHeight {16};
+        constexpr int kViewGap {4};
+        const auto viewRow = area.removeFromTop(kViewButtonHeight + 4);
+
+        struct View {
+            juce::TextButton* button;
+            ByteDisplay::ViewMode mode;
+        };
+        const View views[] = {
+            {&viewWaveButton_, ByteDisplay::ViewMode::waveform},
+            {&viewHexButton_, ByteDisplay::ViewMode::hex},
+            {&viewEntropyButton_, ByteDisplay::ViewMode::entropy},
+        };
+
+        const int stripWidth = (kViewButtonWidth + kViewGap) * 3 - kViewGap;
+        const auto active = grid_.mode();
+        const bool fitsAll = viewRow.getWidth() >= stripWidth;
+
+        // **Quando nao cabem os tres, mostra so o da vista activa.** Um conjunto
+        // parcial e' pior que um botao unico: com dois dos tres no ecra, o que
+        // falta e' uma vista que o utilizador nao sabe que existe, e o botao que
+        // sobra e' um comando que muda de vista sem explicar para que. Com um so,
+        // o selector continua verdadeiro — diz em que vista se esta — e a troca
+        // continua a fazer-se pelas teclas 1, 2 e 3, que nao dependem de largura.
+        int viewX = viewRow.getX();
+        for (const auto& view : views) {
+            const auto isActive = view.mode == active;
+            view.button->setVisible(fitsAll || isActive);
+            if (!fitsAll && !isActive) {
+                continue;
+            }
+            view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 2,
+                                                         kViewButtonWidth, kViewButtonHeight});
+            viewX += kViewButtonWidth + kViewGap;
+        }
+    }
+
     // ---- painel de parametros ----
     engineTitle_.setBounds(area.removeFromTop(16).reduced(2, 0));
 
@@ -748,7 +864,13 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
             pe::byteForPosition(static_cast<double>(transportFraction), range);
         const auto elapsed = duration * static_cast<double>(transportFraction);
 
-        setIfChanged(transportReadout_,
+// A leitura de transporte so e' lida do que a thread de audio ja publicou, e
+    // nao do transporte: o display mostra onde a cabeca de audio esta', e ler o
+    // nucleo de lado mostraria o ultimo bloco, nao este.
+    grid_.setPlayhead(telemetry.playheadFraction.load(std::memory_order_relaxed),
+                      transportPlaying);
+
+    setIfChanged(transportReadout_,
                      juce::String::formatted("TP 0x%08X  %.1f/%.1fs",
                                              static_cast<unsigned long long>(transportHead),
                                              elapsed, duration));

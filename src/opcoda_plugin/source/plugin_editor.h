@@ -1,9 +1,9 @@
 #pragma once
 
 #include "boxed_label.h"
+#include "byte_display.h"
 #include "byte_address_field.h"
 #include "display_panel.h"
-#include "hex_grid.h"
 #include "knob.h"
 #include "led.h"
 #include "look_and_feel.h"
@@ -171,10 +171,9 @@ private:
     Led voicesLed_ {Led::State::off};
     DisplayPanel display_;
 
-    // A grelha de bytes ocupa o display todo. Nao ha barra de posicao nem curva
-    // ao lado: a grelha mostra os bytes e cada linha traz o seu endereco, que e'
-    // mais informacao do que a barra dava.
-    HexGrid grid_;
+    // O display ocupa a area toda. Sao tres vistas dentro dele, porque sao tres
+    // perguntas sobre a mesma regiao e porque o OE7 pede duas delas.
+    ByteDisplay grid_;
 
     // Os dois caminhos de teclado para o que o rato faz na grelha. O campo
     // escreve o endereco da regiao; o botao substitui o Enter que o seletor
@@ -186,6 +185,19 @@ private:
     // alinhamento porque e' a zona do display que ja tem moldura: um botao dentro
     // do rodape de leituras seria indistinguivel de uma leitura.
     juce::TextButton playButton_;
+
+    // Selector de vista. Tres botoes em vez de um seletor: sao tres estados e
+    // cabem tres palavras, e um popup para mudar de vista seria dois cliques para
+    // uma coisa que se faz a cada minuto.
+    //
+    // Nao e' juce::ComboBox porque um popup esconde o display no momento em que se
+    // quer comparar as tres vistas.
+    juce::TextButton viewWaveButton_;
+    juce::TextButton viewHexButton_;
+    juce::TextButton viewEntropyButton_;
+
+    void buildViewButtons();
+    void updateViewButtons();
 
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};

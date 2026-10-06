@@ -53,6 +53,8 @@ target_sources(Opcoda
         source/display_panel.h
         source/hex_grid.cpp
         source/hex_grid.h
+        source/byte_display.cpp
+        source/byte_display.h
         source/byte_address_field.cpp
         source/byte_address_field.h
         source/palette.h)
