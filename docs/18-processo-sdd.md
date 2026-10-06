@@ -36,10 +36,10 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 156 casos verdes, incluindo o critério de 40 dB do T1 |
-| C · Tempo real | zero alocação no callback e na troca de material, com duas threads |
+| B · Testes | 191 casos na suíte principal mais 7 do guard de alocação, incluindo o critério de 40 dB do T1 |
+| C · Tempo real | zero alocação no callback e na troca de material, com duas threads, e também durante a reprodução do transporte |
 | D · Robustez | 50 mutações de bit-flip e 10 casos de borda, todas com erro tipado |
-| E · Interface | contraste, teclado e nome acessível (etapa S4) |
+| E · Interface | contraste, teclado e nome acessível. **O 2.5.8 fechou em 06/10/2026** com a caret de teclado do `ByteDisplay`, e a exceção declarada foi retirada |
 | F · Documentação | `docs/` coerente com o código |
 
 ## Rastreabilidade
@@ -52,10 +52,10 @@ Cada objetivo específico de `docs/04-objetivos.md` tem uma feature:
 | OE2 · ingestão somente-leitura | F002, F003 | pronto: `parseFile`, `toSamples` e diálogo de arquivo; arrasto na interface |
 | OE3 · fila lock-free | F003 | pronto: dupla fila SPSC com devolução, portão C verificado com duas threads |
 | OE4 · motor granular | F005 | pronto: 8 vozes, janelas, sobreposição |
-| OE5 · entropia de Shannon | F004 | pronto: curvo por janela, testado |
+| OE5 · entropia de Shannon | F004, F008 | pronto: curva por janela, testada, e **mostrada no display** desde 06/10/2026 |
 | OE6 · condicionamento | F006 | pronto: DC-blocker e limiter |
-| OE7 · interface | F008 | interface pronta: chassi, knobs, display de entropia, grelha de bytes, campo de endereço e telemetria; falta a auditoria de 200% de zoom |
-| OE8 · isolamento | F003 | pronto: guard de alocação e troca sem alocação verificados; TSan indisponível no Windows |
+| OE7 · interface | F008 | **fechado em 06/10/2026**: três vistas do material (forma de onda, hex, curva de entropia), transporte de audição, operação completa por teclado, peças vetoriais sem PNG. O display de entropia que esta linha afirmava estar pronto em 09/10 tinha sido apagado por `e99d089`; a linha estava errada e a feature corrigiu o código e a afirmação |
+| OE8 · isolamento | F003, F008 | pronto: guard de alocação e troca sem alocação verificados, agora também sobre o caminho do transporte; TSan indisponível no Windows |
 | OE9 · MIDI | F009 | pronto: gate por nota, sustain e 2 CCs mapeados; falta o ensaio no host |
 | T1–T4 | F010 | T1 e T3 prontos; T2 e T4 dependem de DAW instalado |
 

@@ -24,7 +24,7 @@ src/opcoda_core/    núcleo C++20 puro, sem JUCE
   dsp/              motor granular, janelas, DC-blocker, limiter
   rt/               fila SPSC, troca de amostra, guard de alocação
 src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
-tests/              GoogleTest, 156 casos mais 6 do guard de alocação
+tests/              GoogleTest, 191 casos mais 7 do guard de alocação
 docs/               documentação acadêmica e técnica
 specs/              especificações por feature, do spec-kit
 ```
@@ -85,12 +85,36 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
 - `docs/18-processo-sdd.md`: spec-kit, constitution, portões e agentes
 - `specs/001-ingestao-pe/spec.md`: ingestão de PE, com as armadilhas encontradas
 - `specs/003-troca-material/spec.md`: troca entre interface e áudio
+- `specs/008-transporte-e-vistas/spec.md`: transporte de audição e as três leituras
+  do material, com a regra da posição 1,0 ser silêncio e as duas armadilhas do
+  display
 
 ## Estado
 
 Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
-faixas, grelha de bytes, MIDI por nota e CC, e estado do host. 156 casos de teste
-e o guard de alocação verdes.
+faixas, MIDI por nota e CC, e estado do host. 198 casos de teste e o guard de
+alocação verdes.
+
+O display tem **três vistas** do material carregado, porque são três perguntas
+diferentes sobre a mesma região:
+
+| Vista | Pergunta | Tecla |
+| --- | --- | --- |
+| forma de onda | que som é este | `1` |
+| grelha de bytes | que bytes são estes | `2` |
+| curva de entropia | o quanto o material é aleatório | `3` |
+
+O botão **PLAY** percorre a região inteira de início a fim **sem nota MIDI**, que é
+a única forma de ouvir o material sem um teclado. Com a região de 4 KB ou menos a
+duração tem um piso de 100 ms, porque abaixo do comprimento do maior grão uma
+passagem não dá para completar um grão. O knob POSITION é a âncora de busca: mexer
+ nele durante a reprodução reposiciona.
+
+**Mapa de teclas.** `Espaço` liga e desliga a reprodução · `←` `→` movem o cursor um
+byte · `Shift` com as setas move dezasseis · `↑` `↓` movem uma linha · `PgUp` `PgDn`
+movem 1024 bytes · `Início` e `Fim` vão aos extremos · `Enter` ativa o byte sob o
+cursor · `Esc` volta o cursor à cabeça de leitura · `1` `2` `3` mudam de vista ·
+`A` alinha a região a uma secção PE · `L` abre o ficheiro.
 
 Há um defeito conhecido e **não corrigido**, visível no Standalone: os seis
 parâmetros arrancam em valores que não são os defaults declarados em

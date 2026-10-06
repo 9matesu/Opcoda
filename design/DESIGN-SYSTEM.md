@@ -90,48 +90,68 @@ Três faixas, de cima para baixo, com 1 px de `#52575c` entre elas.
 ### 1. Cabeçalho
 
 Botão de ativação (círculo com fenda vertical, verde `#82d64a` quando ligado),
-nome do device, e à direita a faixa de arquivo: botão `LOAD`, nome em mono,
-`[64-bit PE]`, tamanho em chip, e a dica `DRAG & DROP BINARY`.
+nome do device, botão `LOAD`, nome do ficheiro em mono, e à direita `[64-bit PE]` e
+o tamanho em chip.
+
+**Não há mais texto no cabeçalho.** Saíram o subtítulo `Granular Synthesizer`, o
+contador `VOICES 8`, a dica `DRAG & DROP BINARY` e o título do módulo
+`1 - GRANULAR ENGINE`, porque cada um repetia informação escrita noutro sítio: o
+título repetia o nome do device, o contador repetia o rodapé — e escrevia o máximo
+em vez do valor real —, a dica repetia a linha de estado e o "1" prometia um
+segundo módulo que nunca existiu. Regra geral: **um rótulo que repete outro rótulo
+é ruído**, por mais bem desenhado que esteja.
 
 ### 2. Display
 
 Fundo `#0e1013`, com 1 px de `#252b31` na moldura. A faixa de display mede entre
-200 e 320 px, metade da altura da janela, e a janela mínima subiu de 560×380 para
-560×420 porque uma grelha de bytes precisa de seis linhas de 24 px para mostrar
-o endianço de um ficheiro inteiro.
+200 e 320 px, metade da altura da janela, e a janela mínima é 480×420.
+
+**O display tem três vistas**, porque são três perguntas sobre a mesma região e
+porque o OE7 pede duas delas. A região é a unidade nas três: mostrar o ficheiro
+inteiro ao lado de uma região estreita mente sobre o que está a soar.
 
 De cima para baixo:
 
-- **Grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
-  bytes por linha em mono 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
-  de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas.
-  A viewport é ancorada num múltiplo de 16, para os endereços caírem em
-  round numbers como num hex dump.
-  - A **região ativa** leva fundo laranja a 22 % **e** um filete de 1 px em cima
-    e em baixo da linha: o fundo diz a quem vê cor, o filete diz a quem não vê.
-  - A **cabeça de leitura** é uma barra branca de 2 px na margem esquerda da
-    célula, com fundo claro a 16 % por baixo do texto.
-  - Os **bytes nulos** saem num tom a parte, como num hex dump, para se ver o
-    preenchimento de uma seção sem ler as duas colunas.
-  - Os **limites de seção** aparecem no gutter, na linha onde a seção começa, com
-    uma barra de 2 px a toda a altura da linha e o nome da seção à direita. Substitui
-    o mapa de seções de 18 px.
-  - Abaixo de 520 px de largura a coluna **ASCII é omitida**. Perder colunas de
-    hexadecimal partiria os endereços ao meio, e um endereço ao meio é pior do que
-    nenhum.
-  - O gutter **cresce com o ficheiro**: um PE acima de 4 GB tem endereços com mais
-    de oito dígitos, e o número não é cortado a meio.
-- **Linha de estado**, 14 px: `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO`, com
-  LED à esquerda. À direita, o campo hexadecimal do endereço da região e o botão
-  `ALINHAR`, que substitui a tecla `Enter` que o seletor removido usava para o
-  alinhamento de seção.
-- **Rodapé de telemetria**, 16 px: entropia em bits por byte na janela da cabeça
-  de leitura, `POS` com o endereço da cabeça, `REG` com o intervalo da região, `PK`,
-  taxa e `VOICES`. Tudo em `textOnDark`, nunca nos tokens do chassi.
+- **Linha de estado**, 14 px: LED e `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO` à
+  esquerda; à direita o campo hexadecimal do endereço da região, o botão `ALINHAR`
+  e o botão `PLAY`/`STOP`. Quando o host está parado o botão fica desativado e a
+  linha diz `TRANSPORTE DO HOST PARADO` — desativado e não invisível, porque um
+  botão que aceita o toque e não produz nada é pior do que um que recusa o toque.
+- **Medidor de saída**, 3 px no topo do display: pico com faixa de −60 dB a 0 dB. No
+  topo e não no rodapé porque o rodapé é do editor e está lá a telemetria escrita.
+- **Vista do material**, o corpo do display:
+  - **forma de onda**: envelope mínimo-máximo fraco e núcleo de RMS forte. O
+    mínimo e o máximo quase não servem para mostrar bytes — o texto de um `.exe` tem
+    quase todos os valores de `0x00` a `0xFF`, e o envelope fica com altura quase
+    inteira em todas as colunas. O RMS é o que varia, e é o que diz se o material é
+    denso ou repetitivo;
+  - **grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
+    bytes por linha em mono 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
+    de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas. A
+    região ativa leva fundo laranja a 22 % **e** um filete de 1 px em cima e em
+    baixo da linha. Os bytes nulos saem num tom à parte. Os limites de secção
+    aparecem no gutter, na linha onde a secção começa, com uma barra de 2 px a toda
+    a altura da linha e o nome à direita. Abaixo de 520 px a coluna **ASCII é
+    omitida**. O gutter **cresce com o ficheiro**;
+  - **curva de entropia**: 0 a 8 bits por byte com o **eixo legível em 0, 4 e 8** e
+    a unidade escrita como `bits/byte`. Uma curva sem eixo não tem leitura: 7,5 é o
+    valor de um `.exe` normal e 3,5 o de um repositório de bytes iguais.
+- **Cabeças**: a de leitura é uma barra branca de 2 px com realce por baixo; a de
+  reprodução é um **triângulo** em cima com barra fina, e é a única peça do display
+  com uma forma própria — o que a identifica mesmo sem cor, como o 1.4.1 exige. A
+  caret de teclado só aparece com o foco do teclado, senão seriam três barras
+  verticais no mesmo ecrã.
+- **Rodapé de telemetria**, 16 px: entropia em bits por byte na janela da cabeça de
+  leitura, `TP` com a cabeça de reprodução e o instante e a duração da volta, `POS`,
+  `REG`, `PK`, taxa e `VOICES`. Tudo em `textOnDark`. O rodapé degrada em vez de
+  espremer, e a ordem de sacrifício é o valor: a taxa é constante durante a sessão e
+  cai primeiro.
 
-O display deixou de ter a barra de 30 px do seletor, o mapa de seções e a curva
-de entropia. A faixa de 30 px era um mapa do ficheiro inteiro com um cursor, e um
-ficheiro de 12 MB não cabe em grelha: o que a grelha dá em troca é o byte.
+**Não há banda da região nas vistas novas**, e a diferença é intencional: no hex a
+região é uma faixa sobre células de largura fixa porque o que se vê é o ficheiro
+inteiro; na forma de onda e na curva o que se vê já é a região. No lugar ficam as
+marcas dos limites de secção, que são filetes de 1 px — um sinal que não depende da
+cor.
 
 ### 3. Painel de parâmetros
 
@@ -144,18 +164,66 @@ acima e valor em `valBox` abaixo.
 ## Controles
 
 Knob circular com ponteiro laranja e arco de valor, 1 px de arco de fundo
-`chassisBorder`. O corpo vem do asset harness como peça física e **não é rodado**:
-é uma fotografia top-down com a luz de estúdio assente, e rodar o PNG faria o
-brilho andar com o controle. Rótulo em Inter 10 px acima, valor em `valBox`
+`chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma imagem**: aro
+serrilhado, face recuada e ponto de origem, com a luz de cima e da esquerda num
+gradiente diagonal. A serrilhado é um `juce::Path` memorizado por posição e não
+36 chamadas de `drawLine` por knob. Rótulo em Inter 10 px acima, valor em `valBox`
 abaixo, com fonte mono.
 
-Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2.
-A célula da grelha de bytes é a exceção, e está declarada em
-`docs/10-acessibilidade-w3c.md`: tem 24 px de altura e cerca de 17 de largura, e a
-densidade é a função.
+**Por que a peça fotografada saiu.** `knob-md.png` eram 186×192 píxeis para pintar
+um disco de 62, e `button-large.png` obrigava a desenhar a peça quadrada ao lado do
+texto porque esticar um bisel de 2 px o deixava com 1 px de um lado e 4 px do outro.
+Com `Path` o corpo escala, o bisel tem a espessura que se pede, e não há um
+descodificador de PNG a correr no arranque.
 
-O PNG é sempre só o desenho. Quem opera o controle é um `juce::Slider`, porque é
-ele que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
+Botão com bisel: realce em cima, sombra em baixo, e o sentido trocado quando está
+premiado. **O estado ligado ganha uma barra de 1 px no lado esquerdo** e um contorno
+de acento, porque `#ff9a00` sobre `#c2c6c9` dá 2,4:1 e um botão de transporte cuja
+única pista de estado é essa cor não passa o 1.4.3. O `PLAY`/`STOP` troca a
+palavra, que é a segunda pista e a que funciona sem ver cor.
+
+Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2. **O
+critério foi fechado em 06/10/2026** sem aumentar o alvo — a célula de byte continua
+a 17 px de largura, porque a densidade é a função —: o `ByteDisplay` é focalizável e
+tem uma caret de navegação, e a operação completa por teclado acontece sobre o
+display inteiro sem passar por nenhum outro controlo.
+
+O desenho é sempre código. Quem opera o controlo é um `juce::Slider`, porque é ele
+que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
+
+## Animação
+
+Tudo o que se mexe interpola por **meia-vida exponencial**, não por mola e não por
+linha por quadro:
+
+```
+valor += (alvo - valor) * (1 - 2^(-dt / meiaVida))
+```
+
+A meia-vida precisa só do valor e do alvo, e o mesmo aspecto aparece a 20 Hz e a
+144 Hz. Uma interpolação linear por quadro parece igual a 60 e a 120 Hz e o dobro de
+rápida a 240 Hz — e 240 Hz é um monitor que existe. Uma mola precisa de velocidade,
+e velocidade precisa de estado: se um quadro atrasar, o valor salta e a mola passa
+do alvo.
+
+| O que | Meia-vida | Porquê |
+| --- | --- | --- |
+| cabeça de reprodução | 30 ms | é a única que se mexe sem a mão do utilizador |
+| cabeça de leitura | 60 ms | segue o knob |
+| transição de vista | 90 ms | o suficiente para se ler que mudou |
+| medidor | 80 ms | sobe depressa e cai devagar, como um medidor de verdade |
+
+A primeira leitura de cada valor é um salto e as seguintes deslizam: sem essa
+distinção, carregar um ficheiro faria a cabeça varrer o ecrã inteiro.
+
+O temporizador do editor corre a **60 Hz**, e o delta é medido com
+`getMillisecondCounterHiRes` — o contador inteiro tem 15 ms de resolução e um quadro
+a 144 Hz dura 7 ms, o que daria um delta alternado de 0 e 15 ms.
+
+**Todo valor animado tem um equivalente textual no ecrã**: a cabeça de leitura tem o
+`POS`, a de reprodução tem o `TP`, e o medidor tem o `PK`. O critério 1.4.1 não é só
+sobre cor — é sobre ter mais do que uma pista, e uma barra animada sem número ao
+lado seria a única forma de ler o que se ouve.
 
 ## Adaptação ao JUCE
 
@@ -165,14 +233,20 @@ ele que dá foco por teclado, ajuste com setas e `AccessibilityHandler`.
 | Inter | `juce::Font {16.0f}` com a fonte do sistema, ou `Inter` embarcada |
 | JetBrains Mono | `juce::Font` monoespaçada, ou `JetBrains Mono` embarcada |
 | Knob com ponteiro | `juce::Slider` `RotaryHorizontalVerticalDrag` com `LookAndFeel` próprio |
-| Grelha de bytes | `juce::Component` com `paint()` e `cellRect()` partilhada entre o desenho e o clique |
+| Grelha de bytes | `HexGrid`, um `Component` com `paint()` e `cellRect()` partilhada entre o desenho e o clique |
+| Vista de forma de onda e de entropia | `ByteDisplay`, um `Component` com três caminhos de `paint()` e `HexGrid` como filho na vista hex |
+| Redução do material | `pe::reduceToColumns`, no núcleo, sem JUCE e com quinze ensaios |
+| Curva de entropia por região | a coluna `entropyBits` da mesma redução, com o eixo escrito em `paintEntropy` |
+| Medidor de saída | `ByteDisplay::paintOutputLevel` mais a leitura `PK` no rodapé |
+| Caret de teclado | `ByteDisplay::caret_`, com `setWantsKeyboardFocus` e `paintFocusRing` |
 | Campo de endereço | `juce::TextEditor` com `AddressEditor` a retirar as setas |
 | Faixa de arquivo | `juce::Label` + `juce::TextButton` |
 
-As peças físicas vêm de `I:\TG_I\opcoda-asset-harness` e são embutidas com
-`juce_add_binary_data`. O harness **não gera texto**: rótulos, valores e escalas
-são sempre desenhados em código, porque texto gerado por modelo sai com letra
-errada e não há como corrigir sem regenerar.
+**Não há peças de arte.** Não existe ficheiro de imagem em `resources/` nem alvo de
+dados embutidos: knob e botão são `juce::Path` desenhados em código, e o texto é
+sempre desenhado em código. A regra do harness antigo — não gerar texto, porque
+texto gerado por modelo sai com letra errada — mantém-se, mas deixou de ser a única
+restrição: agora também não há imagem.
 
 JUCE não embarca fonte por padrão. Embarcar Inter e JetBrains Mono adiciona cerca
 de 400 KB ao binário; usar a fonte do sistema (`Segoe UI`) e a monoespaçada do
@@ -193,3 +267,10 @@ parâmetros documentados. `Voices` vira leitura, não controle. O bloco
 `STATE FILTER` corresponde ao biquad de coloração que o artigo descreve e que não
 está na Tabela 8: a decisão de torná-lo sétimo parâmetro ou estágio fixo continua
 aberta, e muda o texto publicado.
+
+**O botão de reprodução não é um sétimo parâmetro**, e é preciso escrever isto porque
+a tentação existe: `PLAY` comanda o motor granular pela mesma porta que as notas
+usam, e poderia ser um `AudioParameterFloat` com automating. Não é, porque o OE4
+fixa seis parâmetros e o ensaio T4 mede seis. A audição é momentânea e não faz parte
+do estado do projeto: `getStateInformation` guarda `sourcePath`, `byteStart` e
+`byteEnd`, e nada de reprodução.

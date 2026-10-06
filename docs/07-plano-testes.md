@@ -48,6 +48,8 @@ Consequência sobre os ensaios acima:
 | T2 (latência) | bloqueado | p99 medido em teste; o ensaio com DAW e 8 vozes reais exige um host licenciado, que não está disponível nesta máquina |
 | T3 (robustez) | executado | 50 mutações determinísticas por bit-flip, truncamento e cabeçalhos forjados, mais 10 casos de borda, todos com erro tipado |
 | T4 (aceite) | bloqueado | exige instalar o bundle atual num DAW licenciado e repetir arrasto, parâmetros e CCs, etapas S3b e S4b |
+| portão B | executado | 191 casos na suíte principal mais 7 do guard de alocação, incluindo o critério de 40 dB do T1 |
+| portão C | executado | guard de alocação verde, e desde 06/10/2026 também sobre o caminho do transporte, que é o caminho novo da thread de áudio |
 | TSan | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
 | UBSan | indisponível | substituído por `/W4 /WX` e pelos testes de borda |
 | `pluginval` | indisponível | trava nesta máquina; a conformidade do bundle é conferida no `moduleinfo.json` gerado pelo `juce_vst3_helper`, e o comportamento é medido no Ableton |

@@ -181,20 +181,33 @@ Medir a partir do offset declarado daria a entropia do material seguinte.
 
 ## A interface
 
-Cinco arquivos, cada um com uma responsabilidade só:
+Cada arquivo tem uma responsabilidade só:
 
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `palette.h` | os tokens do `design/DESIGN-SYSTEM.md`, em hex único |
-| `look_and_feel.h` | desenho do knob e do botão |
+| `look_and_feel.h` | desenho do knob e do botão, ambos em `juce::Path` |
+| `animator.h` | meia-vida exponencial, a única forma de interpolação da interface |
 | `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
 | `display_panel.h` | fundo escuro e grade de 24 px |
-| `hex_grid.h/.cpp` | grelha de bytes: endereços, 16 colunas e coluna ASCII |
+| `byte_display.h/.cpp` | as três vistas do material, a caret e a animação |
+| `hex_grid.h/.cpp` | a vista de bytes: endereços, 16 colunas e coluna ASCII |
 | `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
-| `assets.h` | peças físicas do asset harness, embutidas e carregadas uma vez |
 | `plugin_editor.h/.cpp` | as três faixas e o layout |
+
+**Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
+`Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
+`knob-md.png` eram 186×192 píxeis para pintar um disco de 62, e `button-large.png`
+obrigava a desenhar a peça quadrada ao lado do texto porque esticar um bisel de 2 px
+o deixava com 1 px de um lado e 4 px do outro. Com `Path` o corpo escala, o bisel
+tem a espessura que se pede e não há descodificador de PNG no arranque.
+
+**O `HexGrid` continua a ser um Component independente, dentro do `ByteDisplay`.**
+A geometria dele tem três capturas atrás e um redesenho seria o caminho de perder as
+três. O `ByteDisplay` é o dono do modo e pinta por cima a cabeça de reprodução, que
+é a única peça que o `HexGrid` não conhece.
 
 O editor tem três faixas: header claro, display escuro, painel de parâmetros. É a
 convenção do Ableton, e é também a resposta ao pedido de brilho: halo laranja
@@ -455,25 +468,31 @@ casa decimal — PITCH e VOLUME — o `if` entra e o formato já estava certo; e
 dois não se mexeram. O helper existe para a razão ficar escrita uma vez em vez
 de seis.
 
-### Peças físicas do asset harness
+### Peças desenhadas em código
 
-**O harness não gera texto.** Todo o texto — rótulos, valores, escalas — é
-desenhado em código, porque texto gerado por modelo sai com letra errada e não
-há como corrigir sem regenerar.
+**Não há mais harness, nem foto, nem sprite.** Ver a secção "A interface" acima para
+o porquê. Fica escrito o que a regra do harness chegou a ensinar e que continua
+valendo: **o harness não gerava texto**, e todo o texto — rótulos, valores, escalas —
+é desenhado em código, porque texto gerado por modelo sai com letra errada e não há
+como corrigir sem regenerar. A regra passou a aplicar-se a tudo, não só ao texto.
 
-**O corpo do knob não é rodado.** É uma fotografia top-down com a luz de estúdio
-assente; rodar o PNG faria o brilho andar com o knob, e o realce passaria a
-descer de manhã a norte. O `README` do harness diz o mesmo: a rotação é do
-plugin, via filme de imagens, e `createSpriteSheet` está reservado e não
-implementado. O indicador do valor é o arco e o ponteiro, ambos em código.
+**O corpo do knob são três círculos.** Aro serrilhado, face recuada e ponto de
+origem. São eles que separam "disco" de "botão rotativo": o aro lê-se como pega, a
+face mais escura recua, e o ponto no centro marca a origem, que é o que se vê num
+knob real. A luz vem de cima e da esquerda e o gradiente é diagonal, não radial a
+partir do centro — um radial simétrico daria um disco sem direção, e sem direção não
+se lê como superfície redonda.
 
-**O botão é desenhado como peça quadrada mais texto ao lado**, não esticado. A
-peça é um quadrado e o `LOAD` é uma faixa; esticar um PNG deformaria o bisel de
-2 px para 1 px de um lado e 4 px do outro.
+**O serrilhado é um `Path` memorizado por posição**, não 36 chamadas de `drawLine`
+por knob. São seis knobs a 60 Hz, e 216 chamadas de linha por quadro para desenhar
+textura fixa é o trabalho que o `Path` existe para evitar. A comparação do cache é
+dos dois valores e não só do raio: o mesmo raio com o centro noutro sítio é um
+serrilhado na posição errada.
 
-**O PNG não substitui o `juce::Slider`.** O corpo é imagem; quem opera o controle
-continua a ser o `Slider`, e é ele que tem o foco por teclado e o
-`AccessibilityHandler`. Um PNG não tem nenhum dos dois.
+**O estado ligado do botão não é só cor.** `#ff9a00` sobre `#c2c6c9` dá 2,4:1, e
+sem segunda pista o botão de transporte falha o 1.4.3. O ligado ganha uma barra de
+1 px à esquerda, e o `PLAY`/`STOP` troca a palavra — que é a pista que funciona sem
+ver cor.
 
 ### O que não está feito
 
