@@ -32,6 +32,7 @@ constexpr int kMinHeight {420};
 
 constexpr int kAddressFieldWidth {132};
 constexpr int kSnapButtonWidth {72};
+constexpr int kPlayButtonWidth {60};
 constexpr int kStatusHeight {14};
 constexpr int kFooterHeight {16};
 
@@ -148,6 +149,7 @@ void PluginEditor::buildHeader() {
     for (auto* component : {static_cast<juce::Component*>(&grid_),
                             static_cast<juce::Component*>(&address_),
                             static_cast<juce::Component*>(&snapButton_),
+                            static_cast<juce::Component*>(&playButton_),
                             static_cast<juce::Component*>(&voicesLed_)}) {
         addAndMakeVisible(*component);
     }
@@ -162,13 +164,27 @@ void PluginEditor::buildHeader() {
 
     snapButton_.setButtonText("ALINHAR");
     snapButton_.setTooltip(
-        "Alterna entre a regiao exacta e a secao PE mais proxima. Substitui a "
-        "tecla Enter que o seletor de bytes usava para o mesmo.");
+        "Alterna entre a regiao exacta e a secao PE mais proxima. Tambem na tecla A.");
     snapButton_.setName("Alinhar a regiao a uma secao PE");
     snapButton_.onClick = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
 
-    for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_, &peakReadout_,
-                          &rateReadout_, &voicesReadout_}) {
+    // Botao de transporte. E' um toggle, e o texto troca com o estado: e' a segunda
+    // pista de estado, e a que funciona para quem nao distingue o laranja do
+    // cinzento. O LookAndFeel desenha a barra de acento do lado esquerdo.
+    playButton_.setButtonText("PLAY");
+    playButton_.setClickingTogglesState(true);
+    playButton_.setTooltip(
+        "Percorre a regiao seleccionada de inicio a fim, sem nota MIDI. Tambem na "
+        "barra de espaco.");
+    playButton_.setName("Reproduzir a regiao");
+    playButton_.onClick = [this] {
+        owner_.toggleTransport();
+        refreshPlayButton();
+    };
+
+    for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_,
+                          &transportReadout_, &peakReadout_, &rateReadout_,
+                          &voicesReadout_}) {
         addAndMakeVisible(*readout);
         readout->setInterceptsMouseClicks(false, false);
         // A cor de texto por omissao do Label e' quase preta e desaparece sobre
@@ -209,6 +225,60 @@ void PluginEditor::updateFooterVisibility() {
     rateReadout_.setVisible(footerFitsRate_);
     peakReadout_.setVisible(footerFitsPeak_);
     entropyReadout_.setVisible(footerFitsEntropy_ && entropyReadout_.getText().isNotEmpty());
+
+    // A leitura de transporte so aparece a tocar, pela mesma razao que os chips
+    // vazios do header se escondem: uma moldura vazia le-se como defeito. Durante
+    // a reproducao e' a unica pista textual da cabeca, e sem ela a barra animada
+    // seria a unica forma de saber o que se ouve — o que o criterio 1.4.1 nao
+    // permite.
+    transportReadout_.setVisible(footerFitsTransport_ &&
+                                 transportReadout_.getText().isNotEmpty());
+}
+
+void PluginEditor::updateStatusVisibility() {
+    // O botao de reproducao nunca desaparece por falta de espaco: e' a unica
+    // forma de ouvir o material sem teclado MIDI. O que se sacrifica e' o campo
+    // de endereco e o alinhamento, que escrevem sitios que o POSITION e o clique
+    // na grelha escrevem tambem.
+    playButton_.setVisible(owner_.hasSource());
+    snapButton_.setVisible(owner_.hasSource() && statusFitsSnap_);
+    address_.setVisible(owner_.hasSource() && statusFitsAddress_);
+}
+
+void PluginEditor::refreshPlayButton() {
+    const bool playing = owner_.isTransportPlaying();
+
+    // O texto e' a pista de estado que sobrevive a quem nao ve cor. PLAY e STOP
+    // sao palavras e nao simbolos, e nao ha fonte de iconos no plugin.
+    const auto text = juce::String {playing ? "STOP" : "PLAY"};
+    if (playButton_.getButtonText() != text) {
+        playButton_.setButtonText(text);
+        playButton_.setName(playing ? "Parar a reproducao" : "Reproduzir a regiao");
+    }
+
+    if (playButton_.getToggleState() != playing) {
+        playButton_.setToggleState(playing, juce::dontSendNotification);
+    }
+
+    // **Desativado e nao invisivel, e nao activo-a-fingir.** Sem material nao ha
+    // regiao para percorrer; e com o host parado nao ha callback que produza o
+    // som. Um botao que aceita o toque e nao faz nada e' pior do que um botao que
+    // recusa, porque o primeiro faz o utilizador achar que o plugin avariou.
+    const auto canPlay = owner_.hasSource() && !owner_.hostTransportIsKnownToBeStopped();
+    playButton_.setEnabled(canPlay);
+}
+
+void PluginEditor::pushTransportAnchor() {
+    // A ancora so e' escrita quando o utilizador mexeu em POSITION. Escrever a cada
+    // quadro faria a geracao do nucleo subir a cada quadro, e a cabeca nunca
+    // passaria do ponto de ancoragem — que e' o modo de falha que o teste
+    // Transport.SeekIsAppliedOnceAndThenTheHeadAdvanced cobre do outro lado.
+    if (!positionChangedSinceLastAnchor_) {
+        return;
+    }
+    positionChangedSinceLastAnchor_ = false;
+    lastAnchoredPosition_ = readPosition();
+    owner_.seekTransportTo(lastAnchoredPosition_);
 }
 
 void PluginEditor::buildParameterPanel() {
@@ -352,8 +422,6 @@ void PluginEditor::resized() {
     const auto statusY = displayBounds.getY();
     statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
                              .withSizeKeepingCentre(14, kStatusHeight));
-    status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY,
-                                            displayBounds.getWidth() - 36 - 12, kStatusHeight});
 
     const auto footerY = displayBounds.getBottom() - kFooterHeight - 2;
 
@@ -365,15 +433,53 @@ void PluginEditor::resized() {
     grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
                                           displayBounds.getWidth(), footerY - gridTop});
 
-    // O campo de endereco e o botao de alinhar ficam na linha do estado, a
-    // direita. Ao lado do texto e nao no rodape porque sao controles: e' a zona
-    // do display que ja tem moldura, e um campo de texto dentro do rodape de
-    // leituras seria indistinguivel de uma leitura.
+    // O campo de endereco, o botao de alinhar e o botao de reproducao ficam na
+    // linha do estado, a direita. Ao lado do texto e nao no rodape porque sao
+    // controles: e' a zona do display que ja tem moldura, e um campo de texto
+    // dentro do rodape de leituras seria indistinguivel de uma leitura.
+    //
+    // A cadeia desce da direita para a esquerda em largura fixa e degrada em vez
+    // de espremer, com o botao de reproducao a ser o ultimo a cair. A 480 px de
+    // janela, o display tem 480 e os tres controlos precisam de 276: sobra entao
+    // 200 px para o texto de estado, e a dica de arrasto de 300 px nao cabe. Por
+    // isso o que se sacrifica primeiro e' o campo de endereco, e nao a dica.
     const int controlY = displayBounds.getY() + 2;
-    snapButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kSnapButtonWidth,
-                                                controlY, kSnapButtonWidth, kStatusHeight + 2});
-    address_.setBounds(juce::Rectangle<int> {snapButton_.getX() - 6 - kAddressFieldWidth,
-                                             controlY, kAddressFieldWidth, kStatusHeight + 2});
+    const int controlHeight = kStatusHeight + 2;
+    const int controlGap = 6;
+
+    playButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kPlayButtonWidth,
+                                                controlY, kPlayButtonWidth, controlHeight});
+    const int afterPlay = playButton_.getX() - controlGap;
+
+    // O alinhamento e' o segundo a cair: o campo de endereco escreve o mesmo
+    // sitio que o POSITION, e por isso e' o primeiro.
+    statusFitsSnap_ = afterPlay - kSnapButtonWidth >= displayBounds.getX() + 150;
+    snapButton_.setBounds(juce::Rectangle<int> {afterPlay - kSnapButtonWidth, controlY,
+                                                kSnapButtonWidth, controlHeight});
+    const int afterSnap = snapButton_.getX() - controlGap;
+
+    statusFitsAddress_ = afterSnap - kAddressFieldWidth >= displayBounds.getX() + 150;
+    address_.setBounds(juce::Rectangle<int> {afterSnap - kAddressFieldWidth, controlY,
+                                             kAddressFieldWidth, controlHeight});
+
+    // O texto de estado e' medido depois dos controlos e nao antes, porque e' a
+    // largura deles que diz onde o texto acaba. Com uma largura fixa, o texto
+    // escrevia por baixo do campo de endereco e do botao — e o fundo opaco do
+    // campo tapava o "PRONTO", que e' o que o criterio 3.3.1 exige que se veja.
+    //
+    // A decisao vem das flags que acabaram de ser calculadas e nao de isVisible():
+    // nesta passagem do layout a visibilidade ainda e' a da janela anterior, e o
+    // texto saltava uma largura para a esquerda e para a direita enquanto a
+    // janela era redimensionada.
+    const int statusLeft = displayBounds.getX() + 12 + 16 + 8;
+    const auto hasSource = owner_.hasSource();
+    const int statusRight =
+        juce::jmax(statusLeft + 40,
+                   (hasSource && statusFitsAddress_) ? address_.getX() - controlGap
+                   : (hasSource && statusFitsSnap_) ? snapButton_.getX() - controlGap
+                                                   : afterPlay);
+    status_.setBounds(juce::Rectangle<int> {statusLeft, statusY, statusRight - statusLeft,
+                                            kStatusHeight});
 
     // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
     // por caixa. A versao anterior media cada caixa a partir da margem esquerda
@@ -392,11 +498,12 @@ void PluginEditor::resized() {
     const int margin = displayBounds.getX() + 12;
     const int footerRight = displayBounds.getRight() - 12;
 
-    constexpr int kLedBoxWidth {12};
+constexpr int kLedBoxWidth {12};
     constexpr int kBoxGap {8};
     constexpr int kVoicesBoxWidth {74};
     constexpr int kRateWidth {78};
     constexpr int kPeakWidth {86};
+    constexpr int kTransportWidth {128};
     constexpr int kPositionWidth {116};
     constexpr int kRegionWidth {116};
     constexpr int kMinEntropyWidth {96};
@@ -410,17 +517,20 @@ void PluginEditor::resized() {
     // A partir daqui decide-se por ordem de prioridade, e a ordem esta' escrita
     // na cadeia e nao numa frase ao lado: se a entropia fosse decidida primeiro e
     // a taxa por ultimo, cada uma veria o que sobra depois das outras e a taxa
-    // sobrevivia a expense da entropia — que e' o inverso do que se quer.
+    // sobreviveria a expensa da entropia — que e' o inverso do que se quer.
     //
-    // A entropia da janela da cabeca de leitura e' o dado que justifica o rodape,
-    // por isso tem prioridade absoluta. O pico e' util e sai a seguir. A taxa de
-    // amostragem e' constante durante a sessao e e' a leitura menos informativa de
+    // A ordem e' a do valor, com uma unica inversao: **a leitura de transporte vem
+    // antes da taxa e do pico.** E' a unica caixa que muda durante a sessao para
+    // alem do pico, e sem ela o display mostra uma barra a andar sem nenhum numero
+    // que a confirme. A taxa e' constante e e' a leitura menos informativa de
     // todas, por isso e' a primeira a cair.
     footerFitsEntropy_ = room >= kMinEntropyWidth;
-    footerFitsPeak_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) >= kPeakWidth;
-    footerFitsRate_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) -
-                          (footerFitsPeak_ ? kPeakWidth + kBoxGap : 0) >=
-                      kRateWidth;
+    const auto afterEntropy = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0);
+    footerFitsTransport_ = afterEntropy >= kTransportWidth;
+    const auto afterTransport =
+        afterEntropy - (footerFitsTransport_ ? kTransportWidth + kBoxGap : 0);
+    footerFitsPeak_ = afterTransport >= kPeakWidth;
+    footerFitsRate_ = afterTransport - (footerFitsPeak_ ? kPeakWidth + kBoxGap : 0) >= kRateWidth;
 
     // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
     // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
@@ -438,6 +548,7 @@ void PluginEditor::resized() {
     put(voicesReadout_, kVoicesBoxWidth, true);
     put(positionReadout_, kPositionWidth, true);
     put(offsetReadout_, kRegionWidth, true);
+    put(transportReadout_, kTransportWidth, footerFitsTransport_);
     put(rateReadout_, kRateWidth, footerFitsRate_);
     put(peakReadout_, kPeakWidth, footerFitsPeak_);
 
@@ -510,8 +621,8 @@ void PluginEditor::refresh() {
     // de estado nao muda de sitio com o material a carregar: um alvo que salta
     // quando se carrega um binario e' pior do que um espaco constante.
     grid_.setVisible(owner_.hasSource());
-    address_.setVisible(owner_.hasSource());
-    snapButton_.setVisible(owner_.hasSource());
+
+    const auto hostStopped = owner_.hostTransportIsKnownToBeStopped();
 
     Led::State ledState = Led::State::off;
     juce::String message;
@@ -519,11 +630,17 @@ void PluginEditor::refresh() {
     if (owner_.lastError().isNotEmpty()) {
         ledState = Led::State::fault;
         message = "RECUSADO / " + owner_.lastError();
-    } else if (owner_.hasSource()) {
+    } else if (!owner_.hasSource()) {
+        message = "ARRASTE UM .EXE, .DLL OU .BIN PARA DENTRO DA JANELA";
+    } else if (hostStopped) {
+        // O botao esta' desativado, e dizer porquê e' o que evita que o utilizador
+        // ache que o plugin avariou. Sem host nenhum esta' desligado nao se sabe,
+        // e nao se diz nada — ver hostTransportIsKnownToBeStopped.
+        ledState = Led::State::ready;
+        message = "PRONTO / " + info.name + " / TRANSPORTE DO HOST PARADO";
+    } else {
         ledState = Led::State::ready;
         message = "PRONTO / " + info.name;
-    } else {
-        message = "ARRASTE UM .EXE, .DLL OU .BIN PARA DENTRO DA JANELA";
     }
 
     setIfChanged(status_, message);
@@ -532,6 +649,11 @@ void PluginEditor::refresh() {
 
     statusLed_.setState(ledState);
     powerLed_.setState(ledState == Led::State::off ? Led::State::off : Led::State::ready);
+
+    // O botao e' atualizado depois da mensagem porque a mensagem e' que depende do
+    // estado que ele produz.
+    updateStatusVisibility();
+    refreshPlayButton();
 
     refreshTelemetry(info);
 }
@@ -566,6 +688,17 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     const auto readHead = pe::byteForPosition(static_cast<double>(position), range);
     grid_.setReadHead(readHead);
 
+    // A ancora de busca do transporte so e' escrita quando o POSITION mudou. E' o
+    // que impede o editor de reancorar a cada quadro, o que prenderia a cabeca de
+    // reproducao no ponto onde o knob estava.
+    if (std::abs(position - lastAnchoredPosition_) > 1.0e-4f) {
+        positionChangedSinceLastAnchor_ = true;
+    }
+    pushTransportAnchor();
+
+    // A telemetria de reproducao e' lida do que a thread de audio ja publicou, e
+    // nao do transporte: o display mostra onde a cabeca de audio esta', e ler o
+    // nucleo de lado mostraria o ultimo bloco, nao este.
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
     const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
@@ -601,6 +734,28 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     setIfChanged(peakReadout_,
                  peak < -0.5f ? juce::String {"PK -inf dB"}
                               : juce::String {"PK "} + juce::String {peak, 1} + " dB");
+
+    // A leitura de transporte: posicao da cabeca de reproducao em endereco, o
+    // instante da volta e a duracao de uma volta. E' a confirmacao textual da barra
+    // que a forma de onda vai mostrar.
+    const auto transportPlaying = telemetry.playing.load(std::memory_order_relaxed);
+    if (transportPlaying) {
+        const auto transportFraction =
+            telemetry.playheadFraction.load(std::memory_order_relaxed);
+        const auto duration =
+            telemetry.playDurationSeconds.load(std::memory_order_relaxed);
+        const auto transportHead =
+            pe::byteForPosition(static_cast<double>(transportFraction), range);
+        const auto elapsed = duration * static_cast<double>(transportFraction);
+
+        setIfChanged(transportReadout_,
+                     juce::String::formatted("TP 0x%08X  %.1f/%.1fs",
+                                             static_cast<unsigned long long>(transportHead),
+                                             elapsed, duration));
+    } else {
+        setIfChanged(transportReadout_, juce::String {});
+    }
+
     setIfChanged(rateReadout_,
                  juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
                      + " kHz");

@@ -79,9 +79,33 @@ private:
     bool footerFitsRate_ {false};
     bool footerFitsPeak_ {false};
     bool footerFitsEntropy_ {false};
+    bool footerFitsTransport_ {false};
+
+    // Mesma regra para a linha de estado, que agora tem tres controlos e nao um.
+    //
+    // A ordem de sacrificio e' a do valor: o campo de endereco e' o primeiro a
+    // cair porque o POSITION e o clique na grelha escrevem o mesmo sitio, e o
+    // botao de alinhar o segundo. **O botao de reproducao e' o ultimo a sair**,
+    // porque e' a unica forma de ouvir o material sem teclado MIDI, e uma feature
+    // que desaparece quando a janela encolhe e' uma feature que ninguem encontra.
+    bool statusFitsAddress_ {false};
+    bool statusFitsSnap_ {false};
 
     void updateHeaderVisibility();
     void updateFooterVisibility();
+    void updateStatusVisibility();
+
+// O transporte de audicao no editor. Sao tres operacoes diferentes e nao
+    // podem ser um so: o botao e' um comando, a ancora e' uma escrita do parametro
+    // e a seek so' acontece quando o utilizador mexeu no knob.
+    //
+    // A guarda `positionChangedSinceLastAnchor_` e' o que impede o editor de
+    // reancorar sessenta vezes por segundo. O nucleo conta geracoes para nao
+    // reaplicar a mesma ancora, mas se o editor a escrevesse a cada quadro a
+    // geracao subiria a cada quadro e a cabeca nunca passaria do ponto de
+    // ancoragem.
+    void pushTransportAnchor();
+    void refreshPlayButton();
 
     // Clique numa celula: puxa a regiao para la se o byte estiver fora, e escreve
     // o POSITION. A ordem e' a do else: primeiro move-se o material, depois a
@@ -158,6 +182,11 @@ private:
     ByteAddressField address_;
     juce::TextButton snapButton_;
 
+    // Transporte de audicao. Fica na linha de estado ao lado do campo e do
+    // alinhamento porque e' a zona do display que ja tem moldura: um botao dentro
+    // do rodape de leituras seria indistinguivel de uma leitura.
+    juce::TextButton playButton_;
+
     BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel dropHint_ {juce::Colours::transparentBlack, palette::chassisBorder};
@@ -170,6 +199,7 @@ private:
     BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel positionReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    BoxedLabel transportReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
     BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
@@ -186,6 +216,15 @@ private:
     // Identidade do material carregado. A grelha so e' reenviada quando isto
     // muda, e nao a cada tique do timer.
     juce::String loadedSignature_;
+
+    // Ultima ancora de busca escrita no transporte, e a posicao que a produziu.
+    //
+    // E' o par e nao o valor so, porque o que interessa e' "o utilizador mexeu",
+    // e isso so se sabe comparando com o valor anterior. Guardar so a fracao
+    // permitiria detetar uma mudanca de 0,001 que o host fez e reancorar a cabeca
+    // por causa dela.
+    float lastAnchoredPosition_ {-1.0f};
+    bool positionChangedSinceLastAnchor_ {false};
 };
 
 } // namespace opcoda
