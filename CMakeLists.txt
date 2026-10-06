@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.28)
 
 project(Opcoda VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -23,6 +23,7 @@ add_library(opcoda_core STATIC
     src/opcoda_core/pe/byte_to_sample.cpp
     src/opcoda_core/pe/byte_range.cpp
     src/opcoda_core/pe/byte_to_position.cpp
+    src/opcoda_core/pe/column_reduction.cpp
     src/opcoda_core/entropy/shannon_entropy.cpp
     src/opcoda_core/dsp/dc_blocker.cpp
     src/opcoda_core/dsp/limiter.cpp
