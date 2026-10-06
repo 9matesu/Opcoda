@@ -163,6 +163,15 @@ void PluginEditor::buildHeader() {
     grid_.onSnapRequested = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
     address_.onAddressEntered = [this](std::uint64_t address) { moveRegionTo(address); };
 
+    // O display e' o componente que fica com o foco quando nao ha campo de endereco
+    // com foco, e por isso e' ele que responde ao espaco e ao A. O editor responde
+    // tambem, para o caso de o foco estar noutro sitio — um botao, por exemplo.
+    grid_.onToggleTransport = [this] {
+        owner_.toggleTransport();
+        refreshPlayButton();
+    };
+    grid_.onSnapRequestedFromKey = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
+
     snapButton_.setButtonText("ALINHAR");
     snapButton_.setTooltip(
         "Alterna entre a regiao exacta e a secao PE mais proxima. Tambem na tecla A.");
@@ -707,6 +716,48 @@ constexpr int kLedBoxWidth {12};
 
 void PluginEditor::timerCallback() {
     refresh();
+}
+
+bool PluginEditor::keyPressed(const juce::KeyPress& key) {
+    // O display ja consumiu o que lhe competia. Aqui so chegam as teclas de
+    // transporte, e so quando o foco nao estava no display.
+    if (key.getKeyCode() == juce::KeyPress::spaceKey) {
+        owner_.toggleTransport();
+        refreshPlayButton();
+        return true;
+    }
+
+    // Letras e digitos nao tem codigo no JUCE; ver isTypedCharacter em
+    // byte_display.h.
+    if (isTypedCharacter(key, 'A')) {
+        static_cast<void>(owner_.snapByteRangeToSection());
+        return true;
+    }
+
+    if (isTypedCharacter(key, 'L')) {
+        chooseFile();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '1')) {
+        grid_.setMode(ByteDisplay::ViewMode::waveform);
+        updateViewButtons();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '2')) {
+        grid_.setMode(ByteDisplay::ViewMode::hex);
+        updateViewButtons();
+        return true;
+    }
+
+if (isTypedCharacter(key, '3')) {
+        grid_.setMode(ByteDisplay::ViewMode::entropy);
+        updateViewButtons();
+        return true;
+    }
+
+    return false;
 }
 
 void PluginEditor::refresh() {

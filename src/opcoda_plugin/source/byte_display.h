@@ -15,6 +15,19 @@
 
 namespace opcoda {
 
+// **As teclas de letra e as da linha dos numeros nao tem codigo nomeado no JUCE.**
+// KeyPress so enumera navegacao, edicao e teclas de multimedia; uma letra ou um
+// digito chega com keyCode a zero e o caracter em getTextCharacter(). Pedir
+// KeyPress::aKey ou KeyPress::oneKey da erro de compilacao, e foi o que aconteceu
+// nas duas primeiras versoes deste codigo.
+//
+// `& 0xDF` e' o truque de maiusculas para ASCII: 'a' e 'A' dao o mesmo valor, e o
+// mapa e' o mesmo com ou sem Shift.
+[[nodiscard]] inline bool isTypedCharacter(const juce::KeyPress& key, char character) noexcept {
+    return key.getKeyCode() == 0 &&
+           static_cast<char>(key.getTextCharacter() & 0xDF) == character;
+}
+
 // O display do material, em tres leituras.
 //
 // Sao tres vistas porque sao tres perguntas diferentes sobre a mesma regiao, e
@@ -57,11 +70,7 @@ public:
 
     void setRegion(std::uint64_t start, std::uint64_t end);
 
-    void setReadHead(std::uint64_t address) {
-        readHead_ = address;
-        hex_.setReadHead(address);
-        repaint();
-    }
+    void setReadHead(std::uint64_t address);
 
     // Cabeca de reproducao, em fracao da regiao, tal como a publicada pela thread
     // de audio. Fica separada da cabeca de leitura porque sao coisas diferentes: a
@@ -80,9 +89,36 @@ public:
     std::function<void(std::uint64_t address)> onAddressActivated;
     std::function<void()> onSnapRequested;
 
+    // O transporte, para a tecla de espaco. Vem por callback e nao por referencia
+    // ao Processor porque o display nao deve saber que existe um Processor.
+    std::function<void()> onToggleTransport;
+    std::function<void()> onSnapRequestedFromKey;
+
+    // A caret de teclado: o endereco que as setas movem.
+    //
+    // **E' separada da cabeca de leitura de proposito.** A cabeca de leitura e' o
+    // que se esta a ouvir e responde ao knob e a automacao do host; a caret e' o
+    // cursor de navegacao. Sao a mesma posicao na maioria do tempo e nao precisam de
+    // estar ligadas: enquanto o utilizador navega com as setas o som nao muda ate
+    // carregar em Enter, que e' o que torna a navegacao inofensiva.
+    //
+    // A caret segue a cabeca de leitura enquanto o utilizador nao a mexer, e deixa de
+    // seguir assim que ele mexe. Sem isso, uma volta de 60 Hz do editor repunha a
+    // caret no meio e as setas nao fariam nada.
+    void setCaret(std::uint64_t address);
+    [[nodiscard]] std::uint64_t caret() const noexcept { return caret_; }
+
+    // Traseiras de teclas. Divididas porque sao consumidores diferentes: o display
+    // trata a navegacao e o editor trata o transporte.
+    void handleNavigationKey(const juce::KeyPress& key);
+    bool handleTransportKey(const juce::KeyPress& key);
+
     void paint(juce::Graphics& g) override;
     void paintOverChildren(juce::Graphics& g) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress& key) override;
+    void focusGained(juce::Component::FocusChangeType cause) override;
+    void focusLost(juce::Component::FocusChangeType cause) override;
 
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDoubleClick(const juce::MouseEvent& event) override;
@@ -112,6 +148,15 @@ private:
     void paintSectionTicks(juce::Graphics& g);
     void paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area);
     void paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>& area);
+    void paintFocusRing(juce::Graphics& g);
+
+    // Ultimo endereco que produz som dentro da regiao: `end - 2`.
+    //
+    // **Nao e' `end - 1`.** granular_engine.cpp desliga a voz quando
+    // `index + 1 >= sourceCount`, e pe::positionForByte ja' e' meio aberto em cima
+    // pelo mesmo motivo. Uma caret em `end - 1` seria uma posicao que existe e
+    // nao se ouve.
+    [[nodiscard]] std::uint64_t highestUsableAddress() const noexcept;
 
     // Fracao da regiao em que um endereco cai, em [0, 1]. Devolve 1,0 para um
     // endereco fora da regiao, e quem chama recorta.
@@ -136,6 +181,8 @@ private:
     std::uint64_t regionStart_ {0};
     std::uint64_t regionEnd_ {0};
     std::uint64_t readHead_ {0};
+    std::uint64_t caret_ {0};
+    bool caretMoved_ {false};
     float playheadFraction_ {0.0f};
     bool playheadVisible_ {false};
 

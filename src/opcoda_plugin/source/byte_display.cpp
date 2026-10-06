@@ -10,7 +10,6 @@ namespace opcoda {
 namespace {
 
 // Preenchimento do envelope.
-//
 // **O min/max quase nao serve para mostrar bytes, e e' por isso que o rms e' que
 // desenha o corpo.** O texto de um .exe tem quase todos os valores de 0x00 a 0xFF,
 // e portanto o minimo e o maximo de uma coluna estao perto de -1 e de +1 em
@@ -32,6 +31,17 @@ ByteDisplay::ByteDisplay() {
     setInterceptsMouseClicks(true, false);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 
+    // **Focalizavel, e e' o que retira a excecao ao criterio 2.5.8.** A excecao
+    // estava escrita em hex_grid.h e em docs/10 porque as celulas eram pintadas e
+    // nao componentes, e um Component so nao tem filhos acessiveis. Isso continua
+    // verdadeiro: nao ha 200 componentes. O que passou a existir e' um cursor de
+    // navegacao com nome e valor, e com ele a operacao completa por teclado que o
+    // portao E exige.
+    //
+    // Nao ha setFocusable: no JUCE 8 a focalizabilidade e' implicita e o que se
+    // escreve e' que o componente quer o foco do teclado. E' setWantsKeyboardFocus.
+    setWantsKeyboardFocus(true);
+
     monoFont_ = BoxedLabel::monoFont(10.0f);
 
     // 4.1.2. O nome diz o que e' e o texto de ajuda diz o que se pode fazer, porque
@@ -40,8 +50,10 @@ ByteDisplay::ByteDisplay() {
     setName("Display do material binario");
     setHelpText(
         "Tres vistas do material: forma de onda, grelha de bytes e curva de "
-        "entropia. Clique para mover a cabeca de leitura. As teclas 1, 2 e 3 "
-        "mudam de vista.");
+        "entropia. Clique para mover a cabeca de leitura. Com o teclado: setas "
+        "movem o cursor, Enter ativa o byte, Esc volta a cabeca de leitura, "
+        "espaco liga e desliga a reproducao, 1, 2 e 3 mudam de vista e A alinha a "
+        "regiao a uma secao PE.");
 
     hex_.onCellActivated = [this](std::uint64_t address) {
         if (onAddressActivated != nullptr) {
@@ -177,6 +189,172 @@ float ByteDisplay::fractionOf(std::uint64_t address) const noexcept {
     return static_cast<float>(fractionFor(address));
 }
 
+void ByteDisplay::setReadHead(std::uint64_t address) {
+    readHead_ = address;
+    hex_.setReadHead(address);
+
+    // A caret segue a cabeca de leitura ate o utilizador lhe tocar. O editor
+    // reenvia a cabeca a cada tique, e sem esta guarda uma volta de 60 Hz repunha
+    // a caret no meio e as setas nao mexiam em nada.
+    if (!caretMoved_) {
+        caret_ = address;
+    }
+
+    repaint();
+}
+
+void ByteDisplay::setCaret(std::uint64_t address) {
+    caret_ = std::clamp(address, regionStart_, highestUsableAddress());
+    caretMoved_ = caret_ != readHead_;
+    repaint();
+}
+
+std::uint64_t ByteDisplay::highestUsableAddress() const noexcept {
+    // Com menos de dois bytes nao ha nenhum endereco que produza som, e o clamp de
+    // juce::jmax abaixo mantem a caret dentro da regiao vazia.
+    return regionEnd_ >= regionStart_ + 2 ? regionEnd_ - 2 : regionStart_;
+}
+
+void ByteDisplay::focusGained(juce::Component::FocusChangeType) {
+    repaint();
+}
+
+void ByteDisplay::focusLost(juce::Component::FocusChangeType) {
+    repaint();
+}
+
+void ByteDisplay::handleNavigationKey(const juce::KeyPress& key) {
+    if (regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // O comprimento da regiao e' a unidade de uma linha. Nas vistas novas nao ha
+    // linha, e um salto de 16 e' a granularidade que o hex usa e a que um
+    // utilizador de teclado espera: um byte de cada vez em 12 MB e' impraticavel.
+    constexpr std::uint64_t kStep {1};
+    constexpr std::uint64_t kRow {16};
+
+    // Uma "pagina" e' uma regiao de 1024 bytes, que e' a janela que o rodape mede a
+    // entropia. Ligar o salto a um numero que ja existe no codigo e' melhor do que
+    // inventar um em proportion a altura, que mudaria com a janela e tornaria a
+    // mesma tecla um salto diferente em cada tamanho de janela.
+    constexpr std::uint64_t kPage {1024};
+
+    const auto upper = highestUsableAddress();
+    const auto shift = key.getModifiers().isShiftDown();
+    const auto code = key.getKeyCode();
+    std::uint64_t target = caret_;
+    bool handled = true;
+
+    // **`if` e nao `switch`.** Os codigos do KeyPress sao `static const int`
+    // inicializados no .cpp da biblioteca, e nao constantes de compilacao: um
+    // `case juce::KeyPress::leftKey` da "a expressao nao foi avaliada como uma
+    // constante". Foi o que a primeira versao usou e o que o compilador apanhou.
+    if (code == juce::KeyPress::leftKey) {
+        target = caret_ - std::min(caret_, shift ? kRow : kStep);
+    } else if (code == juce::KeyPress::rightKey) {
+        target = caret_ + (shift ? kRow : kStep);
+    } else if (code == juce::KeyPress::upKey) {
+        target = caret_ - std::min(caret_, kRow);
+    } else if (code == juce::KeyPress::downKey) {
+        target = caret_ + kRow;
+    } else if (code == juce::KeyPress::pageUpKey) {
+        target = caret_ - std::min(caret_, kPage);
+    } else if (code == juce::KeyPress::pageDownKey) {
+        target = caret_ + kPage;
+    } else if (code == juce::KeyPress::homeKey) {
+        target = regionStart_;
+    } else if (code == juce::KeyPress::endKey) {
+        target = upper;
+    } else if (code == juce::KeyPress::returnKey) {
+        // Ativar e' o que o clique faz. E' a unica tecla que escreve: as setas
+        // movem a caret e nao mudam o som, e e' por isso que navegar e inofensivo.
+        //
+        // Depois de ativar, a caret volta a seguir a cabeca de leitura. Sem isto, a
+        // proxima volta do timer mantinha a caret onde o utilizador a deixou e as
+        // setas recomecavam de um sitio que ja nao e' o sitio da leitura.
+        caretMoved_ = false;
+        if (onAddressActivated != nullptr) {
+            onAddressActivated(caret_);
+        }
+        return;
+    } else {
+        handled = false;
+    }
+
+    if (!handled) {
+        return;
+    }
+
+    // O clamp e' a unica proteccao contra transbordo. Um `caret_ - 16` sem isto
+    // daria um numero enorme e o Editor escreveria uma posicao absurda.
+    setCaret(std::clamp(target, regionStart_, upper));
+}
+
+bool ByteDisplay::handleTransportKey(const juce::KeyPress& key) {
+    if (key.getKeyCode() == juce::KeyPress::spaceKey) {
+        if (onToggleTransport != nullptr) {
+            onToggleTransport();
+            return true;
+        }
+        return false;
+    }
+
+    if (isTypedCharacter(key, 'A') && onSnapRequestedFromKey != nullptr) {
+        onSnapRequestedFromKey();
+        return true;
+    }
+
+    return false;
+}
+
+bool ByteDisplay::keyPressed(const juce::KeyPress& key) {
+    if (key.getKeyCode() == juce::KeyPress::escapeKey) {
+        // Devolve a caret a cabeca de leitura: e' a forma de desfazer uma
+        // navegacao sem passar pelo knob.
+        setCaret(readHead_);
+        return true;
+    }
+
+    // As teclas de transporte sao respondidas aqui e nao so no editor, porque o
+    // display e' o unico componente que fica com foco quando nao ha campo de
+    // endereco com foco. Devolvem o resultado para que o editor saiba que ja foram
+    // consumidas.
+    if (handleTransportKey(key)) {
+        return true;
+    }
+
+    if (isTypedCharacter(key, '1')) {
+        setMode(ViewMode::waveform);
+        return true;
+    }
+    if (isTypedCharacter(key, '2')) {
+        setMode(ViewMode::hex);
+        return true;
+    }
+    if (isTypedCharacter(key, '3')) {
+        setMode(ViewMode::entropy);
+        return true;
+    }
+
+    handleNavigationKey(key);
+    return true;
+}
+
+void ByteDisplay::paintFocusRing(juce::Graphics& g) {
+    // 2.4.7 Foco visivel.
+    //
+    // O anel e' o sinal de que as setas mexem na caret. Sem ele, quem esta' a
+    // navegar por teclado nao sabe que o display tem o foco, e as setas parecem nao
+    // fazer nada — que e' a falha que o portao E descreve.
+    if (!hasKeyboardFocus(true)) {
+        return;
+    }
+
+    g.setColour(palette::accent);
+    g.drawRect(getLocalBounds().toFloat().reduced(1.0f), 2.0f);
+}
+
 void ByteDisplay::paint(juce::Graphics& g) {
     g.fillAll(palette::displayPanel);
 
@@ -258,6 +436,18 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
     // o HexGrid nao conhece, e sem ela o botao PLAY nao tinha nada que mostrar
     // na vista dos bytes.
     paintPlayhead(g, area);
+
+    // A caret e' so desenhada com o foco do teclado. Sem foco ela seria uma marca
+    // a mais entre a cabeca de leitura e a de reproducao, e tres barras verticais
+    // no mesmo ecra nao se distinguem.
+    if (hasKeyboardFocus(true) && mode_ != ViewMode::hex) {
+        const auto caretX = area.getX() + fractionOf(caret_) * area.getWidth();
+        g.setColour(palette::accentSoft);
+        g.drawRect(juce::Rectangle<float> {caretX - 3.0f, area.getY() + 2.0f, 6.0f,
+                                           area.getHeight() - 4.0f}, 1.0f);
+    }
+
+    paintFocusRing(g);
 }
 
 void ByteDisplay::paintWaveform(juce::Graphics& g) {
@@ -448,12 +638,19 @@ std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
 }
 
 void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
+    // **O clique da o foco do teclado ao display.** Sem isto, um utilizador que
+    // clica no display e depois carrega em Espaco veria o transporte nao responder, e
+    // a unica pista seria o anel de foco que so aparece depois de um Tab. E' o mesmo
+    // cuidado que o campo de endereco tem em grabFocusOnField.
+    grabKeyboardFocus();
+
     if (mode_ == ViewMode::hex) {
         return; // o HexGrid trata do seu
     }
 
     const auto address = addressAt(event.position);
     if (address != std::numeric_limits<std::uint64_t>::max() && onAddressActivated != nullptr) {
+        caretMoved_ = false;
         onAddressActivated(address);
     }
 }

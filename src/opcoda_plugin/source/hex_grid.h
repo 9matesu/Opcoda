@@ -26,17 +26,20 @@ namespace opcoda {
 // um ByteRange novo: se o byte estiver fora da regiao, quem puxa a regiao e' o
 // editor, antes de escrever a posicao.
 //
-// **A grelha e' operada so com o rato.** As celulas sao pintadas e nao sao
-// componentes, e um Component so nao tem filhos acessiveis: nao ha como dar nome
-// a 200 celulas. O caminho de teclado nao e' a mesma coisa desenhada outra vez,
-// e sao dois controlos com nome e valor proprios:
+// **A grelha e' operada so com o rato, e isso ja deixou de ser um problema de
+// acessibilidade.** As celulas sao pintadas e nao sao componentes, e um Component so
+// nao tem filhos acessiveis: nao ha como dar nome a 200 celulas. Isso continua
+    // verdadeiro e por isso a grelha nao ganha um nome por celula.
 //
-//   - POSITION, o knob, que e' um juce::Slider de verdade, move a cabeca de
-//     leitura em passos de 1% com as setas;
-//   - ByteAddressField, o campo hexadecimal, escreve o endereco.
+// O caminho de teclado passou a existir no ByteDisplay, que e' o componente que
+// contem esta grelha e que tem uma caret de navegacao com o nome e o valor
+// tertentu. As setas, `Inicio`, `Fim`, `Enter` e `Esc` operam o display inteiro sem
+// passar por nenhum outro controle, e a excecao ao criterio 2.5.8 que esta classe
+// justificava foi retirada de docs/10-acessibilidade-w3c.md.
 //
-// Entre os dois cobrem o que o clique faz, e por isso a excecao ao criterio
-// 2.5.8, que esta escrita em docs/10-acessibilidade-w3c.md.
+// O ByteAddressField tambem nao e' a alternativa: ele consome as quatro teclas de
+// navegacao de proposito, para o caret do TextEditor nao responder a setas de forma
+// diferente conforme o cursor esteja ou nao no fim do texto.
 class HexGrid : public juce::Component {
 public:
     HexGrid();

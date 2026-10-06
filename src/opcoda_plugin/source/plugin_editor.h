@@ -35,6 +35,16 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
+    // Transporte e vista, quando nenhuma tecla mais focada as consumiu.
+    //
+    // **A divisao com o display e' a que o JUCE ja impõe.** Uma tecla chega primeiro
+    // ao componente com o foco e so depois sobe para os ancestrais. O display trata
+    // a navegacao e o editor trata o transporte, e cada um devolve `true` quando
+    // consome. Uma unica funcao no editor seria mais curta e errada: as setas
+    // chegariam aqui por cima do display sempre que o display nao as consumisse, e
+    // o display nao as consome para nao as roubar ao campo de endereco.
+    bool keyPressed(const juce::KeyPress& key) override;
+
     // isInterestedInFileDrag decide se os demais callbacks chegam, e e' chamado
     // varias vezes enquanto o mouse se move. Precisa ser barato: so testa
     // existeAsFile e nao toca em disco.
