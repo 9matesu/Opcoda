@@ -119,8 +119,12 @@ public:
         // Anel de foco. Sem ele, quem navega por teclado nao sabe qual knob
         // esta' ativo, e o criterio 2.4.7 do WCAG 2.2 pede foco visivel. E' o
         // unico sinal de que o controle esta' com o foco do teclado.
+        //
+        // A cor e' focusRing e nao accent porque este anel nao tem leitura
+        // numerica ao lado que o repita: accent sobre o chassis da 1,24:1, e o
+        // 1.4.11 exige 3:1 de um indicador de foco. focusRing da 9,73:1.
         if (slider.hasKeyboardFocus(true)) {
-            g.setColour(palette::accent);
+            g.setColour(palette::focusRing);
             g.drawEllipse(bounds.reduced(-3.0f), 2.0f);
         }
     }
@@ -192,8 +196,10 @@ public:
         }
 
         // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
+        // focusRing e nao accent pelo mesmo motivo do knob: o botao esta' sobre
+        // o painel claro e accent ali da 1,24:1, abaixo dos 3:1 do 1.4.11.
         if (button.hasKeyboardFocus(true)) {
-            g.setColour(palette::accent);
+            g.setColour(palette::focusRing);
             g.drawRoundedRectangle(reduced.reduced(1.0f), 2.0f, 2.0f);
         }
     }

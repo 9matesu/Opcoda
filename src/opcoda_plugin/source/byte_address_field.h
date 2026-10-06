@@ -76,7 +76,9 @@ private:
     };
 
     AddressEditor editor_;
-    juce::Font monoFont_ {juce::FontOptions {11.0f, juce::Font::plain}};
+    // Pela fabrica e nao por FontOptions directo: e' o unico caminho para uma
+    // fonte, e um FontOptions directo aqui voltaria a ser a fonte do sistema.
+    juce::Font monoFont_ {BoxedLabel::monoFont(11.0f)};
     std::uint64_t highestAddress_ {0};
     std::uint64_t shownAddress_ {0};
     bool updating_ {false};

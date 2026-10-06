@@ -36,8 +36,27 @@ inline const juce::Colour textField {0xff555a60};
 inline const juce::Colour textOnDark {0xffc6cacc};
 inline const juce::Colour textOnDarkSub {0xff8e98a1};
 
+// Foco. Precisa de 3:1 contra o fundo (1.4.11) e de ser o unico sinal de que
+// um controle tem o foco do teclado (2.4.7). Sobra entao apenas uma cor: o
+// accent da 1,24:1 sobre o chassis, reprovado. textDark da 9,73:1 e' a escolha.
+inline const juce::Colour focusRing {0xff1b1e22};
+
 // Acentos. O laranja e' preenchimento e indicador, nunca portador de texto
-// pequeno: sobre o chassis ele da 2,4:1 e reprovaria o contraste.
+// pequeno: sobre o chassis ele da 1,24:1 e reprovaria o contraste.
+//
+// As razoes medidas, para nao estimar de olhos. O 1.4.11 do WCAG 2.2 exige 3:1
+// para um grafico que precise de contraste para ser entendido, e o laranja fica
+// abaixo disso em toda superficie clara do chassis:
+//
+//   accent sobre chassis      1,24:1   (anel de foco, se fosse accent)
+//   accent sobre valBox       1,49:1   (aro do knob, pior ponto do arco)
+//   accent sobre chassisDark  1,04:1   (aro do knob, ponta escura do gradiente)
+//   accent sobre subPanel     1,08:1   (face do knob)
+//
+// O arco de valor ainda se sustenta porque cada knob tem a leitura numerica por
+// baixo, que repete o valor sem cor nenhuma. O anel de foco nao tem essa
+// segunda via: e' o unico sinal de que o controle tem o foco do teclado, e por
+// isso ele usa focusRing, e nao accent.
 inline const juce::Colour accent {0xffff9a00};
 inline const juce::Colour accentSoft {0xffffc83b};
 inline const juce::Colour accentWarn {0xffffb833};

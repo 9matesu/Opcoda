@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fonts.h"
 #include "palette.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -20,21 +21,15 @@ public:
         setFont(monoFont(10.0f));
     }
 
-    static juce::Font monoFont(float height) {
-        auto font = juce::Font {juce::FontOptions {height, juce::Font::plain}};
-        font.setTypefaceName(getDefaultMonospacedTypefaceName());
-        return font;
+    // As duas fabricas de fonte de toda a interface. Tudo o que escreve texto
+    // passa por aqui, e nao ha um terceiro sitio — ver fonts.h para a razao de a
+    // fonte vir por Typeface::Ptr e nao por nome.
+    [[nodiscard]] static juce::Font monoFont(float height, bool strong = false) {
+        return fonts().monospace(height, strong);
     }
 
-    static const juce::String& getDefaultMonospacedTypefaceName() {
-        return juce::Font::getDefaultMonospacedFontName();
-    }
-
-    static juce::Font sansFont(float height, bool bold = false) {
-        auto font = juce::Font {juce::FontOptions {height,
-                                                   bold ? juce::Font::bold : juce::Font::plain}};
-        font.setTypefaceName(juce::Font::getDefaultSansSerifFontName());
-        return font;
+    [[nodiscard]] static juce::Font sansFont(float height, bool strong = false) {
+        return fonts().sans(height, strong);
     }
 
     void paint(juce::Graphics& g) override {
