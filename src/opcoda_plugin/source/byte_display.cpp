@@ -66,6 +66,12 @@ ByteDisplay::ByteDisplay() {
         }
     };
 
+    // **O primeiro gesto do utilizador na grelha corta o seguimento dos graos.**
+    // A janela do hex segue o material enquanto ninguem mexe, e isso e' o que torna
+    // os graos visiveis, mas quem esta' a ler bytes nao pode ter o ecra a mexer
+    // sozinho. A partir da rolagem ou do clique, quem manda e' a pessoa.
+    hex_.onUserScrolled = [this] { grainFollow_ = false; };
+
     addAndMakeVisible(hex_);
 
     // **A visibilidade do hex tem de sair do modo, e nao de uma mudanca de modo.**
@@ -112,6 +118,12 @@ void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
     }
 
     hex_.setRegion(regionStart_, regionEnd_);
+
+    // **A regiao mudou, portanto a fracao mudou de significado.** Um grao que
+    // estava a ler o fim da regiao antiga tem fracao 0,9, e 0,9 na regiao nova e'
+    // um sitio completamente diferente. Sem esvaziar, o rastro velho aparecia
+    // sobre o material novo e parecia um grao a dar um salto.
+    grainTrails_.clear();
     repaint();
 }
 
@@ -162,10 +174,64 @@ void ByteDisplay::tickAnimation(float deltaSeconds) {
     }
 }
 
+void ByteDisplay::setGrains(
+    const std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices>& views, int count) {
+    // As posicoes sao fracoes **da regiao**, e a regiao e' a mesma nas tres vistas.
+    // No hex a fracao e' convertida em endereco dentro do `push`, porque o hex mostra
+    // o ficheiro inteiro e nao a regiao.
+    //
+    // So se guarda o que interessa. Um display sem material nao tem regiao para ser
+    // interpreted, entao um rastro de graos sobre o ecra vazio seria ruido.
+    const bool drawable = bytes_ != nullptr && !bytes_->empty() &&
+                          regionEnd_ > regionStart_;
+    const auto toRead = drawable ? std::clamp(count, 0, dsp::GrainTelemetry::kMaxVoices) : 0;
+
+    for (int i = 0; i < toRead; ++i) {
+        const auto& view = views[static_cast<std::size_t>(i)];
+
+        // **A identidade e' `view.voice`, nunca o indice `i`.** O publish do motor
+        // compacta os graos activos para a frente, portanto `i` diz em que ordem
+        // apareceram e nao que grao e'. A cauda da voz 3 e' a cauda da voz 3, e um
+        // rastro ligado ao slot saltaria de grao a cada bloco.
+        grainTrails_.push(view.voice, view.position);
+    }
+
+    // No hex, a janela segue os graos. Ver followGrainsInHex para o porque e para o
+    // que custa.
+    if (toRead > 0 && mode_ == ViewMode::hex) {
+        followGrainsInHex();
+    }
+
+    // Repintar: os rastros que existiam e nao receberam nada hoje ainda estao a
+    // desvanecer, e sem este repaint eles ficariam congelados a meio do ecra.
+    repaint();
+}
+
+void ByteDisplay::followGrainsInHex() noexcept {
+    if (!grainFollow_ || regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // **A regiao tem de caber na janela, senao nao ha para onde ir.** A janela sao
+    // `metrics_.rows` linhas e a regiao pode ter dezenas de milhares. Ancorar no
+    // grao mais baixo faz a janela saltar de baixo para cima a cada bloco conforme
+    // o agendador sorteia as vozes, e um ecra que treme e pior do que um ecra sem
+    // graos.
+    //
+    // Ancorar no **primeiro endereco da regiao** mantem a janela quieta: ela fica
+    // onde a regiao comeca e so se mexe quando o utilizador rola. E o que torna
+    // visivel o inicio do material, que e' onde o transporte comeca.
+    hex_.scrollToAddress(regionStart_);
+}
+
 void ByteDisplay::setMode(ViewMode mode) {
     if (mode == mode_) {
         return;
     }
+
+    // A fracao da regiao continua a valer nas tres vistas, mas o desenho muda e
+    // um rastro antigo em cima do hex novo e' ruido sem informacao.
+    grainTrails_.clear();
     mode_ = mode;
 
     // O hex e' o unico modo com um Component proprio, porque o seu desenho tem
@@ -432,6 +498,13 @@ void ByteDisplay::paint(juce::Graphics& g) {
         case ViewMode::hex: break; // o HexGrid pinta-se a si proprio
     }
 
+    // Os graos vao sobre o conteudo e por baixo das cabecas. No hex o HexGrid e'
+    // um Component filho e pinta-se a si proprio, portanto `paint` acontece antes
+    // dele: e' `paintOverChildren` que os coloca por cima.
+    if (mode_ != ViewMode::hex) {
+        paintGrains(g, getLocalBounds().toFloat().reduced(kPadding));
+    }
+
     // **Nao ha banda da regiao nas vistas novas, e a diferenca e' intentional.**
     // No hex a regiao e' uma faixa sobre celulas de largura fixa, porque o que se
     // ve e' o ficheiro inteiro. Na forma de onda e na curva o que se ve ja e' a
@@ -441,6 +514,144 @@ void ByteDisplay::paint(juce::Graphics& g) {
     if (mode_ != ViewMode::hex) {
         paintSectionTicks(g);
     }
+}
+
+void ByteDisplay::paintGrainsInHex(juce::Graphics& g) {
+    if (regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // **Aqui o alvo e' a celula, e nao a coluna.** Um grao desenha-se sobre a celula
+    // do byte que esta' a ler, porque no hex o que interessa e' *qual byte*. Desenhar
+    // a fracao da regiao como se fosse a posicao no ecra seria uma mentira
+    // geometrica, e a captura mostrava uma mancha desfocada a meio da linha em vez
+    // de uma celula.
+    for (int voice = 0; voice < view::GrainTrailSet::kMaxVoices; ++voice) {
+        if (!grainTrails_.active(voice)) {
+            continue;
+        }
+
+        const auto cell = hex_.cellRectForAddress(grainTrails_.address(voice));
+        if (cell.isEmpty()) {
+            continue;
+        }
+
+        // **Sem rastro no hex.** A cauda serve quando o grao se mexe no ecra, e no
+        // hex um grao de 40 ms muda de byte a cada bloco: a cauda ocuparia tres ou
+        // quatro celulas e marcaria bytes por onde o grao ja passou, que e'
+        // informacao falsa — diria que o grao esta' a ler onde ja nao esta'. A
+        // forma de onda e' que mostra a varredura; o hex mostra o byte.
+        g.setColour(palette::alpha(juce::Colours::white, 0.28f));
+        g.fillRect(cell.reduced(1.0f));
+        g.setColour(palette::alpha(juce::Colours::white, 0.92f));
+        g.drawRect(cell.reduced(1.0f), 1.5f);
+    }
+}
+
+void ByteDisplay::paintGrains(juce::Graphics& g, const juce::Rectangle<float>& area) {
+    // Desenhados em `paint`, antes da cabeca de leitura e da de reproducao, que
+    // sao em `paintOverChildren`. A ordem e' a da leitura: o que responde a "o que
+    // estou a ouvir" fica por cima, e o grao e' contexto.
+    //
+    // **A celula do hex e' o sitio onde a coisa esta' a acontecer**, e e' por isso
+    // que o hex tambem mostra graos. A fracao publicada e' da regiao e o hex
+    // mostra o ficheiro inteiro, entao a conversao passa pelo endereco.
+    for (int voice = 0; voice < view::GrainTrailSet::kMaxVoices; ++voice) {
+        if (!grainTrails_.active(voice)) {
+            continue;
+        }
+
+        paintGrain(g, area, grainTrails_.trail(voice), 1.0f);
+    }
+}
+
+void ByteDisplay::paintGrain(juce::Graphics& g,
+                             const juce::Rectangle<float>& area,
+                             const view::GrainTrailSet::Trail& trail,
+                             float gain) {
+    // **Esta funcao e' so para a forma de onda e para a curva.** Nelas a janela e'
+    // a regiao, e a fracao do grao e' a posicao no ecra — e' por isso que a
+    // fracao vai directamente para x. No hex a escala e' outra: a janela e' o
+    // ficheiro inteiro e o grao desenha-se na celula do byte, em
+    // `paintGrainsInHex`.
+    const auto xOf = [&area](float fraction) {
+        if (fraction <= 0.0f || fraction >= 1.0f) {
+            return -1.0f; // fora da regiao: melhor nao desenhar do que adivinhar
+        }
+        return area.getX() + fraction * area.getWidth();
+    };
+
+    // O indice 0 e' o mais recente, porque o deslocamento empurra para o fim.
+    const auto newestX = xOf(trail.positions[0]);
+    if (newestX < 0.0f) {
+        return;
+    }
+
+    // O risco e' **baixo**, com a altura a dar o ganho, e nunca a toda a altura.
+    // Desenhado a toda a altura, o grao ficava indistinto da cabeca de leitura:
+    // duas barras brancas do mesmo tamanho no mesmo ecra. A cabeca responde a "o
+    // que estou a ouvir" e tem de ganhar. Um risco baixo e um risco de altura
+    // total nao se confundem, mesmo sendo a mesma cor - e o 1.4.1 e' sobre forma,
+    // nao so sobre cor.
+    const auto centreY = area.getCentreY();
+    const auto height = juce::jmax(6.0f, area.getHeight() * 0.30f * gain);
+    const auto top = centreY - height * 0.5f;
+
+    float oldestX = newestX;
+    for (int f = 1; f < trail.count; ++f) {
+        const auto x = xOf(trail.positions[static_cast<std::size_t>(f)]);
+        if (x >= 0.0f) {
+            oldestX = std::min(oldestX, x);
+        }
+    }
+
+    // **O rastro e' uma pilha de quadris com alfa crescente, e nao um
+    // gradiente.** O gradiente foi a segunda tentativa e dava faixas visiveis:
+    // o JUCE quantiza para 8 bits por canal, e num gradiente de meio alfa
+    // durante seis pixels cada degrau de 1/255 aparece como uma banda. Com seis
+    // pixels de curso nao ha lado nenhum para um gradiente: uma pilha de retangulos
+    // de 2 px com alfa a dar para tras da a mesma leitura e nao tem bandas.
+    const auto span = newestX - oldestX;
+    if (trail.count > 1 && span > 0.5f) {
+        // Do mais antigo para o mais recente. O alfa cresce com a proximidade do
+        // grao actual, que e' o que faz o olho ler a direccao do varrimento sem
+        // seta nem legenda.
+        constexpr int kSteps {6};
+        const auto step = juce::jmax(1.0f, std::ceil(span / static_cast<float>(kSteps)));
+        for (int s = 0; s < kSteps; ++s) {
+            const auto t = static_cast<float>(s + 1) / static_cast<float>(kSteps);
+            const auto x0 = oldestX + step * static_cast<float>(s);
+            if (x0 >= newestX) {
+                break;
+            }
+            const auto width = juce::jmin(step, newestX - x0);
+            g.setColour(palette::alpha(juce::Colours::white, 0.42f * gain * t * t));
+            g.fillRect(juce::Rectangle<float> {x0, top, width, height});
+        }
+    }
+
+    // A cabeca do rastro: o ponto mais recente, opaco. E' este o que diz "o grao
+    // esta' aqui", e e' o unico elemento do rastro que nao pode faltar.
+    //
+    // **Branco, e nao a cor do grao.** A primeira versao desenhou o grao em
+    // accentSoft, e ele desaparecia. A razao e' medida: o envelope da forma de
+    // onda e' accent a 62%, que da #a6690b, e contra isso
+    //
+    //   accentSoft  2,92:1     accentWarn  2,62:1     textOnDark  2,74:1
+    //
+    // todos abaixo dos 3:1 que o 1.4.11 exige de um grafico que precisa de
+    // contraste para ser entendido. Um grao laranja sobre um envelope laranja so
+    // se distinguia por matiz, que e' o que o criterio proibe. O branco da 4,52:1
+    // sobre o envelope e 13,4:1 sobre o fundo, e passa nos dois.
+    g.setColour(palette::alpha(juce::Colours::white, 0.14f * gain));
+    g.fillRoundedRectangle(juce::Rectangle<float> {newestX - kGrainGlowWidth * 0.5f,
+                                                   top - 1.5f, kGrainGlowWidth,
+                                                   height + 3.0f},
+                           kGrainGlowWidth * 0.5f);
+    g.setColour(palette::alpha(juce::Colours::white, 0.9f * gain));
+    g.fillRoundedRectangle(juce::Rectangle<float> {newestX - kGrainCoreWidth * 0.5f, top,
+                                                   kGrainCoreWidth, height},
+                           kGrainCoreWidth * 0.5f);
 }
 
 void ByteDisplay::paintSectionTicks(juce::Graphics& g) {
@@ -482,6 +693,15 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
     }
 
     const auto area = getLocalBounds().toFloat().reduced(kPadding);
+
+    // No hex os graos entram aqui, e nao em `paint`: o HexGrid e' um Component
+    // filho e pinta-se depois de `paint` do pai, portanto qualquer marca minha
+    // feita em `paint` ficaria **por baixo** da grelha e invisivel.
+    //
+    // O alvo e' a celula do byte, e nao a fracao da regiao. Ver paintGrainsInHex.
+    if (mode_ == ViewMode::hex) {
+        paintGrainsInHex(g);
+    }
 
     // A cabeca de leitura so e' desenhada aqui nas vistas novas. No hex o
     // HexGrid desenha a sua, dentro da celula, porque a cabe a linha e a coluna da

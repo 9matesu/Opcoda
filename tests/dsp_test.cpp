@@ -617,6 +617,83 @@ std::array<GrainView, GrainTelemetry::kMaxVoices> readAll(
 
 } // namespace
 
+TEST(GrainTelemetry, EachPublishedGrainCarriesItsOwnVoiceIndex) {
+    // **A identidade e' o indice da voz, nunca a posicao no array.** O publish
+    // compacta os activos para a frente, portanto o slot diz em que ordem
+    // apareceram e nao que grao e'. Um display que ligue um rastro a um slot
+    // saltaria de um grao para outro cada vez que um deles morre, e a cauda
+    // cortava a meio do ecra a dar um rasgo falso.
+    //
+    // Este teste e' o que separa as duas coisas: sao publicados quatro graos
+    // nas vozes 0, 2, 3 e 5, e a resposta tem de ser 0, 2, 3, 5, e nao
+    // 0, 1, 2, 3.
+    GrainTelemetry telemetry;
+    telemetry.publish(voicesWith({0, 2, 3, 5}));
+
+    int count = 0;
+    const auto views = readAll(telemetry, &count);
+
+    ASSERT_EQ(count, 4);
+    EXPECT_EQ(views[0].voice, 0);
+    EXPECT_EQ(views[1].voice, 2);
+    EXPECT_EQ(views[2].voice, 3);
+    EXPECT_EQ(views[3].voice, 5);
+}
+
+TEST(GrainTelemetry, VoiceIndexStaysWithTheGrainAcrossPublishes) {
+    // A mesma voz, com posicao diferente em cada bloco, tem de continuar a
+    // reportar o mesmo indice. E' o que permite ao display saber que o grao de
+    // agora e' o mesmo que estava no ecra ha oito quadros.
+    GrainTelemetry telemetry;
+
+    auto first = voicesWith({1, 4});
+    first[1].position = 0.20;
+    first[4].position = 0.60;
+    telemetry.publish(first);
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> before {};
+    ASSERT_EQ(telemetry.read(before), 2);
+    ASSERT_EQ(before[0].voice, 1);
+    ASSERT_EQ(before[1].voice, 4);
+
+    auto second = voicesWith({1, 4});
+    second[1].position = 0.25;
+    second[4].position = 0.65;
+    telemetry.publish(second);
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> after {};
+    ASSERT_EQ(telemetry.read(after), 2);
+    EXPECT_EQ(after[0].voice, before[0].voice);
+    EXPECT_EQ(after[1].voice, before[1].voice);
+
+    // E a posicao avancou mesmo, senao o teste passaria com um publish parado.
+    EXPECT_GT(after[0].position, before[0].position);
+    EXPECT_GT(after[1].position, before[1].position);
+}
+
+TEST(GrainTelemetry, AVoiceThatDiesFreesItsSlotForAnotherVoice) {
+    // O caso que justifica a identidade: a voz 3 termina e a voz 6 nasce no
+    // mesmo bloco. Os dois ocupam o slot 0 do publish, porque compactam, e so a
+    // identidade diz que sao graos diferentes. Um display sem identidade leria
+    // "o mesmo grao de repente saltou" e desenhava uma cauda a atravessar o
+    // ecra entre os dois.
+    auto before = voicesWith({3});
+    GrainTelemetry telemetry;
+    telemetry.publish(before);
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> wasView {};
+    ASSERT_EQ(telemetry.read(wasView), 1);
+    ASSERT_EQ(wasView[0].voice, 3);
+
+    telemetry.publish(voicesWith({6}));
+
+    std::array<GrainView, GrainTelemetry::kMaxVoices> nowView {};
+    ASSERT_EQ(telemetry.read(nowView), 1);
+    EXPECT_EQ(nowView[0].voice, 6);
+    EXPECT_NE(nowView[0].voice, wasView[0].voice)
+        << "a voz nova ficou com a identidade da velha e o rastro vai atravessar o ecra";
+}
+
 TEST(GrainTelemetry, NaNGainIsPublishedAsZeroAndNotAsNaN) {
     // O clamp nao trata NaN — clamp(NaN) devolve NaN. Um NaN publicado propaga-se
     // em silencio para o brilho do grao e apaga-o, sem erro nenhum. O guard
@@ -764,7 +841,7 @@ TEST(GrainTelemetry, ReadLeavesSlotsPastTheCountUntouched) {
 
     std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
     for (auto& view : views) {
-        view = GrainView {-1.0f, -1.0f, -1.0f};
+        view = GrainView {-1, -1.0f, -1.0f, -1.0f};
     }
 
     const int count = telemetry.read(views);

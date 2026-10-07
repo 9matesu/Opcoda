@@ -38,6 +38,16 @@ struct Grain {
 // O que a thread de interface precisa para desenhar um grao no sitio onde ele
 // esta' a ler o material.
 struct GrainView {
+    // **O indice da voz, e nao um numero de ordem.** E' a identidade do grao, e
+    // sem ela o rastro nao se pode construir: os slots sao compactados a cada
+    // publish, portanto o slot 0 deste bloco pode ser a voz 3 e no seguinte a
+    // voz 1. Ligar um rastro a um slot，而不是 a uma voz, faria a cauda saltar
+    // entre graos e dar um rasgo falso no ecra.
+    //
+    // Estavel por todo o tempo de vida do grao, porque `voices_[i]` e' um slot
+    // fixo do motor. O valor -1 nao existe: quem le trata de voice < 0.
+    int voice {-1};
+
     float position {0.0f}; ///< Fracao do material, 0..1.
     float gain {0.0f};     ///< 0..1, sem a rampa de saida.
     float phase {0.0f};    ///< 0..1 dentro da janela do grao.
@@ -97,10 +107,17 @@ public:
     void publish(const std::array<Grain, kMaxVoices>& voices) noexcept {
         int count = 0;
 
-        for (const auto& grain : voices) {
+        for (std::size_t voice = 0; voice < voices.size(); ++voice) {
+            const auto& grain = voices[voice];
             if (!grain.active) {
                 continue;
             }
+
+            // A identidade vai antes de tudo o resto. E' um store de `int` para
+            // um slot cujo valor cabe em tres bits, e emparelha com o count do
+            // mesmo publish: quem le um count novo sabe que a voz veio com ele.
+            voice_[static_cast<std::size_t>(count)].store(static_cast<int>(voice),
+                                                           std::memory_order_relaxed);
 
             // position ja vem normalizado em [0, 1] do startGrain, mas um grao
             // com pitch a subir avanca para alem de 1 e so volta a entrar na
@@ -157,6 +174,7 @@ public:
         for (int i = 0; i < toRead; ++i) {
             const auto index = static_cast<std::size_t>(i);
             out[static_cast<std::size_t>(i)] = GrainView {
+                voice_[index].load(std::memory_order_relaxed),
                 position_[index].load(std::memory_order_relaxed),
                 gain_[index].load(std::memory_order_relaxed),
                 phase_[index].load(std::memory_order_relaxed)};
@@ -165,6 +183,7 @@ public:
     }
 
     private:
+    std::array<std::atomic<int>, kMaxVoices> voice_ {};
     std::array<std::atomic<float>, kMaxVoices> position_ {};
     std::array<std::atomic<float>, kMaxVoices> gain_ {};
     std::array<std::atomic<float>, kMaxVoices> phase_ {};

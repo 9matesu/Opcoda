@@ -8,6 +8,7 @@
 
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/pe/column_reduction.h"
+#include "opcoda_core/view/grain_trail.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -93,6 +94,20 @@ public:
         repaint();
     }
 
+    // Os graos que a thread de audio publicou, ja' lidos e ja' em fracao da regiao.
+    //
+    // O editor le a telemetria a 60 Hz e empurra aqui, em vez de o display ir
+    // buscar. E' o mesmo caminho que o playhead, e pela mesma razao: quem decide
+    // o que se pinta a 60 Hz e' o editor, porque e' ele que tem o timer.
+    //
+    // **O rastro e' por voz, e nao por slot.** Os slots do publish sao compactados,
+    // portanto o slot 0 e' o primeiro grao activo *deste* bloco e nada mais; ligar
+    // uma cauda a um slot faria a cauda saltar de um grao para outro cada vez que
+    // um deles morre, e o ecra ganhava um rasgo falso atravessado a cada bloco.
+    // `GrainView::voice` e' o indice fixo no motor, e e' o que fecha o rastro.
+    void setGrains(const std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices>& views,
+                   int count);
+
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
 
@@ -171,6 +186,23 @@ private:
     void paintWaveform(juce::Graphics& g);
     void paintEntropy(juce::Graphics& g);
     void paintSectionTicks(juce::Graphics& g);
+    // Graos na forma de onda e na curva: a fracao e' a posicao na regiao e a
+    // regiao e' o ecra, entao a fracca vai directamente para x.
+    void paintGrains(juce::Graphics& g, const juce::Rectangle<float>& area);
+
+    // **No hex e' outra coisa.** O hex mostra o ficheiro inteiro e a regiao e' uma
+    // fracao minuscula dele — 678 KB num ficheiro de 51 MB sao 0,1%, e cabem em
+    // 42 000 linhas quando a janela mostra oito. Um grao so aparece se a janela
+    // estiver na linha certa, por isso aqui a fracca vira endereco e o endereco
+    // vira celula.
+    void paintGrainsInHex(juce::Graphics& g);
+
+    // Mantem a janela do hex nos graos. Custa a posicao de quem esta' a ler bytes,
+    // por isso `grainFollow_` desliga-se no primeiro `scrollByLines` ou clique
+    // Recentrar os graos
+    void followGrainsInHex() noexcept;
+
+    // Recentrar os graos
     void paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area);
     void paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>& area);
     // **A animacao nao e' um extra e' um caminho de leitura.** A cabeca de leitura e a
@@ -191,6 +223,16 @@ private:
     static constexpr float kLevelFloorDb {-60.0f};
     static constexpr float kLevelHeight {3.0f};
 
+    // O comprimento do rastro e' `view::GrainTrailSet::kFrames`, no nucleo, e a
+    // razao do valor esta' num ensaio la: `GrainTrail.ASweepOfThisRegionIsSubPixel`.
+    static constexpr float kGrainCoreWidth {2.0f};
+    static constexpr float kGrainGlowWidth {7.0f};
+
+    void paintGrain(juce::Graphics& g,
+                    const juce::Rectangle<float>& area,
+                    const view::GrainTrailSet::Trail& trail,
+                    float gain);
+
     void paintFocusRing(juce::Graphics& g);
     void paintOutputLevel(juce::Graphics& g);
 
@@ -201,6 +243,17 @@ private:
     Eased playheadFraction_;
     Eased modeFade_;
     Eased outputLevel_;
+
+    // **O rastro vive no nucleo** (`opcoda::view::GrainTrailSet`) e nao aqui. A
+    // logica — deslocar, truncar, esvaziar por voz, recusar posicoes invalidas — e'
+    // aritmetica pura sobre arrays fixos, e dentro de um `juce::Component` nao ha
+    // como a testar. `pe::reduceToColumns` e' o mesmo caso e o mesmo motivo.
+    view::GrainTrailSet grainTrails_ {};
+
+    // A janela do hex segue os graos? Verdadeiro ate' o utilizador rolar ou
+    // clicar, e e' o que impede que a tela se mexa sozinha enquanto ninguem
+    // pediu.
+    bool grainFollow_ {true};
 
     bool readHeadAnimated_ {false};
     bool playheadAnimated_ {false};

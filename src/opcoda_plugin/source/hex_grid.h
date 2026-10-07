@@ -52,6 +52,11 @@ public:
     // mesma operacao que o duplo clique no seletor antigo fazia.
     std::function<void()> onSnapRequested;
 
+    // O utilizador mexeu na janela: rolou, ou clicou numa celula. Corta o
+    // seguimento automatico dos graos, porque a partir daqui quem manda e' a
+    // pessoa.
+    std::function<void()> onUserScrolled;
+
     // Os bytes crus. O ponteiro e' para o vector do Processor e fica valido
     // enquanto o Processor viver, porque o vector nao muda de endereco quando o
     // ingest atribui outro. O conteudo muda, e o editor avisa com setSource.
@@ -72,6 +77,19 @@ public:
     // endereco, e as teclas de pagina precisam de mexer aqui.
     void scrollToAddress(std::uint64_t address);
     void scrollByLines(int lines);
+
+    // Retangulo da celula de um endereco, em coordenadas locais, ou um rectangulo
+    // vazio se a linha nao estiver na janela.
+    //
+    // Existe para o ByteDisplay desenhar os graos **na celula** em vez de numa
+    // fracao da largura. Sem ele a unica hipotese e' desenhar a fracca da regiao
+    // como se fosse a posicao no ecra, e isso e' uma mentira geometrica: a regiao
+    // pode ser 0,1% de um ficheiro de 51 MB, e entao a fracao 0,5 cai numa linha
+    // que ninguem esta' a ver.
+    [[nodiscard]] juce::Rectangle<float> cellRectForAddress(std::uint64_t address) const;
+
+    // Verdadeiro quando a linha do endereco esta' dentro da janela visivel.
+    [[nodiscard]] bool isAddressVisible(std::uint64_t address) const noexcept;
 
     void paint(juce::Graphics& g) override;
     void resized() override;

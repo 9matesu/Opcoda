@@ -141,6 +141,26 @@ std::uint64_t HexGrid::rowAddress(int row) const {
     return topByte_ + static_cast<std::uint64_t>(row) * kBytesPerRow;
 }
 
+bool HexGrid::isAddressVisible(std::uint64_t address) const noexcept {
+    if (metrics_.rows < 1) {
+        return false;
+    }
+
+    const auto wantedRow = static_cast<int64_t>(address / kBytesPerRow);
+    const auto firstRow = static_cast<int64_t>(topByte_ / kBytesPerRow);
+    return wantedRow >= firstRow && wantedRow < firstRow + metrics_.rows;
+}
+
+juce::Rectangle<float> HexGrid::cellRectForAddress(std::uint64_t address) const {
+    if (!isAddressVisible(address)) {
+        return {};
+    }
+
+    const auto row = static_cast<int>(static_cast<int64_t>(address / kBytesPerRow) -
+                                       static_cast<int64_t>(topByte_ / kBytesPerRow));
+    return cellRect(address % kBytesPerRow, row);
+}
+
 // As medidas sao derivadas da fonte: uma celula mais estreita do que dois
 // digitos corta o segundo, e o display perde-se sem dar erro nenhum.
 void HexGrid::rebuildMetrics() {
@@ -245,6 +265,12 @@ void HexGrid::resized() {
 }
 
 void HexGrid::mouseDown(const juce::MouseEvent& event) {
+    // Mesmo corte que na roda: um clique e' o utilizador a dizer que a janela e'
+    // dele.
+    if (onUserScrolled != nullptr) {
+        onUserScrolled();
+    }
+
     const auto address = addressAt(event.position);
     if (address != std::numeric_limits<std::uint64_t>::max() && onCellActivated != nullptr) {
         onCellActivated(address);
@@ -266,6 +292,14 @@ void HexGrid::mouseDoubleClick(const juce::MouseEvent& event) {
 void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
                              const juce::MouseWheelDetails& wheel) {
     static_cast<void>(event);
+
+    // **Rolar e' o utilizador a dizer que manda ele.** A janela do hex segue os
+    // graos enquanto ninguem mexe, e o primeiro entalhe corta isso: quem esta' a
+    // ler bytes nao aceita que o ecra se mexa. Sem este corte, ler uma linha e a
+    // tela saltar para o material seria um ciclo sem fim.
+    if (onUserScrolled != nullptr) {
+        onUserScrolled();
+    }
 
     // Uma linha por entalhe, com acumulador. Um entalhe chega como 1.0, mas
     // uma roda de alta resolucao e um trackpad mandam fraccoes, e sem

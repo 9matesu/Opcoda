@@ -967,6 +967,13 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     // O LED de vozes nunca e' a unica pista: o numero ao lado e' o mesmo dado
     // em texto, que e' o que o criterio 1.4.1 do WCAG pede.
     voicesLed_.setState(sounding && activeVoices > 0 ? Led::State::ready : Led::State::off);
+
+    // Os graos, na mesma leitura de 60 Hz. E' leitura de lado, tal como o resto da
+    // telemetria: quem publica e' a thread de audio, uma vez por bloco, e o
+    // display mostra o ultimo bloco publicado e nao um estado inventado aqui.
+    std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices> grains {};
+    const auto grainCount = owner_.grainTelemetry().read(grains);
+    grid_.setGrains(grains, grainCount);
 }
 
 float PluginEditor::readPosition() const {
