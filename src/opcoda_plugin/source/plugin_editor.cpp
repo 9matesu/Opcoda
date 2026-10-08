@@ -108,7 +108,7 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     // Nenhum deles levava informacao que nao estivesse escrita noutro sitio. O que
     // fica no cabeçalho é o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
     // tamanho.
-    makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::monoFont(10.0f));
+    makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::sansFont(10.0f));
 
     fileName_.setText("-", juce::dontSendNotification);
 

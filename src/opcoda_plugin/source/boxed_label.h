@@ -16,18 +16,14 @@ public:
         : background_(background), outline_(outline) {
         setJustificationType(juce::Justification::centred);
         setInterceptsMouseClicks(false, false);
-        // Numero e' sempre monoespacado e sempre alinhado: e' o que faz a
+        // Texto e numeros na mesma letra, sempre alinhados: e' o que faz a
         // leitura parecer instrumento e nao pagina web.
-        setFont(monoFont(10.0f));
+        setFont(sansFont(10.0f));
     }
 
-    // As duas fabricas de fonte de toda a interface. Tudo o que escreve texto
-    // passa por aqui, e nao ha um terceiro sitio — ver fonts.h para a razao de a
-    // fonte vir por Typeface::Ptr e nao por nome.
-    [[nodiscard]] static juce::Font monoFont(float height, bool strong = false) {
-        return fonts().monospace(height, strong);
-    }
-
+    // A fabrica de fonte de toda a interface. Tudo o que escreve texto passa por
+    // aqui, e nao ha um segundo sitio — ver fonts.h para a razao de a fonte vir
+    // por Typeface::Ptr e nao por nome.
     [[nodiscard]] static juce::Font sansFont(float height, bool strong = false) {
         return fonts().sans(height, strong);
     }

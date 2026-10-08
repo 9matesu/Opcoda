@@ -36,7 +36,7 @@ HexGrid::HexGrid() {
     setInterceptsMouseClicks(true, false);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 
-    monoFont_ = BoxedLabel::monoFont(11.0f);
+    font_ = BoxedLabel::sansFont(11.0f);
 
     // 4.1.2 Nome, funcao e valor. A grelha e' operada so com o rato, mas nao
     // pode ser um buraco sem nome para quem navega por leitor de tela: o nome
@@ -181,7 +181,7 @@ void HexGrid::rebuildMetrics() {
     }
 
     const auto widthOf = [this](const juce::String& text) {
-        return juce::GlyphArrangement::getStringWidth(monoFont_, text);
+        return juce::GlyphArrangement::getStringWidth(font_, text);
     };
 
     metrics_.gutterWidth = widthOf("0x" + juce::String::repeatedString(
@@ -326,7 +326,7 @@ void HexGrid::paint(juce::Graphics& g) {
 
     g.setColour(palette::displayPanel);
     g.fillRect(bounds);
-    g.setFont(monoFont_);
+    g.setFont(font_);
 
     if (fileSize_ == 0 || bytes_ == nullptr || bytes_->empty()) {
         // Sem ficheiro, um rectangulo vazio com moldura le-se como defeito. E' o
@@ -351,7 +351,7 @@ void HexGrid::paintColumnHeader(juce::Graphics& g) {
     const auto top = getLocalBounds().toFloat().reduced(kPadding).getY();
 
     g.setColour(palette::textOnDarkSub);
-    g.setFont(monoFont_);
+    g.setFont(font_);
 
     // 00 01 02 ... 0F em cima das colunas. Sem este cabecalho a coluna
     // hexadecimal e' uma parede de digitos sem referencia, e a coluna 0xe nao se
@@ -403,14 +403,14 @@ void HexGrid::paintGutter(juce::Graphics& g, int row) {
         // a mesma coisa em menos sitio.
         g.setColour(palette::accent);
         g.fillRect(juce::Rectangle<float> {band.getX(), band.getY(), 2.0f, kRowHeight});
-        g.setFont(monoFont_);
+        g.setFont(font_);
         g.drawText(section->name, band.reduced(5.0f, 0.0f), juce::Justification::centredRight,
                    false);
         return;
     }
 
     g.setColour(palette::textOnDarkSub);
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.drawText(formatAddress(address), band.reduced(4.0f, 0.0f), juce::Justification::centredRight,
                false);
 }
@@ -495,7 +495,7 @@ void HexGrid::paintAscii(juce::Graphics& g, int row) {
                              .empty();
     g.setColour(inRegionRow ? palette::textOnDark
                             : palette::alpha(palette::textOnDark, 0.42f));
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.drawText(juce::String {line},
                metrics_.ascii.withY(metrics_.ascii.getY() + static_cast<float>(row) * kRowHeight)
                    .withHeight(kRowHeight),

@@ -1,9 +1,9 @@
 """Extrai e reduz os ficheiros de fonte que o Opcoda embebe.
 
-Porquê reduzir em vez de embutir os TTF inteiros: Inter tem 408 KB por peso e o
-JetBrains Mono 270 KB. Os quatro pesos que a interface usa somam 2,4 MB, que e'
-mais de metade do VST3 actual. A interface nao usa mais de 120 caracteres
-diferentes, e reduzir so' a esses dá um resultado visualmente identico.
+Porquê reduzir em vez de embutir os TTF inteiros: Inter tem 408 KB por peso, e os
+dois pesos que a interface usa somam 816 KB. A interface nao usa mais de 120
+caracteres diferentes, e reduzir so' a esses dá um resultado visualmente
+identico.
 
 O conjunto e' fixo e declarado aqui em vez de ser construido a partir do codigo,
 porque o que a interface escreve e' um conjunto conhecido: nomes de ficheiro, um
@@ -13,8 +13,7 @@ fora do conjunto sai como um caixote, e ver o ecrã e' como se apanha.
 Uso:
     python tools/vendor_fonts.py <pasta> [<pasta> ...]
 
-Cada pasta e' procurada por todos os ficheiros de WANTED, porque Inter e JetBrains
-Mono vem de arquivos separados.
+Cada pasta e' procurada por todos os ficheiros de WANTED.
 """
 
 from __future__ import annotations
@@ -45,10 +44,8 @@ CHARACTERS = (
 # (fonte de origem, nome de saida)
 #
 # **So' os pesos que a interface usa.** Nao e' uma lista do que existe na fonte, e'
-# a lista do que o codigo pede. Ver BoxedLabel::sansFont e monoFont: a interface usa
-# sans em peso forte para rotulos e titulos, e mono em peso normal para tudo o que e'
-# numero. Embarcar Media, Light, Black e os italicos seria 1,5 MB de ficheiros que
-# ninguem carrega.
+# a lista do que o codigo pede: peso medio para texto e leituras, semi-negrito
+# para rotulos e titulos. A monoespacada saiu — a interface e' Inter em tudo.
 #
 # Inter e' **Display** e nao o corte normal, e a razao e' o tamanho. InterDisplay e'
 # a variante com altura de x e contraste concebidos para texto pequeno — 9 a 11 px,
@@ -57,8 +54,6 @@ CHARACTERS = (
 WANTED = [
     ("extras/ttf/InterDisplay-Medium.ttf", "InterDisplay-Medium.ttf"),
     ("extras/ttf/InterDisplay-SemiBold.ttf", "InterDisplay-SemiBold.ttf"),
-    ("fonts/ttf/JetBrainsMono-Regular.ttf", "JetBrainsMono-Regular.ttf"),
-    ("fonts/ttf/JetBrainsMono-SemiBold.ttf", "JetBrainsMono-SemiBold.ttf"),
 ]
 
 # (nameID 1 familia, nameID 2 estilo, nameID 6 postscript)
@@ -72,8 +67,6 @@ WANTED = [
 NAMING = {
     "InterDisplay-Medium.ttf": ("Inter Display", "Medium", "InterDisplay-Medium"),
     "InterDisplay-SemiBold.ttf": ("Inter Display", "SemiBold", "InterDisplay-SemiBold"),
-    "JetBrainsMono-Regular.ttf": ("JetBrains Mono", "Regular", "JetBrainsMono-Regular"),
-    "JetBrainsMono-SemiBold.ttf": ("JetBrains Mono", "SemiBold", "JetBrainsMono-SemiBold"),
 }
 
 OPTIONS = subset.Options()

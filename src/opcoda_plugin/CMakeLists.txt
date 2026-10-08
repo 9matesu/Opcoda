@@ -1,21 +1,20 @@
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 
 # Tipografia embebida. Os ficheiros ja vem reduzidos pelo tools/vendor_fonts.py, que
-# os corta aos caracteres que a interface escreve e mantem a hinting: 353 KB no
-# lugar dos 1 354 KB dos TTF originais.
+# os corta aos caracteres que a interface escreve e mantem a hinting: 183 KB no
+# lugar dos TTF originais.
 #
 # **Sao binarios no repositorio de proposito.** A alternativa era a fonte do sistema,
 # que e' o que a interface usava ate aqui e o que a fazia parecer de 2010. Inter
 # Display e' o corte,opticamente desenhado para texto pequeno, e esta interface vive
-# entre 9 e 11 px.
+# entre 9 e 11 px. E' a unica familia: numeros e texto usam a mesma letra, e as
+# leituras vao alinhadas a direita para nao respirarem.
 juce_add_binary_data(OpcodaFonts
     HEADER_NAME OpcodaFonts.h
     NAMESPACE BinaryData
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/JetBrainsMono-Regular.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/JetBrainsMono-SemiBold.ttf)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"

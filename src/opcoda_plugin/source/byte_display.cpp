@@ -42,7 +42,7 @@ ByteDisplay::ByteDisplay() {
     // escreve e' que o componente quer o foco do teclado. E' setWantsKeyboardFocus.
     setWantsKeyboardFocus(true);
 
-    monoFont_ = BoxedLabel::monoFont(10.0f);
+    font_ = BoxedLabel::sansFont(10.0f);
 
     // 4.1.2. O nome diz o que e' e o texto de ajuda diz o que se pode fazer, porque
     // um componente que so se opera com o rato e' um buraco sem nome para quem
@@ -484,7 +484,7 @@ void ByteDisplay::paint(juce::Graphics& g) {
 
     if (bytes_ == nullptr || bytes_->empty() || regionEnd_ <= regionStart_) {
         g.setColour(palette::textOnDarkSub);
-        g.setFont(monoFont_);
+        g.setFont(font_);
         g.drawText("SEM BINARIO", getLocalBounds().toFloat(), juce::Justification::centred,
                    false);
         return;
@@ -840,7 +840,7 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
         g.drawHorizontalLine(juce::roundToInt(yFor(bits)), plot.getX(), plot.getRight());
     }
 
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.setColour(palette::textOnDarkSub);
     for (const auto bits : {0.0f, 4.0f, 8.0f}) {
         g.drawText(juce::String::formatted("%.0f", static_cast<double>(bits)),

@@ -307,7 +307,7 @@ private:
     std::uint32_t cachedColumnCount_ {0};
     bool cacheValid_ {false};
 
-    juce::Font monoFont_ {BoxedLabel::monoFont(10.0f)};
+    juce::Font font_ {BoxedLabel::sansFont(10.0f)};
 };
 
 } // namespace opcoda

@@ -68,9 +68,9 @@ bool parseHex(const juce::String& text, std::uint64_t& out) {
 } // namespace
 
 ByteAddressField::ByteAddressField() {
-    monoFont_ = BoxedLabel::monoFont(11.0f);
+    font_ = BoxedLabel::sansFont(11.0f);
 
-    editor_.setFont(monoFont_);
+    editor_.setFont(font_);
     editor_.setColour(juce::TextEditor::textColourId, palette::textOnDark);
     editor_.setColour(juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
     editor_.setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
@@ -154,7 +154,7 @@ void ByteAddressField::paint(juce::Graphics& g) {
     // um Ctrl+A seguido de escrita apagava o 0x e o valor seguinte seria lido
     // como decimal.
     g.setColour(palette::textOnDarkSub);
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.drawText("0x", bounds.reduced(5.0f, 0.0f).withWidth(16.0f), juce::Justification::centredLeft,
                false);
 }

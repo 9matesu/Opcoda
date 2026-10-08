@@ -163,7 +163,7 @@ private:
     // linha em round numbers, que e' como se le um hex dump.
     std::uint64_t topByte_ {0};
 
-    juce::Font monoFont_ {BoxedLabel::monoFont(11.0f)};
+    juce::Font font_ {BoxedLabel::sansFont(11.0f)};
     Metrics metrics_;
     double wheelAccumulator_ {0.0};
 };
