@@ -62,10 +62,11 @@ Live, e é o que separa a área de parâmetros da área de visualização.
 | `error` | `#e05373` | estado de recusa |
 | `pink` | `#ea7070` | série secundária do espectro |
 
-O laranja `#ff9a00` sobre `#c2c6c9` dá contraste de 2,4:1, e **não** atinge 4,5:1.
-Onde o laranja carrega texto, ele vai sobre preto (`#0e1013` ou `#1b1e22`), o que dá
-10,8:1. Regra: laranja é preenchimento e indicador, nunca portador de texto pequeno
-sobre superfície clara.
+O laranja `#ff9a00` sobre `#c2c6c9` dá contraste de 1,24:1, e **não** atinge 4,5:1.
+Onde o laranja carrega texto, ele vai sobre preto (`#0e1013` dá 8,96:1), e os anéis
+de foco usam `focusRing` (`#1b1e22`, 9,73:1 sobre o chassi). Regra: laranja é
+preenchimento e indicador, nunca portador de texto pequeno sobre superfície clara
+— e nunca indicador de foco sobre superfície clara.
 
 ## Tipografia
 
@@ -178,7 +179,7 @@ descodificador de PNG a correr no arranque.
 
 Botão com bisel: realce em cima, sombra em baixo, e o sentido trocado quando está
 premiado. **O estado ligado ganha uma barra de 1 px no lado esquerdo** e um contorno
-de acento, porque `#ff9a00` sobre `#c2c6c9` dá 2,4:1 e um botão de transporte cuja
+de acento, porque `#ff9a00` sobre `#c2c6c9` dá 1,24:1 e um botão de transporte cuja
 única pista de estado é essa cor não passa o 1.4.3. O `PLAY`/`STOP` troca a
 palavra, que é a segunda pista e a que funciona sem ver cor.
 
@@ -242,16 +243,17 @@ lado seria a única forma de ler o que se ouve.
 | Campo de endereço | `juce::TextEditor` com `AddressEditor` a retirar as setas |
 | Faixa de arquivo | `juce::Label` + `juce::TextButton` |
 
-**Não há peças de arte.** Não existe ficheiro de imagem em `resources/` nem alvo de
-dados embutidos: knob e botão são `juce::Path` desenhados em código, e o texto é
-sempre desenhado em código. A regra do harness antigo — não gerar texto, porque
-texto gerado por modelo sai com letra errada — mantém-se, mas deixou de ser a única
-restrição: agora também não há imagem.
+**Não há peças de arte.** Não existe ficheiro de imagem em `resources/`: knob e
+botão são `juce::Path` desenhados em código, e o texto é sempre desenhado em
+código. A regra do harness antigo — não gerar texto, porque texto gerado por
+modelo sai com letra errada — mantém-se, mas deixou de ser a única restrição:
+agora também não há imagem.
 
-JUCE não embarca fonte por padrão. Embarcar Inter e JetBrains Mono adiciona cerca
-de 400 KB ao binário; usar a fonte do sistema (`Segoe UI`) e a monoespaçada do
-sistema (`Consolas`) economiza isso ao custo de não bater exatamente com o mock.
-Decisão pendente, com padrão sendo a fonte do sistema.
+JUCE não embarca fonte por padrão. Inter Display e JetBrains Mono vão embutidas
+como dados binários (alvo `OpcodaFonts`, 353 KB — só os quatro pesos que a
+interface escreve, gerados por `tools/vendor_fonts.py`): usar a fonte do sistema
+(`Segoe UI`) e a monoespaçada do sistema (`Consolas`) economizaria isso ao custo
+de não bater exatamente com o mock. Decisão fechada pelo subset embarcado.
 
 ## Conflito com o escopo documentado
 

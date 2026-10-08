@@ -44,12 +44,16 @@ São seis parâmetros automatizáveis: tamanho de grão, densidade, posição, s
 afinação e volume. As notas ligam o motor, o pedal de sustain segura as notas
 soltas, e os CCs 74 e 71 movem densidade e posição.
 
-O display é uma grelha de bytes do binário carregado, com o endereço de cada
-linha à esquerda e os caracteres à direita. Clicar num byte move a cabeça de
-leitura para ele; se o byte estiver fora da região, a região é puxada para lá
-primeiro, com o mesmo comprimento. O campo hexadecimal à direita escreve o
-endereço da região, e o botão `ALINHAR` alterna entre a região exata e a seção PE
-mais próxima, como fazia o duplo clique. A região entra no estado do projeto,
+O display tem três vistas da região — forma de onda, grelha de bytes e curva de
+entropia — e cada grão ativo aparece onde está a ler o material, com uma cauda
+de 24 quadros que mostra a direção da varredura. Sem spray nem pitch a cauda
+lê-se como ponto, e isso é honesto: não há direção para mostrar. Na grelha, o
+grão marca a célula do byte e a janela ancora no início da região; rolar ou
+clicar corta o seguimento, porque quem lê bytes manda. Clicar num byte move a
+cabeça de leitura para ele; se o byte estiver fora da região, a região é puxada
+para lá primeiro, com o mesmo comprimento. O campo hexadecimal à direita escreve
+o endereço da região, e o botão `ALINHAR` alterna entre a região exata e a seção
+PE mais próxima, como fazia o duplo clique. A região entra no estado do projeto,
 pelo mesmo caminho do ficheiro carregado.
 
 A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
