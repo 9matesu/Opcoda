@@ -389,6 +389,12 @@ void PluginEditor::paint(juce::Graphics& g) {
     g.setColour(palette::chassisBorder);
     g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(getWidth()));
 
+    // Sombra de 1 px sob a costura do header: a faixa de cima assenta sobre o
+    // resto do chassi em vez de estar pintada nele. Preta a 0,15 — sombra e nao
+    // linha, porque linha seria mais um divisor e a costura ja divide.
+    g.setColour(juce::Colours::black.withAlpha(0.15f));
+    g.drawHorizontalLine(kHeaderHeight + 1, 0.0f, static_cast<float>(getWidth()));
+
     // Realce de 1 px no topo: e' o que da sensacao de superficie em vez de
     // retangulo liso.
     g.setColour(juce::Colours::white.withAlpha(0.35f));

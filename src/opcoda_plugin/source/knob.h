@@ -91,10 +91,19 @@ public:
     void paint(juce::Graphics& g) override {
         // Painel do modulo, para o knob nao flotar sobre o chassis liso. O corpo
         // do knob e' desenhado pelo LookAndFeel, que e' quem sabe o angulo.
+        const auto bounds = getLocalBounds().toFloat();
         g.setColour(palette::panelBg);
-        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
+        g.fillRoundedRectangle(bounds, 2.0f);
+
+        // Realce interno de 1 px no topo do painel: a mesma leitura do header do
+        // editor, em pequeno. Sem ele o painel e o chassis colam-se num cinzento
+        // so, e os seis modulos viram uma faixa em vez de seis pecas.
+        g.setColour(palette::alpha(juce::Colours::white, 0.28f));
+        g.drawHorizontalLine(juce::roundToInt(bounds.getY() + 1.5f), bounds.getX() + 3.0f,
+                             bounds.getRight() - 3.0f);
+
         g.setColour(palette::alpha(palette::chassisBorder, 0.5f));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 2.0f, 1.0f);
+        g.drawRoundedRectangle(bounds.reduced(0.5f), 2.0f, 1.0f);
     }
 
 private:

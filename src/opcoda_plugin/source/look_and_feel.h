@@ -112,6 +112,11 @@ public:
             const auto tipX = centre.x + std::sin(angle) * outer;
             const auto tipY = centre.y - std::cos(angle) * outer;
 
+            // O ponteiro flutua sobre a face como o corpo sobre o painel: a
+            // sombra de 1 px para baixo e para a direita ancora a haste, e sem
+            // ela o laranja parece impresso em vez de montado.
+            g.setColour(palette::alpha(juce::Colours::black, 0.30f));
+            g.drawLine(tailX + 1.0f, tailY + 1.0f, tipX + 1.0f, tipY + 1.0f, 2.5f);
             g.setColour(palette::accent);
             g.drawLine(tailX, tailY, tipX, tipY, 2.5f);
         }
@@ -134,7 +139,7 @@ public:
     //
     // Os quatro estados - repouso, sobreposto, premido e ligado - sao
     // distinguiveis sem cor. O ligado ganha uma barra de 1 px no lado esquerdo
-    // porque o laranja sobre o chassis claro da 2,4:1
+    // porque o laranja sobre o chassis claro da 1,24:1
     // (design/DESIGN-SYSTEM.md:65), e um botao cuja unica pista de estado e' essa
     // cor nao passa o 1.4.3.
     void drawButtonBackground(juce::Graphics& g,
@@ -159,6 +164,14 @@ public:
         }
         if (shouldDrawButtonAsDown) {
             base = base.darker(0.10f);
+        }
+
+        // Sombra de assentamento: o botao e' uma tecla sobre o painel, nao tinta
+        // sobre ele. Um rectangulo deslocado 1 px para baixo, atras do corpo —
+        // e no estado premido a sombra some, porque a tecla afundou.
+        if (!shouldDrawButtonAsDown) {
+            g.setColour(palette::alpha(juce::Colours::black, 0.14f));
+            g.fillRoundedRectangle(reduced.translated(0.0f, 1.0f), 2.0f);
         }
 
         // Gradiente vertical: a face e' mais clara em cima do que em baixo, e o
@@ -250,6 +263,17 @@ private:
 
         const auto rim = juce::Rectangle<float> {centre.x - radius, centre.y - radius,
                                                   radius * 2.0f, radius * 2.0f};
+
+        // Sombra projetada: o corpo flutua sobre o painel em vez de estar
+        // colado nele. Tres elipses concentricas deslocadas 2 px para baixo, da
+        // mais larga e fraca para a mais justa — um blur de verdade nao existe
+        // barato no JUCE, e tres fills por knob a 60 Hz custam menos que um
+        // DropShadowEffect por quadro.
+        for (int i = 3; i >= 1; --i) {
+            const auto spread = static_cast<float>(i);
+            g.setColour(palette::alpha(juce::Colours::black, 0.10f - 0.025f * spread));
+            g.fillEllipse(rim.expanded(spread).translated(0.0f, 2.0f));
+        }
 
         // Aro, com luz de cima a esquerda.
         g.setGradientFill(juce::ColourGradient {
