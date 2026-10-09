@@ -29,6 +29,8 @@ add_executable(opcoda_tests
     column_reduction_test.cpp
     note_tracker_test.cpp
     transport_test.cpp
+    transport_rate_test.cpp
+    grain_params_test.cpp
     grain_trail_test.cpp
     pe_mutation_test.cpp)
 

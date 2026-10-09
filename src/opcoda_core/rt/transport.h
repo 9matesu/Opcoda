@@ -92,6 +92,17 @@ public:
     void play() noexcept;
     void stop() noexcept;
 
+    // Velocidade de varredura: multiplica o avanco por amostra. 1.0 e' o tempo
+    // natural, 2.0 percorre a regiao em metade do tempo. Faixa 0,25..4,0:
+    // abaixo disso a volta arrasta-se, acima disso a cabeca salta posicoes
+    // inteiras por bloco e o display mente sobre onde o som esta.
+    //
+    // De qualquer thread; a thread de audio le o atomico dentro de
+    // durationSeconds(), O(1) por bloco — uma vez via advance, outra via
+    // publishTelemetry. Segue o mesmo desenho da ancora: estado partilhado em
+    // atomico lock-free, nunca escrita directa.
+    void setRate(double rate) noexcept;
+
     // Repoe o estado inicial e para. Chamado de releaseResources.
     void reset() noexcept;
 
@@ -126,8 +137,16 @@ public:
         return static_cast<float>(publishedPosition_.load(std::memory_order_relaxed));
     }
 
-    // Duracao de uma passagem em segundos, ja com o piso e o tecto aplicados.
-    // Chamada da interface para escrever no display; le atomicos e nao escreve.
+    // Duracao de uma passagem em segundos: a duracao natural dividida pela taxa,
+    // com o piso e o tecto aplicados DEPOIS, sobre o valor efetivo. Chamada da
+    // interface para escrever no display; le atomicos e nao escreve.
+    //
+    // O piso e o tecto valem sobre o efetivo, e nao sobre o natural: o piso
+    // existe porque abaixo de um grao nao ha audicao, e uma regiao curta a 4x
+    // dava uma volta de 25 ms que nao completa um grao de 100 ms — o clique que
+    // o piso existe para impedir. Com o clamp depois, a passagem dura sempre
+    // entre 0,1 e 30 s, qualquer que seja a taxa; em regiao extrema a taxa
+    // satura, e isso e' comportamento documentado, nao defeito.
     [[nodiscard]] double durationSeconds() const noexcept;
 
 private:
@@ -158,6 +177,7 @@ private:
     std::atomic<std::uint64_t> regionBytes_ {0};
     std::atomic<bool> playing_ {false};
     std::atomic<double> anchor_ {0.0};
+    std::atomic<double> rate_ {1.0};
     std::atomic<std::uint64_t> seekGeneration_ {0};
     std::atomic<bool> resetRequested_ {false};
     std::atomic<std::uint64_t> resetSeekGeneration_ {0};

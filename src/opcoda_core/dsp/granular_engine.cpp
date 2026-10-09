@@ -161,18 +161,47 @@ void GranularEngine::startGrain(int voice, const GranularParams& params, double 
     const double spread = static_cast<double>(params.spray) * (0.5 + 0.5 * entropy / 8.0);
     grain.position = std::clamp(base + ((nextRandom(state) * 2.0 - 1.0) * spread), 0.0, 1.0);
 
+    // Detune aleatorio por grao, somado a afinacao antes da razao. Usa a mesma
+    // sequencia do spray (state), e nao uma semente nova: uma semente nova por
+    // parametro partia o determinismo entre corridas, e o ensaio
+    // DeterministicAcrossRuns deixava de valer. Como o desvio entra depois do
+    // sorteio da posicao, o spray existente nao muda.
+    //
+    // NaN entra como zero: um detune NaN envenenaria readStep e a posicao, e um
+    // cast de NaN para size_t na leitura e' comportamento indefinido.
+    const double randomRange =
+        std::isfinite(static_cast<double>(params.pitchRandomSemitones))
+            ? std::clamp(static_cast<double>(params.pitchRandomSemitones), 0.0, 12.0)
+            : 0.0;
+    const double detune = (nextRandom(state) * 2.0 - 1.0) * randomRange;
+
     // A taxa de reproducao e' a razao de semitons, e o avanco por amostra tem
     // que ser ela dividida pelo comprimento da fonte: 'position' e' normalizada
     // em [0, 1], entao somar a taxa crua faz o grao varrer o arquivo inteiro em
     // poucas amostras.
-    const double ratio = std::pow(2.0, static_cast<double>(params.pitchSemitones) / 12.0);
+    //
+    // O pitch entra saneado como o detune: um pitch NaN somava NaN a razao, o
+    // pow devolvia NaN, e o clamp — que nao trata NaN — devolvia NaN adiante.
+    // readStep NaN envenenava a posicao e o cast para size_t na leitura era
+    // indefinido. Zero e' fail-open: mantem a afinacao antiga e o grao soa.
+    const double tuned = std::isfinite(static_cast<double>(params.pitchSemitones))
+                             ? static_cast<double>(params.pitchSemitones)
+                             : 0.0;
+    const double ratio = std::pow(2.0, (tuned + detune) / 12.0);
     const double rate = std::clamp(ratio, 0.5, 2.0);
     grain.readStep = (sourceCount_ > 0) ? rate / static_cast<double>(sourceCount_) : 0.0;
 
     grain.remaining = activeWindowLength_;
     grain.windowIndex = 0;
     grain.active = true;
-    grain.gain = dbToGain(params.volumeDb) * 0.25f;
+
+    // NaN vira silencio do grao, e nao volume cheio: um ganho NaN envenenaria a
+    // mistura e sairia como NaN no barramento, e o host nao avisa. O silencio
+    // de um grao e' conservador; o volume cheio seria um estouro.
+    const float level = std::isfinite(params.grainLevel)
+                            ? std::clamp(params.grainLevel, 0.0f, 1.0f)
+                            : 0.0f;
+    grain.gain = dbToGain(params.volumeDb) * 0.25f * level;
 
     const double p = (static_cast<double>(params.pan) + 1.0) * 0.5;
     grain.panLeft = static_cast<float>(std::cos(p * std::numbers::pi * 0.5));

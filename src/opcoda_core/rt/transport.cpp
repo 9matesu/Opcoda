@@ -74,6 +74,14 @@ void Transport::seekToFraction(double fraction) noexcept {
     seekGeneration_.fetch_add(1, std::memory_order_release);
 }
 
+void Transport::setRate(double rate) noexcept {
+    // NaN volta a 1.0, e nao a zero: taxa zero congelava a cabeca com o gate
+    // aberto, que e' o drone de uma amostra que o predicado >= 3 existe para
+    // impedir.
+    rate_.store(std::isfinite(rate) ? std::clamp(rate, 0.25, 4.0) : 1.0,
+                std::memory_order_relaxed);
+}
+
 void Transport::play() noexcept {
     playing_.store(true, std::memory_order_release);
 }
@@ -89,7 +97,10 @@ double Transport::durationSeconds() const noexcept {
     }
 
     const auto natural = static_cast<double>(bytes) / sampleRate_;
-    return std::clamp(natural, kMinSeconds, kMaxSeconds);
+    const auto rate = rate_.load(std::memory_order_relaxed);
+    // Taxa guardada em [0,25, 4,0] pelo setRate, entao nao ha divisao por zero
+    // aqui; o clamp depois mantem a passagem audivel em qualquer taxa.
+    return std::clamp(natural / rate, kMinSeconds, kMaxSeconds);
 }
 
 double Transport::fractionPerSample() const noexcept {

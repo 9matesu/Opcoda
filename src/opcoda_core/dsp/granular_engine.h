@@ -21,6 +21,14 @@ struct GranularParams {
     float volumeDb {0.0f};
     float pan {0.0f};
     WindowType window {WindowType::kHann};
+    // Nivel por grao, linear 0..1, multiplicado depois do volume em dB. E' o
+    // ganho individual contra o volume geral: o volume diz o nivel da saida, o
+    // nivel diz o quanto cada grao contribui para ela.
+    float grainLevel {1.0f};
+    // Detune aleatorio por grao, em semitons 0..12, somado a afinacao antes da
+    // razao. Zero desliga sem custo de comportamento: a razao sai identica a de
+    // antes, porque o desvio multiplica por zero.
+    float pitchRandomSemitones {0.0f};
 };
 
 struct Grain {
