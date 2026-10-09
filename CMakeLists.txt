@@ -25,6 +25,7 @@ add_library(opcoda_core STATIC
     src/opcoda_core/pe/byte_to_position.cpp
     src/opcoda_core/pe/column_reduction.cpp
     src/opcoda_core/entropy/shannon_entropy.cpp
+    src/opcoda_core/dsp/biquad.cpp
     src/opcoda_core/dsp/dc_blocker.cpp
     src/opcoda_core/dsp/limiter.cpp
     src/opcoda_core/dsp/window.cpp

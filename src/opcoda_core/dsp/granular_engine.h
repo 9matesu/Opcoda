@@ -1,5 +1,6 @@
 #pragma once
 
+#include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/dc_blocker.h"
 #include "opcoda_core/dsp/limiter.h"
 #include "opcoda_core/dsp/window.h"
@@ -29,6 +30,17 @@ struct GranularParams {
     float decaySeconds {0.1f};
     float sustainLevel {1.0f};
     float releaseSeconds {0.05f};
+    // Dois filtros em serie por voz. Tipo fora de faixa vira passa-baixa, e nao
+    // erro: o tipo chega como indice de choice da UI, e um indice corrompido
+    // tem de soar, nao calar. Corte em Hz logaritmico 20..20000 (recortado
+    // contra Nyquist dentro do calculo), Q 0,5..12. Defaults transparentes —
+    // passa-baixa em 20 kHz — para o T1 e o comportamento antigo nao mudarem.
+    FilterType f1type {FilterType::kLowPass};
+    float f1cutoffHz {20000.0f};
+    float f1q {0.7071f};
+    FilterType f2type {FilterType::kLowPass};
+    float f2cutoffHz {20000.0f};
+    float f2q {0.7071f};
     // Nivel por grao, linear 0..1, multiplicado depois do volume em dB. E' o
     // ganho individual contra o volume geral: o volume diz o nivel da saida, o
     // nivel diz o quanto cada grao contribui para ela.
@@ -332,6 +344,22 @@ private:
     DcBlocker dcBlockerRight_ {};
     Limiter limiterLeft_ {};
     Limiter limiterRight_ {};
+
+    // Estado dos dois filtros, um par por voz — o estado nao pode ser
+    // partilhado porque cada voz esta num ponto diferente da sua historia. Os
+    // coeficientes, ao contrario, sao iguais para as 8 vozes e calculados uma
+    // vez por bloco em processBlock; o cache abaixo decide se recalcula.
+    std::array<Biquad, kMaxVoices> filterA_ {};
+    std::array<Biquad, kMaxVoices> filterB_ {};
+    BiquadCoeffs coeffsA_ {};
+    BiquadCoeffs coeffsB_ {};
+    FilterType lastF1Type_ {FilterType::kLowPass};
+    float lastF1Cutoff_ {-1.0f};
+    float lastF1Q_ {-1.0f};
+    FilterType lastF2Type_ {FilterType::kLowPass};
+    float lastF2Cutoff_ {-1.0f};
+    float lastF2Q_ {-1.0f};
+    double lastFilterSampleRate_ {-1.0};
 
     float envelopeLevel_ {0.0f};
     bool soundingCmd_ {false};

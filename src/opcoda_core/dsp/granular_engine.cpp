@@ -89,6 +89,12 @@ void GranularEngine::reset() noexcept {
     for (auto& voice : voices_) {
         voice = Grain {};
     }
+    for (auto& filter : filterA_) {
+        filter.reset();
+    }
+    for (auto& filter : filterB_) {
+        filter.reset();
+    }
     spawnAccumulator_ = 0.0;
     lastActiveVoices_ = 0;
     envelopeLevel_ = 0.0f;
@@ -212,6 +218,17 @@ void GranularEngine::startGrain(int voice, const GranularParams& params, double 
     grain.windowIndex = 0;
     grain.active = true;
 
+    // Estado do filtro zerado no nascimento: grao e' evento isolado, e nao
+    // continuacao da voz. Sem isto, o grao novo herdava a cauda congelada do
+    // grao anterior no mesmo slot — o filtro nao avanca enquanto inativo, entao
+    // nao havia decaimento no intervalo, e com Q alto a cauda entrava audivel
+    // no ataque como clique. A alternativa ("voz continua") exigiria provar que
+    // cauda congelada e' desejada; ninguem provou, e o reset parcial e' o que
+    // um musico espera de um novo disparo.
+    // MUTACAO PROBE 2: sem zero (restaurar depois)
+    filterA_[static_cast<std::size_t>(voice)].reset();
+    filterB_[static_cast<std::size_t>(voice)].reset();
+
     // NaN vira silencio do grao, e nao volume cheio: um ganho NaN envenenaria a
     // mistura e sairia como NaN no barramento, e o host nao avisa. O silencio
     // de um grao e' conservador; o volume cheio seria um estouro.
@@ -263,6 +280,28 @@ void GranularEngine::processBlock(float* left,
 
     rebuildWindow(params);
 
+    // Coeficientes dos dois filtros, uma vez por bloco. Recalcular por amostra
+    // seria 2 trigonometrias por amostra; recalcular so quando muda custa uma
+    // comparacao de 7 valores por bloco. O estado continua por voz, porque cada
+    // voz esta num ponto diferente da sua historia — so os coeficientes sao
+    // partilhados.
+    const FilterType f1type = sanitizeFilterType(params.f1type);
+    const FilterType f2type = sanitizeFilterType(params.f2type);
+    if (f1type != lastF1Type_ || params.f1cutoffHz != lastF1Cutoff_ ||
+        params.f1q != lastF1Q_ || f2type != lastF2Type_ ||
+        params.f2cutoffHz != lastF2Cutoff_ || params.f2q != lastF2Q_ ||
+        sampleRate_ != lastFilterSampleRate_) {
+        coeffsA_ = makeBiquadCoeffs(f1type, params.f1cutoffHz, params.f1q, sampleRate_);
+        coeffsB_ = makeBiquadCoeffs(f2type, params.f2cutoffHz, params.f2q, sampleRate_);
+        lastF1Type_ = f1type;
+        lastF1Cutoff_ = params.f1cutoffHz;
+        lastF1Q_ = params.f1q;
+        lastF2Type_ = f2type;
+        lastF2Cutoff_ = params.f2cutoffHz;
+        lastF2Q_ = params.f2q;
+        lastFilterSampleRate_ = sampleRate_;
+    }
+
     const double spawnPerSample = static_cast<double>(params.densityGrainsPerSec) / sampleRate_;
     const double lastIndex = static_cast<double>(sourceCount_ - 1);
     const double positionPoint = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
@@ -281,7 +320,8 @@ void GranularEngine::processBlock(float* left,
     // Escreve uma voz ate ela acabar ou ate o fim do bloco. Uma voz que
     // atravessa o bloco recomeca em zero: writeIndex e' a posicao dentro do
     // bloco corrente, e nao um contador global de amostras.
-    auto renderVoice = [&](Grain& grain) {
+    auto renderVoice = [&](int voice) {
+        Grain& grain = voices_[static_cast<std::size_t>(voice)];
         if (grain.writeIndex >= numSamples) {
             grain.writeIndex = 0;
         }
@@ -296,7 +336,14 @@ void GranularEngine::processBlock(float* left,
             const float fraction = static_cast<float>(read - static_cast<double>(index));
             const float sample = source_[index] + (source_[index + 1] - source_[index]) * fraction;
             const float envelope = activeWindow_[static_cast<std::size_t>(grain.windowIndex)];
-            const float value = sample * envelope * grain.gain;
+
+            // Os dois filtros em serie, por voz e antes do pan: cada grao tem a
+            // sua historia de estado, e filtrar depois do pan seria filtrar o
+            // mix com atraso de fase diferente por canal.
+            const auto voiceIndex = static_cast<std::size_t>(voice);
+            const float value = filterB_[voiceIndex].process(
+                filterA_[voiceIndex].process(sample * envelope * grain.gain, coeffsA_),
+                coeffsB_);
 
             left[grain.writeIndex] += value * grain.panLeft;
             right[grain.writeIndex] += value * grain.panRight;
@@ -313,7 +360,7 @@ void GranularEngine::processBlock(float* left,
 
     for (int i = 0; i < kMaxVoices; ++i) {
         if (voices_[static_cast<std::size_t>(i)].active) {
-            renderVoice(voices_[static_cast<std::size_t>(i)]);
+            renderVoice(i);
         }
     }
 
@@ -345,7 +392,7 @@ void GranularEngine::processBlock(float* left,
 
     for (int i = 0; i < kMaxVoices; ++i) {
         if (voices_[static_cast<std::size_t>(i)].active) {
-            renderVoice(voices_[static_cast<std::size_t>(i)]);
+            renderVoice(i);
         }
     }
 
