@@ -26,9 +26,38 @@ namespace opcoda {
 //
 // `& 0xDF` e' o truque de maiusculas para ASCII: 'a' e 'A' dao o mesmo valor, e o
 // mapa e' o mesmo com ou sem Shift.
+//
+// **So em letras.** A primeira versao aplicava o fold em tudo, e `'2' & 0xDF`
+// da `0x12`: nenhum digito casava nunca, e as teclas 1, 2 e 3 nao trocavam de
+// vista nem no display nem no editor. So se percebeu porque uma automacao de
+// captura mandou '2' e a vista nao mudou — a mao no teclado ninguem tinha
+// testado as tres teclas juntas, porque cada vista parecia funcionar sozinha.
 [[nodiscard]] inline bool isTypedCharacter(const juce::KeyPress& key, char character) noexcept {
-    return key.getKeyCode() == 0 &&
-           static_cast<char>(key.getTextCharacter() & 0xDF) == character;
+    if (key.getKeyCode() != 0) {
+        return false;
+    }
+    const auto fold = [](int c) { return (c >= 'a' && c <= 'z') ? (c & 0xDF) : c; };
+    return fold(key.getTextCharacter()) == fold(static_cast<int>(character));
+}
+
+// Digitos: aceitam as duas formas que o JUCE entrega. Uma tecla imprimivel
+// chega como keyDown (com keyCode) e como char (com keyCode zero e o texto),
+// e cada frente conta a sua historia: o keyDown traz o codigo, o char traz o
+// texto. Casar so um dos dois deixaria metade dos teclados sem troca de vista.
+//
+// **Chamar so onde a acao e' idempotente.** Se as duas frentes chegarem, a acao
+// corre duas vezes — `setMode` para o mesmo modo e' um nao-op, e por isso 1, 2
+// e 3 podem usar isto. Um toggle como o snap da tecla A nao pode: duas
+// chamadas anulavam-se, e por isso ele continua no isTypedCharacter.
+[[nodiscard]] inline bool isDigitKey(const juce::KeyPress& key, char digit) noexcept {
+    if (digit < '0' || digit > '9') {
+        return false;
+    }
+    const auto want = static_cast<juce::juce_wchar>(digit);
+    if (key.getKeyCode() == 0) {
+        return key.getTextCharacter() == want;
+    }
+    return static_cast<juce::juce_wchar>(key.getKeyCode()) == want;
 }
 
 // O display do material, em tres leituras.
@@ -193,6 +222,25 @@ private:
                           float originX,
                           const std::function<float(std::size_t)>& topOf,
                           const std::function<float(std::size_t)>& bottomOf);
+
+    // Faixa de 0, 1 ou 2: os mesmos tercos do eixo da curva (0, 4, 8). E' estatico
+    // para a linha e as barras usarem a mesma escala sem uma segunda fonte.
+    [[nodiscard]] static int entropyBucket(float bits) noexcept;
+
+    // Barras de entropia acopladas ao hex: uma barra por grupo de colunas, com a
+    // altura do maximo do grupo e a cor da faixa. O valor e' o maximo e nao a
+    // media, pela mesma razao do contorno do nucleo — o pico e' a leitura.
+    void paintEntropyBars(juce::Graphics& g, const juce::Rectangle<float>& strip);
+
+    // Geometria da faixa: 30 % da largura a direita, e nada abaixo de 120 px —
+    // a faixa estreita rouba colunas do hex sem dar leitura, e uma faixa que
+    // some volta o hex ao tamanho cheio. Retangulo vazio quando escondida.
+    [[nodiscard]] juce::Rectangle<int> entropyStripBounds() const noexcept;
+
+    // O hex ocupa tudo menos a faixa, e so no modo hex. Nos outros modos a faixa
+    // nao existe e o hex invisivel mantem os limites cheios, para a troca de
+    // vista nao mexer na geometria do ecra — que e' a regra do resized().
+    void layoutHex();
     void paintSectionTicks(juce::Graphics& g);
     // Graos na forma de onda e na curva: a fracao e' a posicao na regiao e a
     // regiao e' o ecra, entao a fracca vai directamente para x.

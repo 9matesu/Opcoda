@@ -236,16 +236,48 @@ void ByteDisplay::setMode(ViewMode mode) {
 
     // O hex e' o unico modo com um Component proprio, porque o seu desenho tem
     // metricas derivadas da fonte e areas de clique por celula. Nos outros dois o
-    // desenho e' um Path por coluna e nao ha filhos.
+    // desenho e' um Path por coluna e nao ha filhos. A faixa de entropia so
+    // existe no hex, por isso a troca de vista mexe na geometria dele — e so
+    // dele, que e' a excepcao a regra do resized().
     applyModeVisibility();
+    layoutHex();
 
     repaint();
 }
 
+int ByteDisplay::entropyBucket(float bits) noexcept {
+    if (bits < 3.0f) {
+        return 0;
+    }
+    return bits < 6.0f ? 1 : 2;
+}
+
+juce::Rectangle<int> ByteDisplay::entropyStripBounds() const noexcept {
+    if (mode_ != ViewMode::hex) {
+        return {};
+    }
+
+    const auto full = getLocalBounds();
+    const auto stripW = full.getWidth() * 30 / 100;
+    if (stripW < 120) {
+        return {};
+    }
+    return {full.getRight() - stripW, full.getY(), stripW, full.getHeight()};
+}
+
+void ByteDisplay::layoutHex() {
+    const auto strip = entropyStripBounds();
+    hex_.setBounds(strip.isEmpty() ? getLocalBounds()
+                                   : getLocalBounds().withTrimmedRight(
+                                         strip.getWidth() +
+                                         static_cast<int>(kPadding)));
+}
+
 void ByteDisplay::resized() {
-    // O hex ocupa tudo. Nas outras vistas e' invisivel mas continua a receber o
-    // layout, para que a troca de vista nao mude a geometria do ecra.
-    hex_.setBounds(getLocalBounds());
+    // O hex ocupa tudo menos a faixa de entropia. Nas outras vistas e'
+    // invisivel mas continua a receber o layout, para que a troca de vista nao
+    // mude a geometria do ecra.
+    layoutHex();
 
     // O numero de colunas depende da largura E do zoom, e a cache esta' indexada
     // pelo numero. O zoom vive no componente e nao no tamanho: mudar o tamanho
@@ -439,15 +471,15 @@ bool ByteDisplay::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    if (isTypedCharacter(key, '1')) {
+    if (isDigitKey(key, '1')) {
         setMode(ViewMode::waveform);
         return true;
     }
-    if (isTypedCharacter(key, '2')) {
+    if (isDigitKey(key, '2')) {
         setMode(ViewMode::hex);
         return true;
     }
-    if (isTypedCharacter(key, '3')) {
+    if (isDigitKey(key, '3')) {
         setMode(ViewMode::entropy);
         return true;
     }
@@ -486,7 +518,7 @@ void ByteDisplay::paint(juce::Graphics& g) {
     switch (mode_) {
         case ViewMode::waveform: paintWaveform(g); break;
         case ViewMode::entropy: paintEntropy(g); break;
-        case ViewMode::hex: break; // o HexGrid pinta-se a si proprio
+        case ViewMode::hex: paintEntropyBars(g, entropyStripBounds().toFloat()); break;
     }
 
     // Os graos vao sobre o conteudo e por baixo das cabecas. No hex o HexGrid e'
@@ -504,6 +536,49 @@ void ByteDisplay::paint(juce::Graphics& g) {
     // endereco no gutter do hex e o intervalo no rodape, como TP e REG.
     if (mode_ != ViewMode::hex) {
         paintSectionTicks(g);
+    }
+}
+
+void ByteDisplay::paintEntropyBars(juce::Graphics& g, const juce::Rectangle<float>& strip) {
+    if (strip.isEmpty() || columns_.empty()) {
+        return;
+    }
+
+    // Uma barra por grupo de colunas, com a altura do maximo do grupo. O maximo
+    // e nao a media, pela mesma razao do contorno do nucleo: o pico e' a
+    // leitura, e a media esconderia o transiente que a barra existe para
+    // mostrar.
+    //
+    // Sem glow aqui: a barra ja e' cor solida sobre fundo escuro, e um halo em
+    // cada uma de ate 96 barras viraria pasta. O glow mora na linha da onda,
+    // que e' um traco so.
+    const auto plot =
+        strip.reduced(kPadding * 0.5f, 4.0f);
+    const int barCount = juce::jlimit(8, 96, static_cast<int>(plot.getWidth() / 3.0f));
+    const auto barWidth = plot.getWidth() / static_cast<float>(barCount);
+
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+
+    for (int b = 0; b < barCount; ++b) {
+        const auto first =
+            static_cast<std::size_t>(b) * columns_.size() / static_cast<std::size_t>(barCount);
+        const auto last = static_cast<std::size_t>(b + 1) * columns_.size() /
+                          static_cast<std::size_t>(barCount);
+
+        float peak = 0.0f;
+        for (auto i = first; i < last && i < columns_.size(); ++i) {
+            peak = juce::jmax(peak, columns_[i].entropyBits);
+        }
+
+        const auto height = std::clamp(peak, 0.0f, 8.0f) / 8.0f * plot.getHeight();
+        if (height <= 0.0f) {
+            continue;
+        }
+
+        const auto x = plot.getX() + static_cast<float>(b) * barWidth;
+        g.setColour(palette::alpha(inks[entropyBucket(peak)], 0.85f));
+        g.fillRect(juce::Rectangle<float> {x, plot.getBottom() - height,
+                                           juce::jmax(1.0f, barWidth - 1.0f), height});
     }
 }
 
@@ -843,14 +918,6 @@ void ByteDisplay::paintEntropyLine(
     juce::Path mid;
     juce::Path high;
 
-    // Faixas em bits/byte, com os mesmos tercos do eixo da curva (0, 4, 8).
-    const auto bucket = [](float bits) {
-        if (bits < 3.0f) {
-            return 0;
-        }
-        return bits < 6.0f ? 1 : 2;
-    };
-
     // Ultima coluna que entrou em cada faixa. Sem isto, duas colunas da mesma
     // faixa separadas por colunas de outra faixa sairiam ligadas por uma
     // diagonal atravessando o ecra — que e' o que a primeira versao desenhava, e
@@ -859,7 +926,7 @@ void ByteDisplay::paintEntropyLine(
 
     for (std::size_t i = 0; i < columns.size(); ++i) {
         const auto x = originX + static_cast<float>(i) * columnWidth;
-        const auto b = bucket(columns[i].entropyBits);
+        const auto b = entropyBucket(columns[i].entropyBits);
 
         auto& path = b == 0 ? low : b == 1 ? mid : high;
         if (path.isEmpty() || lastInBucket[b] + 1 != i) {
