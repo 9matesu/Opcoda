@@ -13,6 +13,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace opcoda {
@@ -182,6 +183,16 @@ private:
 
     void paintWaveform(juce::Graphics& g);
     void paintEntropy(juce::Graphics& g);
+
+    // Linha colorida por entropia: tres faixas (0-3, 3-6, 6-8 bits/byte), cada
+    // uma com o seu traco e o seu glow. O `topOf`/`bottomOf` mapeiam a coluna ao
+    // y; sem espelho, os dois devolvem o mesmo.
+    void paintEntropyLine(juce::Graphics& g,
+                          const std::vector<pe::Column>& columns,
+                          float columnWidth,
+                          float originX,
+                          const std::function<float(std::size_t)>& topOf,
+                          const std::function<float(std::size_t)>& bottomOf);
     void paintSectionTicks(juce::Graphics& g);
     // Graos na forma de onda e na curva: a fracao e' a posicao na regiao e a
     // regiao e' o ecra, entao a fracca vai directamente para x.

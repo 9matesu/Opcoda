@@ -64,6 +64,16 @@ inline const juce::Colour ok {0xff4caf50};
 inline const juce::Colour okBright {0xff82d64a};
 inline const juce::Colour error {0xffe05373};
 
+// Onda colorida por entropia. Cada coluna pinta conforme os bits/byte locais:
+// ciano no previsivel, amarelo no meio, rosa no aleatorio. Medidos contra o
+// display `#0e1013`, porque o 1.4.11 vale no escuro como no claro:
+//
+//   waveLow sobre display    9,15:1
+//   accentSoft sobre display 12,32:1
+//   waveHigh sobre display   6,40:1
+inline const juce::Colour waveLow {0xff35c4dc};
+inline const juce::Colour waveHigh {0xffea7070};
+
 inline juce::Colour alpha(juce::Colour colour, float opacity) {
     return colour.withAlpha(opacity);
 }

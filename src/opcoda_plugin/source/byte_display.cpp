@@ -804,10 +804,88 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
     g.setColour(palette::alpha(palette::accent, kCoreFill));
     g.fillPath(core);
 
-    // Contorno do nucleo em amarelo. Um preenchimento sem bordo perde o valor maximo
-    // na altura em que a curva esta' no pico, e o pico e' a leitura.
-    g.setColour(palette::alpha(palette::accentSoft, 0.9f));
-    g.strokePath(core, juce::PathStrokeType {1.0f});
+    // Contorno do nucleo colorido por entropia, com glow. Cada coluna pinta
+    // conforme os bits/byte locais — ciano no previsivel, amarelo no meio, rosa
+    // no aleatorio — por isso a linha conta duas leituras de uma vez: onde o
+    // som esta' (posicao) e do que o material e' feito (cor).
+    //
+    // Tres Paths por faixa em vez de um stroke por segmento: um stroke por
+    // coluna seriam milhares de chamadas por quadro a 60 Hz, e tres Paths com
+    // tres cores dao o mesmo desenho. A junta entre faixas vizinhas perde a
+    // continuidade do traco num pixel, e num traco de 1 px isso nao se ve.
+    //
+    // O glow e' pilha de fills com alfa, como o halo dos graos: duas passadas
+    // largas e fracas por baixo do traco de 1 px. Sem DropShadowEffect, sem blur
+    // que o renderizador de software nao tem — e sem custo que apareca no perfil.
+    paintEntropyLine(
+        g, columns_, columnWidth, bounds.getX(),
+        [&](std::size_t i) {
+            return centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+        },
+        [&](std::size_t i) {
+            return centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+        });
+}
+
+// Linha colorida por entropia. Usada pela forma de onda (sobre o nucleo de RMS,
+// espelhado no centro) e pela curva de entropia (sobre a propria curva, sem
+// espelho): o dado e' o mesmo, `columns_[i].entropyBits`, e a escala e' a
+// mesma — 0 a 8. O `topOf` diz o y de cada coluna; `bottomOf` devolve o mesmo y
+// quando nao ha espelho.
+void ByteDisplay::paintEntropyLine(
+    juce::Graphics& g,
+    const std::vector<pe::Column>& columns,
+    float columnWidth,
+    float originX,
+    const std::function<float(std::size_t)>& topOf,
+    const std::function<float(std::size_t)>& bottomOf) {
+    juce::Path low;
+    juce::Path mid;
+    juce::Path high;
+
+    // Faixas em bits/byte, com os mesmos tercos do eixo da curva (0, 4, 8).
+    const auto bucket = [](float bits) {
+        if (bits < 3.0f) {
+            return 0;
+        }
+        return bits < 6.0f ? 1 : 2;
+    };
+
+    // Ultima coluna que entrou em cada faixa. Sem isto, duas colunas da mesma
+    // faixa separadas por colunas de outra faixa sairiam ligadas por uma
+    // diagonal atravessando o ecra — que e' o que a primeira versao desenhava, e
+    // a captura mostrava diagonais cor-de-rosa de uma ponta a outra.
+    std::size_t lastInBucket[3] {columns.size(), columns.size(), columns.size()};
+
+    for (std::size_t i = 0; i < columns.size(); ++i) {
+        const auto x = originX + static_cast<float>(i) * columnWidth;
+        const auto b = bucket(columns[i].entropyBits);
+
+        auto& path = b == 0 ? low : b == 1 ? mid : high;
+        if (path.isEmpty() || lastInBucket[b] + 1 != i) {
+            path.startNewSubPath(x, topOf(i));
+        } else {
+            path.lineTo(x, topOf(i));
+        }
+        path.lineTo(x, bottomOf(i));
+        lastInBucket[b] = i;
+    }
+
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+    const juce::Path* paths[3] {&low, &mid, &high};
+    for (int b = 0; b < 3; ++b) {
+        if (paths[b]->isEmpty()) {
+            continue;
+        }
+        g.setColour(palette::alpha(inks[b], 0.10f));
+        g.strokePath(*paths[b], juce::PathStrokeType {5.0f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+        g.setColour(palette::alpha(inks[b], 0.22f));
+        g.strokePath(*paths[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+        g.setColour(palette::alpha(inks[b], 0.95f));
+        g.strokePath(*paths[b], juce::PathStrokeType {1.0f});
+    }
 }
 
 void ByteDisplay::paintEntropy(juce::Graphics& g) {
@@ -857,20 +935,12 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
     g.setColour(palette::alpha(palette::accent, 0.42f));
     g.fillPath(curve);
 
-    // A linha por cima, porque um preenchimento sem bordo nao tem o valor maximo
-    // legivel: a curva preenchida em 42 % perde-se no topo.
-    juce::Path line;
-    for (std::size_t i = 0; i < columns_.size(); ++i) {
-        const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
-        const auto y = yFor(columns_[i].entropyBits);
-        if (i == 0) {
-            line.startNewSubPath(x, y);
-        } else {
-            line.lineTo(x, y);
-        }
-    }
-    g.setColour(palette::accent);
-    g.strokePath(line, juce::PathStrokeType {1.0f});
+    // A linha por cima, colorida pela propria entropia que desenha: a curva que
+    // sobe para o rosa diz "aqui o material e' aleatorio" sem precisar do eixo.
+    // Sem espelho — a curva tem um y so por coluna, e o segundo lambda repete o
+    // primeiro.
+    const auto yAt = [&](std::size_t i) { return yFor(columns_[i].entropyBits); };
+    paintEntropyLine(g, columns_, columnWidth, plot.getX(), yAt, yAt);
 }
 
 void ByteDisplay::paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area) {
