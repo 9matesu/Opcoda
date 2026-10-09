@@ -43,13 +43,23 @@ Nenhuma tarefa é concluída sem que seu portão passe. Os seis portões:
 
 O portão C tem uma ressalva registrada em `docs/17-guia-de-build.md`: o pacote LLVM para Windows não distribui runtime de ThreadSanitizer. A verificação de concorrência é feita por guard de alocação, ensaio de xrun e revisão, e a lacuna do TSan fica declarada como limitação honesta em vez de ser omitida.
 
-### V. Simplicidade e escopo do MVP
+### V. Simplicidade e escopo do instrumento
 
-Oito vozes, janelas Hann e Gaussiana, seis parâmetros automatizáveis, Windows x64. O que não está no MVP não entra por antecipação. YAGNI vale: sem abstração especulativa, sem dependência para uso futuro hipotético.
+Oito vozes, Windows x64, e o conjunto fechado de 25 parâmetros automatizáveis da tabela abaixo — todos com ID e nome em inglês. IDs dos seis originais (`grain`, `density`, `position`, `spray`, `pitch`, `volume`) não mudam, para não quebrar sessões salvas; só o nome exibido passa a inglês. O que não está na tabela não entra por antecipação. YAGNI vale: sem abstração especulativa, sem dependência para uso futuro hipotético.
+
+| Grupo | Parâmetros (ID) |
+| --- | --- |
+| Grão (originais) | `grain`, `density`, `position`, `spray`, `pitch`, `volume` |
+| Grão (novos) | `window` (choice: Hann, Gaussian, Hamming, Blackman — o motor já tem as 4), `pan`, `grainlevel`, `pitchrand`, `scanspeed` (multiplicador do `advance` do transporte) |
+| Envelope | `attack`, `decay`, `sustain`, `release` — o gate com rampa vira ADSR por nota; `all-notes-off` e sustain entram na matriz de teste, sem nota presa |
+| Filtros | por filtro (×2, em série, por voz): `f1type`/`f2type` (choice: LP, HP, BP, Notch), `f1cutoff`/`f2cutoff` (log 20–20 kHz), `f1q`/`f2q`. Coeficientes recalculados só quando cutoff/Q mudam, nunca por amostra |
+| LFO | `lforate` (Hz), `lfodepth`, `lfotarget` (choice: pitch, density, cutoff, position), `lfowave` (choice: sine, tri, saw, square, S&H) |
+
+Cortes declarados, não escondidos: **FM não entra** — grão é playback amostrado, não oscilador, e FM de verdade exigiria portadora por voz; o LFO no pitch cobre o musicalmente útil. **Seleção inteligente de blocos (§8) continua adiada** — a própria especificação manda adiar, e a entropia já modula o spray hoje. **CLAP continua pós-entrega**, como no objetivo.
 
 Consequência sobre FFT: o caminho de áudio não usa FFT. A entropia é frequência de bytes, não análise espectral. A FFT existe apenas na ferramenta offline de medição do ensaio T1, como dependência exclusiva daquela ferramenta. Não é preciso modelo demachine learning, framework de áudio alternativo nem camada de plugin de terceiros.
 
-O biquad ressonante de coloração é estágio de coefficients fixos e documentados, não o sétimo parâmetro do MVP. Isso preserva a Tabela 8 dos seis parâmetros e o ensaio T4 como estão escritos.
+A Tabela 8 do artigo e o ensaio T4 foram reescritos para o novo conjunto: a Tabela 8 lista os 25 parâmetros com faixas, e o T4 mede os 25 em vez dos 6.
 
 ### VI. Documentação como parte do código
 
@@ -76,7 +86,7 @@ Erro de parser sempre aparece como texto com código tipado, nunca só por cor. 
 
 O desenvolvimento segue spec-kit: `/speckit-constitution`, depois `/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement` para cada feature. Uma feature corresponde a um objetivo ou a um ensaio, não a um agrupamento arbitrário de tarefas.
 
-Mapas de features: F001 fundação e build · F002 parser PE e ingestão (OE1, OE2) · F003 fila lock-free (OE3, OE8) · F004 entropia de Shannon (OE5) · F005 motor granular (OE4) · F006 condicionamento de saída (OE6) · F007 telemetria · F008 interface e acessibilidade (OE7) · F009 MIDI (OE9) · F010 bateria de validação T1–T4. A ordem real é F002 antes de F001, porque o núcleo é que se constrói primeiro; a numeração registra dependência, não cronologia.
+Mapas de features: F001 fundação e build · F002 parser PE e ingestão (OE1, OE2) · F003 fila lock-free (OE3, OE8) · F004 entropia de Shannon (OE5) · F005 motor granular (OE4) · F006 condicionamento de saída (OE6) · F007 telemetria · F008 interface e acessibilidade (OE7) · F009 MIDI (OE9) · F010 bateria de validação T1–T4 · F011 parâmetros estendidos do motor (window, pan, grainlevel, pitchrand, scanspeed) · F012 ADSR por nota · F013 dois biquads em série por voz · F014 LFO com roteamento · F015 módulos de UI e nomes em inglês (§9) · F016 presets (fábrica + `.opcoda`) · F017 teto de ingestão e análise cancelável (§3/§11). A ordem real é F002 antes de F001, porque o núcleo é que se constrói primeiro; a numeração registra dependência, não cronologia.
 
 Revisão por agente especializado é obrigatória antes de declarar uma tarefa concluída: `pe-parser-reviewer` para o parser, `rt-dsp-auditor` para o DSP, `test-engineer` para testes. Os agentes de interface, desempenho e documentação entram junto com as etapas F008 e F010, que são as que dão objeto a eles.
 
@@ -88,4 +98,4 @@ Esta constitution prevalece sobre README, comentários de código e preferência
 
 Exceções são permitidas quando o ensaio que a comprova não existe na plataforma, desde que a lacuna seja declarada por escrito em `docs/07-plano-testes.md` e repetida nos artefatos entregues. O caso do TSan é o exemplo corrente: a limitação é documentada, não escondida.
 
-**Versão**: 1.0.0 | **Ratificada**: 2026-10-01 | **Última alteração**: 2026-10-01
+**Versão**: 1.1.0 | **Ratificada**: 2026-10-01 | **Última alteração**: 2026-10-08

@@ -85,3 +85,20 @@ o impacto nos portões e a migração das features afetadas. Exceção é permit
 quando o ensaio que a comprova não existe na plataforma, desde que a lacuna
 fique escrita em `docs/07-plano-testes.md` e repetida nos artefatos entregues.
 O caso do TSan é o exemplo corrente.
+
+## Emenda 1.1.0 (2026-10-08) — escopo do instrumento
+
+**Motivo.** A Fase 2 pedida (ADSR, dois filtros, LFO) não cabia no teto de seis
+parâmetros do Princípio V, e o biquad "fixo" que a constitution citava nem
+existia no código. Manter o teto seria documentar uma intenção contra o próprio
+repositório; a emenda alinha o documento ao instrumento que se vai construir.
+
+**Impacto nos portões.** B ganha testes por parâmetro novo (unidade + borda);
+C passa a medir 16 biquads e o LFO no ensaio de orçamento, com coeficientes
+fora do caminho por amostra; E re-verifica os módulos novos de UI; T4 passa a
+medir 25 parâmetros. A, D e F não mudam de critério.
+
+**Migração.** IDs dos seis originais não mudam (sessões salvas continuam
+válidas); só o nome exibido passa a inglês. Tabela 8 do artigo e ensaio T4
+(T4 em `docs/07-plano-testes.md`) reescritos para os 25 — ver Next Actions da
+emenda. Features novas: F011–F017 no mapa do fluxo de trabalho.
