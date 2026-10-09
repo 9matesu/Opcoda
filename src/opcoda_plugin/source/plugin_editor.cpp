@@ -6,7 +6,10 @@
 namespace opcoda {
 namespace {
 
-constexpr int kHeaderHeight {54};
+// 44 px e nao 54: sem caixa no nome do ficheiro nem palavra nos botoes, a
+// faixa nao precisa de ar. O LOAD de 28 px entra a y+10 com 6 de respiro, e o
+// nome a y+14 com 24 — tudo com folga de 6 px em baixo.
+constexpr int kHeaderHeight {44};
 
 // O display passou de 130-210 px para 200-320 px. Uma grelha com endereco,
 // dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis linhas de
@@ -16,10 +19,10 @@ constexpr int kHeaderHeight {54};
 constexpr int kMinDisplayHeight {200};
 constexpr int kMaxDisplayHeight {320};
 
-// Janela minima e' 560x420. A altura subiu de 380 porque uma grelha com
-// endereco, dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis
-// linhas de 24 px, e o painel de parametros precisa de 124 px para o titulo e os
-// seis knobs.
+// Janela minima e' 480x410. A altura desceu de 420 com o header de 44 e a faixa
+// de vistas de 24: grelha com endereco, dezasseis colunas e ASCII precisa de 14
+// px de cabecalho mais seis linhas de 24 px, e o painel de parametros precisa de
+// espaco para o titulo e os seis knobs.
 //
 // A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
 // para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
@@ -28,7 +31,7 @@ constexpr int kMaxDisplayHeight {320};
 // ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
 // vozes, e nada mais.
 constexpr int kMinWidth {480};
-constexpr int kMinHeight {420};
+constexpr int kMinHeight {410};
 
 constexpr int kAddressFieldWidth {132};
 constexpr int kPlayButtonWidth {60};
@@ -200,8 +203,7 @@ void PluginEditor::buildHeader() {
     };
 
     for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_,
-                           &transportReadout_, &peakReadout_, &rateReadout_,
-                           &voicesReadout_}) {
+                           &transportReadout_, &peakReadout_, &voicesReadout_}) {
         addAndMakeVisible(*readout);
         makePlainLabel(*readout, "", palette::textOnDark, fonts().sans(10.0f));
         // Centrado como antes, quando havia caixa: a posicao do texto na faixa
@@ -320,7 +322,6 @@ void PluginEditor::updateFooterVisibility() {
     // Mesma regra do header: a largura decide se a caixa existe, e o conteudo
     // decide se ha algo para escrever. Uma caixa a mais pequena e' pior do que
     // nenhuma, porque o texto sai cortado e nao se percebe o que e'.
-    rateReadout_.setVisible(footerFitsRate_);
     peakReadout_.setVisible(footerFitsPeak_);
     entropyReadout_.setVisible(footerFitsEntropy_ && entropyReadout_.getText().isNotEmpty());
 
@@ -573,10 +574,10 @@ void PluginEditor::resized() {
     // E pela mesma razao que o header, o rodape degrada em vez de espremer: as
     // caixas tem largura fixa, e a 480 nao cabem todas. Sem isso a entropia fica
     // com zero de largura e o REG sai cortado a meio, que e' pior do que nao
-    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro a taxa, que e'
-    // constante durante a sessao e por isso a menos informativa; depois o pico;
-    // a entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
-    // que o painel existe para mostrar.
+    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro o pico, a
+    // entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
+    // que o painel existe para mostrar. A taxa nem entra na ordem: saiu para o
+    // tooltip do titulo.
     constexpr int footerHeight {16};
     const int margin = displayBounds.getX() + 12;
     const int footerRight = displayBounds.getRight() - 12;
@@ -584,7 +585,6 @@ void PluginEditor::resized() {
 constexpr int kLedBoxWidth {12};
     constexpr int kBoxGap {8};
     constexpr int kVoicesBoxWidth {74};
-    constexpr int kRateWidth {78};
     constexpr int kPeakWidth {86};
     constexpr int kTransportWidth {128};
     constexpr int kPositionWidth {116};
@@ -598,22 +598,19 @@ constexpr int kLedBoxWidth {12};
     const auto room = footerRight - margin - essential;
 
     // A partir daqui decide-se por ordem de prioridade, e a ordem esta' escrita
-    // na cadeia e nao numa frase ao lado: se a entropia fosse decidida primeiro e
-    // a taxa por ultimo, cada uma veria o que sobra depois das outras e a taxa
-    // sobreviveria a expensa da entropia — que e' o inverso do que se quer.
+    // na cadeia e nao numa frase ao lado. A taxa ja saiu daqui — constante na
+    // sessao, foi para o tooltip do titulo — por isso a cadeia agora e' curta:
+    // entropia, transporte, pico.
     //
-    // A ordem e' a do valor, com uma unica inversao: **a leitura de transporte vem
-    // antes da taxa e do pico.** E' a unica caixa que muda durante a sessao para
-    // alem do pico, e sem ela o display mostra uma barra a andar sem nenhum numero
-    // que a confirme. A taxa e' constante e e' a leitura menos informativa de
-    // todas, por isso e' a primeira a cair.
+    // A ordem e' a do valor: **a leitura de transporte vem antes do pico.** E' a
+    // unica caixa que muda durante a sessao para alem do pico, e sem ela o
+    // display mostra uma barra a andar sem nenhum numero que a confirme.
     footerFitsEntropy_ = room >= kMinEntropyWidth;
     const auto afterEntropy = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0);
     footerFitsTransport_ = afterEntropy >= kTransportWidth;
     const auto afterTransport =
         afterEntropy - (footerFitsTransport_ ? kTransportWidth + kBoxGap : 0);
     footerFitsPeak_ = afterTransport >= kPeakWidth;
-    footerFitsRate_ = afterTransport - (footerFitsPeak_ ? kPeakWidth + kBoxGap : 0) >= kRateWidth;
 
     // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
     // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
@@ -632,7 +629,6 @@ constexpr int kLedBoxWidth {12};
     put(positionReadout_, kPositionWidth, true);
     put(offsetReadout_, kRegionWidth, true);
     put(transportReadout_, kTransportWidth, footerFitsTransport_);
-    put(rateReadout_, kRateWidth, footerFitsRate_);
     put(peakReadout_, kPeakWidth, footerFitsPeak_);
 
     // A entropia ocupa o que sobra a esquerda, e por isso fica colada ao
@@ -644,7 +640,7 @@ constexpr int kLedBoxWidth {12};
 
     updateFooterVisibility();
 
-    area.removeFromTop(10);
+    area.removeFromTop(6);
 
     // ---- selector de vista ----
     //
@@ -955,9 +951,16 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
         setIfChanged(transportReadout_, juce::String {});
     }
 
-    setIfChanged(rateReadout_,
-                 juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
-                     + " kHz");
+    // A taxa mora no tooltip do titulo: e' constante na sessao e nao precisa de
+    // faixa propria. Quem procura um numero fixo le sem pressa, e a faixa do
+    // rodape fica para o que muda. So escreve quando muda, pela mesma razao do
+    // setIfChanged nos Labels.
+    const auto rateText =
+        juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
+        + " kHz";
+    if (title_.getTooltip() != rateText) {
+        title_.setTooltip(rateText);
+    }
     setIfChanged(voicesReadout_,
                  juce::String {"VOICES "} + juce::String {activeVoices});
 

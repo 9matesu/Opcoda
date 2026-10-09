@@ -84,7 +84,6 @@ private:
     // de cada um dos dois lados escrever setVisible por sua conta.
     bool headerFitsSize_ {false};
     bool headerFitsFormat_ {false};
-    bool footerFitsRate_ {false};
     bool footerFitsPeak_ {false};
     bool footerFitsEntropy_ {false};
     bool footerFitsTransport_ {false};
@@ -212,13 +211,14 @@ private:
     juce::Label status_;
 
     // Rodape de telemetria: leituras em Inter, como no resto. Todas em texto,
-    // nunca so por cor.
+    // nunca so por cor. A taxa saiu: e' constante na sessao e morava na faixa
+    // mais disputada do ecra; foi para o tooltip do titulo, que e' onde quem
+    // procura um numero fixo vai ler sem pressa.
     juce::Label entropyReadout_;
     juce::Label positionReadout_;
     juce::Label offsetReadout_;
     juce::Label transportReadout_;
     juce::Label peakReadout_;
-    juce::Label rateReadout_;
     juce::Label voicesReadout_;
 
     juce::Label fileName_;
