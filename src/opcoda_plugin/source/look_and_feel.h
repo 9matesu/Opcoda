@@ -48,11 +48,13 @@ public:
         setColour(juce::TextButton::textColourOnId, palette::textDark);
     }
 
-    // Knob: corpo desenhado em codigo, com o arco de escala, o ponteiro e o anel
-    // de foco por cima.
+    // Knob estilo Ableton: disco fino, arco fino, ponteiro curto. Sem serrilhado.
     //
-    // O corpo e' fixo e o valor mexe-se no arco e no ponteiro. O corpo serrilhado
-    // e' fixo como na peca fotografada, e o que muda e' o arco.
+    // O corpo e' fixo e o valor mexe-se no arco e no ponteiro. O serrilhado saiu
+    // porque era a peca que mais gritava "synth de 2006": 36 dentes a 1 px viram
+    // ruido cinzento em qualquer diametro util, e um anel liso com luz de cima
+    // le-se como controle moderno sem perder a pega — a pega esta' no gesto, nao
+    // no desenho.
     //
     // A divisao entre o corpo e o indicador nao e' arbitraria: o corpo e' igual
     // para os seis knobs e por isso desenha-se sempre da mesma forma, enquanto o
@@ -98,14 +100,15 @@ public:
             g.strokePath(valueArc, juce::PathStrokeType {2.0f, juce::PathStrokeType::curved,
                                                         juce::PathStrokeType::rounded});
 
-            // Ponteiro. O indicador do valor e' uma haste de verdade e nao o ponto
-            // do centro da face: um knob com dois indicadores nao diz qual e' o
-            // valor.
+            // Ponteiro. O indicador do valor e' uma haste curta e nao um raio
+            // inteiro: sai a 30 % do centro e morre antes da borda, como no
+            // Ableton. Uma haste de ponta a ponta divide o disco em dois e o
+            // olho le metade; curta, ela e' um indice e nao uma divisao.
             //
-            // A haste vai do centro para fora e e' desenhada *depois* do arco, para
-            // ficar por cima dele. Ao contrario, nascia por baixo do arco e o
-            // primeiro troco da faixa aparecia cortado.
-            const auto inner = radius * 0.16f;
+            // A haste vai para fora e e' desenhada *depois* do arco, para ficar
+            // por cima dele. Ao contrario, nascia por baixo do arco e o primeiro
+            // troco da faixa aparecia cortado.
+            const auto inner = radius * 0.30f;
             const auto outer = radius - 2.5f;
             const auto tailX = centre.x + std::sin(angle) * inner;
             const auto tailY = centre.y - std::cos(angle) * inner;
@@ -274,30 +277,13 @@ public:
                                                   juce::PathStrokeType::rounded});
     }
 
-    // O corpo do knob: aro serrilhado, face recuada e ponto de origem.
+    // O corpo do knob: disco liso, aro fino e ponto de origem.
     //
-    // A luz vem de cima e da esquerda, como numa fotografia de estudio com a luz
-    // assente na peca. E' por isso que o gradiente e' diagonal e nao radial a
-    // partir do centro: um gradiente radial simetrico daria um disco sem
-    // direccao, e sem direccao nao se le como superficie redonda.
-    //
-    // Os tres circulos sao o que separa "disco" de "botao rotativo": o aro
-    // serrilhado le-se como pega, a face mais escova recua, e o ponto no centro
-    // marca a origem, que e' o que se ve num knob real.
+    // A luz vem de cima, quase de frente, como num controle do Ableton: o
+    // gradiente e' curto, do claro para o tom do painel, e nao ha aro escuro a
+    // separar o disco do fundo. Sem o serrilhado nao ha Path para memorizar nem
+    // cache para invalidar — o corpo inteiro sao tres fills e dois strokes.
     void drawKnobBody(juce::Graphics& g, juce::Point<float> centre, float radius) {
-        // O serrilhado e' um Path memorizado por posicao. Trinta e seis dentes por
-        // knob sao 216 chamadas de drawLine por quadro a 60 Hz, e o Path e' um
-        // stroke so. Os seis knobs sao do mesmo tamanho, portanto o cache vale
-        // para quase todos os quadros da sessao.
-        //
-        // A comparacao e' dos dois valores e nao so do raio: o mesmo raio com o
-        // centro noutro sitio e' um serrilhado na posicao errada, e os knobs
-        // podem mudar de celula sem mudar de tamanho.
-        if (std::abs(radius - cachedKnurlRadius_) > 0.5f ||
-            centre.getDistanceFrom(cachedKnurlCentre_) > 0.5f) {
-            rebuildKnurl(centre, radius);
-        }
-
         const auto rim = juce::Rectangle<float> {centre.x - radius, centre.y - radius,
                                                   radius * 2.0f, radius * 2.0f};
 
@@ -312,71 +298,25 @@ public:
             g.fillEllipse(rim.expanded(spread).translated(0.0f, 2.0f));
         }
 
-        // Aro, com luz de cima a esquerda.
+        // Disco, com luz suave de cima. O claro e' valBox e o escuro e' o proprio
+        // painel: sem aro de chassisDark a separar, o disco assenta no modulo em
+        // vez de flutuar sobre um anel.
         g.setGradientFill(juce::ColourGradient {
-            palette::valBox, centre.translated(-radius * 0.45f, -radius * 0.45f),
-            palette::chassisDark, centre.translated(radius * 0.6f, radius * 0.6f), true});
+            palette::valBox, centre.translated(0.0f, -radius * 0.5f),
+            palette::panelBg, centre.translated(0.0f, radius * 0.55f), false});
         g.fillEllipse(rim);
 
-        // Serrilhado. Trinta e seis dentes: menos que isso le-se como textura e
-        // nao como pega, e mais que isso fecha num anel cinzento liso quando o
-        // knob esta' a 20 px de diametro.
-        g.setColour(palette::alpha(palette::chassisBorder, 0.34f));
-        g.strokePath(knurlPath_,
-                     juce::PathStrokeType {1.0f, juce::PathStrokeType::curved,
-                                           juce::PathStrokeType::rounded});
-
-        // Face, recuada em relacao ao aro: mais escura, e com o gradiente na
-        // mesma direccao para parecer um covao e nao um botao em cima.
-        const auto faceRadius = radius * 0.72f;
-        const auto face = juce::Rectangle<float> {centre.x - faceRadius, centre.y - faceRadius,
-                                                  faceRadius * 2.0f, faceRadius * 2.0f};
-        g.setGradientFill(juce::ColourGradient {
-            palette::subPanel, centre.translated(-faceRadius * 0.4f, -faceRadius * 0.4f),
-            palette::chassisDark, centre.translated(faceRadius * 0.5f, faceRadius * 0.5f), true});
-        g.fillEllipse(face);
-
-        // Contorno da face, para o recuo ter uma borda e nao so uma mudanca de
-        // cor.
-        g.setColour(palette::alpha(palette::chassisBorder, 0.30f));
-        g.drawEllipse(face.reduced(0.5f), 1.0f);
+        // Aro fino, so para fechar a forma contra o painel.
+        g.setColour(palette::alpha(palette::chassisBorder, 0.40f));
+        g.drawEllipse(rim.reduced(0.5f), 1.0f);
 
         // Ponto de origem, no centro. Fica por baixo do arco e do ponteiro, e e'
-        // por isso que a haste do valor comeca a 16 % do raio e nao no centro.
-        const auto markerRadius = radius * 0.075f;
-        g.setColour(palette::alpha(juce::Colours::white, 0.55f));
+        // por isso que a haste do valor comeca a 30 % do raio e nao no centro.
+        const auto markerRadius = radius * 0.06f;
+        g.setColour(palette::alpha(palette::chassisBorder, 0.65f));
         g.fillEllipse(centre.x - markerRadius, centre.y - markerRadius, markerRadius * 2.0f,
                       markerRadius * 2.0f);
     }
-
-    void rebuildKnurl(juce::Point<float> centre, float radius) {
-        // Trinta e seis dentes: menos que isso le-se como textura e nao como pega.
-        constexpr int kTeeth {36};
-        constexpr float kKnurlInner {0.84f};
-
-        knurlPath_.clear();
-        for (int tooth = 0; tooth < kTeeth; ++tooth) {
-            const auto angle = static_cast<float>(tooth) *
-                               juce::MathConstants<float>::twoPi /
-                               static_cast<float>(kTeeth);
-            const auto sinA = std::sin(angle);
-            const auto cosA = std::cos(angle);
-
-            const auto inner = juce::Point<float> {centre.x + sinA * radius * kKnurlInner,
-                                                    centre.y - cosA * radius * kKnurlInner};
-            const auto outer = juce::Point<float> {centre.x + sinA * (radius - 1.0f),
-                                                    centre.y - cosA * (radius - 1.0f)};
-            knurlPath_.startNewSubPath(inner);
-            knurlPath_.lineTo(outer);
-        }
-
-        cachedKnurlCentre_ = centre;
-        cachedKnurlRadius_ = radius;
-    }
-
-    juce::Path knurlPath_;
-    juce::Point<float> cachedKnurlCentre_ {};
-    float cachedKnurlRadius_ {-1.0f};
 };
 
 } // namespace opcoda
