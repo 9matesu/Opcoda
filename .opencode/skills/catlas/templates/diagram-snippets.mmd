@@ -1,0 +1,41 @@
+%% Catlas starters. Copy one per file. Keep the classDefs identical.
+
+%% --- context (flowchart LR) ---
+%% flowchart LR
+%%   direction LR
+%%   subgraph ext[External]
+%%     U[User]
+%%     H[Host DAW]
+%%   end
+%%   subgraph repo[Repo]
+%%     A[App entry<br/>main.cpp]
+%%   end
+%%   U -->|midi: events| A
+%%   A -->|audio: float| H
+
+%% --- containers (classDiagram, UML gray) ---
+%% classDiagram
+%%   direction TB
+%%   class Core:::abstract
+%%   class Parser:::concrete
+%%   class Engine:::concrete
+%%   Core <|-- Parser
+%%   Core <|-- Engine
+%%   classDef abstract fill:#9AA0A6,stroke:#5F6368,color:#fff,fontStyle:italic
+%%   classDef concrete fill:#ffffff,stroke:#8B1A1A,stroke-width:1px,color:#202124
+
+%% --- dataflow L0 (flowchart LR) ---
+%% flowchart LR
+%%   direction LR
+%%   S[PE file<br/>parser.cpp] -->|pe_bytes: vector| E[Entropy<br/>entropy.cpp]
+%%   E -->|table: array| G[Grains<br/>engine.cpp]
+%%   G -->|audio: float| O[Output<br/>processBlock]
+
+%% --- sequence ---
+%% sequenceDiagram
+%%   participant F as File [parser.cpp]
+%%   participant E as Entropy [entropy.cpp]
+%%   participant A as Audio [engine.cpp]
+%%   F->>E: pe_bytes
+%%   E->>A: table
+%%   A-->>F: E_OOB on short read
