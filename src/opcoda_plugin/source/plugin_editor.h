@@ -27,10 +27,11 @@ namespace opcoda {
 // janela e a promessa e' 480x434.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
+                     private juce::ValueTree::Listener,
                      public juce::FileDragAndDropTarget {
 public:
     explicit PluginEditor(PluginProcessor& processor);
-    ~PluginEditor() override = default;
+    ~PluginEditor() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -227,6 +228,30 @@ private:
     juce::Label fileSize_;
 
     juce::TextButton loadButton_;
+
+    // Seletor de preset no header: anterior, nome (abre o menu), seguinte. O
+    // nome mostra "*" quando um parametro saiu do preset — sem isso o menu
+    // mente, porque diz "Cloud" sobre um som que ja nao e' Cloud. A sujeira
+    // vem do Listener da APVTS e nao de comparacao de valores: comparar 25
+    // floats a 60 Hz para desenhar um asterisco e' o contrario de barato.
+    juce::TextButton presetPrevButton_;
+    juce::TextButton presetNameButton_;
+    juce::TextButton presetNextButton_;
+    std::unique_ptr<juce::FileChooser> presetChooser_;
+    juce::String currentPresetName_ {"Init"};
+    int currentFactoryIndex_ {0};
+    bool presetDirty_ {false};
+    bool applyingPreset_ {false};
+
+    void buildPresetSelector();
+    void showPresetMenu();
+    void applyFactoryPresetAndTrack(int index);
+    void stepFactoryPreset(int direction);
+    void refreshPresetName();
+    void valueTreePropertyChanged(juce::ValueTree& changed,
+                                    const juce::Identifier& property) override;
+    void loadPresetFromFile();
+    void savePresetToFile();
 
     // Cinco modulos, uma faixa visivel de cada vez. Todos os 25 knobs existem
     // desde a construcao — os attachments vivem neles — e a aba so decide quem

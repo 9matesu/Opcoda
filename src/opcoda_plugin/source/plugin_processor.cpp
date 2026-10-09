@@ -1,5 +1,7 @@
 #include "plugin_processor.h"
 
+#include "factory_presets.h"
+
 #include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/lfo.h"
 #include "opcoda_core/dsp/window.h"
@@ -531,36 +533,77 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
 }
 
 
-void PluginProcessor::getStateInformation(juce::MemoryBlock& destData) {
+void PluginProcessor::applyFactoryPreset(int index) {
+    const auto& presets = factoryPresets();
+    if (index < 0 || static_cast<std::size_t>(index) >= presets.size()) {
+        return;
+    }
+    const auto& preset = presets[static_cast<std::size_t>(index)];
+
+    // Por ID, e nao por ordem do layout: a tabela e' a fonte e a ordem pode
+    // mudar. convertTo0to1 porque setValueNotifyingHost fala normalizado.
+    const auto set = [this](const char* id, float plainValue) {
+        if (auto* parameter = parameters_.getParameter(id)) {
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(plainValue));
+        }
+    };
+    set("grain", preset.grain);
+    set("density", preset.density);
+    set("position", preset.position);
+    set("spray", preset.spray);
+    set("pitch", preset.pitch);
+    set("volume", preset.volume);
+    set("window", preset.window);
+    set("pan", preset.pan);
+    set("grainlevel", preset.grainlevel);
+    set("pitchrand", preset.pitchrand);
+    set("scanspeed", preset.scanspeed);
+    set("attack", preset.attack);
+    set("decay", preset.decay);
+    set("sustain", preset.sustain);
+    set("release", preset.release);
+    set("f1type", preset.f1type);
+    set("f1cutoff", preset.f1cutoff);
+    set("f1q", preset.f1q);
+    set("f2type", preset.f2type);
+    set("f2cutoff", preset.f2cutoff);
+    set("f2q", preset.f2q);
+    set("lforate", preset.lforate);
+    set("lfodepth", preset.lfodepth);
+    set("lfotarget", preset.lfotarget);
+    set("lfowave", preset.lfowave);
+}
+
+// Nao-const porque copyState e' nao-const no JUCE: copiar o estado mexe no
+// undo interno da arvore. Chamar de const mentiria sobre isso.
+std::unique_ptr<juce::XmlElement> PluginProcessor::stateXml() {
     auto state = parameters_.copyState();
 
-// O binario carregado vai para o estado porque sem ele o projeto abre com
+    // O binario carregado vai para o estado porque sem ele o projeto abre com
     // os parametros certos e o som errado, que e' pior do que nao abrir nada.
     state.setProperty("sourcePath", sourcePath_, nullptr);
 
     // A regiao tambem vai, pelo mesmo motivo: sem ela o projeto abre a tocar
     // outra parte do ficheiro, e o utilizador nao sabe porque. Fica como
-    // propriedade e nao como PARAM, para nao virar um setimo parametro
-    // automatizavel: a Tabela 8 tem seis e o ensaio T4 mede seis.
+    // propriedade e nao como PARAM, para nao virar parametro automatizavel.
     state.setProperty("byteStart", static_cast<std::int64_t>(byteRange_.start), nullptr);
     state.setProperty("byteEnd", static_cast<std::int64_t>(byteRange_.end), nullptr);
 
-    if (auto xml = state.createXml()) {
+    return state.createXml();
+}
+
+void PluginProcessor::getStateInformation(juce::MemoryBlock& destData) {
+    if (auto xml = stateXml()) {
         copyXmlToBinary(*xml, destData);
     }
 }
 
-void PluginProcessor::setStateInformation(const void* data, int sizeInBytes) {
-    if (data == nullptr || sizeInBytes <= 0) {
-        return;
+bool PluginProcessor::loadStateXml(const juce::XmlElement& xml) {
+    if (!xml.hasTagName(parameters_.state.getType())) {
+        return false;
     }
 
-    auto xml = getXmlFromBinary(data, sizeInBytes);
-    if (xml == nullptr || !xml->hasTagName(parameters_.state.getType())) {
-        return;
-    }
-
-    parameters_.replaceState(juce::ValueTree::fromXml(*xml));
+    parameters_.replaceState(juce::ValueTree::fromXml(xml));
 
 // O arquivo e' reingestado pela mesma via de ingest do arrasto: ler disco,
     // converter e publicar na fila. Nao ha caminho paralelo, e' o mesmo codigo
@@ -588,6 +631,39 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes) {
     } else if (path.isNotEmpty()) {
         lastError_ = "E_SOURCE_MISSING";
     }
+    return true;
+}
+
+void PluginProcessor::setStateInformation(const void* data, int sizeInBytes) {
+    if (data == nullptr || sizeInBytes <= 0) {
+        return;
+    }
+
+    auto xml = getXmlFromBinary(data, sizeInBytes);
+    if (xml == nullptr) {
+        return;
+    }
+    // Falso nao e' erro aqui: o host pode entregar qualquer blob, e o contrato
+    // do setStateInformation e' ignorar o que nao reconhece.
+    static_cast<void>(loadStateXml(*xml));
+}
+
+bool PluginProcessor::savePresetToFile(const juce::File& file) {
+    auto xml = stateXml();
+    if (xml == nullptr) {
+        return false;
+    }
+    // replaceWithText e nao append: um .opcoda anterior tem de sair inteiro, e
+    // um append a meio de um XML velho dava um ficheiro com dois documentos.
+    return file.replaceWithText(xml->toString());
+}
+
+bool PluginProcessor::loadPresetFromFile(const juce::File& file) {
+    auto xml = juce::XmlDocument::parse(file);
+    if (xml == nullptr) {
+        return false;
+    }
+    return loadStateXml(*xml);
 }
 
 } // namespace opcoda

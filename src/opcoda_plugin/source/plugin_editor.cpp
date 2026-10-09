@@ -1,5 +1,7 @@
 #include "plugin_editor.h"
 
+#include "factory_presets.h"
+
 #include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_position.h"
 
@@ -166,7 +168,13 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
 
     buildHeader();
     buildViewButtons();
+    buildPresetSelector();
     buildParameterPanel();
+
+    // A sujeira do preset chega por Listener da arvore: qualquer PARAM que mexa
+    // fora de uma aplicacao de preset marca. O desenho do "*" mora no refresh,
+    // onde a comparacao evita o evento de acessibilidade a 60 Hz.
+    owner_.parameters().state.addListener(this);
 
     // A thread de interface e' a dona da memoria de amostra, entao e' ela que
     // libera o que a thread de audio ja devolveu.
@@ -185,6 +193,137 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
     setSize(900, 540);
     refresh();
+}
+
+PluginEditor::~PluginEditor() {
+    owner_.parameters().state.removeListener(this);
+}
+
+void PluginEditor::buildPresetSelector() {
+    // Setas sem cromo e nome como aba: a mesma lingua das abas de modulo, num
+    // tamanho que cabe entre o wordmark e o LOAD. O nome e' o botao do menu —
+    // um botao separado "MENU" seria o quarto controle para uma so funcao.
+    const auto setupArrow = [this](juce::TextButton& button, const char* glyph,
+                                   const char* spokenName, int direction) {
+        button.setButtonText(glyph);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName});
+        button.getProperties().set("uiIcon", "tab");
+        button.onClick = [this, direction] { stepFactoryPreset(direction); };
+        addAndMakeVisible(button);
+    };
+    setupArrow(presetPrevButton_, "<", "Previous factory preset", -1);
+    setupArrow(presetNextButton_, ">", "Next factory preset", +1);
+
+    presetNameButton_.setButtonText(currentPresetName_);
+    presetNameButton_.setName("Preset menu");
+    presetNameButton_.setTooltip("Factory presets, load and save .opcoda");
+    presetNameButton_.getProperties().set("uiIcon", "tab");
+    presetNameButton_.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible(presetNameButton_);
+}
+
+void PluginEditor::showPresetMenu() {
+    juce::PopupMenu menu;
+    const auto& presets = factoryPresets();
+    for (std::size_t i = 0; i < presets.size(); ++i) {
+        menu.addItem(static_cast<int>(i) + 1, presets[i].name, true,
+                     static_cast<int>(i) == currentFactoryIndex_ && !presetDirty_);
+    }
+    menu.addSeparator();
+    menu.addItem(101, "Load .opcoda...");
+    menu.addItem(102, "Save .opcoda...");
+
+    // Assincrono como o FileChooser: menu modal trava a message thread e o
+    // host nao perdoa. O tick marca o preset ativo so quando limpo — com "*"
+    // nenhum item e' o som atual.
+    menu.showMenuAsync(juce::PopupMenu::Options().withParentComponent(this),
+                       [this](int result) {
+                           if (result >= 1 && result <= 6) {
+                               applyFactoryPresetAndTrack(result - 1);
+                           } else if (result == 101) {
+                               loadPresetFromFile();
+                           } else if (result == 102) {
+                               savePresetToFile();
+                           }
+                       });
+}
+
+void PluginEditor::applyFactoryPresetAndTrack(int index) {
+    // A guarda impede os 25 parameterChanged de sujarem o preset que acabaram
+    // de aplicar: sem ela, todo preset nascia com "*".
+    applyingPreset_ = true;
+    owner_.applyFactoryPreset(index);
+    applyingPreset_ = false;
+    currentFactoryIndex_ = index;
+    currentPresetName_ = factoryPresets()[static_cast<std::size_t>(index)].name;
+    presetDirty_ = false;
+    refreshPresetName();
+}
+
+void PluginEditor::stepFactoryPreset(int direction) {
+    const auto count = static_cast<int>(factoryPresets().size());
+    applyFactoryPresetAndTrack((currentFactoryIndex_ + direction + count) % count);
+}
+
+void PluginEditor::refreshPresetName() {
+    const auto text =
+        presetDirty_ ? currentPresetName_ + " *" : currentPresetName_;
+    if (presetNameButton_.getButtonText() != text) {
+        presetNameButton_.setButtonText(text);
+        presetNameButton_.setName("Preset: " + text);
+    }
+}
+
+void PluginEditor::valueTreePropertyChanged(juce::ValueTree& changed,
+                                               const juce::Identifier&) {
+    // So PARAM suja: sourcePath e a regiao mudam no ingest e nao dizem nada
+    // sobre o som em relacao ao preset.
+    if (changed.hasType("PARAM") && !applyingPreset_) {
+        presetDirty_ = true;
+    }
+}
+
+void PluginEditor::loadPresetFromFile() {
+    presetChooser_ = std::make_unique<juce::FileChooser>(
+        "Load .opcoda preset", juce::File {}, "*.opcoda");
+    presetChooser_->launchAsync(
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser) {
+            const auto file = chooser.getResult();
+            // Nome primeiro, som depois: se o ficheiro falhar, o nome antigo
+            // continua verdadeiro. O som so troca dentro do if.
+            if (file.existsAsFile() && owner_.loadPresetFromFile(file)) {
+                currentPresetName_ = file.getFileNameWithoutExtension();
+                currentFactoryIndex_ = -1;
+                presetDirty_ = false;
+                refreshPresetName();
+            }
+        });
+}
+
+void PluginEditor::savePresetToFile() {
+    presetChooser_ = std::make_unique<juce::FileChooser>(
+        "Save .opcoda preset", juce::File {}, "*.opcoda");
+    presetChooser_->launchAsync(
+        juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser) {
+            auto file = chooser.getResult();
+            if (file.getFullPathName().isEmpty()) {
+                return;
+            }
+            // Extensao forcada: o dialogo de save nao a poe sozinho e um preset
+            // sem .opcoda nao abre por duplo-clique nem pelo filtro de load.
+            if (file.getFileExtension().isEmpty()) {
+                file = file.withFileExtension(".opcoda");
+            }
+            if (owner_.savePresetToFile(file)) {
+                currentPresetName_ = file.getFileNameWithoutExtension();
+                currentFactoryIndex_ = -1;
+                presetDirty_ = false;
+                refreshPresetName();
+            }
+        });
 }
 
 void PluginEditor::makePlainLabel(juce::Label& label,
@@ -570,9 +709,22 @@ void PluginEditor::resized() {
                          .withSizeKeepingCentre(kIdentityWidth, 19));
     x += kIdentityWidth + kIdentityGap;
 
+    // Seletor de preset entre o wordmark e o LOAD: identidade do som antes da
+    // origem do som. Setas de 22 com nome de 84 no meio; a 480 o nome do
+    // ficheiro encolhe mas o preset nunca e' sacrificado — e' feature, nao chip.
+    constexpr int kPresetArrow {22};
+    constexpr int kPresetName {84};
+    constexpr int kPresetGap {2};
+    presetPrevButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    x += kPresetArrow + kPresetGap;
+    presetNameButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetName, 22});
+    x += kPresetName + kPresetGap;
+    presetNextButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    x += kPresetArrow + kIdentityGap;
+
     // Tudo o que fica a partir daqui tem de caber a serio. `leftLimit` e' o fim do
-    // bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no minimo. E'
-    // contra ele que cada peca decide se cabe.
+    // bloco fixo: LED, wordmark, preset, botao LOAD e o nome do ficheiro no minimo.
+    // E' contra ele que cada peca decide se cabe.
     const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
 
     // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
@@ -985,6 +1137,9 @@ void PluginEditor::refresh() {
     // estado que ele produz.
     updateStatusVisibility();
     refreshPlayButton();
+    // O "*" de preset sujo chega por Listener e o desenho mora aqui, onde a
+    // comparacao evita o evento de acessibilidade a 60 Hz.
+    refreshPresetName();
 
     refreshTelemetry(info);
 }

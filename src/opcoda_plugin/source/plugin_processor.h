@@ -80,7 +80,7 @@ public:
     const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String&) override {}
 
-// Estado: os seis parametros e o ficheiro carregado.
+// Estado: os 25 parametros, o ficheiro carregado e a regiao.
 //
 // copyState e replaceState da APVTS tratam dos parametros, incluindo os que o
 // host exponentiale ja' tinha empurrado para dentro com setValueNotifyingHost.
@@ -90,8 +90,25 @@ public:
 // A parte do binario e' uma arvore Value na APVTS, e nao um campo solto, pelo
 // mesmo motivo: o host pede o estado quando o projeto e' aberto, e o caminho
 // que ele percorre e' o mesmo dos parametros.
+//
+// O .opcoda e' este mesmo XML em ficheiro: stateXml/loadStateXml sao a via
+// unica, usada pelo host E pelo Save/Load de preset. Duas serializacoes dariam
+// dois formatos que divergem no primeiro parametro novo.
 void getStateInformation(juce::MemoryBlock& destData) override;
 void setStateInformation(const void* data, int sizeInBytes) override;
+
+// Presets de fabrica (F016): 6 pontos de partida em factory_presets.h. So na
+// thread de interface: 25 setValueNotifyingHost com undo do host.
+void applyFactoryPreset(int index);
+
+// XML do estado completo, ou nullptr se a arvore nao serializar. Quem guarda
+// (host ou .opcoda) decide o contentor; o conteudo e' um so.
+[[nodiscard]] std::unique_ptr<juce::XmlElement> stateXml();
+// Aplica um XML como o do stateXml. Devolve false sem tocar em nada se nao for
+// um estado Opcoda — sessao ou .opcoda de outro plugin nao calam este.
+bool loadStateXml(const juce::XmlElement& xml);
+bool savePresetToFile(const juce::File& file);
+bool loadPresetFromFile(const juce::File& file);
 
     // Chamado na thread de interface. Le o arquivo, converte e publica na fila.
     // Devolve false e preenche lastError em caso de recusa.
