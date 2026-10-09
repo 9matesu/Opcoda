@@ -161,17 +161,18 @@ void GranularEngine::setSource(const float* samples,
 
 void GranularEngine::rebuildWindow(const GranularParams& params) noexcept {
     const int length = clampGrainSamples(sampleRate_, params.grainSizeMs);
-    if (length == activeWindowLength_ && params.window == activeWindowType_) {
+    const auto window = sanitizeWindowType(params.window);
+    if (length == activeWindowLength_ && window == activeWindowType_) {
         return;
     }
 
     // Alterna entre dois buffers para nao invalidar o ponteiro que o agendador
     // pode estar lendo no meio de um bloco.
     float* target = (activeWindow_ == windowA_.data()) ? windowB_.data() : windowA_.data();
-    fillWindow(params.window, target, length);
+    fillWindow(window, target, length);
     activeWindow_ = target;
     activeWindowLength_ = length;
-    activeWindowType_ = params.window;
+    activeWindowType_ = window;
 }
 
 void GranularEngine::startGrain(int voice,

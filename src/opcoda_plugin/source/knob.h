@@ -6,6 +6,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <cmath>
 #include <functional>
 
 namespace opcoda {
@@ -34,6 +35,12 @@ public:
         const char* spokenName;  // nome accessible, descritivo
         float defaultValue;
         std::function<juce::String(float)> format;
+        // So para choices: os rotulos na ordem do AudioParameterChoice. Com a
+        // lista, o valor mostra o rotulo em vez do numero — um knob de forma
+        // que diz "2" e' adivinhacao, e a decisao foi knob com degraus, nao
+        // combo. O attachment ja poe o intervalo 0..N-1 com passo 1 a partir
+        // do parametro, por isso aqui so falta o texto.
+        juce::StringArray choiceLabels {};
     };
 
     // Sem parametro de tamanho: o editor posiciona por celula e o knob se ajusta
@@ -67,6 +74,7 @@ public:
         setName(spec.spokenName);
         addAndMakeVisible(value_);
         format_ = spec.format;
+        choiceLabels_ = spec.choiceLabels;
 
         slider_.addListener(this);
         // O valor inicial vem do parametro, e nao do zero do slider: quem cria
@@ -134,11 +142,21 @@ private:
     }
 
     void showValue(double value) {
-        if (format_) {
-            const auto text = format_(static_cast<float>(value));
-            if (text != value_.getText()) {
-                value_.setText(text, juce::dontSendNotification);
-            }
+        juce::String text;
+        if (!choiceLabels_.isEmpty()) {
+            // isfinite antes do roundToInt: float-para-int fora de faixa e' UB
+            // formal, e NaN nao passa nem pelo jlimit. NaN mostra o primeiro
+            // rotulo em vez de um acesso selvagem.
+            const auto index = std::isfinite(value)
+                                   ? juce::jlimit(0, choiceLabels_.size() - 1,
+                                                  juce::roundToInt(value))
+                                   : 0;
+            text = choiceLabels_[index];
+        } else if (format_) {
+            text = format_(static_cast<float>(value));
+        }
+        if (text.isNotEmpty() && text != value_.getText()) {
+            value_.setText(text, juce::dontSendNotification);
         }
     }
 
@@ -147,6 +165,7 @@ private:
     juce::Label value_;
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
+    juce::StringArray choiceLabels_;
 };
 
 } // namespace opcoda

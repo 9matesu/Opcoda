@@ -285,14 +285,16 @@ A tela do Stitch tem cerca de dezesseis controles: `Size`, `Density`, `Position`
 `Spray`, `Pitch`, `Distance`, `Freq`, `Attack`, `Release`, `Drive`, `Cutoff`,
 `Resonance`, `Shape`, `Volume`, `Dry/Wet`, `Voices`.
 
-O MVP documentado tem **seis** parâmetros (Tabela 8 do artigo) e o ensaio T4
-verifica "mover os 6 parâmetros". O número de vozes é fixo em 8 no MVP.
+O MVP documentado tinha **seis** parâmetros (Tabela 8 do artigo); a constituição
+v1.1.0 fechou o instrumento em **25** parâmetros em cinco módulos (GRAIN,
+ENVELOPE, FILTER, MOD, OUT), com os IDs dos seis originais intactos e os nomes
+exibidos em inglês. O número de vozes é fixo em 8.
 
-A interface adota a linguagem visual e a arquitetura de informação, com os seis
+A interface adota a linguagem visual e a arquitetura de informação, com os 25
 parâmetros documentados. `Voices` vira leitura, não controle. O bloco
-`STATE FILTER` corresponde ao biquad de coloração que o artigo descreve e que não
-está na Tabela 8: a decisão de torná-lo sétimo parâmetro ou estágio fixo continua
-aberta, e muda o texto publicado.
+`STATE FILTER` virou o módulo FILTER (dois biquads em série por voz); `MOD`
+cobre o LFO e `OUT` o volume. `Dry/Wet`, `Distance`, `Drive` e `Shape` do Stitch
+continuam fora: o que não está na tabela de 25 não entra.
 
 **O botão de reprodução não é um sétimo parâmetro**, e é preciso escrever isto porque
 a tentação existe: `PLAY` comanda o motor granular pela mesma porta que as notas

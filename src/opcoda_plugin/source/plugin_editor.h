@@ -18,12 +18,13 @@
 
 namespace opcoda {
 
-// Editor em tres faixas: header claro, display escuro, painel de parametros.
+// Editor em quatro faixas: header claro, display escuro, abas de modulo e
+// faixa de parametros.
 //
-// Os seis parametros sao os documentados na Tabela 8 do artigo. Os modulos
-// STATE FILTER e MOD & OUTPUT que aparecem no mock do Stitch ficaram de fora de
-// proposito: o biquad, o envelope e o dry/wet nao existem no nucleo, e desenhar
-// controle que nao controla nada seria pior que a ausencia dele.
+// Os 25 parametros da Tabela 8 em cinco modulos — GRAIN, ENVELOPE, FILTER, MOD
+// e OUT — com os nomes exibidos em ingles e os IDs dos seis originais
+// intactos. Uma aba mostra a sua faixa; empilhar as cinco pedia 700 px de
+// janela e a promessa e' 480x434.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      public juce::FileDragAndDropTarget {
@@ -226,7 +227,24 @@ private:
     juce::Label fileSize_;
 
     juce::TextButton loadButton_;
+
+    // Cinco modulos, uma faixa visivel de cada vez. Todos os 25 knobs existem
+    // desde a construcao — os attachments vivem neles — e a aba so decide quem
+    // aparece. Recriar knobs por aba recriaria attachments e largaria o undo.
+    enum class ParamModule { grain, envelope, filter, mod, out };
+    ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
+    std::vector<std::size_t> moduleFirstKnob_ {};
+    std::vector<std::size_t> moduleKnobCount_ {};
+    juce::TextButton moduleGrainButton_;
+    juce::TextButton moduleEnvelopeButton_;
+    juce::TextButton moduleFilterButton_;
+    juce::TextButton moduleModButton_;
+    juce::TextButton moduleOutButton_;
+
+    void buildModuleTabs();
+    void updateModuleTabs();
+    void showModule(ParamModule module);
     std::unique_ptr<juce::FileChooser> chooser_;
     bool dragHovered_ {false};
 

@@ -19,10 +19,10 @@ constexpr int kHeaderHeight {44};
 constexpr int kMinDisplayHeight {200};
 constexpr int kMaxDisplayHeight {320};
 
-// Janela minima e' 480x410. A altura desceu de 420 com o header de 44 e a faixa
-// de vistas de 24: grelha com endereco, dezasseis colunas e ASCII precisa de 14
+// Janela minima e' 480x434. A altura subiu de 410 com a fileira de abas de
+// modulo (22 + 2): grelha com endereco, dezasseis colunas e ASCII precisa de 14
 // px de cabecalho mais seis linhas de 24 px, e o painel de parametros precisa de
-// espaco para o titulo e os seis knobs.
+// espaco para o titulo e os knobs do modulo ativo.
 //
 // A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
 // para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
@@ -31,7 +31,7 @@ constexpr int kMaxDisplayHeight {320};
 // ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
 // vozes, e nada mais.
 constexpr int kMinWidth {480};
-constexpr int kMinHeight {410};
+constexpr int kMinHeight {434};
 
 constexpr int kAddressFieldWidth {132};
 constexpr int kPlayButtonWidth {60};
@@ -56,20 +56,75 @@ juce::String asInteger(float value) {
     return juce::String {juce::roundToInt(value)};
 }
 
-const std::array<Knob::Spec, 6> kSpecs {
-    Knob::Spec {"grain", "SIZE", "Tamanho de grao, em milissegundos", 40.0f,
+const auto percent = [](float v) { return asInteger(v * 100.0f) + " %"; };
+const auto seconds = [](float v) { return asInteger(v * 1000.0f) + " ms"; };
+const auto cutoffText = [](float v) {
+    return v >= 1000.0f ? juce::String {v / 1000.0f, 1} + " kHz" : asInteger(v) + " Hz";
+};
+
+// Os 25 parametros da Tabela 8 em cinco modulos, e nada mais. Os IDs dos seis
+// originais nao mudam — sessoes salvas referenciam por ID — so o titulo e o
+// nome falado passam a ingles. As abas trocam a faixa visivel em vez de
+// empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e cinco
+// fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao promete.
+const std::array<Knob::Spec, 10> kGrainSpecs {
+    Knob::Spec {"grain", "SIZE", "Grain size, in milliseconds", 40.0f,
                 [](float v) { return asInteger(v) + " ms"; }},
-    Knob::Spec {"density", "DENSITY", "Densidade, em graos por segundo", 20.0f,
+    Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
                 [](float v) { return asInteger(v) + " /s"; }},
-    Knob::Spec {"position", "POSITION", "Posicao de leitura no material", 0.5f,
-                [](float v) { return asInteger(v * 100.0f) + " %"; }},
-    Knob::Spec {"spray", "SPRAY", "Spray, dispersao da posicao de inicio", 0.0f,
-                [](float v) { return asInteger(v * 100.0f) + " %"; }},
+    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
+    Knob::Spec {"spray", "SPRAY", "Spray, start position spread", 0.0f, percent},
     // Estas duas ja estavam certas: com uma casa decimal o writeDouble entra no
     // if e formata em fixo. Ficam como estava para nao mexer no que funciona.
-    Knob::Spec {"pitch", "PITCH", "Afinacao, em semitons", 0.0f,
+    Knob::Spec {"pitch", "PITCH", "Tuning, in semitones", 0.0f,
                 [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"volume", "VOLUME", "Volume, em decibels", 0.0f,
+    Knob::Spec {"window", "WINDOW", "Grain window shape", 0.0f, {},
+                {"Hann", "Gaussian", "Hamming", "Blackman"}},
+    Knob::Spec {"pan", "PAN", "Stereo pan, left to right", 0.0f,
+                [](float v) {
+                    return v == 0.0f ? juce::String {"C"}
+                         : v < 0.0f  ? asInteger(-v * 100.0f) + " L"
+                                     : asInteger(v * 100.0f) + " R";
+                }},
+    Knob::Spec {"grainlevel", "LEVEL", "Per-grain level", 1.0f, percent},
+    Knob::Spec {"pitchrand", "P.RAND", "Random detune per grain, in semitones", 0.0f,
+                [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {"scanspeed", "SCAN", "Playhead scan speed, times realtime", 1.0f,
+                [](float v) { return juce::String {v, 2} + "x"; }},
+};
+
+const std::array<Knob::Spec, 4> kEnvelopeSpecs {
+    Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds},
+    Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds},
+    Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent},
+    Knob::Spec {"release", "REL", "Release time", 0.05f, seconds},
+};
+
+const std::array<Knob::Spec, 6> kFilterSpecs {
+    Knob::Spec {"f1type", "F1 TYPE", "Filter 1 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
+    Knob::Spec {"f1cutoff", "F1 CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText},
+    Knob::Spec {"f1q", "F1 Q", "Filter 1 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }},
+    Knob::Spec {"f2type", "F2 TYPE", "Filter 2 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
+    Knob::Spec {"f2cutoff", "F2 CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText},
+    Knob::Spec {"f2q", "F2 Q", "Filter 2 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }},
+};
+
+const std::array<Knob::Spec, 4> kModSpecs {
+    Knob::Spec {"lforate", "RATE", "LFO rate, in hertz", 1.0f,
+                [](float v) { return juce::String {v, 2} + " Hz"; }},
+    Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent},
+    Knob::Spec {"lfotarget", "TARGET", "LFO target parameter", 0.0f, {},
+                {"Pitch", "Density", "Cutoff", "Position"}},
+    Knob::Spec {"lfowave", "WAVE", "LFO waveform", 0.0f, {},
+                {"Sine", "Tri", "Saw", "Square", "S&H"}},
+};
+
+const std::array<Knob::Spec, 1> kOutSpecs {
+    Knob::Spec {"volume", "VOLUME", "Output volume, in decibels", 0.0f,
                 [](float v) {
                     return v <= -60.0f ? juce::String {"-inf"}
                                        : juce::String {v, 1} + " dB";
@@ -385,10 +440,73 @@ void PluginEditor::pushTransportAnchor() {
 }
 
 void PluginEditor::buildParameterPanel() {
-    for (const auto& spec : kSpecs) {
-        knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
-        addAndMakeVisible(*knobs_.back());
+    // Ordem de construcao e' ordem de modulo: GRAIN, ENVELOPE, FILTER, MOD,
+    // OUT. moduleFirstKnob_/moduleKnobCount_ guardam as fatias para a aba
+    // mostrar sem procurar por ID.
+    const auto addSpecs = [this](const auto& specs) {
+        moduleFirstKnob_.push_back(knobs_.size());
+        for (const auto& spec : specs) {
+            knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
+            addAndMakeVisible(*knobs_.back());
+        }
+        moduleKnobCount_.push_back(knobs_.size() - moduleFirstKnob_.back());
+    };
+    addSpecs(kGrainSpecs);
+    addSpecs(kEnvelopeSpecs);
+    addSpecs(kFilterSpecs);
+    addSpecs(kModSpecs);
+    addSpecs(kOutSpecs);
+
+    buildModuleTabs();
+    showModule(activeModule_);
+}
+
+void PluginEditor::buildModuleTabs() {
+    // Mesma lingua das abas de vista: palavra sem cromo, ativa em peso forte
+    // com filete. Cinco abas curtas cabem a 480 sem regra de colapso — GRAIN e'
+    // a mais larga e a soma nao chega a 300 px.
+    const auto setup = [this](juce::TextButton& button, const char* title,
+                              const char* spokenName, ParamModule module) {
+        button.setButtonText(title);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName});
+        button.setClickingTogglesState(true);
+        // Aba sem cromo, como as de vista: o mesmo "tab" do LookAndFeel, que
+        // desenha a palavra e o filete do estado sem fundo nem bisel.
+        button.getProperties().set("uiIcon", "tab");
+        button.onClick = [this, module] { showModule(module); };
+        addAndMakeVisible(button);
+    };
+    setup(moduleGrainButton_, "GRAIN", "Grain module", ParamModule::grain);
+    setup(moduleEnvelopeButton_, "ENV", "Envelope module", ParamModule::envelope);
+    setup(moduleFilterButton_, "FILTER", "Filter module", ParamModule::filter);
+    setup(moduleModButton_, "MOD", "Modulation module", ParamModule::mod);
+    setup(moduleOutButton_, "OUT", "Output module", ParamModule::out);
+}
+
+void PluginEditor::updateModuleTabs() {
+    const auto mark = [this](juce::TextButton& button, ParamModule candidate) {
+        const auto on = activeModule_ == candidate;
+        if (button.getToggleState() != on) {
+            button.setToggleState(on, juce::dontSendNotification);
+        }
+    };
+    mark(moduleGrainButton_, ParamModule::grain);
+    mark(moduleEnvelopeButton_, ParamModule::envelope);
+    mark(moduleFilterButton_, ParamModule::filter);
+    mark(moduleModButton_, ParamModule::mod);
+    mark(moduleOutButton_, ParamModule::out);
+}
+
+void PluginEditor::showModule(ParamModule module) {
+    activeModule_ = module;
+    const auto index = static_cast<std::size_t>(module);
+    const auto first = moduleFirstKnob_[index];
+    for (std::size_t i = 0; i < knobs_.size(); ++i) {
+        knobs_[i]->setVisible(i >= first && i < first + moduleKnobCount_[index]);
     }
+    updateModuleTabs();
+    resized();
 }
 
 void PluginEditor::paint(juce::Graphics& g) {
@@ -694,31 +812,53 @@ constexpr int kLedBoxWidth {12};
         }
     }
 
+    // ---- abas de modulo ----
+    //
+    // Uma fileira propria entre a vista e os knobs, e nao titulo de modulo: o
+    // titulo antigo ("1 - GRANULAR ENGINE") nomeava uma seccao unica, e agora
+    // sao cinco. Mesma altura e lingua das abas de vista; cinco palavras curtas
+    // cabem a 480 sem colapso.
+    {
+        constexpr int kModuleButtonWidth {52};
+        constexpr int kModuleButtonHeight {22};
+        constexpr int kModuleGap {4};
+        const auto moduleRow = area.removeFromTop(kModuleButtonHeight + 2);
+
+        juce::TextButton* buttons[] = {
+            &moduleGrainButton_, &moduleEnvelopeButton_, &moduleFilterButton_,
+            &moduleModButton_, &moduleOutButton_,
+        };
+        int tabX = moduleRow.getX();
+        for (auto* button : buttons) {
+            button->setBounds(juce::Rectangle<int> {tabX, moduleRow.getY() + 1,
+                                                    kModuleButtonWidth, kModuleButtonHeight});
+            tabX += kModuleButtonWidth + kModuleGap;
+        }
+    }
+
     // ---- painel de parametros ----
     //
-    // Nao ha titulo de modulo. Era "1 - GRANULAR ENGINE", e o "1" prometia um
-    // segundo modulo que nunca existiu; o que preenchia aquela linha era um titulo
-    // de uma secção que e' a unica do painel.
-    //
-    // Os seis knobs ficam sempre em uma linha, como no mock. Quebrar em duas
-    // linhas foi tentado e e' pior: a altura que sobra nao comporta um knob com
-    // titulo e valor, e os knobs despencam para poucos pixels. O diametro do
-    // knob e' limitado dentro do componente, entao encolhe com a janela sem
-    // precisar de um segundo layout.
+    // So os knobs do modulo ativo ocupam celulas: os escondidos ficam com
+    // largura zero na aritmetica porque nao entram na contagem. A regra de uma
+    // linha continua — quebrar em duas foi tentado e e' pior — e o diametro do
+    // knob encolhe com a janela sem segundo layout.
     const auto knobArea = area.reduced(8, 2);
-    const int cellWidth = knobArea.getWidth() / static_cast<int>(knobs_.size());
+    const auto moduleIndex = static_cast<std::size_t>(activeModule_);
+    const auto first = moduleFirstKnob_[moduleIndex];
+    const auto count = moduleKnobCount_[moduleIndex];
+    const int cellWidth = knobArea.getWidth() / static_cast<int>(count);
 
     // O painel fecha o conteudo (titulo, knob, valor) e fica centrado na
     // vertical da area. Preencher a celula inteira deixaria um monte de caixa
     // cinza vazia embaixo do knob.
     constexpr int knobContentHeight {13 + 1 + 62 + 4 + 18};
-    for (std::size_t i = 0; i < knobs_.size(); ++i) {
+    for (std::size_t k = 0; k < count; ++k) {
         const auto cell = juce::Rectangle<int> {knobArea.getX()
-                                                     + (static_cast<int>(i) * cellWidth),
+                                                     + (static_cast<int>(k) * cellWidth),
                                                  knobArea.getY(),
                                                  cellWidth,
                                                  knobArea.getHeight()};
-        knobs_[i]->setBounds(cell.reduced(4).withHeight(
+        knobs_[first + k]->setBounds(cell.reduced(4).withHeight(
             juce::jmin(knobContentHeight, cell.getHeight() - 8)));
     }
 }

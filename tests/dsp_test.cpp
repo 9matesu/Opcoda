@@ -244,9 +244,18 @@ TEST(Window, HandlesDegenerateInput) {
 }
 
 TEST(Window, NamesAreStable) {
-    // Os nomes aparecem na interface, entao fazem parte do contrato visivel.
+    // Os nomes aparecem na interface, entao fazem parte do contrato visivel —
+    // e o contrato e' ingles, pela F015.
     EXPECT_STREQ(windowName(WindowType::kHann), "Hann");
-    EXPECT_STREQ(windowName(WindowType::kGaussian), "Gaussiana");
+    EXPECT_STREQ(windowName(WindowType::kGaussian), "Gaussian");
+    EXPECT_STREQ(windowName(WindowType::kHamming), "Hamming");
+    EXPECT_STREQ(windowName(WindowType::kBlackman), "Blackman");
+}
+
+TEST(Window, InvalidTypeFallsBackToHann) {
+    // Mesma regra dos filtros e do LFO: indice corrompido soa, nao cala.
+    EXPECT_EQ(sanitizeWindowType(static_cast<WindowType>(99)), WindowType::kHann);
+    EXPECT_EQ(sanitizeWindowType(WindowType::kBlackman), WindowType::kBlackman);
 }
 
 TEST(GranularEngine, PrepareWithoutSourceIsSilent) {

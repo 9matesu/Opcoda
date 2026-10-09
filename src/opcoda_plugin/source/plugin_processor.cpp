@@ -1,5 +1,8 @@
 #include "plugin_processor.h"
 
+#include "opcoda_core/dsp/biquad.h"
+#include "opcoda_core/dsp/lfo.h"
+#include "opcoda_core/dsp/window.h"
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/pe/byte_to_sample.h"
 #include "opcoda_core/pe/column_reduction.h"
@@ -24,14 +27,48 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         return std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID {id, 1}, juce::String {name}, juce::NormalisableRange<float> {lo, hi}, def);
     };
+    // Corte em Hz com centro em 1 kHz: linear de 20 a 20000 punha a oitava
+    // 40..80 Hz nos primeiros 2 graus do knob e o resto era passeio. O skew so
+    // remapeia o gesto — o valor guardado e automatizado continua em Hz.
+    const auto logCutoff = [](const char* id, const char* name, float def) {
+        juce::NormalisableRange<float> cutoff {20.0f, 20000.0f};
+        cutoff.setSkewForCentre(1000.0f);
+        return std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID {id, 1}, juce::String {name}, cutoff, def);
+    };
+    const auto choice = [](const char* id, const char* name, juce::StringArray options, int def) {
+        return std::make_unique<juce::AudioParameterChoice>(
+            juce::ParameterID {id, 1}, juce::String {name}, std::move(options), def);
+    };
 
+    // Os seis IDs originais nao mudam — sessoes salvas referenciam por ID — so
+    // o nome exibido passa a ingles. Os 19 novos ja nascem com ID ingles.
     return {
-        range("grain", "Tamanho de grao", 1.0f, 100.0f, 40.0f),
-        range("density", "Densidade", 1.0f, 200.0f, 20.0f),
-        range("position", "Posicao", 0.0f, 1.0f, 0.5f),
+        range("grain", "Grain Size", 1.0f, 100.0f, 40.0f),
+        range("density", "Density", 1.0f, 200.0f, 20.0f),
+        range("position", "Position", 0.0f, 1.0f, 0.5f),
         range("spray", "Spray", 0.0f, 1.0f, 0.0f),
-        range("pitch", "Afinacao", -24.0f, 24.0f, 0.0f),
+        range("pitch", "Pitch", -24.0f, 24.0f, 0.0f),
         range("volume", "Volume", -60.0f, 0.0f, 0.0f),
+        choice("window", "Window", {"Hann", "Gaussian", "Hamming", "Blackman"}, 0),
+        range("pan", "Pan", -1.0f, 1.0f, 0.0f),
+        range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
+        range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
+        range("scanspeed", "Scan Speed", 0.25f, 4.0f, 1.0f),
+        range("attack", "Attack", 0.001f, 2.0f, 0.005f),
+        range("decay", "Decay", 0.001f, 2.0f, 0.1f),
+        range("sustain", "Sustain", 0.0f, 1.0f, 1.0f),
+        range("release", "Release", 0.001f, 2.0f, 0.05f),
+        choice("f1type", "Filter 1 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
+        logCutoff("f1cutoff", "Filter 1 Cutoff", 20000.0f),
+        range("f1q", "Filter 1 Q", 0.5f, 12.0f, 0.7071f),
+        choice("f2type", "Filter 2 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
+        logCutoff("f2cutoff", "Filter 2 Cutoff", 20000.0f),
+        range("f2q", "Filter 2 Q", 0.5f, 12.0f, 0.7071f),
+        range("lforate", "LFO Rate", 0.0f, 20.0f, 1.0f),
+        range("lfodepth", "LFO Depth", 0.0f, 1.0f, 0.0f),
+        choice("lfotarget", "LFO Target", {"Pitch", "Density", "Cutoff", "Position"}, 0),
+        choice("lfowave", "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"}, 0),
     };
 }
 
@@ -44,6 +81,12 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
         return static_cast<float>(*parameters_.getRawParameterValue(id));
     };
 
+    // Indice de choice chega como float 0..N-1; o sanitize existe para o dia
+    // em que nao chegar — estado corrompido de sessao tem de soar, nao calar.
+    const auto choiceIndex = [&value](const char* id) {
+        return static_cast<int>(value(id) + 0.5f);
+    };
+
     dsp::GranularParams params;
     params.grainSizeMs = value("grain");
     params.densityGrainsPerSec = value("density");
@@ -51,6 +94,24 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.spray = value("spray");
     params.pitchSemitones = value("pitch");
     params.volumeDb = value("volume");
+    params.window = dsp::sanitizeWindowType(static_cast<dsp::WindowType>(choiceIndex("window")));
+    params.pan = value("pan");
+    params.grainLevel = value("grainlevel");
+    params.pitchRandomSemitones = value("pitchrand");
+    params.attackSeconds = value("attack");
+    params.decaySeconds = value("decay");
+    params.sustainLevel = value("sustain");
+    params.releaseSeconds = value("release");
+    params.f1type = dsp::sanitizeFilterType(static_cast<dsp::FilterType>(choiceIndex("f1type")));
+    params.f1cutoffHz = value("f1cutoff");
+    params.f1q = value("f1q");
+    params.f2type = dsp::sanitizeFilterType(static_cast<dsp::FilterType>(choiceIndex("f2type")));
+    params.f2cutoffHz = value("f2cutoff");
+    params.f2q = value("f2q");
+    params.lforateHz = value("lforate");
+    params.lfodepth = value("lfodepth");
+    params.lfotarget = dsp::sanitizeLFOTarget(static_cast<dsp::LFOTarget>(choiceIndex("lfotarget")));
+    params.lfowave = dsp::sanitizeLFOWave(static_cast<dsp::LFOWave>(choiceIndex("lfowave")));
     return params;
 }
 
@@ -419,6 +480,10 @@ const auto numSamples = buffer.getNumSamples();
     const auto playing = transport_.isPlaying();
 
     auto params = currentParams();
+    // Scan Speed nao e' parametro do motor — e' taxa do transporte, que e'
+    // estado atomico proprio. Um store relaxado por bloco e' o custo, e o
+    // setRate ja recorta NaN para 1,0: automacao corrompida nao trava o scan.
+    transport_.setRate(static_cast<double>(*parameters_.getRawParameterValue("scanspeed")));
     if (playing) {
         params.position = transport_.advance(numSamples, playing);
     }

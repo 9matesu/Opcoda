@@ -221,9 +221,13 @@ padrão, é decisão: `Slider` entrega foco por teclado, ajuste com setas e
 `SliderParameterAttachment` cuida do undo por parâmetro, e por isso exige a
 referência do `RangedAudioParameter`, não a da árvore inteira.
 
-O nome accessible de cada knob é a descrição completa em português
-("Tamanho de grao, em milissegundos") e não o rótulo curto do mock ("SIZE"), que
-seria inútil para quem navega por leitor de tela.
+O nome accessible de cada knob é a descrição completa em inglês
+("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
+seria inútil para quem navega por leitor de tela. Os 25 parâmetros vivem em
+cinco módulos (GRAIN, ENVELOPE, FILTER, MOD, OUT) com uma faixa visível de cada
+vez; os knobs de choice (window, tipos de filtro, alvo e forma do LFO) usam o
+mesmo `SliderParameterAttachment` — o JUCE entrega intervalo 0..N-1 com passo 1
+para `AudioParameterChoice` — e só o texto do valor muda para o rótulo.
 
 ### Três decisões que deram errado na primeira tentativa
 
@@ -239,10 +243,11 @@ queda de alpha sobre fundo escuro dá o mesmo resultado de uma luz que se dissol
 no fundo.
 
 **Quebrar os knobs em duas linhas não funciona.** A altura disponível depois do
-display e do título do módulo não comporta dois knobs com rótulo e valor, e eles
-despencam para poucos pixels. Os seis ficam sempre em uma linha, como no mock, e
+display e das abas não comporta dois knobs com rótulo e valor, e eles
+despencam para poucos pixels. Cada módulo fica sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
-sem precisar de um segundo layout.
+sem precisar de um segundo layout. Por isso as abas trocam a faixa em vez de
+empilhar: cinco fileiras pediriam ~700 px e o mínimo continua 480x434.
 
 ### O display F008
 
