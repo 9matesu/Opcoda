@@ -55,8 +55,10 @@ Live, e é o que separa a área de parâmetros da área de visualização.
 | Token | Valor | Uso |
 | --- | --- | --- |
 | `accent` | `#ff9a00` | laranja Ableton: aba ativa, ponteiro de knob, pico do espectro |
-| `accentSoft` | `#ffc83b` | amarelo do cabeçalho |
+| `accentSoft` | `#ffc83b` | amarelo do cabeçalho; meio da escala de entropia |
 | `accentWarn` | `#ffb833` | amarelo de atenção |
+| `waveLow` | `#35c4dc` | ciano: base da escala de entropia (0–3 bits/byte) |
+| `waveHigh` | `#ea7070` | rosa: topo da escala de entropia (6–8 bits/byte) |
 | `ok` | `#4caf50` | estado pronto, "STEREO GRAINS" |
 | `okBright` | `#82d64a` | botão de ativação ligado |
 | `error` | `#e05373` | estado de recusa |
@@ -128,11 +130,15 @@ De cima para baixo:
 - **Medidor de saída**, 3 px no topo do display: pico com faixa de −60 dB a 0 dB. No
   topo e não no rodapé porque o rodapé é do editor e está lá a telemetria escrita.
 - **Vista do material**, o corpo do display:
-  - **forma de onda**: envelope mínimo-máximo fraco e núcleo de RMS forte. O
-    mínimo e o máximo quase não servem para mostrar bytes — o texto de um `.exe` tem
-    quase todos os valores de `0x00` a `0xFF`, e o envelope fica com altura quase
-    inteira em todas as colunas. O RMS é o que varia, e é o que diz se o material é
-    denso ou repetitivo;
+  - **forma de onda**: envelope mínimo-máximo fraco e núcleo de RMS forte, com a
+    linha do núcleo colorida por entropia — ciano no previsível, amarelo no meio,
+    rosa no aleatório — e glow em pilha de alfa. O mínimo e o máximo quase não
+    servem para mostrar bytes — o texto de um `.exe` tem quase todos os valores
+    de `0x00` a `0xFF`, e o envelope fica com altura quase inteira em todas as
+    colunas. O RMS é o que varia, e é o que diz se o material é denso ou
+    repetitivo; a cor diz do que ele é feito. Três Paths por faixa em vez de um
+    stroke por coluna, com subpath novo a cada descontinuidade para não ligar
+    colunas distantes com diagonais;
   - **grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
     bytes por linha em Inter 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
     de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas. A
@@ -143,7 +149,12 @@ De cima para baixo:
     omitida**. O gutter **cresce com o ficheiro**;
   - **curva de entropia**: 0 a 8 bits por byte com o **eixo legível em 0, 4 e 8** e
     a unidade escrita como `bits/byte`. Uma curva sem eixo não tem leitura: 7,5 é o
-    valor de um `.exe` normal e 3,5 o de um repositório de bytes iguais.
+    valor de um `.exe` normal e 3,5 o de um repositório de bytes iguais. A linha
+    usa a mesma cor-por-entropia da onda, pelo mesmo helper;
+  - **grelha com barras**: a vista hex acopla uma faixa de barras de entropia à
+    direita (30 % da largura, some abaixo de 120 px). Cada barra é o máximo do
+    grupo de colunas, na cor da faixa — sem glow, sem eixo. O `HexGrid` encolhe;
+    scroll, clique e duplo-clique não mudam.
 - **Cabeças**: a de leitura é uma barra branca de 2 px com realce por baixo; a de
   reprodução é um **triângulo** em cima com barra fina, e é a única peça do display
   com uma forma própria — o que a identifica mesmo sem cor, como o 1.4.1 exige. A
@@ -187,11 +198,15 @@ descodificador de PNG a correr no arranque.
 Botão sem cromo: ícone ou palavra solta sobre a superfície, sem fundo, sem bisel,
 sem sombra. O componente continua `TextButton` — teclado, foco e
 `AccessibilityHandler` de graça — só o desenho achatou. O transporte é ▶/■
-desenhado como `Path`: a troca de *forma* é a segunda pista e a que funciona sem
-ver cor, pelo motivo que criou a troca de palavra `PLAY`/`STOP`. A aba ativa leva
-peso forte e um filete de acento em baixo; o texto carrega o estado, o filete é
-redundância. Hover e premido são banhos de alfa; o foco continua o anel
-`focusRing` (claro) ou `textOnDark` (no display escuro, onde o transporte mora).
+desenhado como `Path`, com halo branco no display escuro: a mesma luz dos grãos,
+porque o botão que comanda o som tem a energia do som a acontecer. A troca de
+*forma* é a segunda pista e a que funciona sem ver cor, pelo motivo que criou a
+troca de palavra `PLAY`/`STOP`. A aba ativa leva peso forte, filete de acento e
+halo fraco em baixo; o texto carrega o estado, o resto é redundância. Hover e
+premido são banhos de alfa; o foco continua o anel `focusRing` (claro) ou
+`textOnDark` (no display escuro, onde o transporte mora). Arrastar na onda e na
+curva varre a cabeça de leitura pelo caminho do clique, com um endereço pendente
+descarregado no tick de 60 Hz; no hex o arrasto é do `HexGrid`.
 
 Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2. **O
 critério foi fechado em 06/10/2026** sem aumentar o alvo — a célula de byte continua
