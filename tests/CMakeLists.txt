@@ -33,6 +33,7 @@ add_executable(opcoda_tests
     grain_params_test.cpp
     adsr_test.cpp
     filter_test.cpp
+    lfo_test.cpp
     grain_trail_test.cpp
     pe_mutation_test.cpp)
 

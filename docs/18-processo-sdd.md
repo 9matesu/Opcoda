@@ -61,6 +61,7 @@ Cada objetivo específico de `docs/04-objetivos.md` tem uma feature:
 | OE4 (params) | F011 | pronto: grainlevel, pitchrand e scanspeed no motor, 13 testes com fail-without-fix por mutação; UI liga na F015 |
 | OE4 (envelope) | F012 | pronto: ADSR por nota com disparo na aresta, 10 testes; sem nota presa (all-notes-off e sustain entram pela mesma aresta) |
 | OE4 (filtros) | F013 | pronto: 2 biquads RBJ em serie por voz (LP/HP/BP/Notch), coefs 1x/bloco, estado zerado no nascimento; 15 testes com fail-without-fix por mutacao |
+| OE4 (LFO) | F014 | pronto: LFO como funcao do tempo absoluto (rate, depth, 4 alvos, 5 formas incl. S&H deterministico), modulacao por grao e por bloco; 16 testes com floors de magnitude e mutacoes por alvo |
 
 ## Agentes de revisão
 

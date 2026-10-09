@@ -2,6 +2,7 @@
 
 #include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/dc_blocker.h"
+#include "opcoda_core/dsp/lfo.h"
 #include "opcoda_core/dsp/limiter.h"
 #include "opcoda_core/dsp/window.h"
 
@@ -41,6 +42,15 @@ struct GranularParams {
     FilterType f2type {FilterType::kLowPass};
     float f2cutoffHz {20000.0f};
     float f2q {0.7071f};
+    // LFO: taxa em Hz, profundidade 0..1, alvo e forma. Profundidade zero
+    // desliga sem custo de comportamento: com depth 0 todas as contribuicoes
+    // abaixo sao zero e o motor soa identico ao sem LFO. Escalas por alvo,
+    // documentadas onde sao aplicadas: pitch ±12 st, posicao ±0,25 de fracao,
+    // densidade x[0,5, 1,5], cutoff f1 ±2 oitavas.
+    float lforateHz {1.0f};
+    float lfodepth {0.0f};
+    LFOTarget lfotarget {LFOTarget::kPitch};
+    LFOWave lfowave {LFOWave::kSine};
     // Nivel por grao, linear 0..1, multiplicado depois do volume em dB. E' o
     // ganho individual contra o volume geral: o volume diz o nivel da saida, o
     // nivel diz o quanto cada grao contribui para ela.
@@ -316,8 +326,23 @@ private:
     // aqui nao ha quadro que atrase porque nao ha velocidade.
     enum class EnvelopePhase : std::uint8_t { idle, attack, decay, sustain, release };
 
+    // LFO saneado uma vez por bloco: taxa, profundidade, alvo e forma ja
+    // validados, prontos para startGrain e para o agendamento sem revalidar
+    // por grao. Passado por valor (4 escalares) e nao por params cru, para o
+    // caminho quente nao pagar sanitize repetido nem ler campo invalido.
+    struct LFOSettings {
+        float rateHz {1.0f};
+        float depth {0.0f};
+        LFOTarget target {LFOTarget::kPitch};
+        LFOWave wave {LFOWave::kSine};
+    };
+
     void rebuildWindow(const GranularParams& params) noexcept;
-    void startGrain(int voice, const GranularParams& params, double entropy) noexcept;
+    void startGrain(int voice,
+                    const GranularParams& params,
+                    double entropy,
+                    int blockOffset,
+                    const LFOSettings& lfo) noexcept;
     void applyGate(float* left, float* right, int numSamples,
                    const GranularParams& params) noexcept;
 
@@ -369,6 +394,11 @@ private:
     int lastActiveVoices_ {0};
 
     GrainTelemetry telemetry_ {};
+
+    // LFO: fase acumulada em voltas, sempre o inicio do bloco corrente. Avanca
+    // no fim de cada processBlock, nos dois caminhos de saida — o LFO e' tempo
+    // absoluto e marcha mesmo em silencio.
+    LFO lfo_ {};
 };
 
 } // namespace opcoda::dsp

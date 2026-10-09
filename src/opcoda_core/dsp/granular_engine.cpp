@@ -89,6 +89,7 @@ void GranularEngine::reset() noexcept {
     for (auto& voice : voices_) {
         voice = Grain {};
     }
+    lfo_.reset();
     for (auto& filter : filterA_) {
         filter.reset();
     }
@@ -173,16 +174,31 @@ void GranularEngine::rebuildWindow(const GranularParams& params) noexcept {
     activeWindowType_ = params.window;
 }
 
-void GranularEngine::startGrain(int voice, const GranularParams& params, double entropy) noexcept {
+void GranularEngine::startGrain(int voice,
+                                const GranularParams& params,
+                                double entropy,
+                                int blockOffset,
+                                const LFOSettings& lfo) noexcept {
     Grain& grain = voices_[static_cast<std::size_t>(voice)];
 
     // Entropia local modula a dispersao: regiao compressada (H alto) espalha
     // mais, regiao repetitiva (H baixo) fica mais ancorada.
     std::uint64_t state = kRngSeed + static_cast<std::uint64_t>(voice) * 0x9E3779B1ull;
 
+    // LFO amostrado no instante exato do nascimento (offset dentro do bloco),
+    // e nao no inicio do bloco: a 20 Hz com bloco de 256, o inicio e o fim
+    // estao a 0,13 ciclos de distancia. So entra se o alvo for posicao; com
+    // depth 0 o termo e' zero e nada muda.
+    const double lfoPosition =
+        (lfo.target == LFOTarget::kPosition)
+            ? static_cast<double>(lfo_.valueAt(lfo.wave, lfo.rateHz, blockOffset, sampleRate_)) *
+                  static_cast<double>(lfo.depth) * 0.25
+            : 0.0;
+
     const double base = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
     const double spread = static_cast<double>(params.spray) * (0.5 + 0.5 * entropy / 8.0);
-    grain.position = std::clamp(base + ((nextRandom(state) * 2.0 - 1.0) * spread), 0.0, 1.0);
+    grain.position =
+        std::clamp(base + ((nextRandom(state) * 2.0 - 1.0) * spread) + lfoPosition, 0.0, 1.0);
 
     // Detune aleatorio por grao, somado a afinacao antes da razao. Usa a mesma
     // sequencia do spray (state), e nao uma semente nova: uma semente nova por
@@ -198,6 +214,15 @@ void GranularEngine::startGrain(int voice, const GranularParams& params, double 
             : 0.0;
     const double detune = (nextRandom(state) * 2.0 - 1.0) * randomRange;
 
+    // LFO no pitch, em semitons: ±12 com depth cheio. Soma ao detune
+    // aleatorio antes da razao, pelo mesmo caminho — as duas modulacoes sao
+    // independentes e comutam na soma.
+    const double lfoPitch = (lfo.target == LFOTarget::kPitch)
+                                ? static_cast<double>(lfo_.valueAt(
+                                      lfo.wave, lfo.rateHz, blockOffset, sampleRate_)) *
+                                      static_cast<double>(lfo.depth) * 12.0
+                                : 0.0;
+
     // A taxa de reproducao e' a razao de semitons, e o avanco por amostra tem
     // que ser ela dividida pelo comprimento da fonte: 'position' e' normalizada
     // em [0, 1], entao somar a taxa crua faz o grao varrer o arquivo inteiro em
@@ -210,7 +235,7 @@ void GranularEngine::startGrain(int voice, const GranularParams& params, double 
     const double tuned = std::isfinite(static_cast<double>(params.pitchSemitones))
                              ? static_cast<double>(params.pitchSemitones)
                              : 0.0;
-    const double ratio = std::pow(2.0, (tuned + detune) / 12.0);
+    const double ratio = std::pow(2.0, (tuned + detune + lfoPitch) / 12.0);
     const double rate = std::clamp(ratio, 0.5, 2.0);
     grain.readStep = (sourceCount_ > 0) ? rate / static_cast<double>(sourceCount_) : 0.0;
 
@@ -225,7 +250,6 @@ void GranularEngine::startGrain(int voice, const GranularParams& params, double 
     // no ataque como clique. A alternativa ("voz continua") exigiria provar que
     // cauda congelada e' desejada; ninguem provou, e o reset parcial e' o que
     // um musico espera de um novo disparo.
-    // MUTACAO PROBE 2: sem zero (restaurar depois)
     filterA_[static_cast<std::size_t>(voice)].reset();
     filterB_[static_cast<std::size_t>(voice)].reset();
 
@@ -260,6 +284,22 @@ void GranularEngine::processBlock(float* left,
         return;
     }
 
+    // LFO saneado uma vez por bloco, aqui em cima para os dois caminhos de
+    // saida o verem: taxa em [0, 20] (NaN volta a 1,0), profundidade em
+    // [0, 1] (NaN desliga), alvo e forma saneados. Taxa zero congela a fase —
+    // vira offset estatico, que e' uso legitimo, nao erro.
+    const float lfoRate = std::isfinite(params.lforateHz)
+                              ? std::clamp(params.lforateHz, 0.0f, 20.0f)
+                              : 1.0f;
+    const float lfoDepth = std::isfinite(params.lfodepth)
+                               ? std::clamp(params.lfodepth, 0.0f, 1.0f)
+                               : 0.0f;
+    const LFOSettings lfoSettings{lfoRate, lfoDepth, sanitizeLFOTarget(params.lfotarget),
+                                  sanitizeLFOWave(params.lfowave)};
+    // Valor do bloco para densidade e cutoff, que sao por bloco e nao por grao.
+    // Lido na fase do inicio do bloco: o advance so corre no fim.
+    const float lfoBlock = lfo_.blockValue(lfoSettings.wave);
+
     for (int i = 0; i < numSamples; ++i) {
         left[i] = 0.0f;
         right[i] = 0.0f;
@@ -271,6 +311,9 @@ void GranularEngine::processBlock(float* left,
         // O gate avanca mesmo sem material, senao fica congelado no meio da
         // rampa e a primeira nota depois de carregar entra com ganho parcial.
         applyGate(left, right, numSamples, params);
+        // O LFO avanca mesmo sem material: e' tempo absoluto, e parar a fase
+        // sem fonte partia o determinismo entre corridas com e sem material.
+        lfo_.advance(lfoRate, numSamples, sampleRate_);
         // Publica mesmo assim. Sem material nao ha graos, e o display tem de
         // deixar de os desenhar: se este caminho nao publicasse, o ultimo
         // publish continuaria na tela depois do ficheiro ser fechado.
@@ -285,16 +328,27 @@ void GranularEngine::processBlock(float* left,
     // comparacao de 7 valores por bloco. O estado continua por voz, porque cada
     // voz esta num ponto diferente da sua historia — so os coeficientes sao
     // partilhados.
+    //
+    // O cutoff do f1 entra ja modulado pelo LFO (alvo cutoff, ±2 oitavas em
+    // escala log, que e' como corte se ouve). A comparacao do cache usa o valor
+    // efetivo, e nao o cru: comparar o cru recalcularia a cada bloco com o LFO
+    // ligado, mesmo parado.
     const FilterType f1type = sanitizeFilterType(params.f1type);
     const FilterType f2type = sanitizeFilterType(params.f2type);
-    if (f1type != lastF1Type_ || params.f1cutoffHz != lastF1Cutoff_ ||
+    const float f1cutoff =
+        (lfoSettings.target == LFOTarget::kCutoff)
+            ? params.f1cutoffHz *
+                  static_cast<float>(std::pow(2.0, static_cast<double>(lfoBlock) *
+                                                       static_cast<double>(lfoDepth) * 2.0))
+            : params.f1cutoffHz;
+    if (f1type != lastF1Type_ || f1cutoff != lastF1Cutoff_ ||
         params.f1q != lastF1Q_ || f2type != lastF2Type_ ||
         params.f2cutoffHz != lastF2Cutoff_ || params.f2q != lastF2Q_ ||
         sampleRate_ != lastFilterSampleRate_) {
-        coeffsA_ = makeBiquadCoeffs(f1type, params.f1cutoffHz, params.f1q, sampleRate_);
+        coeffsA_ = makeBiquadCoeffs(f1type, f1cutoff, params.f1q, sampleRate_);
         coeffsB_ = makeBiquadCoeffs(f2type, params.f2cutoffHz, params.f2q, sampleRate_);
         lastF1Type_ = f1type;
-        lastF1Cutoff_ = params.f1cutoffHz;
+        lastF1Cutoff_ = f1cutoff;
         lastF1Q_ = params.f1q;
         lastF2Type_ = f2type;
         lastF2Cutoff_ = params.f2cutoffHz;
@@ -302,7 +356,21 @@ void GranularEngine::processBlock(float* left,
         lastFilterSampleRate_ = sampleRate_;
     }
 
-    const double spawnPerSample = static_cast<double>(params.densityGrainsPerSec) / sampleRate_;
+    // Densidade modulada pelo LFO (alvo density, x[0,5, 1,5]): com lfo em -1 e
+    // depth cheio, metade da densidade — nunca zero nem negativa, porque zero
+    // calava o motor por modulacao e negativo nao tem sentido.
+    const float densityMod = (lfoSettings.target == LFOTarget::kDensity)
+                                 ? 1.0f + lfoBlock * lfoDepth * 0.5f
+                                 : 1.0f;
+    // Saneada e nunca negativa: NaN/Inf em `static_cast<int>` e' UB, densidade
+    // zero em `1,0 / spawnPerSample` e' `int(Inf)` (UB), e negativa punha `at`
+    // negativo e escrevia fora do buffer. Zero e' silencio legitimo (sem
+    // spawns); negativo trunca em zero; NaN/Inf viram zero, e nao default com
+    // som, porque densidade inventada e' pior que motor quieto.
+    const double rawDensity = std::isfinite(static_cast<double>(params.densityGrainsPerSec))
+                                  ? std::max(static_cast<double>(params.densityGrainsPerSec), 0.0)
+                                  : 0.0;
+    const double spawnPerSample = rawDensity * static_cast<double>(densityMod) / sampleRate_;
     const double lastIndex = static_cast<double>(sourceCount_ - 1);
     const double positionPoint = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
 
@@ -313,7 +381,7 @@ void GranularEngine::processBlock(float* left,
         const double entropy = (entropyPointCount_ > 0)
             ? static_cast<double>(entropyCurve_[point])
             : 4.0;
-        startGrain(voice, params, entropy);
+        startGrain(voice, params, entropy, atSample, lfoSettings);
         voices_[static_cast<std::size_t>(voice)].writeIndex = atSample;
     };
 
@@ -379,7 +447,9 @@ void GranularEngine::processBlock(float* left,
     // Espalha os graos ao longo do bloco. A posicao usa o intervalo entre dois
     // graos, e nao i/spawnPerSample: com densidade baixa o segundo grao nasce
     // depois do fim do bloco, e i/spawnPerSample jogaria todos no ultimo.
-    const int spacing = static_cast<int>(1.0 / spawnPerSample);
+    // Com densidade zero nao ha spawn e o spacing nao existe: o ramo evita o
+    // `int(Inf)` que o calculo direto daria.
+    const int spacing = (spawnPerSample > 0.0) ? static_cast<int>(1.0 / spawnPerSample) : numSamples;
     for (int i = 0; i < toSpawn; ++i) {
         const int at = std::min(i * spacing, numSamples - 1);
         for (int voice = 0; voice < kMaxVoices; ++voice) {
@@ -408,6 +478,11 @@ void GranularEngine::processBlock(float* left,
     limiterRight_.processBlock(right, numSamples);
 
     lastActiveVoices_ = activeVoiceCount();
+
+    // Avanca a fase para o proximo bloco, depois de todos os spawns a terem
+    // lido a fase deste. Uma vez por bloco, e nunca por amostra: e' O(1) com
+    // uma soma (sem wrap por desenho — o indice S&H precisa da fase inteira).
+    lfo_.advance(lfoRate, numSamples, sampleRate_);
 
     // Publica no fim, e nao dentro do renderVoice: a partir daqui as janelas e as
     // posicoes de todos os graos deste bloco ja estao escritas, e e' o que a
