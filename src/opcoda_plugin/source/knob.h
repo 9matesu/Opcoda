@@ -1,6 +1,6 @@
 #pragma once
 
-#include "boxed_label.h"
+#include "fonts.h"
 #include "palette.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -43,9 +43,16 @@ public:
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(BoxedLabel::sansFont(10.0f, true));
+        title_.setFont(fonts().sans(10.0f, true));
         title_.setColour(juce::Label::textColourId, palette::textSub);
         addAndMakeVisible(title_);
+
+        // Valor em texto puro, sem caixa: a moldura valBox era ruido repetido
+        // seis vezes, e o numero alinha-se ao centro como antes.
+        value_.setJustificationType(juce::Justification::centred);
+        value_.setFont(fonts().sans(10.0f));
+        value_.setColour(juce::Label::textColourId, palette::textDark);
+        value_.setInterceptsMouseClicks(false, false);
 
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
@@ -137,7 +144,7 @@ private:
 
     juce::Slider slider_;
     juce::Label title_;
-    BoxedLabel value_ {palette::valBox, palette::chassisBorder};
+    juce::Label value_;
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
 };

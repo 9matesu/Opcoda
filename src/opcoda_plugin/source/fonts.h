@@ -40,6 +40,9 @@ struct Fonts {
 
     // A fabrica de que a interface inteira depende. Todas as fontes do plugin
     // passam por aqui, e nao ha um segundo sitio onde se escreve uma.
+    //
+    // Era metodo de BoxedLabel; o componente morreu (caixas fora) e a fabrica
+    // ficou, porque continua a ser o unico caminho para a fonte embebida.
     [[nodiscard]] juce::Font sans(float height, bool strong = false) const {
         if (const auto& face = strong ? sansStrong : sansRegular) {
             return juce::Font {juce::FontOptions {face}.withHeight(height)};

@@ -36,7 +36,7 @@ HexGrid::HexGrid() {
     setInterceptsMouseClicks(true, false);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 
-    font_ = BoxedLabel::sansFont(11.0f);
+    font_ = fonts().sans(11.0f);
 
     // 4.1.2 Nome, funcao e valor. A grelha e' operada so com o rato, mas nao
     // pode ser um buraco sem nome para quem navega por leitor de tela: o nome

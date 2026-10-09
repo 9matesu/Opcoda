@@ -87,13 +87,10 @@ void setIfChanged(juce::Label& label, const juce::String& text) {
 
 PluginEditor::PluginEditor(PluginProcessor& processor)
     : juce::AudioProcessorEditor(&processor),
-      owner_(processor),
-      fileName_(palette::subPanel, palette::chassisBorder),
-      formatTag_(palette::subPanel, palette::chassisBorder),
-      fileSize_(palette::subPanel, palette::chassisBorder) {
+      owner_(processor) {
     setLookAndFeel(&lookAndFeel_);
 
-    makePlainLabel(title_, "Opcoda", palette::textDark, BoxedLabel::sansFont(14.0f, true));
+    makePlainLabel(title_, "Opcoda", palette::textDark, fonts().sans(13.0f, true));
     // **O subtítulo, o contador de vozes do cabeçalho, a dica de arrasto e o título do
     // módulo saíram todos, e cada um tinha um duplo algures no ecrã.**
     //
@@ -108,9 +105,7 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     // Nenhum deles levava informacao que nao estivesse escrita noutro sitio. O que
     // fica no cabeçalho é o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
     // tamanho.
-    makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::sansFont(10.0f));
-
-    fileName_.setText("-", juce::dontSendNotification);
+    makePlainLabel(status_, "", palette::textOnDark, fonts().sans(10.0f));
 
     buildHeader();
     buildViewButtons();
@@ -205,16 +200,27 @@ void PluginEditor::buildHeader() {
     };
 
     for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_,
-                          &transportReadout_, &peakReadout_, &rateReadout_,
-                          &voicesReadout_}) {
+                           &transportReadout_, &peakReadout_, &rateReadout_,
+                           &voicesReadout_}) {
         addAndMakeVisible(*readout);
+        makePlainLabel(*readout, "", palette::textOnDark, fonts().sans(10.0f));
+        // Centrado como antes, quando havia caixa: a posicao do texto na faixa
+        // nao muda, so some a moldura. Mudar o alinhamento junto seria duas
+        // mudancas visuais numa.
+        readout->setJustificationType(juce::Justification::centred);
         readout->setInterceptsMouseClicks(false, false);
         // A cor de texto por omissao do Label e' quase preta e desaparece sobre
         // o display escuro. textOnDark mantem a leitura acima de 4,5:1, que e'
         // o que o criterio 1.4.3 exige. O rodape vive no display, nao no chassis
         // claro, e por isso nao pode usar os tokens de superficie clara.
-        readout->setColour(juce::Label::textColourId, palette::textOnDark);
     }
+
+    makePlainLabel(fileName_, "-", palette::textDark, fonts().sans(10.0f));
+    makePlainLabel(formatTag_, "", palette::textDark, fonts().sans(10.0f));
+    makePlainLabel(fileSize_, "", palette::textDark, fonts().sans(10.0f));
+    fileName_.setJustificationType(juce::Justification::centred);
+    formatTag_.setJustificationType(juce::Justification::centred);
+    fileSize_.setJustificationType(juce::Justification::centred);
 
     loadButton_.setButtonText("LOAD");
     loadButton_.setTooltip("Escolher um binario para sintetizar");

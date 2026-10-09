@@ -1,6 +1,6 @@
 #pragma once
 
-#include "boxed_label.h"
+#include "fonts.h"
 #include "palette.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -228,7 +228,7 @@ public:
                         bool shouldDrawButtonAsDown) override {
         const auto bounds = button.getLocalBounds().toFloat();
 
-        g.setFont(BoxedLabel::sansFont(10.0f, true));
+        g.setFont(fonts().sans(10.0f, true));
         g.setColour(button.findColour(juce::TextButton::textColourOffId)
                         .withAlpha(shouldDrawButtonAsDown ? 0.9f : 1.0f));
 

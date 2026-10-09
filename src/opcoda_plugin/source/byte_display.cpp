@@ -42,7 +42,7 @@ ByteDisplay::ByteDisplay() {
     // escreve e' que o componente quer o foco do teclado. E' setWantsKeyboardFocus.
     setWantsKeyboardFocus(true);
 
-    font_ = BoxedLabel::sansFont(10.0f);
+    font_ = fonts().sans(10.0f);
 
     // 4.1.2. O nome diz o que e' e o texto de ajuda diz o que se pode fazer, porque
     // um componente que so se opera com o rato e' um buraco sem nome para quem

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "boxed_label.h"
+#include "fonts.h"
 #include "palette.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -78,7 +78,7 @@ private:
     AddressEditor editor_;
     // Pela fabrica e nao por FontOptions directo: e' o unico caminho para uma
     // fonte, e um FontOptions directo aqui voltaria a ser a fonte do sistema.
-    juce::Font font_ {BoxedLabel::sansFont(11.0f)};
+    juce::Font font_ {fonts().sans(11.0f)};
     std::uint64_t highestAddress_ {0};
     std::uint64_t shownAddress_ {0};
     bool updating_ {false};

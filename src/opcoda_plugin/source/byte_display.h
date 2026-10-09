@@ -1,7 +1,7 @@
 #pragma once
 
-#include "boxed_label.h"
 #include "animator.h"
+#include "fonts.h"
 #include "hex_grid.h"
 #include "palette.h"
 #include "plugin_processor.h"
@@ -307,7 +307,7 @@ private:
     std::uint32_t cachedColumnCount_ {0};
     bool cacheValid_ {false};
 
-    juce::Font font_ {BoxedLabel::sansFont(10.0f)};
+    juce::Font font_ {fonts().sans(10.0f)};
 };
 
 } // namespace opcoda

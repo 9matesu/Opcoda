@@ -68,7 +68,7 @@ bool parseHex(const juce::String& text, std::uint64_t& out) {
 } // namespace
 
 ByteAddressField::ByteAddressField() {
-    font_ = BoxedLabel::sansFont(11.0f);
+    font_ = fonts().sans(11.0f);
 
     editor_.setFont(font_);
     editor_.setColour(juce::TextEditor::textColourId, palette::textOnDark);

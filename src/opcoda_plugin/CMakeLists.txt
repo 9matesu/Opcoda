@@ -65,7 +65,6 @@ target_sources(Opcoda
         source/look_and_feel.h
         source/knob.h
         source/led.h
-        source/boxed_label.h
         source/animator.h
         source/display_panel.h
         source/hex_grid.cpp

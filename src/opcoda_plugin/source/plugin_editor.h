@@ -1,6 +1,5 @@
 #pragma once
 
-#include "boxed_label.h"
 #include "byte_display.h"
 #include "byte_address_field.h"
 #include "display_panel.h"
@@ -208,22 +207,26 @@ private:
     void buildViewButtons();
     void updateViewButtons();
 
-    BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel status_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // Texto puro, sem caixa nem moldura. As BoxedLabel morreram aqui: o contorno
+    // de 1 px em cada leitura era o que dava a cara de painel de 2006, e a
+    // informacao nao precisa dele. O contraste vem da cor do texto, que continua
+    // textDark no claro e textOnDark no escuro.
+    juce::Label title_;
+    juce::Label status_;
 
-    // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
-    // mock. Todas em texto, nunca so por cor.
-    BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel positionReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel transportReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // Rodape de telemetria: leituras em Inter, como no resto. Todas em texto,
+    // nunca so por cor.
+    juce::Label entropyReadout_;
+    juce::Label positionReadout_;
+    juce::Label offsetReadout_;
+    juce::Label transportReadout_;
+    juce::Label peakReadout_;
+    juce::Label rateReadout_;
+    juce::Label voicesReadout_;
 
-    BoxedLabel fileName_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel formatTag_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel fileSize_ {palette::subPanel, palette::chassisBorder};
+    juce::Label fileName_;
+    juce::Label formatTag_;
+    juce::Label fileSize_;
 
     juce::TextButton loadButton_;
     std::vector<std::unique_ptr<Knob>> knobs_;
