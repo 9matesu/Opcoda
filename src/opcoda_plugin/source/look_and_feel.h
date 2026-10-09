@@ -134,17 +134,23 @@ public:
         }
     }
 
-    // Botao com bisel: borda clara em cima e escura embaixo, que e' a leitura de
-    // tecla fisica. Pressionado inverte o bisel e afunda 1 px.
+    // Botao sem cromo: icone ou palavra solta sobre o chassi, sem fundo, sem
+    // bisel, sem sombra. O componente continua juce::TextButton — teclado, foco
+    // e AccessibilityHandler de graca — so o desenho achatou.
     //
-    // Os quatro estados - repouso, sobreposto, premido e ligado - sao
-    // distinguiveis sem cor. O ligado ganha uma barra de 1 px no lado esquerdo
-    // porque o laranja sobre o chassis claro da 1,24:1
-    // (design/DESIGN-SYSTEM.md:65), e um botao cuja unica pista de estado e' essa
-    // cor nao passa o 1.4.3.
+    // O que diz qual botao e' vai na propriedade `uiIcon`: "transport" desenha
+    // ▶/■, "folder" desenha a pasta, "tab" desenha a palavra. Sem a propriedade
+    // nao se desenha nada, porque um botao sem icone e' um alvo invisivel e um
+    // alvo invisivel nao passa nem no 2.5.8 nem no bom senso.
+    //
+    // Os quatro estados continuam distinguiveis sem cor: repouso e' o icone
+    // quieto, sobreposto ganha o banho de alfa, premido escurece, e ligado troca
+    // a forma (▶ vira ■, aba ganha o filete). A troca de palavra PLAY/STOP virou
+    // troca de forma pelo mesmo motivo que a criou: o estado tem de se ler sem
+    // ver cor, e forma e' o que o 1.4.1 pede.
     void drawButtonBackground(juce::Graphics& g,
                               juce::Button& button,
-                              const juce::Colour& backgroundColour,
+                              const juce::Colour&,
                               bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override {
         // Os limites sao os do botao e nao os deste LookAndFeel. Os dois derives
@@ -156,56 +162,25 @@ public:
             return;
         }
 
-        const bool isOn = button.getToggleState();
-
-        auto base = isOn ? palette::subPanel : backgroundColour;
+        // Banho de alfa no hover e no premido: e' o unico relevo que sobrou, e
+        // chega porque o icone ja tem forma propria.
         if (shouldDrawButtonAsHighlighted && !shouldDrawButtonAsDown) {
-            base = base.brighter(0.12f);
+            g.setColour(palette::alpha(juce::Colours::black, 0.07f));
+            g.fillRoundedRectangle(reduced, 4.0f);
         }
         if (shouldDrawButtonAsDown) {
-            base = base.darker(0.10f);
+            g.setColour(palette::alpha(juce::Colours::black, 0.12f));
+            g.fillRoundedRectangle(reduced, 4.0f);
         }
 
-        // Sombra de assentamento: o botao e' uma tecla sobre o painel, nao tinta
-        // sobre ele. Um rectangulo deslocado 1 px para baixo, atras do corpo —
-        // e no estado premido a sombra some, porque a tecla afundou.
-        if (!shouldDrawButtonAsDown) {
-            g.setColour(palette::alpha(juce::Colours::black, 0.14f));
-            g.fillRoundedRectangle(reduced.translated(0.0f, 1.0f), 2.0f);
-        }
-
-        // Gradiente vertical: a face e' mais clara em cima do que em baixo, e o
-        // premido e' o inverso. E' o que da a sensacao de tecla em vez de
-        // rectangulo.
-        const auto topColour = shouldDrawButtonAsDown ? base.darker(0.10f)
-                                                      : base.brighter(0.10f);
-        const auto bottomColour = shouldDrawButtonAsDown ? base.brighter(0.02f)
-                                                         : base.darker(0.06f);
-        g.setGradientFill(juce::ColourGradient {topColour, reduced.getTopLeft(), bottomColour,
-                                                reduced.getBottomLeft(), false});
-        g.fillRoundedRectangle(reduced, 2.0f);
-
-        // Bisel: realce em cima, sombra em baixo. A espessura e' a mesma nos dois
-        // lados, que era exactamente o que esticar a peca fotografada nao
-        // permitia.
-        g.setColour(palette::alpha(juce::Colours::white,
-                                   shouldDrawButtonAsDown ? 0.10f : 0.35f));
-        g.drawHorizontalLine(juce::roundToInt(reduced.getY() + 0.5f), reduced.getX() + 1.5f,
-                             reduced.getRight() - 1.5f);
-        g.setColour(palette::alpha(palette::chassisBorder,
-                                   shouldDrawButtonAsDown ? 0.35f : 0.95f));
-        g.drawHorizontalLine(juce::roundToInt(reduced.getBottom() - 0.5f), reduced.getX() + 1.5f,
-                             reduced.getRight() - 1.5f);
-        g.drawRoundedRectangle(reduced, 2.0f, 1.0f);
-
-        // Estado ligado: barra de 1 px a toda a altura do lado esquerdo mais um
-        // contorno de acento. E' o sinal que sobrevive a quem nao distingue as
-        // cores, e e' o mesmo que as tabs de secao removidas usavam.
-        if (isOn) {
+        // Aba activa: filete de acento em baixo. E' pista redundante — o texto da
+        // aba activa vai em forte e escuro, e e' isso que carrega o estado — por
+        // isso o 1,24:1 do laranja sobre o chassi nao conta aqui.
+        if (button.getToggleState() &&
+            button.getProperties()["uiIcon"].toString() == "tab") {
             g.setColour(palette::accent);
-            g.fillRect(juce::Rectangle<float> {reduced.getX() + 0.5f, reduced.getY() + 1.5f, 1.0f,
-                                               reduced.getHeight() - 3.0f});
-            g.drawRoundedRectangle(reduced, 2.0f, 1.0f);
+            g.fillRect(juce::Rectangle<float> {reduced.getX() + 4.0f, reduced.getBottom() - 2.5f,
+                                               reduced.getWidth() - 8.0f, 2.0f});
         }
 
         // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
@@ -213,30 +188,92 @@ public:
         // o painel claro e accent ali da 1,24:1, abaixo dos 3:1 do 1.4.11.
         if (button.hasKeyboardFocus(true)) {
             g.setColour(palette::focusRing);
-            g.drawRoundedRectangle(reduced.reduced(1.0f), 2.0f, 2.0f);
+            g.drawRoundedRectangle(reduced.reduced(1.0f), 4.0f, 2.0f);
         }
     }
 
-    // O texto e' desenhado em codigo e nunca vem de uma peca.
-    //
-    // Centralizado, com 3 px de recuo a esquerda para nao cair em cima da barra do
-    // estado ligado. E' tambem o que torna o estado legivel sem cor, porque o
-    // botao troca a palavra: PLAY para STOP.
+    // O icone e' desenhado em codigo e nunca vem de uma peca nem de uma fonte de
+    // icones, porque nao ha nenhuma no repositorio e uma fonte so para tres
+    // glifos seria peso morto.
     void drawButtonText(juce::Graphics& g,
                         juce::TextButton& button,
                         bool,
-                        bool shouldDrawButtonAsDown) override {
-        const auto bounds = button.getLocalBounds().toFloat();
+                        bool) override {
+        const auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+        if (bounds.getWidth() <= 1.0f || bounds.getHeight() <= 1.0f) {
+            return;
+        }
 
-        g.setFont(fonts().sans(10.0f, true));
-        g.setColour(button.findColour(juce::TextButton::textColourOffId)
-                        .withAlpha(shouldDrawButtonAsDown ? 0.9f : 1.0f));
+        // Desligado usa textMuted em vez de sumir: um icone que some quando o
+        // transporte do host para parece que o botao foi embora, e um botao que
+        // recusa o toque tem de continuar la para recusar.
+        const auto ink = button.isEnabled() ? palette::textDark : palette::textMuted;
+        const auto kind = button.getProperties()["uiIcon"].toString();
 
-        g.drawText(button.getButtonText(), bounds.reduced(3.0f, 0.0f),
-                   juce::Justification::centred, false);
+        if (kind == "transport") {
+            paintTransportGlyph(g, bounds, button.getToggleState(), ink);
+            return;
+        }
+        if (kind == "folder") {
+            paintFolderGlyph(g, bounds, ink);
+            return;
+        }
+
+        // Aba de vista: a palavra curta, forte e escura quando activa, normal e
+        // secundaria quando nao. A mudanca de peso e cor carrega o estado; o
+        // filete desenhado no fundo e' redundancia.
+        const auto on = button.getToggleState();
+        g.setFont(fonts().sans(10.0f, on));
+        g.setColour(on ? palette::textDark : palette::textSub);
+        g.drawText(button.getButtonText(), bounds, juce::Justification::centred, false);
     }
 
-private:
+ private:
+    // Transporte: triangulo para tocar, quadrado para parar, centrados na area
+    // util do botao. O tamanho e' fracao do menor lado para nao encostar na
+    // borda quando a janela encolhe o botao.
+    static void paintTransportGlyph(juce::Graphics& g,
+                                    const juce::Rectangle<float>& bounds,
+                                    bool playing,
+                                    juce::Colour ink) {
+        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.42f;
+        const auto centre = bounds.getCentre();
+
+        g.setColour(ink);
+        if (playing) {
+            g.fillRect(juce::Rectangle<float> {centre.x - side * 0.5f, centre.y - side * 0.5f,
+                                               side, side});
+            return;
+        }
+
+        juce::Path triangle;
+        triangle.addTriangle(centre.x - side * 0.5f, centre.y - side * 0.62f,
+                             centre.x - side * 0.5f, centre.y + side * 0.62f,
+                             centre.x + side * 0.62f, centre.y);
+        g.fillPath(triangle);
+    }
+
+    // Pasta: costas com aba e frente por cima, so com contorno. Cheia seria um
+    // borrao a 14 px; o contorno le-se como pasta e deixa o chassi respirar.
+    static void paintFolderGlyph(juce::Graphics& g,
+                                 const juce::Rectangle<float>& bounds,
+                                 juce::Colour ink) {
+        const auto w = juce::jmin(bounds.getWidth() * 0.52f, 20.0f);
+        const auto h = w * 0.72f;
+        const auto x = bounds.getCentreX() - w * 0.5f;
+        const auto y = bounds.getCentreY() - h * 0.5f;
+
+        g.setColour(ink);
+        juce::Path folder;
+        folder.addRoundedRectangle(x, y + h * 0.22f, w, h * 0.78f, 1.5f);
+        folder.startNewSubPath(x, y + h * 0.22f);
+        folder.lineTo(x, y);
+        folder.lineTo(x + w * 0.38f, y);
+        folder.lineTo(x + w * 0.48f, y + h * 0.22f);
+        g.strokePath(folder, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
+                                                  juce::PathStrokeType::rounded});
+    }
+
     // O corpo do knob: aro serrilhado, face recuada e ponto de origem.
     //
     // A luz vem de cima e da esquerda, como numa fotografia de estudio com a luz

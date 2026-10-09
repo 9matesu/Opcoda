@@ -31,7 +31,6 @@ constexpr int kMinWidth {480};
 constexpr int kMinHeight {420};
 
 constexpr int kAddressFieldWidth {132};
-constexpr int kSnapButtonWidth {72};
 constexpr int kPlayButtonWidth {60};
 constexpr int kStatusHeight {14};
 constexpr int kFooterHeight {16};
@@ -156,13 +155,12 @@ void PluginEditor::buildHeader() {
 
     for (auto* component : {static_cast<juce::Component*>(&grid_),
                             static_cast<juce::Component*>(&address_),
-                            static_cast<juce::Component*>(&snapButton_),
                             static_cast<juce::Component*>(&playButton_),
                             static_cast<juce::Component*>(&voicesLed_)}) {
         addAndMakeVisible(*component);
     }
 
-    // A grelha escreve o POSITION. O duplo clique e o botao alternam entre a
+    // A grelha escreve o POSITION. O duplo clique e a tecla A alternam entre a
     // regiao exacta e a secao PE mais proxima; o metodo do Processor e' quem
     // decide o sentido da alternancia, porque e' ele quem guarda a regiao
     // exacta anterior.
@@ -179,16 +177,18 @@ void PluginEditor::buildHeader() {
     };
     grid_.onSnapRequestedFromKey = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
 
-    snapButton_.setButtonText("ALINHAR");
-    snapButton_.setTooltip(
-        "Alterna entre a regiao exacta e a secao PE mais proxima. Tambem na tecla A.");
-    snapButton_.setName("Alinhar a regiao a uma secao PE");
-    snapButton_.onClick = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
+    // Tecla A e duplo-clique na grelha alinham a regiao; nao ha botao porque o
+    // terceiro controle na linha de estado empurrava o texto para debaixo do
+    // campo. A dica vive no help text do display e em docs/10 — setHelpText e
+    // nao setTooltip, pelo mesmo motivo do HexGrid: o Component so expoe ajuda
+    // pelo AccessibilityHandler.
+    grid_.setHelpText("Duplo-clique ou tecla A: alinha a regiao a secao PE mais proxima.");
 
-    // Botao de transporte. E' um toggle, e o texto troca com o estado: e' a segunda
-    // pista de estado, e a que funciona para quem nao distingue o laranja do
-    // cinzento. O LookAndFeel desenha a barra de acento do lado esquerdo.
-    playButton_.setButtonText("PLAY");
+    // Botao de transporte. E' um toggle, e a forma troca com o estado (▶/■): e'
+    // a segunda pista de estado, e a que funciona para quem nao distingue cores.
+    // Sem texto e sem cromo — so o glifo, desenhado pelo LookAndFeel.
+    playButton_.getProperties().set("uiIcon", "transport");
+    playButton_.setButtonText("");
     playButton_.setClickingTogglesState(true);
     playButton_.setTooltip(
         "Percorre a regiao seleccionada de inicio a fim, sem nota MIDI. Tambem na "
@@ -222,8 +222,9 @@ void PluginEditor::buildHeader() {
     formatTag_.setJustificationType(juce::Justification::centred);
     fileSize_.setJustificationType(juce::Justification::centred);
 
-    loadButton_.setButtonText("LOAD");
-    loadButton_.setTooltip("Escolher um binario para sintetizar");
+    loadButton_.getProperties().set("uiIcon", "folder");
+    loadButton_.setButtonText("");
+    loadButton_.setTooltip("Escolher um binario para sintetizar (tecla L)");
     loadButton_.setName("Carregar binario");
     loadButton_.onClick = [this] { chooseFile(); };
 }
@@ -265,6 +266,9 @@ void PluginEditor::buildViewButtons() {
         spec.button->setClickingTogglesState(true);
         spec.button->setTooltip(juce::String {spec.spokenName} + ". " + spec.hint);
         spec.button->setName(spec.spokenName);
+        // Aba sem cromo: so a palavra e o filete do estado. O desenho e' do
+        // LookAndFeel, que trata "tab" sem fundo nem bisel.
+        spec.button->getProperties().set("uiIcon", "tab");
     }
 
     // Os tres botoes nao estao em grupo: cada um e' independente e e' o LookAndFeel
@@ -332,21 +336,19 @@ void PluginEditor::updateFooterVisibility() {
 void PluginEditor::updateStatusVisibility() {
     // O botao de reproducao nunca desaparece por falta de espaco: e' a unica
     // forma de ouvir o material sem teclado MIDI. O que se sacrifica e' o campo
-    // de endereco e o alinhamento, que escrevem sitios que o POSITION e o clique
-    // na grelha escrevem tambem.
+    // de endereco, que escreve um sitio que o POSITION e o clique na grelha
+    // escrevem tambem.
     playButton_.setVisible(owner_.hasSource());
-    snapButton_.setVisible(owner_.hasSource() && statusFitsSnap_);
     address_.setVisible(owner_.hasSource() && statusFitsAddress_);
 }
 
 void PluginEditor::refreshPlayButton() {
     const bool playing = owner_.isTransportPlaying();
 
-    // O texto e' a pista de estado que sobrevive a quem nao ve cor. PLAY e STOP
-    // sao palavras e nao simbolos, e nao ha fonte de iconos no plugin.
-    const auto text = juce::String {playing ? "STOP" : "PLAY"};
-    if (playButton_.getButtonText() != text) {
-        playButton_.setButtonText(text);
+    // A forma e' a pista de estado que sobrevive a quem nao ve cor: ▶ parado,
+    // ■ a tocar. O nome accessivel troca junto para o leitor de tela dizer o
+    // que o glifo mostra.
+    if ((playButton_.getName() == "Parar a reproducao") != playing) {
         playButton_.setName(playing ? "Parar a reproducao" : "Reproduzir a regiao");
     }
 
@@ -426,7 +428,9 @@ void PluginEditor::resized() {
     // "Granular Synthesizer" exigia. Com ele fora, o titulo precisa de metade.
     constexpr int kIdentityWidth {96};
     constexpr int kIdentityGap {12};
-    constexpr int kLoadWidth {76};
+    // 40 px porque e' um icone de pasta, nao a palavra LOAD: os 36 px que
+    // sobram vao para o nome do ficheiro, que e' quem precisa deles.
+    constexpr int kLoadWidth {40};
     constexpr int kNameGap {6};
     constexpr int kMinNameWidth {40};
     constexpr int kChipGap {4};
@@ -521,16 +525,15 @@ void PluginEditor::resized() {
     grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
                                           displayBounds.getWidth(), footerY - gridTop});
 
-    // O campo de endereco, o botao de alinhar e o botao de reproducao ficam na
-    // linha do estado, a direita. Ao lado do texto e nao no rodape porque sao
-    // controles: e' a zona do display que ja tem moldura, e um campo de texto
-    // dentro do rodape de leituras seria indistinguivel de uma leitura.
+    // O campo de endereco e o botao de reproducao ficam na linha do estado, a
+    // direita. Ao lado do texto e nao no rodape porque sao controles: e' a zona
+    // do display que ja tem moldura, e um campo de texto dentro do rodape de
+    // leituras seria indistinguivel de uma leitura.
     //
     // A cadeia desce da direita para a esquerda em largura fixa e degrada em vez
-    // de espremer, com o botao de reproducao a ser o ultimo a cair. A 480 px de
-    // janela, o display tem 480 e os tres controlos precisam de 276: sobra entao
-    // 200 px para o texto de estado, e a dica de arrasto de 300 px nao cabe. Por
-    // isso o que se sacrifica primeiro e' o campo de endereco, e nao a dica.
+    // de espremer, com o botao de reproducao a ser o ultimo a cair. Sem o
+    // alinhar, a 480 px de janela sobra espaco para o texto de estado e para o
+    // campo — o que se sacrifica primeiro continua a ser o campo, e nao a dica.
     const int controlY = displayBounds.getY() + 2;
     const int controlHeight = kStatusHeight + 2;
     const int controlGap = 6;
@@ -539,15 +542,8 @@ void PluginEditor::resized() {
                                                 controlY, kPlayButtonWidth, controlHeight});
     const int afterPlay = playButton_.getX() - controlGap;
 
-    // O alinhamento e' o segundo a cair: o campo de endereco escreve o mesmo
-    // sitio que o POSITION, e por isso e' o primeiro.
-    statusFitsSnap_ = afterPlay - kSnapButtonWidth >= displayBounds.getX() + 150;
-    snapButton_.setBounds(juce::Rectangle<int> {afterPlay - kSnapButtonWidth, controlY,
-                                                kSnapButtonWidth, controlHeight});
-    const int afterSnap = snapButton_.getX() - controlGap;
-
-    statusFitsAddress_ = afterSnap - kAddressFieldWidth >= displayBounds.getX() + 150;
-    address_.setBounds(juce::Rectangle<int> {afterSnap - kAddressFieldWidth, controlY,
+    statusFitsAddress_ = afterPlay - kAddressFieldWidth >= displayBounds.getX() + 150;
+    address_.setBounds(juce::Rectangle<int> {afterPlay - kAddressFieldWidth, controlY,
                                              kAddressFieldWidth, controlHeight});
 
     // O texto de estado e' medido depois dos controlos e nao antes, porque e' a
@@ -564,8 +560,7 @@ void PluginEditor::resized() {
     const int statusRight =
         juce::jmax(statusLeft + 40,
                    (hasSource && statusFitsAddress_) ? address_.getX() - controlGap
-                   : (hasSource && statusFitsSnap_) ? snapButton_.getX() - controlGap
-                                                   : afterPlay);
+                                                    : afterPlay);
     status_.setBounds(juce::Rectangle<int> {statusLeft, statusY, statusRight - statusLeft,
                                             kStatusHeight});
 
@@ -655,16 +650,17 @@ constexpr int kLedBoxWidth {12};
     //
     // Fica em cima do painel de parametros e nao dentro do display: e' um
     // instrumento de navegacao, e um instrumento que fica dentro da coisa que ele
-    // instrumenta desaparece quando a coisa muda. Tres botoes de 46 px com 4 de
-    // vao sao 150 px, e a 480 de janela ainda sobra para metade deles.
+    // instrumenta desaparece quando a coisa muda. Tres palavras sem cromo, 46 px
+    // cada com 4 de vao; a 480 de janela ainda sobra para metade delas.
     //
-    // O botao activo tem o mesmo tratamento visual do PLAY ligado: barra de acento
-    // a esquerda. E' o mesmo sinal, e o display inteiro tem assim uma linguagem so.
+    // A altura e' 22 px e nao 16: alvo de toque perto dos 24 do 2.5.8, com as
+    // teclas 1, 2 e 3 como caminho garantido. A aba activa leva peso forte e o
+    // filete — o texto carrega o estado, o filete e' redundancia.
     {
         constexpr int kViewButtonWidth {46};
-        constexpr int kViewButtonHeight {16};
+        constexpr int kViewButtonHeight {22};
         constexpr int kViewGap {4};
-        const auto viewRow = area.removeFromTop(kViewButtonHeight + 4);
+        const auto viewRow = area.removeFromTop(kViewButtonHeight + 2);
 
         struct View {
             juce::TextButton* button;
@@ -693,7 +689,7 @@ constexpr int kLedBoxWidth {12};
             if (!fitsAll && !isActive) {
                 continue;
             }
-            view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 2,
+            view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 1,
                                                          kViewButtonWidth, kViewButtonHeight});
             viewX += kViewButtonWidth + kViewGap;
         }

@@ -89,15 +89,14 @@ private:
     bool footerFitsEntropy_ {false};
     bool footerFitsTransport_ {false};
 
-    // Mesma regra para a linha de estado, que agora tem tres controlos e nao um.
-    //
-    // A ordem de sacrificio e' a do valor: o campo de endereco e' o primeiro a
-    // cair porque o POSITION e o clique na grelha escrevem o mesmo sitio, e o
-    // botao de alinhar o segundo. **O botao de reproducao e' o ultimo a sair**,
-    // porque e' a unica forma de ouvir o material sem teclado MIDI, e uma feature
-    // que desaparece quando a janela encolhe e' uma feature que ninguem encontra.
+    // Mesma regra para a linha de estado, que agora tem dois controlos e nao um:
+    // o campo de endereco cai primeiro porque o POSITION e o clique na grelha
+    // escrevem o mesmo sitio. O alinhar saiu da linha — tecla A e duplo-clique
+    // cobrem, e o terceiro controle empurrava o texto para debaixo do campo.
+    // **O botao de reproducao e' o ultimo a sair**, porque e' a unica forma de
+    // ouvir o material sem teclado MIDI, e uma feature que desaparece quando a
+    // janela encolhe e' uma feature que ninguem encontra.
     bool statusFitsAddress_ {false};
-    bool statusFitsSnap_ {false};
 
     void updateHeaderVisibility();
     void updateFooterVisibility();
@@ -183,11 +182,9 @@ private:
     // perguntas sobre a mesma regiao e porque o OE7 pede duas delas.
     ByteDisplay grid_;
 
-    // Os dois caminhos de teclado para o que o rato faz na grelha. O campo
-    // escreve o endereco da regiao; o botao substitui o Enter que o seletor
-    // antigo usava para alinhar a secao.
+    // O campo escreve o endereco da regiao. O alinhar nao tem botao: tecla A e
+    // duplo-clique na grelha sao os dois caminhos, e o help text do display diz.
     ByteAddressField address_;
-    juce::TextButton snapButton_;
 
     // Transporte de audicao. Fica na linha de estado ao lado do campo e do
     // alinhamento porque e' a zona do display que ja tem moldura: um botao dentro
