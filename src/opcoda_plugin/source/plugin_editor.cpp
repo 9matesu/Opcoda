@@ -763,19 +763,19 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
-    if (isTypedCharacter(key, '1')) {
+    if (isDigitKey(key, '1')) {
         grid_.setMode(ByteDisplay::ViewMode::waveform);
         updateViewButtons();
         return true;
     }
 
-    if (isTypedCharacter(key, '2')) {
+    if (isDigitKey(key, '2')) {
         grid_.setMode(ByteDisplay::ViewMode::hex);
         updateViewButtons();
         return true;
     }
 
-if (isTypedCharacter(key, '3')) {
+if (isDigitKey(key, '3')) {
         grid_.setMode(ByteDisplay::ViewMode::entropy);
         updateViewButtons();
         return true;
