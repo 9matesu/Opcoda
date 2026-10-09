@@ -137,9 +137,14 @@ public:
         }
     }
 
-    // Botao sem cromo: icone ou palavra solta sobre o chassi, sem fundo, sem
+    // Botao sem cromo: icone ou palavra solta sobre a superficie, sem fundo, sem
     // bisel, sem sombra. O componente continua juce::TextButton — teclado, foco
     // e AccessibilityHandler de graca — so o desenho achatou.
+    //
+    // A superficie importa e o botao nao a conhece: `uiOnDark` diz que ele mora
+    // sobre o display escuro (a linha de estado), e ai a tinta clara e' o que
+    // se le. Sem a propriedade, um glifo textDark sobre o display daria 1,14:1
+    // — invisivel — e o anel focusRing sumiria junto.
     //
     // O que diz qual botao e' vai na propriedade `uiIcon`: "transport" desenha
     // ▶/■, "folder" desenha a pasta, "tab" desenha a palavra. Sem a propriedade
@@ -166,13 +171,16 @@ public:
         }
 
         // Banho de alfa no hover e no premido: e' o unico relevo que sobrou, e
-        // chega porque o icone ja tem forma propria.
+        // chega porque o icone ja tem forma propria. Preto no claro, branco no
+        // escuro — o banho tem de se ver contra a superficie.
+        const auto onDark = button.getProperties()["uiOnDark"];
+        const auto wash = onDark ? juce::Colours::white : juce::Colours::black;
         if (shouldDrawButtonAsHighlighted && !shouldDrawButtonAsDown) {
-            g.setColour(palette::alpha(juce::Colours::black, 0.07f));
+            g.setColour(palette::alpha(wash, 0.08f));
             g.fillRoundedRectangle(reduced, 4.0f);
         }
         if (shouldDrawButtonAsDown) {
-            g.setColour(palette::alpha(juce::Colours::black, 0.12f));
+            g.setColour(palette::alpha(wash, 0.14f));
             g.fillRoundedRectangle(reduced, 4.0f);
         }
 
@@ -187,10 +195,12 @@ public:
         }
 
         // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
-        // focusRing e nao accent pelo mesmo motivo do knob: o botao esta' sobre
-        // o painel claro e accent ali da 1,24:1, abaixo dos 3:1 do 1.4.11.
+        // focusRing no claro (9,73:1), textOnDark no escuro (11,54:1): o anel
+        // tem de contrastar com a superficie, e accent nas duas daria 1,24:1 e
+        // 8,96:1 — a segunda ate passaria, mas o anel tem de ser um so.
         if (button.hasKeyboardFocus(true)) {
-            g.setColour(palette::focusRing);
+            g.setColour(button.getProperties()["uiOnDark"] ? palette::textOnDark
+                                                           : palette::focusRing);
             g.drawRoundedRectangle(reduced.reduced(1.0f), 4.0f, 2.0f);
         }
     }
@@ -207,10 +217,15 @@ public:
             return;
         }
 
-        // Desligado usa textMuted em vez de sumir: um icone que some quando o
-        // transporte do host para parece que o botao foi embora, e um botao que
-        // recusa o toque tem de continuar la para recusar.
-        const auto ink = button.isEnabled() ? palette::textDark : palette::textMuted;
+        // Desligado usa o apagado da superficie em vez de sumir: um icone que
+        // some quando o transporte do host para parece que o botao foi embora, e
+        // um botao que recusa o toque tem de continuar la para recusar.
+        // textSub no claro (6,38:1 — textMuted daria 2,87 e reprovaria),
+        // textOnDarkSub no escuro (6,49:1).
+        const auto onDark = static_cast<bool>(button.getProperties()["uiOnDark"]);
+        const auto ink = button.isEnabled()
+                             ? (onDark ? palette::textOnDark : palette::textDark)
+                             : (onDark ? palette::textOnDarkSub : palette::textSub);
         const auto kind = button.getProperties()["uiIcon"].toString();
 
         if (kind == "transport") {

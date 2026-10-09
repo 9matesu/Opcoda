@@ -191,6 +191,9 @@ void PluginEditor::buildHeader() {
     // a segunda pista de estado, e a que funciona para quem nao distingue cores.
     // Sem texto e sem cromo — so o glifo, desenhado pelo LookAndFeel.
     playButton_.getProperties().set("uiIcon", "transport");
+    // Na linha de estado, sobre o display escuro: tinta clara, ou o glifo some
+    // (textDark ali da 1,14:1).
+    playButton_.getProperties().set("uiOnDark", true);
     playButton_.setButtonText("");
     playButton_.setClickingTogglesState(true);
     playButton_.setTooltip(

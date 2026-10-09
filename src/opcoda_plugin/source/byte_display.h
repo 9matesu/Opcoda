@@ -165,9 +165,6 @@ public:
     void mouseWheelMove(const juce::MouseEvent& event,
                         const juce::MouseWheelDetails& wheel) override;
 
-    // Para o editor escrever o modo sem conhecer o enum.
-    static juce::String viewName(ViewMode mode);
-
 private:
     // A cache de colunas, com a chave que a invalida.
     //

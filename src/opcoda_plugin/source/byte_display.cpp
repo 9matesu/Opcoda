@@ -242,15 +242,6 @@ void ByteDisplay::setMode(ViewMode mode) {
     repaint();
 }
 
-juce::String ByteDisplay::viewName(ViewMode mode) {
-    switch (mode) {
-        case ViewMode::waveform: return "FORMA DE ONDA";
-        case ViewMode::hex: return "HEX";
-        case ViewMode::entropy: return "ENTROPIA";
-    }
-    return "DESCONHECIDO";
-}
-
 void ByteDisplay::resized() {
     // O hex ocupa tudo. Nas outras vistas e' invisivel mas continua a receber o
     // layout, para que a troca de vista nao mude a geometria do ecra.
