@@ -458,7 +458,9 @@ struct GateRig {
 
     GateRig() {
         engine.prepare(kSampleRate, kBlock);
-        engine.setGateSeconds(0.005);
+        // Sem setGateSeconds: os defaults do envelope (attack 5 ms, release
+        // 50 ms) ja sao o comportamento antigo de abertura, e o release novo
+        // e' propositalmente mais longo que a rampa antiga.
         source.assign(8192, 0.75f);
         engine.setSource(source.data(), source.size());
         params.densityGrainsPerSec = 60.0f;
@@ -504,14 +506,17 @@ TEST(GranularEngineGate, OpensAndClosesWithTheNote) {
     rig.engine.setSounding(true);
     EXPECT_TRUE(rig.engine.isSounding());
 
-    // A 50 graos por segundo o primeiro grao so nasce depois de dezenas de
+    // A 60 graos por segundo o primeiro grao so nasce depois de dezenas de
     // blocos, entao aaudio so aparece depois de renderizar tempo suficiente.
     rig.process(80);
     EXPECT_GT(rig.peak(), 1.0e-4f);
 
     rig.engine.setSounding(false);
     EXPECT_FALSE(rig.engine.isSounding());
-    rig.process(8);
+    // Release default de 50 ms a 48 kHz sao 2400 amostras: 24 blocos de 128
+    // fecham com folga. Oito blocos, que bastavam para a rampa antiga de 5 ms,
+    // deixariam a cauda a meio.
+    rig.process(24);
     EXPECT_LT(rig.peak(), 1.0e-6f);
 }
 
@@ -539,13 +544,16 @@ TEST(GranularEngineGate, RampIsGradualAndNotBinary) {
     EXPECT_GT(closing, 0.0f) << "fechou de uma vez, sem rampa";
     EXPECT_LT(closing, 1.0f);
 
-    rig.process(2);
+    // Release default de 50 ms: 20 blocos de 128 cobrem as 2400 amostras com
+    // folga, e o nivel tem de estar exatamente em zero — nao "quase", porque
+    // o release mede a partir do nivel de soltura e o tempo e' exato.
+    rig.process(20);
     EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
 }
 
 TEST(GranularEngineGate, RampTimeMatchesTheRequestedSeconds) {
     GateRig rig;
-    rig.engine.setGateSeconds(0.001);
+    rig.params.attackSeconds = 0.001f;
     rig.engine.setSounding(true);
 
     // 1 ms a 48 kHz sao 48 amostras: menos da metade de um bloco, entao o

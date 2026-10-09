@@ -425,8 +425,9 @@ const auto numSamples = buffer.getNumSamples();
 
     // O OR com as notas e' o que faz o botao funcionar sem MIDI: o motor so'
     // precisa de gate aberto para produzir, e gate aberto sem nota e' exactamente
-    // o que o transporte e'. A rampa de 5 ms do applyGate continua a valer, porque
-    // setSounding e' a mesma porta que as notas usam.
+    // o que o transporte e'. O ADSR com defaults (attack 5 ms) continua a valer,
+    // porque setSounding e' a mesma porta que as notas usam — e e' chamada a
+    // cada bloco, por isso o disparo e' na aresta e nao no nivel.
     engine_.setSounding(notes_.sounding() || playing);
     engine_.processBlock(buffer.getWritePointer(0),
                          buffer.getWritePointer(1),

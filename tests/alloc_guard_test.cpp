@@ -172,6 +172,15 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
             engine.setSounding(playing);
             engine.processBlock(left.data(), right.data(), kBlock, params);
         }
+
+        // A fase de release tambem corre dentro da janela: parar a meio e
+        // processar mais 20 blocos exercita o braco release do switch, que os
+        // 200 blocos acima nunca tocam porque o gate so abre.
+        transport.stop();
+        for (int block = 0; block < 20; ++block) {
+            engine.setSounding(transport.isPlaying());
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
     });
 
     EXPECT_EQ(violations, 0u)

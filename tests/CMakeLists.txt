@@ -31,6 +31,7 @@ add_executable(opcoda_tests
     transport_test.cpp
     transport_rate_test.cpp
     grain_params_test.cpp
+    adsr_test.cpp
     grain_trail_test.cpp
     pe_mutation_test.cpp)
 

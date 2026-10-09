@@ -58,6 +58,8 @@ Cada objetivo específico de `docs/04-objetivos.md` tem uma feature:
 | OE8 · isolamento | F003, F008 | pronto: guard de alocação e troca sem alocação verificados, agora também sobre o caminho do transporte; TSan indisponível no Windows |
 | OE9 · MIDI | F009 | pronto: gate por nota, sustain e 2 CCs mapeados; falta o ensaio no host |
 | T1–T4 | F010 | T1 e T3 prontos; T2 e T4 dependem de DAW instalado |
+| OE4 (params) | F011 | pronto: grainlevel, pitchrand e scanspeed no motor, 13 testes com fail-without-fix por mutação; UI liga na F015 |
+| OE4 (envelope) | F012 | pronto: ADSR por nota com disparo na aresta, 10 testes; sem nota presa (all-notes-off e sustain entram pela mesma aresta) |
 
 ## Agentes de revisão
 

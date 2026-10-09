@@ -59,15 +59,30 @@ void GranularEngine::prepare(double sampleRate, int maximumBlockSize) noexcept {
     fillWindow(WindowType::kHann, windowA_.data(), activeWindowLength_);
     activeWindowType_ = WindowType::kHann;
 
-    // Rampa de 5 ms para abrir e fechar sem degrau no sinal.
-    setGateSeconds(0.005);
-
     reset();
 }
 
-void GranularEngine::setGateSeconds(double seconds) noexcept {
-    const auto samples = (seconds > 0.0) ? sampleRate_ * seconds : 1.0;
-    gateStep_ = static_cast<float>(1.0 / samples);
+void GranularEngine::setSounding(bool on) noexcept {
+    // So a aresta dispara: o processador chama a cada bloco, e disparar por
+    // nivel reancoraria o ataque sessenta vezes por segundo e a nota nunca
+    // saia do ataque.
+    if (on == soundingCmd_) {
+        return;
+    }
+    soundingCmd_ = on;
+
+    if (on) {
+        // Re-disparo parte do nivel corrente, e nao do zero: no meio de um
+        // release, voltar a zero antes de subir seria o proprio degrau que o
+        // envelope existe para impedir.
+        envelopePhase_ = EnvelopePhase::attack;
+    } else {
+        // O release mede a partir daqui para fechar em tempo exato, qualquer
+        // que seja o nivel: com inclinacao fixa, soltar a meio do ataque
+        // fecharia mais rapido do que o knob diz.
+        releaseStartLevel_ = envelopeLevel_;
+        envelopePhase_ = EnvelopePhase::release;
+    }
 }
 
 void GranularEngine::reset() noexcept {
@@ -76,8 +91,10 @@ void GranularEngine::reset() noexcept {
     }
     spawnAccumulator_ = 0.0;
     lastActiveVoices_ = 0;
-    gateLevel_ = 0.0f;
-    gateTarget_ = 0.0f;
+    envelopeLevel_ = 0.0f;
+    soundingCmd_ = false;
+    envelopePhase_ = EnvelopePhase::idle;
+    releaseStartLevel_ = 0.0f;
     dcBlockerLeft_.prepare();
     dcBlockerRight_.prepare();
     limiterLeft_.prepare();
@@ -236,7 +253,7 @@ void GranularEngine::processBlock(float* left,
         dcBlockerRight_.processBlock(right, numSamples);
         // O gate avanca mesmo sem material, senao fica congelado no meio da
         // rampa e a primeira nota depois de carregar entra com ganho parcial.
-        applyGate(left, right, numSamples);
+        applyGate(left, right, numSamples, params);
         // Publica mesmo assim. Sem material nao ha graos, e o display tem de
         // deixar de os desenhar: se este caminho nao publicasse, o ultimo
         // publish continuaria na tela depois do ficheiro ser fechado.
@@ -338,7 +355,7 @@ void GranularEngine::processBlock(float* left,
 
     // Gate antes do limiter: fechar a rampa antes de saturar mantem o
     // behaviour do limiter independente das notas.
-    applyGate(left, right, numSamples);
+    applyGate(left, right, numSamples, params);
 
     limiterLeft_.processBlock(left, numSamples);
     limiterRight_.processBlock(right, numSamples);
@@ -352,17 +369,62 @@ void GranularEngine::processBlock(float* left,
     telemetry_.publish(voices_);
 }
 
-void GranularEngine::applyGate(float* left, float* right, int numSamples) noexcept {
-    for (int i = 0; i < numSamples; ++i) {
-        if (gateLevel_ != gateTarget_) {
-            if (gateLevel_ < gateTarget_) {
-                gateLevel_ = std::min(gateTarget_, gateLevel_ + gateStep_);
-            } else {
-                gateLevel_ = std::max(gateTarget_, gateLevel_ - gateStep_);
-            }
+void GranularEngine::applyGate(float* left, float* right, int numSamples,
+                                const GranularParams& params) noexcept {
+    // Tempos saneados uma vez por bloco, e nao por amostra: quatro divisoes
+    // por bloco nao aparecem no perfil, e por amostra seriam 4x o bloco.
+    //
+    // NaN volta ao default de cada fase, e nao a zero nem ao minimo: zero no
+    // attack calava a nota por um parametro corrompido, e o default preserva o
+    // comportamento antigo. Negativo ou zero trunca em uma amostra — o mais
+    // rapido sem divisao por zero — e o teto de 5 s barra release infinito por
+    // automacao perdida.
+    const auto secondsOr = [](float value, float fallback) {
+        if (!std::isfinite(value) || value <= 0.0f) {
+            return (std::isfinite(value) && value <= 0.0f) ? 1.0f / 44100.0f : fallback;
         }
-        left[i] *= gateLevel_;
-        right[i] *= gateLevel_;
+        return std::min(value, 5.0f);
+    };
+    const float attackSeconds = secondsOr(params.attackSeconds, 0.005f);
+    const float decaySeconds = secondsOr(params.decaySeconds, 0.1f);
+    const float sustain =
+        std::isfinite(params.sustainLevel) ? std::clamp(params.sustainLevel, 0.0f, 1.0f) : 1.0f;
+    const float releaseSeconds = secondsOr(params.releaseSeconds, 0.05f);
+
+    const auto samplesFor = [this](float seconds) {
+        return std::max(1.0f, seconds * static_cast<float>(sampleRate_));
+    };
+    const float attackStep = 1.0f / samplesFor(attackSeconds);
+    const float decayStep = (1.0f - sustain) / samplesFor(decaySeconds);
+    const float releaseStep = releaseStartLevel_ / samplesFor(releaseSeconds);
+
+    for (int i = 0; i < numSamples; ++i) {
+        switch (envelopePhase_) {
+            case EnvelopePhase::idle: envelopeLevel_ = 0.0f; break;
+            case EnvelopePhase::attack:
+                envelopeLevel_ = std::min(1.0f, envelopeLevel_ + attackStep);
+                if (envelopeLevel_ >= 1.0f) {
+                    envelopePhase_ = EnvelopePhase::decay;
+                }
+                break;
+            case EnvelopePhase::decay:
+                envelopeLevel_ = std::max(sustain, envelopeLevel_ - decayStep);
+                if (envelopeLevel_ <= sustain) {
+                    envelopeLevel_ = sustain;
+                    envelopePhase_ = EnvelopePhase::sustain;
+                }
+                break;
+            case EnvelopePhase::sustain: envelopeLevel_ = sustain; break;
+            case EnvelopePhase::release:
+                envelopeLevel_ = std::max(0.0f, envelopeLevel_ - releaseStep);
+                if (envelopeLevel_ <= 0.0f) {
+                    envelopeLevel_ = 0.0f;
+                    envelopePhase_ = EnvelopePhase::idle;
+                }
+                break;
+        }
+        left[i] *= envelopeLevel_;
+        right[i] *= envelopeLevel_;
     }
 }
 

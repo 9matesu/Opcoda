@@ -21,6 +21,14 @@ struct GranularParams {
     float volumeDb {0.0f};
     float pan {0.0f};
     WindowType window {WindowType::kHann};
+    // Envelope por nota, em segundos e nivel, sobre o mix — nao por grao. O
+    // attack abre do nivel corrente (retrigger no meio do release nao da
+    // degrau); o decay cai do 1.0 ao sustain em tempo exato; o release fecha
+    // do nivel corrente a zero tambem em tempo exato, qualquer que seja ele.
+    float attackSeconds {0.005f};
+    float decaySeconds {0.1f};
+    float sustainLevel {1.0f};
+    float releaseSeconds {0.05f};
     // Nivel por grao, linear 0..1, multiplicado depois do volume em dB. E' o
     // ganho individual contra o volume geral: o volume diz o nivel da saida, o
     // nivel diz o quanto cada grao contribui para ela.
@@ -256,20 +264,27 @@ public:
     [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
     [[nodiscard]] std::size_t sourceSize() const noexcept { return sourceCount_; }
 
-    // Gate com rampa linear, para as notas ligarem e desligarem sem estalo.
+    // Envelope ADSR linear sobre o mix, para as notas ligarem e desligarem sem
+    // estalo. E' global, e nao por voz: as vozes granulares nascem e morrem
+    // sozinhas, e o que a nota comanda e' a saida.
     //
     // Abrir e fechar a saida de uma vez produz um degrau no sinal, e um degrau
     // e' um transiente largo em frequencia: o ataque e' audivel mesmo com
-    // release curto. A rampa de 5 ms custa duas multiplicacoes por amostra e
-    // remove o problema.
-    void setSounding(bool on) noexcept { gateTarget_ = on ? 1.0f : 0.0f; }
-    [[nodiscard]] bool isSounding() const noexcept { return gateTarget_ > 0.5f; }
-    void setGateSeconds(double seconds) noexcept;
+    // release curto.
+    //
+    // setSounding e' aresta, e nao nivel: true so dispara o ataque na subida de
+    // false para true (legato nao re-dispara), e false so dispara o release na
+    // descida. O processador chama a cada bloco com notes_.sounding(), por isso
+    // aresta e' o unico desenho que nao reancora a cada quadro. isSounding
+    // devolve o comando, e nao a fase: durante o release a nota ja acabou mesmo
+    // que ainda se oica a cauda.
+    void setSounding(bool on) noexcept;
+    [[nodiscard]] bool isSounding() const noexcept { return soundingCmd_; }
 
-    // Nivel corrente da rampa. Existe para o teste verificar a rampa em si,
-    // sem depender do agendamento de graos, que precisa de dezenas de blocos
-    // para produzir audio e tornaria a medicao lenta e fragil.
-    [[nodiscard]] float gateLevel() const noexcept { return gateLevel_; }
+    // Nivel corrente do envelope. Existe para o teste verificar o envelope em
+    // si, sem depender do agendamento de graos, que precisa de dezenas de
+    // blocos para produzir audio e tornaria a medicao lenta e fragil.
+    [[nodiscard]] float gateLevel() const noexcept { return envelopeLevel_; }
 
     void processBlock(float* left, float* right, int numSamples,
                       const GranularParams& params) noexcept;
@@ -283,9 +298,16 @@ public:
     [[nodiscard]] const GrainTelemetry& telemetry() const noexcept { return telemetry_; }
 
 private:
+    // Fases do envelope. idle e sustain sao paradas; attack, decay e release
+    // movem o nivel uma taxa fixa por amostra, sem velocidade guardada — uma
+    // mola precisaria de estado e passava do alvo quando um quadro atrasasse, e
+    // aqui nao ha quadro que atrase porque nao ha velocidade.
+    enum class EnvelopePhase : std::uint8_t { idle, attack, decay, sustain, release };
+
     void rebuildWindow(const GranularParams& params) noexcept;
     void startGrain(int voice, const GranularParams& params, double entropy) noexcept;
-    void applyGate(float* left, float* right, int numSamples) noexcept;
+    void applyGate(float* left, float* right, int numSamples,
+                   const GranularParams& params) noexcept;
 
 
     double sampleRate_ {44100.0};
@@ -311,9 +333,10 @@ private:
     Limiter limiterLeft_ {};
     Limiter limiterRight_ {};
 
-    float gateLevel_ {0.0f};
-    float gateTarget_ {0.0f};
-    float gateStep_ {0.0f};
+    float envelopeLevel_ {0.0f};
+    bool soundingCmd_ {false};
+    EnvelopePhase envelopePhase_ {EnvelopePhase::idle};
+    float releaseStartLevel_ {0.0f};
 
     int lastActiveVoices_ {0};
 
