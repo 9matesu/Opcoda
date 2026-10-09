@@ -74,15 +74,19 @@ Duas famílias, escala densa de device.
 
 | Papel | Família | Tamanho | Peso |
 | --- | --- | --- | --- |
-| Título do device | Inter | 12 px | 700, `tracking-tight` |
+| Título do device | Inter | 13 px | 600 |
 | Subtítulo | Inter | 10 px | 400 |
 | Rótulo de parâmetro | Inter | 10 px | 500 |
-| Metadado numérico | JetBrains Mono | 9–10 px | 500–600 |
-| Aba de seção | JetBrains Mono | 9 px | 700, maiúscula |
+| Metadado numérico | Inter | 10–11 px | 400–500 |
+| Aba de seção | Inter | 9 px | 700, maiúscula |
 | Estado do display | Inter | 9 px | 500, maiúscula |
 
-Regra: **todo número é JetBrains Mono**, alinhado à direita. Isso é o que faz a
-leitura de valor parecer instrumento e não página web.
+Uma família só. A JetBrains Mono saiu porque a leitura numérica parecia apertada
+nas caixas do rodapé e da grelha. Regra: **todo número é Inter**, alinhado ao
+centro com a caixa que tinha, e a borda direita fica quieta porque a caixa tem
+largura fixa. Isso é o que faz a leitura de valor parecer instrumento e não
+página web. Não há `tnum` no JUCE para travar a largura dos dígitos; o
+alinhamento em caixa fixa é o que segura a leitura sem ele.
 
 ## Layout
 
@@ -91,8 +95,9 @@ Três faixas, de cima para baixo, com 1 px de `#52575c` entre elas.
 ### 1. Cabeçalho
 
 Botão de ativação (círculo com fenda vertical, verde `#82d64a` quando ligado),
-nome do device, botão `LOAD`, nome do ficheiro em mono, e à direita `[64-bit PE]` e
-o tamanho em chip.
+nome do device, ícone de pasta para carregar, nome do ficheiro em Inter, e à
+direita `[64-bit PE]` e o tamanho em texto puro — sem caixas nem molduras em
+nenhum dos três.
 
 **Não há mais texto no cabeçalho.** Saíram o subtítulo `Granular Synthesizer`, o
 contador `VOICES 8`, a dica `DRAG & DROP BINARY` e o título do módulo
@@ -105,7 +110,7 @@ segundo módulo que nunca existiu. Regra geral: **um rótulo que repete outro r�
 ### 2. Display
 
 Fundo `#0e1013`, com 1 px de `#252b31` na moldura. A faixa de display mede entre
-200 e 320 px, metade da altura da janela, e a janela mínima é 480×420.
+200 e 320 px, metade da altura da janela, e a janela mínima é 480×410.
 
 **O display tem três vistas**, porque são três perguntas sobre a mesma região e
 porque o OE7 pede duas delas. A região é a unidade nas três: mostrar o ficheiro
@@ -114,10 +119,12 @@ inteiro ao lado de uma região estreita mente sobre o que está a soar.
 De cima para baixo:
 
 - **Linha de estado**, 14 px: LED e `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO` à
-  esquerda; à direita o campo hexadecimal do endereço da região, o botão `ALINHAR`
-  e o botão `PLAY`/`STOP`. Quando o host está parado o botão fica desativado e a
-  linha diz `TRANSPORTE DO HOST PARADO` — desativado e não invisível, porque um
-  botão que aceita o toque e não produz nada é pior do que um que recusa o toque.
+  esquerda; à direita o campo hexadecimal do endereço da região e o transporte
+  como glifo ▶/■, sem texto e sem cromo. Sem botão `ALINHAR`: tecla A e
+  duplo-clique cobrem, e o terceiro controle empurrava o texto para debaixo do
+  campo. Quando o host está parado o glifo fica em `textOnDarkSub` e a linha diz
+  `TRANSPORTE DO HOST PARADO` — desativado e não invisível, porque um botão que
+  aceita o toque e não produz nada é pior do que um que recusa o toque.
 - **Medidor de saída**, 3 px no topo do display: pico com faixa de −60 dB a 0 dB. No
   topo e não no rodapé porque o rodapé é do editor e está lá a telemetria escrita.
 - **Vista do material**, o corpo do display:
@@ -127,7 +134,7 @@ De cima para baixo:
     inteira em todas as colunas. O RMS é o que varia, e é o que diz se o material é
     denso ou repetitivo;
   - **grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
-    bytes por linha em mono 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
+    bytes por linha em Inter 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
     de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas. A
     região ativa leva fundo laranja a 22 % **e** um filete de 1 px em cima e em
     baixo da linha. Os bytes nulos saem num tom à parte. Os limites de secção
@@ -143,10 +150,11 @@ De cima para baixo:
   caret de teclado só aparece com o foco do teclado, senão seriam três barras
   verticais no mesmo ecrã.
 - **Rodapé de telemetria**, 16 px: entropia em bits por byte na janela da cabeça de
-  leitura, `TP` com a cabeça de reprodução e o instante e a duração da volta, `POS`,
-  `REG`, `PK`, taxa e `VOICES`. Tudo em `textOnDark`. O rodapé degrada em vez de
-  espremer, e a ordem de sacrifício é o valor: a taxa é constante durante a sessão e
-  cai primeiro.
+  leitura, `TP` com a cabeça de reprodução e o instante e a duração da volta,
+  `POS`, `REG`, `PK` e `VOICES`, tudo em texto puro sem caixa nem moldura. Tudo
+  em `textOnDark`. O rodapé degrada em vez de espremer, e a ordem de sacrifício
+  é o valor: primeiro o pico, a entropia é a última a cair. A taxa saiu da faixa
+  — constante na sessão, foi para o tooltip do título.
 
 **Não há banda da região nas vistas novas**, e a diferença é intencional: no hex a
 região é uma faixa sobre células de largura fixa porque o que se vê é o ficheiro
@@ -160,16 +168,15 @@ Abas verticais de modo à esquerda e, à direita, módulos agrupados em caixas
 `panelBg` com borda 1 px `chassisBorder`.
 
 Cada módulo tem título em maiúscula, e dentro dele os controles com rótulo
-acima e valor em `valBox` abaixo.
+acima e valor em texto puro abaixo — sem `valBox`.
 
 ## Controles
 
 Knob circular com ponteiro laranja e arco de valor, 1 px de arco de fundo
-`chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma imagem**: aro
-serrilhado, face recuada e ponto de origem, com a luz de cima e da esquerda num
-gradiente diagonal. A serrilhado é um `juce::Path` memorizado por posição e não
-36 chamadas de `drawLine` por knob. Rótulo em Inter 10 px acima, valor em `valBox`
-abaixo, com fonte mono.
+`chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma imagem**:
+disco liso com luz suave de cima, aro fino de 1 px e ponto de origem — sem
+serrilhado, que virava ruído cinzento em diâmetro útil. Rótulo em Inter 10 px
+acima, valor em Inter 10 px abaixo, sem caixa.
 
 **Por que a peça fotografada saiu.** `knob-md.png` eram 186×192 píxeis para pintar
 um disco de 62, e `button-large.png` obrigava a desenhar a peça quadrada ao lado do
@@ -177,11 +184,14 @@ texto porque esticar um bisel de 2 px o deixava com 1 px de um lado e 4 px do ou
 Com `Path` o corpo escala, o bisel tem a espessura que se pede, e não há um
 descodificador de PNG a correr no arranque.
 
-Botão com bisel: realce em cima, sombra em baixo, e o sentido trocado quando está
-premiado. **O estado ligado ganha uma barra de 1 px no lado esquerdo** e um contorno
-de acento, porque `#ff9a00` sobre `#c2c6c9` dá 1,24:1 e um botão de transporte cuja
-única pista de estado é essa cor não passa o 1.4.3. O `PLAY`/`STOP` troca a
-palavra, que é a segunda pista e a que funciona sem ver cor.
+Botão sem cromo: ícone ou palavra solta sobre a superfície, sem fundo, sem bisel,
+sem sombra. O componente continua `TextButton` — teclado, foco e
+`AccessibilityHandler` de graça — só o desenho achatou. O transporte é ▶/■
+desenhado como `Path`: a troca de *forma* é a segunda pista e a que funciona sem
+ver cor, pelo motivo que criou a troca de palavra `PLAY`/`STOP`. A aba ativa leva
+peso forte e um filete de acento em baixo; o texto carrega o estado, o filete é
+redundância. Hover e premido são banhos de alfa; o foco continua o anel
+`focusRing` (claro) ou `textOnDark` (no display escuro, onde o transporte mora).
 
 Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2. **O
 critério foi fechado em 06/10/2026** sem aumentar o alvo — a célula de byte continua
@@ -231,8 +241,7 @@ lado seria a única forma de ler o que se ouve.
 | Conceito do HTML | Equivalente em JUCE |
 | --- | --- |
 | Tailwind `bg-[#c2c6c9]` | `juce::Colour {0xffc2c6c9}` |
-| Inter | `juce::Font {16.0f}` com a fonte do sistema, ou `Inter` embarcada |
-| JetBrains Mono | `juce::Font` monoespaçada, ou `JetBrains Mono` embarcada |
+| Inter | `fonts().sans()` com a fonte embarcada, ou a fonte do sistema |
 | Knob com ponteiro | `juce::Slider` `RotaryHorizontalVerticalDrag` com `LookAndFeel` próprio |
 | Grelha de bytes | `HexGrid`, um `Component` com `paint()` e `cellRect()` partilhada entre o desenho e o clique |
 | Vista de forma de onda e de entropia | `ByteDisplay`, um `Component` com três caminhos de `paint()` e `HexGrid` como filho na vista hex |
@@ -249,11 +258,11 @@ código. A regra do harness antigo — não gerar texto, porque texto gerado por
 modelo sai com letra errada — mantém-se, mas deixou de ser a única restrição:
 agora também não há imagem.
 
-JUCE não embarca fonte por padrão. Inter Display e JetBrains Mono vão embutidas
-como dados binários (alvo `OpcodaFonts`, 353 KB — só os quatro pesos que a
-interface escreve, gerados por `tools/vendor_fonts.py`): usar a fonte do sistema
-(`Segoe UI`) e a monoespaçada do sistema (`Consolas`) economizaria isso ao custo
-de não bater exatamente com o mock. Decisão fechada pelo subset embarcado.
+JUCE não embarca fonte por padrão. Inter Display vai embutida como dados binários
+(alvo `OpcodaFonts`, 183 KB — só os dois pesos que a interface escreve, gerados
+por `tools/vendor_fonts.py`): usar a fonte do sistema (`Segoe UI`) economizaria
+isso ao custo de não bater exatamente com o mock. A JetBrains Mono saiu junto com
+a regra do número mono. Decisão fechada pelo subset embarcado.
 
 ## Conflito com o escopo documentado
 

@@ -36,7 +36,7 @@ real sem o framework no caminho.
 ## Usar
 
 O Standalone e o VST3 abrem com a interface de três faixas: arraste um `.exe`,
-`.dll`, `.bin` ou `.sys` para dentro da janela, ou use o botão `LOAD`, e o
+`.dll`, `.bin` ou `.sys` para dentro da janela, ou use o ícone de pasta, e o
 material toca em até um segundo. Binário recusado mostra o código tipado, como
 `E_BAD_MZ`, e o material anterior continua tocando.
 
@@ -52,9 +52,9 @@ grão marca a célula do byte e a janela ancora no início da região; rolar ou
 clicar corta o seguimento, porque quem lê bytes manda. Clicar num byte move a
 cabeça de leitura para ele; se o byte estiver fora da região, a região é puxada
 para lá primeiro, com o mesmo comprimento. O campo hexadecimal à direita escreve
-o endereço da região, e o botão `ALINHAR` alterna entre a região exata e a seção
-PE mais próxima, como fazia o duplo clique. A região entra no estado do projeto,
-pelo mesmo caminho do ficheiro carregado.
+o endereço da região, e a tecla `A` (ou o duplo-clique) alterna entre a região
+exata e a seção PE mais próxima. A região entra no estado do projeto, pelo mesmo
+caminho do ficheiro carregado.
 
 A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
 o knob `POSITION` e escreve o endereço no campo, e ambos têm foco e nome
@@ -108,11 +108,11 @@ diferentes sobre a mesma região:
 | grelha de bytes | que bytes são estes | `2` |
 | curva de entropia | o quanto o material é aleatório | `3` |
 
-O botão **PLAY** percorre a região inteira de início a fim **sem nota MIDI**, que é
-a única forma de ouvir o material sem um teclado. Com a região de 4 KB ou menos a
-duração tem um piso de 100 ms, porque abaixo do comprimento do maior grão uma
-passagem não dá para completar um grão. O knob POSITION é a âncora de busca: mexer
- nele durante a reprodução reposiciona.
+O transporte (▶, ou `Espaço`) percorre a região inteira de início a fim **sem nota
+MIDI**, que é a única forma de ouvir o material sem um teclado. Com a região de 4
+KB ou menos a duração tem um piso de 100 ms, porque abaixo do comprimento do
+maior grão uma passagem não dá para completar um grão. O knob POSITION é a âncora
+de busca: mexer nele durante a reprodução reposiciona.
 
 **Mapa de teclas.** `Espaço` liga e desliga a reprodução · `←` `→` movem o cursor um
 byte · `Shift` com as setas move dezasseis · `↑` `↓` movem uma linha · `PgUp` `PgDn`
@@ -122,7 +122,7 @@ cursor · `Esc` volta o cursor à cabeça de leitura · `1` `2` `3` mudam de vis
 
 Há um defeito conhecido e **não corrigido**, visível no Standalone: os seis
 parâmetros arrancam em valores que não são os defaults declarados em
-`createParameterLayout`. As caixas de valor mostram o que fica: `100 ms`,
+`createParameterLayout`. Os valores mostram o que fica: `100 ms`,
 `13 /s`, `69 %`, onde os defaults são `40 ms`, `20 /s` e `50 %`. Foi confirmado
 em `c8006ae` compilado à parte, logo não vem da grelha.
 

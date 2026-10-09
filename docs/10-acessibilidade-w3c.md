@@ -25,17 +25,17 @@ Amostra: três páginas de docs e três telas da GUI (principal, parâmetros, di
 ## Critérios de aceite da GUI
 
 Verificados no protótipo em 05/10/2026, com o Standalone aberto em 900×540 e no
-mínimo de 480×420. As três larguras foram fotografadas com a janela do plugin
+mínimo de 480×410. As três larguras foram fotografadas com a janela do plugin
 renderizada diretamente, porque a 480 é a que exercita a refluxo da grelha.
 
 | Critério WCAG | Regra no Opcoda | Status | Evidência |
 | --- | --- | --- | --- |
-| 2.1.1 Teclado | knobs, campo de endereço, botões e display operam por teclado, sem armadilha de foco | **cumpre** | os knobs são `juce::Slider`, que já entregam foco e ajuste com setas. `ByteAddressField` é um `TextEditor` com nome acessível: `Enter` confirma, `Esc` volta ao valor anterior, setas sobem e descem um byte e PageUp/PageDown saltam dezasseis. O `ALINHAR` e o `PLAY` são `juce::TextButton`. O `ByteDisplay` é focalizável e tem caret: o mapa completo está abaixo |
-| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` e `drawButtonBackground` desenham o anel em `focusRing` (`#1b1e22`, 9,73:1 sobre o chassi) quando há foco de teclado. O laranja (`1,24:1` sobre o chassi) foi retirado dos dois em `6d8a7a8`: sem segunda pista, o anel laranja reprovava o 1.4.11. O `ByteDisplay` e o `ByteAddressField` pintam sobre o display escuro, onde o laranja dá 9,0:1 — esses dois mantêm o contorno laranja |
+| 2.1.1 Teclado | knobs, campo de endereço, botões e display operam por teclado, sem armadilha de foco | **cumpre** | os knobs são `juce::Slider`, que já entregam foco e ajuste com setas. `ByteAddressField` é um `TextEditor` com nome acessível: `Enter` confirma, `Esc` volta ao valor anterior, setas sobem e descem um byte e PageUp/PageDown saltam dezasseis. Transporte, pasta e abas são `juce::TextButton` sem cromo — o componente continua, só o desenho achatou — e `1` `2` `3`, `A`, `L` e `Espaço` operam tudo sem rato. O `ByteDisplay` é focalizável e tem caret: o mapa completo está abaixo |
+| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` e `drawButtonBackground` desenham o anel em `focusRing` (`#1b1e22`, 9,73:1 sobre o chassi) quando há foco de teclado — inclusive nos botões sem cromo, que continuam focáveis. O transporte mora sobre o display escuro e leva o anel em `textOnDark` (11,54:1), porque `focusRing` ali sumiria. O laranja (`1,24:1` sobre o chassi) foi retirado dos dois em `6d8a7a8`: sem segunda pista, o anel laranja reprovava o 1.4.11. O `ByteDisplay` e o `ByteAddressField` pintam sobre o display escuro, onde o laranja dá 9,0:1 — esses dois mantêm o contorno laranja |
 | 4.1.2 Nome, função e valor | cada controle expõe nome acessível à API do SO | **cumpre** | nome acessível é a descrição completa em português ("Tamanho de grao, em milissegundos"), não o rótulo curto do mock ("SIZE"), que seria inútil por leitor de tela. O campo de endereço escreve o valor em hexadecimal, que é a unidade em que se lê. A grelha tem `setName` e `setHelpText`: o nome diz o que é e a ajuda diz que os dois caminhos de teclado estão noutro sítio, porque `Component` não expõe `setTooltip` a não ser por cabeçalho transitivo e a dica de rato não serviria para nada numa grelha que só se opera com o rato |
-| 2.5.8 Tamanho do alvo | alvos de no mínimo 24×24 px | **cumpre** | a célula de byte continua a 17 px de largura, que não tem correção possível, mas a grelha deixou de ser de rato. O `ByteDisplay` é focalizável e tem caret de navegação: as setas, `Início`, `Fim`, `Enter` e `Esc` operam o display inteiro sem passar por nenhum outro controle. Ver o mapa de teclas abaixo |
+| 2.5.8 Tamanho do alvo | alvos de no mínimo 24×24 px | **cumpre** | a célula de byte continua a 17 px de largura, que não tem correção possível, mas a grelha deixou de ser de rato. O `ByteDisplay` é focalizável e tem caret de navegação: as setas, `Início`, `Fim`, `Enter` e `Esc` operam o display inteiro sem passar por nenhum outro controle. As abas de vista têm 46×22 px com as teclas `1` `2` `3` como caminho garantido. Ver o mapa de teclas abaixo |
 | 1.4.3 Contraste mínimo | texto a 4,5:1 sobre a superfície | **cumpre** | `textDark #1b1e22` sobre `chassis #c2c6c9` dá 9,73:1; `textSub #383d42` dá 6,38:1. O rodapé do display usa `textOnDark #c6cacc` sobre `#0e1013`, que dá 11,54:1 |
-| 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos. A linha de estado fica no topo do display e não no rodapé: um `E_BAD_PE` em mono de 10 px ao lado do pico e das vozes é uma coisa que passa sem ser lida |
+| 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos. A linha de estado fica no topo do display e não no rodapé: um `E_BAD_PE` em Inter de 10 px ao lado do pico e das vozes é uma coisa que passa sem ser lida |
 | 1.4.1 Uso de cor | LEDs, a região ativa e a cabeça de leitura nunca são o único sinal | **cumpre** | cada LED é acompanhado de rótulo. Na grelha, a região ativa leva fundo laranja a 22 % **e** um filete de 1 px em cima e em baixo da linha: o fundo diz a quem vê cor, o filete diz a quem não vê. A cabeça de leitura é uma barra branca de 2 px na margem esquerda da célula, com fundo claro por baixo do texto. Os grãos são riscos brancos baixos, nunca barras de altura total — a forma distingue-os da cabeça de leitura mesmo sendo a mesma cor. O rodapé escreve `POS` e `REG` em hexadecimal |
 | 1.4.11 Contraste não textual | gráficos e indicadores de foco a 3:1 | **cumpre** | anéis de foco em `focusRing`: 9,73:1 sobre o chassi. Grãos em branco: 4,52:1 sobre o envelope saturado (`accent` a 62 %) e 13,4:1 sobre o fundo real da forma de onda (wash de `accent` a 16 % sobre o painel). Tokens quentes **reprovados** sobre o envelope e por isso proibidos como marca de grão: `accentSoft` 2,92:1, `accentWarn` 2,62:1, `textOnDark` 2,74:1 |
 | 1.4.10 Refluxo | interface utilizável a 200% de zoom sem rolagem horizontal | **parcial** | redimensiona de 560 a 4096 px sem rolagem, verificado por captura nos dois extremos. Abaixo de 520 px de largura a grelha **omite a coluna ASCII** em vez de cortar colunas de hexadecimal, que partiriam os endereços ao meio. Não há medição a 200% de zoom em display de baixa densidade |
@@ -78,8 +78,8 @@ Duas decisões fazem isto funcionar, e ambas são sobre o que o utilizador ouve:
 
 O `Enter` mudou de dono: o `ALINHAR` foi criado para substituir o `Enter` que o
 seletor removido usava, e com a grelha focalizável o `Enter` passou a ativar o
-byte sob a caret. O alinhamento ficou com a tecla `A`. A dica do `ALINHAR` mudou
-no mesmo commit, ou ficava a mentir.
+byte sob a caret. O alinhamento ficou com a tecla `A`, e o botão saiu da linha
+de estado — a dica vive no help text do display, ou ficava a mentir.
 
 O clique dá o foco do teclado ao display, pelo mesmo cuidado que o campo de
 endereço tem em `grabFocusOnField`: um utilizador que clica no display e depois
@@ -112,7 +112,7 @@ par de tokens: um rótulo sem cor de texto própria herda a quase preta do
 `display #0e1013` dá 11,6:1. Regra geral: **quem decide a cor de fundo decide
 a cor do texto**, e por isso o rodapé não pode usar os tokens do chassi claro.
 
-O campo de endereço e o botão `ALINHAR` ficam na linha de estado, e não no
+O campo de endereço fica na linha de estado, e não no
 rodapé. São controles, e o rodapé é um alinhamento de leituras: um campo de
 texto dentro do rodapé seria indistinguível de uma leitura.
 
