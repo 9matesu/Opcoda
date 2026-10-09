@@ -152,6 +152,16 @@ float ByteDisplay::normalisedLevel(float decibels) noexcept {
 }
 
 void ByteDisplay::tickAnimation(float deltaSeconds) {
+    // Descarrega o arrasto pendente antes de animar: a cabeca ja desliza para o
+    // alvo mais recente no mesmo quadro, em vez de correr atras com um quadro
+    // de atraso. Uma escrita por quadro e' o tecto — o rato manda eventos a
+    // mais de 60 Hz, e cada escrita e' uma notificacao ao host.
+    if (pendingScrub_ != std::numeric_limits<std::uint64_t>::max() &&
+        onAddressActivated != nullptr) {
+        onAddressActivated(pendingScrub_);
+        pendingScrub_ = std::numeric_limits<std::uint64_t>::max();
+    }
+
     if (!playheadVisible_) {
         playheadFraction_.jumpTo(0.0f);
     }
@@ -1087,6 +1097,21 @@ void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
     if (address != std::numeric_limits<std::uint64_t>::max() && onAddressActivated != nullptr) {
         caretMoved_ = false;
         onAddressActivated(address);
+    }
+}
+
+void ByteDisplay::mouseDrag(const juce::MouseEvent& event) {
+    // Varrer: o mesmo caminho do clique, mas sem pressa. O evento do rato chega
+    // a mais de 60 Hz e cada escrita notifica o host, por isso o endereco fica
+    // guardado e o tickAnimation descarrega um por quadro. No hex o arrasto e'
+    // do HexGrid (rolagem por celula) e aqui nao se faz nada.
+    if (mode_ == ViewMode::hex) {
+        return;
+    }
+
+    const auto address = addressAt(event.position);
+    if (address != std::numeric_limits<std::uint64_t>::max()) {
+        pendingScrub_ = address;
     }
 }
 

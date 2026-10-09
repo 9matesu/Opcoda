@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <vector>
 
 namespace opcoda {
@@ -191,6 +192,7 @@ public:
     void focusLost(juce::Component::FocusChangeType cause) override;
 
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
     void mouseDoubleClick(const juce::MouseEvent& event) override;
     void mouseWheelMove(const juce::MouseEvent& event,
                         const juce::MouseWheelDetails& wheel) override;
@@ -348,6 +350,10 @@ private:
     std::uint64_t readHead_ {0};
     std::uint64_t caret_ {0};
     bool caretMoved_ {false};
+
+    // Endereco do arrasto ainda nao escrito. O rato entrega a mais de 60 Hz e o
+    // tick descarrega um por quadro; maximo significa "nada pendente".
+    std::uint64_t pendingScrub_ {std::numeric_limits<std::uint64_t>::max()};
     float playheadVisible_ {false};
 
     ViewMode mode_ {ViewMode::waveform};

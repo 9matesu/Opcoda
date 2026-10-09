@@ -184,14 +184,20 @@ public:
             g.fillRoundedRectangle(reduced, 4.0f);
         }
 
-        // Aba activa: filete de acento em baixo. E' pista redundante — o texto da
-        // aba activa vai em forte e escuro, e e' isso que carrega o estado — por
-        // isso o 1,24:1 do laranja sobre o chassi nao conta aqui.
+        // Aba activa: filete de acento em baixo, com halo fraco por tras. E'
+        // pista redundante — o texto da aba activa vai em forte e escuro, e e'
+        // isso que carrega o estado — por isso o 1,24:1 do laranja sobre o
+        // chassi nao conta aqui, nem para o filete nem para o halo. O halo e' a
+        // mesma lingua do glow da onda: a vista activa tem luz, as outras nao.
         if (button.getToggleState() &&
             button.getProperties()["uiIcon"].toString() == "tab") {
+            const auto bar = juce::Rectangle<float> {reduced.getX() + 4.0f,
+                                                     reduced.getBottom() - 2.5f,
+                                                     reduced.getWidth() - 8.0f, 2.0f};
+            g.setColour(palette::alpha(palette::accent, 0.25f));
+            g.fillRect(bar.expanded(3.0f, 2.0f));
             g.setColour(palette::accent);
-            g.fillRect(juce::Rectangle<float> {reduced.getX() + 4.0f, reduced.getBottom() - 2.5f,
-                                               reduced.getWidth() - 8.0f, 2.0f});
+            g.fillRect(bar);
         }
 
         // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
@@ -250,6 +256,11 @@ public:
     // Transporte: triangulo para tocar, quadrado para parar, centrados na area
     // util do botao. O tamanho e' fracao do menor lado para nao encostar na
     // borda quando a janela encolhe o botao.
+    //
+    // Halo branco por tras do glifo: o transporte mora no display escuro, e um
+    // halo claro ali e' a mesma luz dos graios — o botao que comanda o som tem a
+    // mesma energia do som a acontecer. Pilha de alfa e nao blur, como em todo o
+    // glow da casa.
     static void paintTransportGlyph(juce::Graphics& g,
                                     const juce::Rectangle<float>& bounds,
                                     bool playing,
@@ -257,18 +268,25 @@ public:
         const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.42f;
         const auto centre = bounds.getCentre();
 
-        g.setColour(ink);
+        juce::Path glyph;
         if (playing) {
-            g.fillRect(juce::Rectangle<float> {centre.x - side * 0.5f, centre.y - side * 0.5f,
-                                               side, side});
-            return;
+            glyph.addRectangle(centre.x - side * 0.5f, centre.y - side * 0.5f, side, side);
+        } else {
+            glyph.addTriangle(centre.x - side * 0.5f, centre.y - side * 0.62f,
+                              centre.x - side * 0.5f, centre.y + side * 0.62f,
+                              centre.x + side * 0.62f, centre.y);
         }
 
-        juce::Path triangle;
-        triangle.addTriangle(centre.x - side * 0.5f, centre.y - side * 0.62f,
-                             centre.x - side * 0.5f, centre.y + side * 0.62f,
-                             centre.x + side * 0.62f, centre.y);
-        g.fillPath(triangle);
+        // O halo e' o glifo dilatado: sem blur no renderizador de software, um
+        // passe alargado e fraco por baixo do passe cheio da a leitura de luz
+        // sem custo que apareca no perfil.
+        g.setColour(palette::alpha(juce::Colours::white, 0.12f));
+        juce::Path haloPath;
+        haloPath.addRoundedRectangle(glyph.getBounds().expanded(3.0f), 3.0f);
+        g.fillPath(haloPath);
+
+        g.setColour(ink);
+        g.fillPath(glyph);
     }
 
     // Pasta: costas com aba e frente por cima, so com contorno. Cheia seria um
