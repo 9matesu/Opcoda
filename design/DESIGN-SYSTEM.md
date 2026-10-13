@@ -27,8 +27,8 @@ Live, e é o que separa a área de parâmetros da área de visualização.
 | `chassisBorder` | `#52575c` | divisórias estruturais, 1 px |
 | `header` | `#d2d6d9` | barra de título |
 | `panelBg` | `#b6babd` | painel de módulo |
-| `subPanel` | `#a8acad` | sub-painel e campo de valor |
-| `valBox` | `#d5d8da` | caixa de valor numérico |
+| `subPanel` | `#a8acad` | face do knob (as caixas de valor morreram; ver Tipografia) |
+| `valBox` | `#d5d8da` | aro do knob (idem) |
 
 ### Display
 
@@ -112,7 +112,7 @@ segundo módulo que nunca existiu. Regra geral: **um rótulo que repete outro r�
 ### 2. Display
 
 Fundo `#0e1013`, com 1 px de `#252b31` na moldura. A faixa de display mede entre
-200 e 320 px, metade da altura da janela, e a janela mínima é 480×410.
+200 e 320 px, metade da altura da janela, e a janela mínima é 480×434.
 
 **O display tem três vistas**, porque são três perguntas sobre a mesma região e
 porque o OE7 pede duas delas. A região é a unidade nas três: mostrar o ficheiro
