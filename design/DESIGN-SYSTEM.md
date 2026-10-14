@@ -15,60 +15,61 @@ segue os tokens daqui, não os valores do HTML.
 
 ## Paleta
 
-O chassis é **claro** e o display é **escuro**. É a convenção de device do Ableton
-Live, e é o que separa a área de parâmetros da área de visualização.
+Estação de trabalho escura: fundo grafite profundo, painéis um tom acima,
+display afundado. Ambar para seleção, reprodução e valores importantes; teal
+contido para o material e a visualização de dados. É a linguagem do Granulator
+II de referência, adaptada aos tokens da casa.
 
 ### Chassis e superfícies
 
 | Token | Valor | Uso |
 | --- | --- | --- |
-| `chassis` | `#c2c6c9` | corpo do device |
-| `chassisDark` | `#b2b6ba` | borda inferior do chassis |
-| `chassisBorder` | `#52575c` | divisórias estruturais, 1 px |
-| `header` | `#d2d6d9` | barra de título |
-| `panelBg` | `#b6babd` | painel de módulo |
-| `subPanel` | `#a8acad` | face do knob (as caixas de valor morreram; ver Tipografia) |
-| `valBox` | `#d5d8da` | aro do knob (idem) |
+| `chassis` | `#202326` | corpo do device |
+| `chassisDark` | `#191c1e` | borda inferior do chassis |
+| `chassisBorder` | `#44494d` | divisórias estruturais, 1 px |
+| `header` | `#26292d` | barra de título |
+| `panelBg` | `#292d30` | painel de módulo |
+| `subPanel` | `#31363a` | face do knob, aba ativa (as caixas de valor morreram; ver Tipografia) |
+| `valBox` | `#3d4349` | topo do gradiente do knob (idem) |
 
 ### Display
 
 | Token | Valor | Uso |
 | --- | --- | --- |
 | `displayDark` | `#0e1013` | fundo do LCD |
-| `displayPanel` | `#14181c` | barra de abas de seção |
+| `displayPanel` | `#14171b` | barra de abas de seção |
 | `displayGrid` | `rgba(255,255,255,0.05)` | grade do osciloscópio, 24 px |
-| `displayBorder` | `#252b31` | divisória interna do display |
+| `displayBorder` | `#2e3338` | divisória interna do display |
 
 ### Texto
 
 | Token | Valor | Uso |
 | --- | --- | --- |
-| `textDark` | `#1b1e22` | texto sobre superfície clara |
-| `textSub` | `#383d42` | texto secundário sobre claro |
-| `textOnDark` | `#c6cacc` | texto sobre o display |
-| `textOnDarkSub` | `#8e98a1` | aba inativa, metadado |
-| `textMuted` | `#6b7176` | rótulo desabilitado |
-| `textField` | `#555a60` | dica de campo |
+| `textDark` | `#e4e7e8` | texto primário sobre superfície escura |
+| `textSub` | `#92999e` | texto secundário sobre escuro |
+| `textOnDark` | `#e4e7e8` | texto sobre o display |
+| `textOnDarkSub` | `#92999e` | aba inativa, metadado |
+| `textMuted` | `#6b7176` | LED apagado, ícone desligado (decorativo) |
+| `textField` | `#92999e` | dica de campo |
 
 ### Acentos
 
 | Token | Valor | Uso |
 | --- | --- | --- |
-| `accent` | `#ff9a00` | laranja Ableton: aba ativa, ponteiro de knob, pico do espectro |
-| `accentSoft` | `#ffc83b` | amarelo do cabeçalho; meio da escala de entropia |
+| `accent` | `#ffaa24` | ambar: aba ativa, ponteiro de knob, anel de foco, viewport, playhead |
+| `accentSoft` | `#ffc83b` | meio da escala de entropia |
 | `accentWarn` | `#ffb833` | amarelo de atenção |
-| `waveLow` | `#35c4dc` | ciano: base da escala de entropia (0–3 bits/byte) |
+| `waveLow` | `#36d9ce` | teal: corpo da forma de onda, base da escala de entropia |
 | `waveHigh` | `#ea7070` | rosa: topo da escala de entropia (6–8 bits/byte) |
 | `ok` | `#4caf50` | estado pronto, "STEREO GRAINS" |
 | `okBright` | `#82d64a` | botão de ativação ligado |
 | `error` | `#e05373` | estado de recusa |
 | `pink` | `#ea7070` | série secundária do espectro |
 
-O laranja `#ff9a00` sobre `#c2c6c9` dá contraste de 1,24:1, e **não** atinge 4,5:1.
-Onde o laranja carrega texto, ele vai sobre preto (`#0e1013` dá 8,96:1), e os anéis
-de foco usam `focusRing` (`#1b1e22`, 9,73:1 sobre o chassi). Regra: laranja é
-preenchimento e indicador, nunca portador de texto pequeno sobre superfície clara
-— e nunca indicador de foco sobre superfície clara.
+Texto primário 12,70:1 e secundário 5,47:1 sobre o fundo; ambar 8,29:1 e teal
+9,00:1 (1.4.11). O anel de foco é `accent`: sobre o fundo escuro ele passa, e
+a forma (anel de 2 px) é a segunda pista que o 1.4.1 pede. Medições em
+`src/opcoda_plugin/source/palette.h`; re-medir se um token mudar.
 
 ## Tipografia
 
@@ -111,7 +112,7 @@ segundo módulo que nunca existiu. Regra geral: **um rótulo que repete outro r�
 
 ### 2. Display
 
-Fundo `#0e1013`, com 1 px de `#252b31` na moldura. A faixa de display mede entre
+Fundo `#0e1013`, com 1 px de `#2e3338` na moldura. A faixa de display mede entre
 200 e 320 px, metade da altura da janela, e a janela mínima é 480×434.
 
 **O display tem três vistas**, porque são três perguntas sobre a mesma região e
@@ -122,7 +123,7 @@ De cima para baixo:
 
 - **Linha de estado**, 14 px: LED e `PRONTO / ficheiro` ou `RECUSADO / E_CODIGO` à
   esquerda; à direita o campo hexadecimal do endereço da região e o transporte
-  como glifo ▶/■, sem texto e sem cromo. Sem botão `ALINHAR`: tecla A e
+  como glifo ▶/■, sem texto. Sem botão `ALINHAR`: tecla A e
   duplo-clique cobrem, e o terceiro controle empurrava o texto para debaixo do
   campo. Quando o host está parado o glifo fica em `textOnDarkSub` e a linha diz
   `TRANSPORTE DO HOST PARADO` — desativado e não invisível, porque um botão que
@@ -130,15 +131,28 @@ De cima para baixo:
 - **Medidor de saída**, 3 px no topo do display: pico com faixa de −60 dB a 0 dB. No
   topo e não no rodapé porque o rodapé é do editor e está lá a telemetria escrita.
 - **Vista do material**, o corpo do display:
-  - **forma de onda**: envelope mínimo-máximo fraco e núcleo de RMS forte, com a
-    linha do núcleo colorida por entropia — ciano no previsível, amarelo no meio,
-    rosa no aleatório — e glow em pilha de alfa. O mínimo e o máximo quase não
+  - **forma de onda**: régua de endereços no topo, plot no meio, faixa de
+    navegação (overview) no fundo. O corpo é o núcleo de RMS em **teal**,
+    com base fraca do envelope mínimo-máximo em ambar; o contorno do núcleo
+    vai colorido por entropia — teal no previsível, amarelo no meio, rosa no
+    aleatório — com glow contido de um passe. O mínimo e o máximo quase não
     servem para mostrar bytes — o texto de um `.exe` tem quase todos os valores
     de `0x00` a `0xFF`, e o envelope fica com altura quase inteira em todas as
     colunas. O RMS é o que varia, e é o que diz se o material é denso ou
     repetitivo; a cor diz do que ele é feito. Três Paths por faixa em vez de um
     stroke por coluna, com subpath novo a cada descontinuidade para não ligar
-    colunas distantes com diagonais;
+    colunas distantes com diagonais. O canto inferior esquerdo carrega
+    `MAPPED AUDIO · BYTES->SAMPLES`: o que se vê é o mapeamento do pipeline,
+    não bytes crus — esses moram na vista HEX;
+  - **zoom contínuo**: a roda aproxima centrada no cursor, Shift+roda faz
+    scroll, `-`/`+`/`0` e os botões `-`/`+`/`FIT` fazem o mesmo por teclado e
+    clique. Arrastar com botão direito/médio (ou Ctrl) move o viewport; clicar
+    ou arrastar no overview centra e move a janela. A redução corre sobre o
+    intervalo do viewport — a mesma `reduceToColumns` com teto de amostras é
+    a pirâmide, sem estrutura extra — e a região nova volta a enquadrar. No
+    zoom fundo (≤2 bytes por pixel) a miniatura dá lugar aos **pontos de
+    amostra**: polilinha pelos valores mapeados com ponto em cada byte, sem
+    agregar nada pelo meio;
   - **grelha de bytes**: endereço de 8 dígitos hexadecimais à esquerda, dezasseis
     bytes por linha em Inter 11 px, e a coluna ASCII à direita. Cabeçalho de colunas
     de 14 px com `00` a `0F`. Linhas de 24 px, com um filete de 1 px entre elas. A
@@ -183,11 +197,11 @@ acima e valor em texto puro abaixo — sem `valBox`.
 
 ## Controles
 
-Knob circular com ponteiro laranja e arco de valor, 1 px de arco de fundo
-`chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma imagem**:
-disco liso com luz suave de cima, aro fino de 1 px e ponto de origem — sem
-serrilhado, que virava ruído cinzento em diâmetro útil. Rótulo em Inter 10 px
-acima, valor em Inter 10 px abaixo, sem caixa.
+Knob circular com ponteiro ambar e arco de valor com halo curto, 1 px de arco
+de fundo `chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma
+imagem**: disco escuro com luz suave de cima, aro fino de 1 px e ponto de
+origem — sem serrilhado, que virava ruído cinzento em diâmetro útil. Rótulo em
+Inter 9 px acima, valor em Inter 10 px abaixo, sem caixa.
 
 **Por que a peça fotografada saiu.** `knob-md.png` eram 186×192 píxeis para pintar
 um disco de 62, e `button-large.png` obrigava a desenhar a peça quadrada ao lado do
@@ -195,18 +209,18 @@ texto porque esticar um bisel de 2 px o deixava com 1 px de um lado e 4 px do ou
 Com `Path` o corpo escala, o bisel tem a espessura que se pede, e não há um
 descodificador de PNG a correr no arranque.
 
-Botão sem cromo: ícone ou palavra solta sobre a superfície, sem fundo, sem bisel,
-sem sombra. O componente continua `TextButton` — teclado, foco e
-`AccessibilityHandler` de graça — só o desenho achatou. O transporte é ▶/■
-desenhado como `Path`, com halo branco no display escuro: a mesma luz dos grãos,
-porque o botão que comanda o som tem a energia do som a acontecer. A troca de
-*forma* é a segunda pista e a que funciona sem ver cor, pelo motivo que criou a
-troca de palavra `PLAY`/`STOP`. A aba ativa leva peso forte, filete de acento e
-halo fraco em baixo; o texto carrega o estado, o resto é redundância. Hover e
-premido são banhos de alfa; o foco continua o anel `focusRing` (claro) ou
-`textOnDark` (no display escuro, onde o transporte mora). Arrastar na onda e na
-curva varre a cabeça de leitura pelo caminho do clique, com um endereço pendente
-descarregado no tick de 60 Hz; no hex o arrasto é do `HexGrid`.
+Botão compacto de workstation: retângulo de raio 2, borda fina, inativo neutro,
+ativo com filete ambar. O componente continua `TextButton` — teclado, foco e
+`AccessibilityHandler` de graça. O transporte é ▶/■ desenhado como `Path`, com
+halo branco no display escuro: a mesma luz dos grãos, porque o botão que comanda
+o som tem a energia do som a acontecer. A troca de *forma* é a segunda pista e
+a que funciona sem ver cor, pelo motivo que criou a troca de palavra
+`PLAY`/`STOP`. A aba ativa leva caixa `subPanel`, peso forte, filete de acento
+e halo fraco em baixo; o texto carrega o estado, o resto é redundância. Hover e
+premido são banhos de alfa; o foco é o anel `focusRing` em ambar (8,29:1 sobre
+o fundo). Arrastar na onda e na curva varre a cabeça de leitura pelo caminho do
+clique, com um endereço pendente descarregado no tick de 60 Hz; botão direito
+ou Ctrl+arrasto faz pan no viewport; no hex o arrasto é do `HexGrid`.
 
 Alvos de toque: 24 px de diâmetro no mínimo, para o critério 2.5.8 do WCAG 2.2. **O
 critério foi fechado em 06/10/2026** sem aumentar o alvo — a célula de byte continua
@@ -255,7 +269,7 @@ lado seria a única forma de ler o que se ouve.
 
 | Conceito do HTML | Equivalente em JUCE |
 | --- | --- |
-| Tailwind `bg-[#c2c6c9]` | `juce::Colour {0xffc2c6c9}` |
+| Tailwind `bg-[#202326]` | `juce::Colour {0xff202326}` |
 | Inter | `fonts().sans()` com a fonte embarcada, ou a fonte do sistema |
 | Knob com ponteiro | `juce::Slider` `RotaryHorizontalVerticalDrag` com `LookAndFeel` próprio |
 | Grelha de bytes | `HexGrid`, um `Component` com `paint()` e `cellRect()` partilhada entre o desenho e o clique |

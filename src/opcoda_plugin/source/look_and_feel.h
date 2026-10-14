@@ -92,10 +92,16 @@ public:
             g.strokePath(track, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
                                                        juce::PathStrokeType::rounded});
 
-            // Arco preenchido, do minimo ate ao valor.
+            // Arco preenchido, do minimo ate ao valor, com halo curto por baixo:
+            // a mesma lingua do glow da onda (pilha de alfa, sem blur) e a
+            // resposta ao "small outer glow on active controls". Contido: um
+            // passe largo e fraco, so sobre o arco aceso.
             juce::Path valueArc;
             valueArc.addCentredArc(centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f,
                                    rotaryStartAngle, angle, true);
+            g.setColour(palette::alpha(palette::accent, 0.16f));
+            g.strokePath(valueArc, juce::PathStrokeType {5.0f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded});
             g.setColour(palette::accent);
             g.strokePath(valueArc, juce::PathStrokeType {2.0f, juce::PathStrokeType::curved,
                                                         juce::PathStrokeType::rounded});
@@ -137,25 +143,26 @@ public:
         }
     }
 
-    // Botao sem cromo: icone ou palavra solta sobre a superficie, sem fundo, sem
-    // bisel, sem sombra. O componente continua juce::TextButton — teclado, foco
-    // e AccessibilityHandler de graca — so o desenho achatou.
+    // Botao compacto de workstation: retangulo de raio minimo, borda fina,
+    // inativo neutro, ativo com filete ambar. O componente continua
+    // juce::TextButton — teclado, foco e AccessibilityHandler de graca.
     //
     // A superficie importa e o botao nao a conhece: `uiOnDark` diz que ele mora
-    // sobre o display escuro (a linha de estado), e ai a tinta clara e' o que
-    // se le. Sem a propriedade, um glifo textDark sobre o display daria 1,14:1
-    // — invisivel — e o anel focusRing sumiria junto.
+    // sobre o display escuro (a linha de estado). Como o chassis tambem e'
+    // escuro agora, a tinta e' a mesma dos dois lados; a propriedade fica
+    // porque o wash do hover precisa dela.
     //
     // O que diz qual botao e' vai na propriedade `uiIcon`: "transport" desenha
-    // ▶/■, "folder" desenha a pasta, "tab" desenha a palavra. Sem a propriedade
-    // nao se desenha nada, porque um botao sem icone e' um alvo invisivel e um
-    // alvo invisivel nao passa nem no 2.5.8 nem no bom senso.
+    // ▶/■, "folder" desenha a pasta, "tab" desenha a palavra numa caixa de
+    // borda fina. Sem a propriedade nao se desenha nada, porque um botao sem
+    // icone e' um alvo invisivel e um alvo invisivel nao passa nem no 2.5.8
+    // nem no bom senso.
     //
     // Os quatro estados continuam distinguiveis sem cor: repouso e' o icone
-    // quieto, sobreposto ganha o banho de alfa, premido escurece, e ligado troca
-    // a forma (▶ vira ■, aba ganha o filete). A troca de palavra PLAY/STOP virou
-    // troca de forma pelo mesmo motivo que a criou: o estado tem de se ler sem
-    // ver cor, e forma e' o que o 1.4.1 pede.
+    // quieto, sobreposto ganha o banho de alfa, premido escurece, e ligado
+    // troca a forma (▶ vira ■, aba ganha o filete) e o peso do texto. A troca
+    // de palavra PLAY/STOP virou troca de forma pelo mesmo motivo que a criou:
+    // o estado tem de se ler sem ver cor, e forma e' o que o 1.4.1 pede.
     void drawButtonBackground(juce::Graphics& g,
                               juce::Button& button,
                               const juce::Colour&,
@@ -170,27 +177,39 @@ public:
             return;
         }
 
+        const auto isTab = button.getProperties()["uiIcon"].toString() == "tab";
+        const auto on = button.getToggleState();
+
+        // Caixa da aba: borda fina sempre, preenchimento so quando ativa.
+        // Inativa neutra (fundo do pai), ativa com subPanel para separar do
+        // fundo sem gritar. Raio 2: workstation, nao pill.
+        if (isTab) {
+            g.setColour(on ? palette::subPanel
+                           : palette::alpha(palette::subPanel, 0.25f));
+            g.fillRoundedRectangle(reduced, 2.0f);
+            g.setColour(palette::alpha(palette::chassisBorder, on ? 0.95f : 0.55f));
+            g.drawRoundedRectangle(reduced, 2.0f, 1.0f);
+        }
+
         // Banho de alfa no hover e no premido: e' o unico relevo que sobrou, e
-        // chega porque o icone ja tem forma propria. Preto no claro, branco no
-        // escuro — o banho tem de se ver contra a superficie.
+        // chega porque o icone ja tem forma propria. Branco no escuro — o
+        // chassis e o display sao ambos escuros agora.
         const auto onDark = button.getProperties()["uiOnDark"];
-        const auto wash = onDark ? juce::Colours::white : juce::Colours::black;
+        const auto wash = onDark ? juce::Colours::white : juce::Colours::white;
         if (shouldDrawButtonAsHighlighted && !shouldDrawButtonAsDown) {
             g.setColour(palette::alpha(wash, 0.08f));
-            g.fillRoundedRectangle(reduced, 4.0f);
+            g.fillRoundedRectangle(reduced, isTab ? 2.0f : 4.0f);
         }
         if (shouldDrawButtonAsDown) {
             g.setColour(palette::alpha(wash, 0.14f));
-            g.fillRoundedRectangle(reduced, 4.0f);
+            g.fillRoundedRectangle(reduced, isTab ? 2.0f : 4.0f);
         }
 
         // Aba activa: filete de acento em baixo, com halo fraco por tras. E'
-        // pista redundante — o texto da aba activa vai em forte e escuro, e e'
-        // isso que carrega o estado — por isso o 1,24:1 do laranja sobre o
-        // chassi nao conta aqui, nem para o filete nem para o halo. O halo e' a
-        // mesma lingua do glow da onda: a vista activa tem luz, as outras nao.
-        if (button.getToggleState() &&
-            button.getProperties()["uiIcon"].toString() == "tab") {
+        // pista redundante — o texto da aba activa vai em forte e claro, e e'
+        // isso que carrega o estado. O halo e' a mesma lingua do glow da onda:
+        // a vista activa tem luz, as outras nao.
+        if (on && isTab) {
             const auto bar = juce::Rectangle<float> {reduced.getX() + 4.0f,
                                                      reduced.getBottom() - 2.5f,
                                                      reduced.getWidth() - 8.0f, 2.0f};
@@ -201,13 +220,12 @@ public:
         }
 
         // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
-        // focusRing no claro (9,73:1), textOnDark no escuro (11,54:1): o anel
-        // tem de contrastar com a superficie, e accent nas duas daria 1,24:1 e
-        // 8,96:1 — a segunda ate passaria, mas o anel tem de ser um so.
+        // focusRing e' ambar (~7:1 sobre o fundo escuro): o anel tem de
+        // contrastar com a superficie, e a forma (anel de 2 px) e' a segunda
+        // pista que o 1.4.1 pede.
         if (button.hasKeyboardFocus(true)) {
-            g.setColour(button.getProperties()["uiOnDark"] ? palette::textOnDark
-                                                           : palette::focusRing);
-            g.drawRoundedRectangle(reduced.reduced(1.0f), 4.0f, 2.0f);
+            g.setColour(palette::focusRing);
+            g.drawRoundedRectangle(reduced.reduced(1.0f), isTab ? 2.0f : 4.0f, 2.0f);
         }
     }
 
@@ -226,8 +244,8 @@ public:
         // Desligado usa o apagado da superficie em vez de sumir: um icone que
         // some quando o transporte do host para parece que o botao foi embora, e
         // um botao que recusa o toque tem de continuar la para recusar.
-        // textSub no claro (6,38:1 — textMuted daria 2,87 e reprovaria),
-        // textOnDarkSub no escuro (6,49:1).
+        // Secundario (~7:1 sobre o fundo escuro) chega para icone desligado,
+        // que nao e' texto de leitura.
         const auto onDark = static_cast<bool>(button.getProperties()["uiOnDark"]);
         const auto ink = button.isEnabled()
                              ? (onDark ? palette::textOnDark : palette::textDark)
@@ -243,11 +261,11 @@ public:
             return;
         }
 
-        // Aba de vista: a palavra curta, forte e escura quando activa, normal e
+        // Aba de vista: a palavra curta, forte e clara quando activa, normal e
         // secundaria quando nao. A mudanca de peso e cor carrega o estado; o
-        // filete desenhado no fundo e' redundancia.
+        // filete e a caixa desenhados no fundo sao redundancia.
         const auto on = button.getToggleState();
-        g.setFont(fonts().sans(10.0f, on));
+        g.setFont(fonts().sans(9.0f, on));
         g.setColour(on ? palette::textDark : palette::textSub);
         g.drawText(button.getButtonText(), bounds, juce::Justification::centred, false);
     }

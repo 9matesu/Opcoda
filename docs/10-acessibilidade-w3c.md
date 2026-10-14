@@ -31,13 +31,13 @@ renderizada diretamente, porque a 480 é a que exercita a refluxo da grelha.
 | Critério WCAG | Regra no Opcoda | Status | Evidência |
 | --- | --- | --- | --- |
 | 2.1.1 Teclado | knobs, campo de endereço, botões e display operam por teclado, sem armadilha de foco | **cumpre** | os knobs são `juce::Slider`, que já entregam foco e ajuste com setas. `ByteAddressField` é um `TextEditor` com nome acessível: `Enter` confirma, `Esc` volta ao valor anterior, setas sobem e descem um byte e PageUp/PageDown saltam dezasseis. Transporte, pasta e abas são `juce::TextButton` sem cromo — o componente continua, só o desenho achatou — e `1` `2` `3`, `A`, `L` e `Espaço` operam tudo sem rato. O `ByteDisplay` é focalizável e tem caret: o mapa completo está abaixo |
-| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` e `drawButtonBackground` desenham o anel em `focusRing` (`#1b1e22`, 9,73:1 sobre o chassi) quando há foco de teclado — inclusive nos botões sem cromo, que continuam focáveis. O transporte mora sobre o display escuro e leva o anel em `textOnDark` (11,54:1), porque `focusRing` ali sumiria. O laranja (`1,24:1` sobre o chassi) foi retirado dos dois em `6d8a7a8`: sem segunda pista, o anel laranja reprovava o 1.4.11. O `ByteDisplay` e o `ByteAddressField` pintam sobre o display escuro, onde o laranja dá 9,0:1 — esses dois mantêm o contorno laranja |
+| 2.4.7 Foco visível | indicador de foco em todo controle | **cumpre** | `drawRotarySlider` e `drawButtonBackground` desenham o anel em `focusRing` (`#ffaa24`, 8,29:1 sobre o fundo `#202326`) quando há foco de teclado — inclusive nos botões, que continuam focáveis. O chassi e o display são ambos escuros, por isso o anel é um só. O `ByteDisplay` pinta o seu sobre o `#0e1013`, onde o laranja dá 10,0:1 |
 | 4.1.2 Nome, função e valor | cada controle expõe nome acessível à API do SO | **cumpre** | nome acessível é a descrição completa em português ("Tamanho de grao, em milissegundos"), não o rótulo curto do mock ("SIZE"), que seria inútil por leitor de tela. O campo de endereço escreve o valor em hexadecimal, que é a unidade em que se lê. A grelha tem `setName` e `setHelpText`: o nome diz o que é e a ajuda diz que os dois caminhos de teclado estão noutro sítio, porque `Component` não expõe `setTooltip` a não ser por cabeçalho transitivo e a dica de rato não serviria para nada numa grelha que só se opera com o rato |
 | 2.5.8 Tamanho do alvo | alvos de no mínimo 24×24 px | **cumpre** | a célula de byte continua a 17 px de largura, que não tem correção possível, mas a grelha deixou de ser de rato. O `ByteDisplay` é focalizável e tem caret de navegação: as setas, `Início`, `Fim`, `Enter` e `Esc` operam o display inteiro sem passar por nenhum outro controle. As abas de vista têm 46×22 px com as teclas `1` `2` `3` como caminho garantido. Ver o mapa de teclas abaixo |
-| 1.4.3 Contraste mínimo | texto a 4,5:1 sobre a superfície | **cumpre** | `textDark #1b1e22` sobre `chassis #c2c6c9` dá 9,73:1; `textSub #383d42` dá 6,38:1. O rodapé do display usa `textOnDark #c6cacc` sobre `#0e1013`, que dá 11,54:1 |
+| 1.4.3 Contraste mínimo | texto a 4,5:1 sobre a superfície | **cumpre** | `textDark #e4e7e8` sobre o fundo `#202326` dá 12,70:1; `textSub #92999e` dá 5,47:1. O rodapé do display usa `textOnDark` (o mesmo claro) sobre `#0e1013`, que dá 19,05:1 em branco e ~12:1 no tom de leitura |
 | 3.3.1 Identificação de erro | binário rejeitado gera mensagem em texto com código tipado, nunca só por cor | **cumpre** | o LED de falha é vermelho e a linha de status escreve `RECUSADO / E_BAD_PE`. Cor e texto sempre juntos. A linha de estado fica no topo do display e não no rodapé: um `E_BAD_PE` em Inter de 10 px ao lado do pico e das vozes é uma coisa que passa sem ser lida |
 | 1.4.1 Uso de cor | LEDs, a região ativa e a cabeça de leitura nunca são o único sinal | **cumpre** | cada LED é acompanhado de rótulo. Na grelha, a região ativa leva fundo laranja a 22 % **e** um filete de 1 px em cima e em baixo da linha: o fundo diz a quem vê cor, o filete diz a quem não vê. A cabeça de leitura é uma barra branca de 2 px na margem esquerda da célula, com fundo claro por baixo do texto. Os grãos são riscos brancos baixos, nunca barras de altura total — a forma distingue-os da cabeça de leitura mesmo sendo a mesma cor. A cor da onda e das barras conta a entropia, mas posição e forma já a contam: quem não distingue o ciano do rosa lê a mesma altura no mesmo sítio. O rodapé escreve `POS` e `REG` em hexadecimal |
-| 1.4.11 Contraste não textual | gráficos e indicadores de foco a 3:1 | **cumpre** | anéis de foco em `focusRing`: 9,73:1 sobre o chassi. Grãos em branco: 4,52:1 sobre o envelope saturado (`accent` a 62 %) e 13,4:1 sobre o fundo real da forma de onda (wash de `accent` a 16 % sobre o painel). Onda por entropia: `waveLow` 9,15:1, `accentSoft` 12,32:1, `waveHigh` 6,40:1, todos contra o display. Tokens quentes **reprovados** sobre o envelope e por isso proibidos como marca de grão: `accentSoft` 2,92:1, `accentWarn` 2,62:1, `textOnDark` 2,74:1 |
+| 1.4.11 Contraste não textual | gráficos e indicadores de foco a 3:1 | **cumpre** | anéis de foco em `focusRing`: 8,29:1 sobre o fundo. Grãos em branco: 19,05:1 sobre o fundo e acima de 3:1 sobre o núcleo em teal. Onda: `waveLow` 10,86:1, `accentSoft` 12,32:1, `waveHigh` 6,40:1, todos contra o display. Viewport no overview leva moldura `accent` (10,0:1) e escurecimento das margens — forma e posição contam sem cor. A borda estrutural (`#44494d`, 1,73:1) não carrega estado sozinha: abas têm texto + filete, e por isso o 1.4.11 não se aplica a ela |
 | 1.4.10 Refluxo | interface utilizável a 200% de zoom sem rolagem horizontal | **parcial** | redimensiona de 560 a 4096 px sem rolagem, verificado por captura nos dois extremos. Abaixo de 520 px de largura a grelha **omite a coluna ASCII** em vez de cortar colunas de hexadecimal, que partiriam os endereços ao meio. Não há medição a 200% de zoom em display de baixa densidade |
 
 ### Ressalva declarada ao 2.5.8 — **retirada em 06/10/2026**
@@ -102,15 +102,15 @@ convém escrever para não parecer um defeito quando alguém ler o código.
 
 ### Duas decisões de desenho que afetam acessibilidade
 
-O display é escuro porque o chassi é claro, e não por estética. Halo laranja
-sobre superfície clara dá 1,24:1 e desaparece, então toda a energia de brilho
-ficou na única região com contraste suficiente.
+O device inteiro é escuro (fundo `#202326`, display `#0e1013`), e é por
+contraste, não só por estética. No tema claro anterior, halo laranja sobre
+superfície clara dava 1,24:1 e desaparecia, e toda a energia de brilho ficava
+na única região escura; com o fundo escuro, ambar e teal passam 3:1 em toda a
+superfície (8,29:1 e 9,00:1) e o glow contido vale em todo o lado.
 
-O rodapé de telemetria vive dentro do display, e isso obriga a uma segunda
-par de tokens: um rótulo sem cor de texto própria herda a quase preta do
-`Label` e fica ilegível sobre o LCD escuro. `textOnDark #c6cacc` sobre
-`display #0e1013` dá 11,6:1. Regra geral: **quem decide a cor de fundo decide
-a cor do texto**, e por isso o rodapé não pode usar os tokens do chassi claro.
+O rodapé de telemetria vive dentro do display. A regra geral mantém-se:
+**quem decide a cor de fundo decide a cor do texto** — o rodapé usa os tokens
+escuros (`textOnDark`), nunca os do chassi.
 
 O campo de endereço fica na linha de estado, e não no
 rodapé. São controles, e o rodapé é um alinhamento de leituras: um campo de

@@ -474,10 +474,10 @@ dentro do laranja, porque a barra é o que fecha o 1.4.1 quando a cor não
 distingue. O `constitution.md:73` exige rótulo ou padrão além da cor, e uma curva
 laranja sobre fundo escuro sem marca não passa.
 
-**O botão ligado não pode ser só cor.** O laranja `#ff9a00` sobre o chassis
-`#c2c6c9` dá 2,4:1 (`design/DESIGN-SYSTEM.md:65`), que é menos do que o 4,5:1 do
-critério 1.4.3. O estado ligado ganha uma barra de 1 px no lado esquerdo, e é por
-isso que o botão de reprodução pode ser lido sem ver a cor.
+**O botão ligado não pode ser só cor.** No tema escuro o ambar `#ffaa24` sobre o
+fundo dá 8,29:1, mas a regra mantém-se: o estado ligado ganha o filete e a
+troca de forma (▶/■, peso do texto), e é por isso que o botão de reprodução
+pode ser lido sem ver a cor.
 
 **A 60 Hz, o texto continua a não vocalizar.** `setIfChanged`
 (`plugin_editor.cpp:80-85`) só escreve quando o texto muda, porque trocar o texto

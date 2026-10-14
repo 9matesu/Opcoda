@@ -142,6 +142,19 @@ public:
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
 
+    // Zoom do viewport da forma de onda e da curva: fracao da regiao visivel.
+    // viewStart_ + viewLength_ <= 1 sempre; comprimento 1 = regiao inteira.
+    //
+    // O zoom muda o *intervalo de bytes reduzido*, nao a resolucao: as colunas
+    // continuam uma por pixel e a reducao (pe::reduceToColumns, com teto de
+    // amostras) escolhe a resolucao sozinha. E' a piramide de picos sem
+    // estrutura extra — a reducao memorizada e' o nivel certo para o zoom.
+    void zoomIn();
+    void zoomOut();
+    void fitView();
+    void zoomAround(float factor, float centreFraction);
+    [[nodiscard]] float viewLength() const noexcept { return viewLength_; }
+
     // Nivel de saida da ultima telemetria, em dB.
     //
     // **O medidor e' a peca animada que responde ao que se ouve**, e e' o unico
@@ -193,6 +206,7 @@ public:
 
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
     void mouseDoubleClick(const juce::MouseEvent& event) override;
     void mouseWheelMove(const juce::MouseEvent& event,
                         const juce::MouseWheelDetails& wheel) override;
@@ -325,9 +339,15 @@ private:
     // nao se ouve.
     [[nodiscard]] std::uint64_t highestUsableAddress() const noexcept;
 
-    // Fracao da regiao em que um endereco cai, em [0, 1]. Devolve 1,0 para um
-    // endereco fora da regiao, e quem chama recorta.
+    // Fracao da regiao em que um endereco cai, em coordenadas de ecra.
+    // Fora do viewport devolve <0 ou >1, e quem pinta recorta em vez de
+    // adivinhar. O inverso (ecra -> endereco) e' addressAt.
     [[nodiscard]] float fractionOf(std::uint64_t address) const noexcept;
+
+    // Fracao da regiao (0..1) sob um ponto do ecra, ou o maximo de uint64 se o
+    // ponto nao for material. Nao e' addressAt: este e' o caminho inverso em
+    // fracao, para o zoom centrado no cursor e para o pan.
+    [[nodiscard]] float regionFractionAt(float x, float areaX, float areaWidth) const noexcept;
 
     // Endereco sob um ponto, ou o maximo de uint64 se o ponto nao for material.
     [[nodiscard]] std::uint64_t addressAt(juce::Point<float> position) const;
@@ -336,9 +356,22 @@ private:
     // desenho e' por fracao, e a conversao e' do nucleo.
     [[nodiscard]] double fractionFor(std::uint64_t address) const noexcept;
 
+    // Intervalo de bytes do viewport, em [regionStart_, regionEnd_).
+    // E' sobre ele — e nao sobre a regiao inteira — que a reducao corre.
+    [[nodiscard]] std::pair<std::uint64_t, std::uint64_t> viewByteRange() const noexcept;
+
     static constexpr float kPadding {6.0f};
     static constexpr float kAxisHeight {12.0f};
     static constexpr float kAxisInset {22.0f};
+
+    // Regua de tempo/endereco no topo da forma de onda e faixa de navegacao
+    // (overview) no fundo. Alturas proprias para o plot as descontar.
+    static constexpr float kRulerHeight {16.0f};
+    static constexpr float kOverviewHeight {30.0f};
+
+    // Zoom minimo: 64 bytes na regiao. Abaixo disso nao ha transiente para ver
+    // — so bytes individuais, que os pontos de amostra ja mostram.
+    static constexpr std::uint64_t kMinViewBytes {64};
 
     HexGrid hex_;
 
@@ -358,15 +391,56 @@ private:
 
     ViewMode mode_ {ViewMode::waveform};
 
-    // Resolucao das vistas novas: quantas colunas por pixel. A roda muda isto e nao
-    // o tamanho do componente, porque o resized do editor e' o dono da geometria e
-    // um setSize de dentro de um paint fightaria com ele.
-    float columnScale_ {1.0f};
+    // Viewport em fracao da regiao. O pan arrasta viewStart_; o zoom escala
+    // viewLength_ ancorado no cursor. setRegion volta a 0/1.
+    float viewStart_ {0.0f};
+    float viewLength_ {1.0f};
+
+    // Pan com botao direito/medio ou Ctrl+arrasto: x do ultimo evento.
+    bool panning_ {false};
+    float lastPanX_ {0.0f};
+
+    // Arrasto na faixa de navegacao: move o viewport em vez de varrer a leitura.
+    bool overviewDrag_ {false};
+
+    // Geometria das vistas novas: faixa de navegacao no fundo, regua no topo,
+    // plot entre as duas. O hex nao usa nenhuma das tres.
+    [[nodiscard]] juce::Rectangle<float> overviewBounds() const noexcept;
+    [[nodiscard]] juce::Rectangle<float> plotBounds() const noexcept;
+    // O plot da curva recua a esquerda para o eixo 0/4/8. Graos e cabecas na
+    // vista de entropia usam este, nao o plot cheio — ou marcavam outro x.
+    [[nodiscard]] juce::Rectangle<float> entropyPlotBounds() const noexcept;
+
+    // Overview da regiao inteira para a faixa de navegacao: 192 colunas fixas,
+    // recalculadas so quando a regiao ou a fonte muda. O detalhe usa columns_
+    // (viewport); o overview usa estas — duas resolucoes, dois caches, nenhum
+    // decode por quadro.
+    std::vector<pe::Column> overviewColumns_ {};
+    std::uint64_t overviewRegionStart_ {0};
+    std::uint64_t overviewRegionEnd_ {0};
+    bool overviewValid_ {false};
+    void rebuildOverviewIfNeeded();
+
+    void paintRuler(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
+    void paintOverview(juce::Graphics& g);
+    void paintSourceTag(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
+
+    // Pontos de amostra no zoom fundo: quando cada coluna cobre <=2 bytes, a
+    // miniatura esticada mente e os bytes reais contam a verdade. Desenha a
+    // polilinha pelos valores mapeados ((byte-127,5)/127,5, a mesma conta do
+    // nucleo) com ponto cheio em cada amostra.
+    void paintSampleDots(juce::Graphics& g,
+                         const juce::Rectangle<float>& plotArea,
+                         std::uint64_t viewStartByte,
+                         std::uint64_t viewEndByte);
+    [[nodiscard]] bool sampleDotsVisible() const noexcept;
 
     std::vector<pe::Column> columns_;
     std::uint64_t cachedRegionStart_ {0};
     std::uint64_t cachedRegionEnd_ {0};
     std::uint32_t cachedColumnCount_ {0};
+    float cachedViewStart_ {-1.0f};
+    float cachedViewLength_ {-1.0f};
     bool cacheValid_ {false};
 
     juce::Font font_ {fonts().sans(10.0f)};

@@ -385,8 +385,9 @@ void PluginEditor::buildHeader() {
     // a segunda pista de estado, e a que funciona para quem nao distingue cores.
     // Sem texto e sem cromo — so o glifo, desenhado pelo LookAndFeel.
     playButton_.getProperties().set("uiIcon", "transport");
-    // Na linha de estado, sobre o display escuro: tinta clara, ou o glifo some
-    // (textDark ali da 1,14:1).
+    // Na linha de estado, sobre o display escuro: tinta clara. O chassis tambem
+    // e' escuro agora, por isso a distincao uiOnDark e' redundante — fica porque
+    // o LookAndFeel ainda a le para o wash do hover.
     playButton_.getProperties().set("uiOnDark", true);
     playButton_.setButtonText("");
     playButton_.setClickingTogglesState(true);
@@ -456,7 +457,10 @@ void PluginEditor::buildViewButtons() {
 
     for (auto* button : {static_cast<juce::Component*>(&viewWaveButton_),
                          static_cast<juce::Component*>(&viewHexButton_),
-                         static_cast<juce::Component*>(&viewEntropyButton_)}) {
+                         static_cast<juce::Component*>(&viewEntropyButton_),
+                         static_cast<juce::Component*>(&zoomOutButton_),
+                         static_cast<juce::Component*>(&zoomInButton_),
+                         static_cast<juce::Component*>(&zoomFitButton_)}) {
         addAndMakeVisible(*button);
     }
 
@@ -486,6 +490,22 @@ void PluginEditor::buildViewButtons() {
         grid_.setMode(ByteDisplay::ViewMode::entropy);
         updateViewButtons();
     };
+
+    // Zoom clicavel do viewport. Nomes falados completos: "-" sozinho num
+    // leitor de tela nao diz nada.
+    const auto setupZoom = [this](juce::TextButton& button, const char* glyph,
+                                 const char* spokenName, const char* hint) {
+        button.setButtonText(glyph);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName} + ". " + hint);
+        button.getProperties().set("uiIcon", "tab");
+    };
+    setupZoom(zoomOutButton_, "-", "Zoom out of the waveform", "Tecla -");
+    setupZoom(zoomInButton_, "+", "Zoom into the waveform", "Tecla +");
+    setupZoom(zoomFitButton_, "FIT", "Fit the region to the view", "Tecla 0");
+    zoomOutButton_.onClick = [this] { grid_.zoomOut(); };
+    zoomInButton_.onClick = [this] { grid_.zoomIn(); };
+    zoomFitButton_.onClick = [this] { grid_.fitView(); };
 
     updateViewButtons();
 }
@@ -665,8 +685,8 @@ void PluginEditor::paint(juce::Graphics& g) {
     g.drawHorizontalLine(kHeaderHeight + 1, 0.0f, static_cast<float>(getWidth()));
 
     // Realce de 1 px no topo: e' o que da sensacao de superficie em vez de
-    // retangulo liso.
-    g.setColour(juce::Colours::white.withAlpha(0.35f));
+    // retangulo liso. Contido (0,08) porque o fundo e' escuro.
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
     g.drawHorizontalLine(0, 0.0f, static_cast<float>(getWidth()));
 }
 
@@ -919,8 +939,9 @@ constexpr int kLedBoxWidth {12};
     //
     // Fica em cima do painel de parametros e nao dentro do display: e' um
     // instrumento de navegacao, e um instrumento que fica dentro da coisa que ele
-    // instrumenta desaparece quando a coisa muda. Tres palavras sem cromo, 46 px
-    // cada com 4 de vao; a 480 de janela ainda sobra para metade delas.
+    // instrumenta desaparece quando a coisa muda. Tres palavras sem cromo a'
+    // esquerda, zoom (-/+/FIT) a' direita; a 480 de janela as vistas colapsam
+    // para a activa e o zoom cai primeiro, porque a roda e as teclas cobrem.
     //
     // A altura e' 22 px e nao 16: alvo de toque perto dos 24 do 2.5.8, com as
     // teclas 1, 2 e 3 como caminho garantido. A aba activa leva peso forte e o
@@ -961,6 +982,28 @@ constexpr int kLedBoxWidth {12};
             view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 1,
                                                          kViewButtonWidth, kViewButtonHeight});
             viewX += kViewButtonWidth + kViewGap;
+        }
+
+        // Zoom a' direita: - e + de 30, FIT de 40. So quando ha folga para la'
+        // das vistas — a 480 nao ha, e a roda com as teclas cobrem o gesto.
+        constexpr int kZoomSmall {30};
+        constexpr int kZoomFit {40};
+        const int zoomWidth = kZoomSmall + kViewGap + kZoomSmall + kViewGap + kZoomFit;
+        const bool fitsZoom =
+            fitsAll && viewRow.getWidth() >= stripWidth + kViewGap * 2 + zoomWidth;
+        zoomOutButton_.setVisible(fitsZoom);
+        zoomInButton_.setVisible(fitsZoom);
+        zoomFitButton_.setVisible(fitsZoom);
+        if (fitsZoom) {
+            int zoomX = viewRow.getRight() - zoomWidth;
+            zoomOutButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                           kZoomSmall, kViewButtonHeight});
+            zoomX += kZoomSmall + kViewGap;
+            zoomInButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                          kZoomSmall, kViewButtonHeight});
+            zoomX += kZoomSmall + kViewGap;
+            zoomFitButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                           kZoomFit, kViewButtonHeight});
         }
     }
 
@@ -1070,6 +1113,23 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
 if (isDigitKey(key, '3')) {
         grid_.setMode(ByteDisplay::ViewMode::entropy);
         updateViewButtons();
+        return true;
+    }
+
+    // Zoom quando o foco nao esta no display (num knob, por exemplo). No
+    // display e' ele que consome; aqui so chegam as que sobraram.
+    if (isTypedCharacter(key, '+') || isTypedCharacter(key, '=')) {
+        grid_.zoomIn();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '-')) {
+        grid_.zoomOut();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '0')) {
+        grid_.fitView();
         return true;
     }
 

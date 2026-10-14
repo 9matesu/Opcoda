@@ -202,6 +202,14 @@ private:
     juce::TextButton viewHexButton_;
     juce::TextButton viewEntropyButton_;
 
+    // Zoom do viewport da forma de onda: - / + / FIT, a direita da fileira de
+    // vistas. Texto curto sem cromo, a mesma lingua das abas; o display tambem
+    // responde a roda, +/- e 0, e estes botoes sao o caminho clicavel e o que
+    // o leitor de tela anuncia.
+    juce::TextButton zoomOutButton_;
+    juce::TextButton zoomInButton_;
+    juce::TextButton zoomFitButton_;
+
     void buildViewButtons();
     void updateViewButtons();
 

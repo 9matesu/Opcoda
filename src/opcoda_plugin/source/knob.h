@@ -50,7 +50,7 @@ public:
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(fonts().sans(10.0f, true));
+        title_.setFont(fonts().sans(9.0f, true));
         title_.setColour(juce::Label::textColourId, palette::textSub);
         addAndMakeVisible(title_);
 
@@ -111,9 +111,9 @@ public:
         g.fillRoundedRectangle(bounds, 2.0f);
 
         // Realce interno de 1 px no topo do painel: a mesma leitura do header do
-        // editor, em pequeno. Sem ele o painel e o chassis colam-se num cinzento
-        // so, e os seis modulos viram uma faixa em vez de seis pecas.
-        g.setColour(palette::alpha(juce::Colours::white, 0.28f));
+        // editor, em pequeno. Contido no tema escuro (0,08): no claro era 0,28,
+        // e a mesma forca aqui viraria filete branco.
+        g.setColour(palette::alpha(juce::Colours::white, 0.08f));
         g.drawHorizontalLine(juce::roundToInt(bounds.getY() + 1.5f), bounds.getX() + 3.0f,
                              bounds.getRight() - 3.0f);
 

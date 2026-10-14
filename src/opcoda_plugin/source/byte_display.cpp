@@ -9,20 +9,11 @@
 namespace opcoda {
 namespace {
 
-// Preenchimento do envelope.
-// **O min/max quase nao serve para mostrar bytes, e e' por isso que o rms e' que
-// desenha o corpo.** O texto de um .exe tem quase todos os valores de 0x00 a 0xFF,
-// e portanto o minimo e o maximo de uma coluna estao perto de -1 e de +1 em
-// praticamente todas. Com o envelope a 55 % o display ficava um bloco laranja
-// solido de altura quase inteira: era truthful e nao parecia uma forma de onda.
-//
-// Duas camadas resolvem. A de fora e' o min/max, fraca, e diz ate onde o material
-// se estica. A de dentro e' o rms, forte, e e' o que varia: um material aleatorio
-// fica perto de 0,577, um filler de zero cai a zero e um filler de 0xFF sobe a 1.
-// Sao tres alturas muito diferentes, e e' delas que se le se o material e' denso ou
-// repetitivo.
-constexpr float kSwingFill {0.16f};
-constexpr float kCoreFill {0.62f};
+// O min/max quase nao serve para mostrar bytes (o texto de um .exe cobre 0x00
+// a 0xFF em quase todas as colunas) e por isso o rms desenha o corpo: um
+// material aleatorio fica perto de 0,577, um filler de zero estica a 1 e um
+// filler de 0xFF tambem — sao as alturas que dizem se o material e' denso ou
+// repetitivo. O envelope min/max fica como base fraca.
 
 } // namespace
 
@@ -52,7 +43,8 @@ ByteDisplay::ByteDisplay() {
         "Tres vistas do material: forma de onda, grelha de bytes e curva de "
         "entropia. Clique para mover a cabeca de leitura. Com o teclado: setas "
         "movem o cursor, Enter ativa o byte, Esc volta a cabeca de leitura, "
-        "espaco liga e desliga a reproducao, 1, 2 e 3 mudam de vista e A alinha a "
+        "espaco liga e desliga a reproducao, 1, 2 e 3 mudam de vista, + e - "
+        "zoom, 0 enquadra a regiao e A alinha a "
         "regiao a uma secao PE.");
 
     hex_.onCellActivated = [this](std::uint64_t address) {
@@ -99,6 +91,7 @@ void ByteDisplay::setSource(const std::vector<std::uint8_t>* bytes,
     // a regiao pode ser a mesma. Confundir as duas dava uma curva de entropia do
     // ficheiro anterior desenhada sobre o ficheiro novo.
     cacheValid_ = false;
+    overviewValid_ = false;
 
     hex_.setSource(bytes, fileSize);
     repaint();
@@ -116,6 +109,13 @@ void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
     if (clampedEnd != cachedRegionEnd_ || start != cachedRegionStart_) {
         cacheValid_ = false;
     }
+    overviewValid_ = false;
+
+    // Regiao nova, viewport cheio: o zoom anterior media-se da regiao antiga e
+    // manter um viewport de 1/8 sobre material novo escondia 7/8 do som sem
+    // nenhum sinal. O utilizador volta a ver tudo e volta a aproximar.
+    viewStart_ = 0.0f;
+    viewLength_ = 1.0f;
 
     hex_.setRegion(regionStart_, regionEnd_);
 
@@ -301,30 +301,110 @@ void ByteDisplay::resized() {
 std::uint32_t ByteDisplay::columnCountForWidth() const noexcept {
     const auto width = getLocalBounds().toFloat().reduced(kPadding).getWidth();
     // Uma coluna por pixel e' o limite util: mais colunas que pixels e' trabalho
-    // que nao aparece, menos e' perda de resolucao sem ganho. O zoom move o limite
-    // dentro de uma faixa de quatro-octavas em cada sentido.
-    const auto scaled = static_cast<float>(width) * columnScale_;
+    // que nao aparece, menos e' perda de resolucao sem ganho. O zoom nao mexe
+    // aqui — muda o intervalo de bytes (viewByteRange), e a mesma densidade de
+    // colunas passa a cobrir menos material. E' a piramide sem estrutura extra.
+    const auto scaled = static_cast<float>(width);
     return static_cast<std::uint32_t>(std::clamp(scaled, 16.0f, 8192.0f));
 }
 
 void ByteDisplay::rebuildColumnsIfNeeded() {
     const auto wanted = columnCountForWidth();
     if (cacheValid_ && wanted == cachedColumnCount_ && regionStart_ == cachedRegionStart_ &&
-        regionEnd_ == cachedRegionEnd_) {
+        regionEnd_ == cachedRegionEnd_ && viewStart_ == cachedViewStart_ &&
+        viewLength_ == cachedViewLength_) {
         return;
     }
 
     columns_.clear();
 
     if (bytes_ != nullptr && !bytes_->empty() && regionEnd_ > regionStart_) {
-        static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(),
-                                              regionStart_, regionEnd_, wanted, columns_));
+        const auto [viewStart, viewEnd] = viewByteRange();
+        if (viewEnd > viewStart) {
+            static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(),
+                                                  viewStart, viewEnd, wanted, columns_));
+        }
     }
 
     cachedColumnCount_ = wanted;
     cachedRegionStart_ = regionStart_;
     cachedRegionEnd_ = regionEnd_;
+    cachedViewStart_ = viewStart_;
+    cachedViewLength_ = viewLength_;
     cacheValid_ = true;
+}
+
+void ByteDisplay::rebuildOverviewIfNeeded() {
+    if (overviewValid_ && overviewRegionStart_ == regionStart_ &&
+        overviewRegionEnd_ == regionEnd_) {
+        return;
+    }
+    overviewColumns_.clear();
+    if (bytes_ != nullptr && !bytes_->empty() && regionEnd_ > regionStart_) {
+        static constexpr std::uint32_t kOverviewColumns {192};
+        static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(),
+                                              regionStart_, regionEnd_,
+                                              kOverviewColumns, overviewColumns_));
+    }
+    overviewRegionStart_ = regionStart_;
+    overviewRegionEnd_ = regionEnd_;
+    overviewValid_ = true;
+}
+
+std::pair<std::uint64_t, std::uint64_t> ByteDisplay::viewByteRange() const noexcept {
+    if (regionEnd_ <= regionStart_) {
+        return {regionStart_, regionStart_};
+    }
+    const auto length = regionEnd_ - regionStart_;
+    const auto start = regionStart_ + static_cast<std::uint64_t>(viewStart_ * length);
+    const auto end = regionStart_ + static_cast<std::uint64_t>(
+                                          std::min(1.0f, viewStart_ + viewLength_) * length);
+    return {std::min(start, regionEnd_), std::max(end, std::min(start + 1, regionEnd_))};
+}
+
+float ByteDisplay::regionFractionAt(float x, float areaX, float areaWidth) const noexcept {
+    if (areaWidth <= 0.0f) {
+        return -1.0f;
+    }
+    const auto screen = (x - areaX) / areaWidth;
+    if (screen < 0.0f || screen > 1.0f) {
+        return -1.0f;
+    }
+    return viewStart_ + screen * viewLength_;
+}
+
+void ByteDisplay::zoomAround(float factor, float centreFraction) {
+    if (regionEnd_ <= regionStart_ || !(factor > 0.0f) ||
+        centreFraction < 0.0f || centreFraction > 1.0f) {
+        return;
+    }
+    const auto regionLength = regionEnd_ - regionStart_;
+    const auto minLength = std::min(1.0f, static_cast<float>(kMinViewBytes) /
+                                             static_cast<float>(regionLength));
+    const auto anchored = std::clamp(viewStart_ + centreFraction * viewLength_, 0.0f, 1.0f);
+    const auto newLength = std::clamp(viewLength_ * factor, minLength, 1.0f);
+    viewStart_ = std::clamp(anchored - centreFraction * newLength, 0.0f, 1.0f - newLength);
+    viewLength_ = newLength;
+    cacheValid_ = false;
+    repaint();
+}
+
+void ByteDisplay::zoomIn() {
+    zoomAround(0.5f, 0.5f);
+}
+
+void ByteDisplay::zoomOut() {
+    zoomAround(2.0f, 0.5f);
+}
+
+void ByteDisplay::fitView() {
+    if (viewStart_ == 0.0f && viewLength_ == 1.0f) {
+        return;
+    }
+    viewStart_ = 0.0f;
+    viewLength_ = 1.0f;
+    cacheValid_ = false;
+    repaint();
 }
 
 double ByteDisplay::fractionFor(std::uint64_t address) const noexcept {
@@ -332,7 +412,11 @@ double ByteDisplay::fractionFor(std::uint64_t address) const noexcept {
 }
 
 float ByteDisplay::fractionOf(std::uint64_t address) const noexcept {
-    return static_cast<float>(fractionFor(address));
+    if (viewLength_ <= 0.0f) {
+        return -1.0f;
+    }
+    const auto region = static_cast<float>(fractionFor(address));
+    return (region - viewStart_) / viewLength_;
 }
 
 void ByteDisplay::setReadHead(std::uint64_t address) {
@@ -494,6 +578,19 @@ bool ByteDisplay::keyPressed(const juce::KeyPress& key) {
         return true;
     }
 
+    if (isTypedCharacter(key, '+') || isTypedCharacter(key, '=')) {
+        zoomIn();
+        return true;
+    }
+    if (isTypedCharacter(key, '-')) {
+        zoomOut();
+        return true;
+    }
+    if (isTypedCharacter(key, '0')) {
+        fitView();
+        return true;
+    }
+
     handleNavigationKey(key);
     return true;
 }
@@ -524,6 +621,7 @@ void ByteDisplay::paint(juce::Graphics& g) {
     }
 
     rebuildColumnsIfNeeded();
+    rebuildOverviewIfNeeded();
 
     switch (mode_) {
         case ViewMode::waveform: paintWaveform(g); break;
@@ -534,8 +632,10 @@ void ByteDisplay::paint(juce::Graphics& g) {
     // Os graos vao sobre o conteudo e por baixo das cabecas. No hex o HexGrid e'
     // um Component filho e pinta-se a si proprio, portanto `paint` acontece antes
     // dele: e' `paintOverChildren` que os coloca por cima.
-    if (mode_ != ViewMode::hex) {
-        paintGrains(g, getLocalBounds().toFloat().reduced(kPadding));
+    if (mode_ == ViewMode::waveform) {
+        paintGrains(g, plotBounds());
+    } else if (mode_ == ViewMode::entropy) {
+        paintGrains(g, entropyPlotBounds());
     }
 
     // **Nao ha banda da regiao nas vistas novas, e a diferenca e' intentional.**
@@ -650,11 +750,15 @@ void ByteDisplay::paintGrain(juce::Graphics& g,
     // fracao vai directamente para x. No hex a escala e' outra: a janela e' o
     // ficheiro inteiro e o grao desenha-se na celula do byte, em
     // `paintGrainsInHex`.
-    const auto xOf = [&area](float fraction) {
-        if (fraction <= 0.0f || fraction >= 1.0f) {
-            return -1.0f; // fora da regiao: melhor nao desenhar do que adivinhar
+    const auto xOf = [this, &area](float regionFraction) {
+        if (viewLength_ <= 0.0f) {
+            return -1.0f;
         }
-        return area.getX() + fraction * area.getWidth();
+        const auto screen = (regionFraction - viewStart_) / viewLength_;
+        if (screen <= 0.0f || screen >= 1.0f) {
+            return -1.0f; // fora do viewport: melhor nao desenhar do que adivinhar
+        }
+        return area.getX() + screen * area.getWidth();
     };
 
     // O indice 0 e' o mais recente, porque o deslocamento empurra para o fim.
@@ -742,7 +846,7 @@ void ByteDisplay::paintSectionTicks(juce::Graphics& g) {
         return;
     }
 
-    const auto area = getLocalBounds().toFloat().reduced(kPadding);
+    const auto area = plotBounds();
     if (area.getWidth() <= 0.0f) {
         return;
     }
@@ -756,7 +860,11 @@ void ByteDisplay::paintSectionTicks(juce::Graphics& g) {
             continue;
         }
 
-        const auto x = area.getX() + fractionOf(start) * area.getWidth();
+        const auto screen = fractionOf(start);
+        if (screen < 0.0f || screen > 1.0f) {
+            continue; // fora do viewport
+        }
+        const auto x = area.getX() + screen * area.getWidth();
 
         g.setColour(palette::alpha(palette::chassisBorder, 0.8f));
         g.fillRect(juce::Rectangle<float> {x, area.getY(), 1.0f, area.getHeight()});
@@ -768,7 +876,15 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
         return;
     }
 
-    const auto area = getLocalBounds().toFloat().reduced(kPadding);
+    // Nas vistas novas as cabecas vivem no plot (regua em cima, overview
+    // em baixo); no hex ocupam a area toda. Na entropia o plot recua para o
+    // eixo, como a curva.
+    juce::Rectangle<float> area = getLocalBounds().toFloat().reduced(kPadding);
+    if (mode_ == ViewMode::waveform) {
+        area = plotBounds();
+    } else if (mode_ == ViewMode::entropy) {
+        area = entropyPlotBounds();
+    }
 
     // No hex os graos entram aqui, e nao em `paint`: o HexGrid e' um Component
     // filho e pinta-se depois de `paint` do pai, portanto qualquer marca minha
@@ -795,10 +911,14 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
     // a mais entre a cabeca de leitura e a de reproducao, e tres barras verticais
     // no mesmo ecra nao se distinguem.
     if (hasKeyboardFocus(true) && mode_ != ViewMode::hex) {
-        const auto caretX = area.getX() + fractionOf(caret_) * area.getWidth();
-        g.setColour(palette::accentSoft);
-        g.drawRect(juce::Rectangle<float> {caretX - 3.0f, area.getY() + 2.0f, 6.0f,
-                                           area.getHeight() - 4.0f}, 1.0f);
+        const auto screen = fractionOf(caret_);
+        if (screen >= 0.0f && screen <= 1.0f) {
+            const auto caretX = area.getX() + screen * area.getWidth();
+            g.setColour(palette::accentSoft);
+            g.drawRect(juce::Rectangle<float> {caretX - 3.0f, area.getY() + 2.0f, 6.0f,
+                                               area.getHeight() - 4.0f},
+                       1.0f);
+        }
     }
 
     paintFocusRing(g);
@@ -838,78 +958,333 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
         return;
     }
 
-    const auto bounds = getLocalBounds().toFloat().reduced(kPadding);
-    const auto centreY = bounds.getCentreY();
-    const auto halfHeight = bounds.getHeight() * 0.5f;
-    const auto columnWidth = bounds.getWidth() / static_cast<float>(columns_.size());
-
-    // Minimo e maximo num Path so, com dois movimentos: subir pela coluna maxima e
-    // descer pela minima. Um Path por coluna custava sete vezes mais e nao mudava o
-    // desenho.
-    juce::Path swing;
-    swing.startNewSubPath(bounds.getX(), centreY);
-
-    for (std::size_t i = 0; i < columns_.size(); ++i) {
-        const auto x = bounds.getX() + static_cast<float>(i) * columnWidth;
-        const auto top = centreY - std::clamp(columns_[i].maximum, -1.0f, 1.0f) * halfHeight;
-        swing.lineTo(x, top);
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto plot = plotBounds();
+    if (plot.getWidth() <= 0.0f || plot.getHeight() <= 0.0f) {
+        return;
     }
 
-    for (std::size_t i = columns_.size(); i-- > 0;) {
-        const auto x = bounds.getX() + static_cast<float>(i) * columnWidth;
-        const auto bottom =
-            centreY - std::clamp(columns_[i].minimum, -1.0f, 1.0f) * halfHeight;
-        swing.lineTo(x, bottom);
+    paintRuler(g, {full.getX(), plot.getY() - kRulerHeight - 2.0f, full.getWidth(),
+                   kRulerHeight});
+
+    const auto centreY = plot.getCentreY();
+    const auto halfHeight = plot.getHeight() * 0.5f;
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto columnWidth = plot.getWidth() / static_cast<float>(columns_.size());
+
+    if (sampleDotsVisible()) {
+        // Zoom fundo: os bytes reais em vez da miniatura. A polilinha passa
+        // pelos valores mapeados e cada amostra leva ponto — o transiente
+        // le-se amostra a amostra, sem esticar nada.
+        paintSampleDots(g, plot, viewStartByte, viewEndByte);
+    } else {
+        // Minimo e maximo num Path so, com dois movimentos: subir pela coluna maxima e
+        // descer pela minima. Um Path por coluna custava sete vezes mais e nao mudava o
+        // desenho.
+        juce::Path swing;
+        swing.startNewSubPath(plot.getX(), centreY);
+
+        for (std::size_t i = 0; i < columns_.size(); ++i) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            const auto top = centreY - std::clamp(columns_[i].maximum, -1.0f, 1.0f) * halfHeight;
+            swing.lineTo(x, top);
+        }
+
+        for (std::size_t i = columns_.size(); i-- > 0;) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            const auto bottom =
+                centreY - std::clamp(columns_[i].minimum, -1.0f, 1.0f) * halfHeight;
+            swing.lineTo(x, bottom);
+        }
+
+        swing.closeSubPath();
+
+        // Base morna fraca: o envelope diz ate onde o material se estica, mas
+        // quem carrega a leitura e' o nucleo em teal — ambar fica reservado a
+        // selecao, reproducao e graos, como na estacao de referencia.
+        g.setColour(palette::alpha(palette::accent, 0.12f));
+        g.fillPath(swing);
+
+        // Nucleo de rms, por cima e com peso. E' a parte que varia entre materiais
+        // diferentes, e por isso e' a que o olho segue.
+        juce::Path core;
+        core.startNewSubPath(plot.getX(), centreY);
+        for (std::size_t i = 0; i < columns_.size(); ++i) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            core.lineTo(x, centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
+        }
+        for (std::size_t i = columns_.size(); i-- > 0;) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            core.lineTo(x, centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
+        }
+        core.closeSubPath();
+
+        // Corpo em teal: a forma de onda le-se em ciano contido sobre o fundo
+        // escuro, e o contorno colorido por entropia conta o material por cima.
+        g.setColour(palette::alpha(palette::waveLow, 0.55f));
+        g.fillPath(core);
+
+        // Contorno do nucleo colorido por entropia, com glow. Cada coluna pinta
+        // conforme os bits/byte locais — ciano no previsivel, amarelo no meio, rosa
+        // no aleatorio — por isso a linha conta duas leituras de uma vez: onde o
+        // som esta' (posicao) e do que o material e' feito (cor).
+        //
+        // Tres Paths por faixa em vez de um stroke por segmento: um stroke por
+        // coluna seriam milhares de chamadas por quadro a 60 Hz, e tres Paths com
+        // tres cores dao o mesmo desenho. A junta entre faixas vizinhas perde a
+        // continuidade do traco num pixel, e num traco de 1 px isso nao se ve.
+        //
+        // O glow e' pilha de fills com alfa, como o halo dos graos: duas passadas
+        // largas e fracas por baixo do traco de 1 px. Sem DropShadowEffect, sem blur
+        // que o renderizador de software nao tem — e sem custo que apareca no perfil.
+        paintEntropyLine(
+            g, columns_, columnWidth, plot.getX(),
+            [&](std::size_t i) {
+                return centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+            },
+            [&](std::size_t i) {
+                return centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+            });
     }
-
-    swing.closeSubPath();
-
-    g.setColour(palette::alpha(palette::accent, kSwingFill));
-    g.fillPath(swing);
 
     // O zero. Um envelope sem linha de zero nao diz qual e' o silencio, e o desenho
     // da grelha tem essa linha ha muito tempo.
     g.setColour(palette::alpha(juce::Colours::white, 0.16f));
-    g.drawHorizontalLine(juce::roundToInt(centreY), bounds.getX(), bounds.getRight());
+    g.drawHorizontalLine(juce::roundToInt(centreY), plot.getX(), plot.getRight());
 
-    // Nucleo de rms, por cima e com peso. E' a parte que varia entre materiais
-    // diferentes, e por isso e' a que o olho segue.
-    juce::Path core;
-    core.startNewSubPath(bounds.getX(), centreY);
-    for (std::size_t i = 0; i < columns_.size(); ++i) {
-        const auto x = bounds.getX() + static_cast<float>(i) * columnWidth;
-        core.lineTo(x, centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
+    paintSourceTag(g, plot);
+    paintOverview(g);
+}
+
+bool ByteDisplay::sampleDotsVisible() const noexcept {
+    if (regionEnd_ <= regionStart_ || bytes_ == nullptr) {
+        return false;
     }
-    for (std::size_t i = columns_.size(); i-- > 0;) {
-        const auto x = bounds.getX() + static_cast<float>(i) * columnWidth;
-        core.lineTo(x, centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
+    const auto plotWidth = plotBounds().getWidth();
+    if (plotWidth <= 0.0f) {
+        return false;
     }
-    core.closeSubPath();
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto viewBytes =
+        viewEndByte > viewStartByte ? (viewEndByte - viewStartByte) : 0;
+    // <=2 bytes por pixel: ha ecra para cada amostra. Acima disso os pontos
+    // colapsavam uns sobre os outros e a polilinha das colunas conta melhor.
+    return viewBytes > 0 &&
+           static_cast<float>(viewBytes) / plotWidth <= 2.0f;
+}
 
-    g.setColour(palette::alpha(palette::accent, kCoreFill));
-    g.fillPath(core);
+void ByteDisplay::paintSampleDots(juce::Graphics& g,
+                                  const juce::Rectangle<float>& plotArea,
+                                  std::uint64_t viewStartByte,
+                                  std::uint64_t viewEndByte) {
+    if (bytes_ == nullptr || viewEndByte <= viewStartByte ||
+        viewStartByte >= bytes_->size()) {
+        return;
+    }
+    const auto last = std::min(viewEndByte, static_cast<std::uint64_t>(bytes_->size()));
+    const auto count = last - viewStartByte;
+    if (count == 0 || count > 8192) {
+        return;
+    }
 
-    // Contorno do nucleo colorido por entropia, com glow. Cada coluna pinta
-    // conforme os bits/byte locais — ciano no previsivel, amarelo no meio, rosa
-    // no aleatorio — por isso a linha conta duas leituras de uma vez: onde o
-    // som esta' (posicao) e do que o material e' feito (cor).
-    //
-    // Tres Paths por faixa em vez de um stroke por segmento: um stroke por
-    // coluna seriam milhares de chamadas por quadro a 60 Hz, e tres Paths com
-    // tres cores dao o mesmo desenho. A junta entre faixas vizinhas perde a
-    // continuidade do traco num pixel, e num traco de 1 px isso nao se ve.
-    //
-    // O glow e' pilha de fills com alfa, como o halo dos graos: duas passadas
-    // largas e fracas por baixo do traco de 1 px. Sem DropShadowEffect, sem blur
-    // que o renderizador de software nao tem — e sem custo que apareca no perfil.
-    paintEntropyLine(
-        g, columns_, columnWidth, bounds.getX(),
-        [&](std::size_t i) {
-            return centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
-        },
-        [&](std::size_t i) {
-            return centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
-        });
+    const auto centreY = plotArea.getCentreY();
+    const auto halfHeight = plotArea.getHeight() * 0.5f;
+    const auto xOf = [&](std::uint64_t byte) {
+        return plotArea.getX() +
+               (static_cast<float>(byte - viewStartByte) + 0.5f) /
+                   static_cast<float>(count) * plotArea.getWidth();
+    };
+    const auto yOf = [&](std::uint8_t byte) {
+        return centreY -
+               ((static_cast<float>(byte) - 127.5f) / 127.5f) * halfHeight;
+    };
+
+    // A mesma conta do nucleo (byteToSample duplicada e presa por ensaio):
+    // o ponto e' o byte, sem agregacao pelo meio.
+    juce::Path line;
+    bool started = false;
+    for (auto byte = viewStartByte; byte < last; ++byte) {
+        const auto x = xOf(byte);
+        const auto y = yOf((*bytes_)[static_cast<std::size_t>(byte)]);
+        if (!started) {
+            line.startNewSubPath(x, y);
+            started = true;
+        } else {
+            line.lineTo(x, y);
+        }
+    }
+    g.setColour(palette::waveLow);
+    g.strokePath(line, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                             juce::PathStrokeType::rounded});
+
+    g.setColour(palette::alpha(palette::waveLow, 0.95f));
+    for (auto byte = viewStartByte; byte < last; ++byte) {
+        const auto x = xOf(byte);
+        const auto y = yOf((*bytes_)[static_cast<std::size_t>(byte)]);
+        g.fillEllipse(x - 1.5f, y - 1.5f, 3.0f, 3.0f);
+    }
+}
+
+void ByteDisplay::paintRuler(juce::Graphics& g, const juce::Rectangle<float>& strip) {
+    if (regionEnd_ <= regionStart_ || strip.getWidth() <= 0.0f) {
+        return;
+    }
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto viewBytes = viewEndByte > viewStartByte ? viewEndByte - viewStartByte : 0;
+    if (viewBytes == 0) {
+        return;
+    }
+
+    // Passo "bonito" 1/2/5 x 10^n para ~90 px por tick maior.
+    const auto pxPerByte = strip.getWidth() / static_cast<float>(viewBytes);
+    const auto target = 90.0 / static_cast<double>(pxPerByte);
+    const auto magnitude = std::pow(10.0, std::floor(std::log10(std::max(target, 1.0))));
+    std::uint64_t stepBytes {1};
+    for (const auto mult : {1.0, 2.0, 5.0, 10.0}) {
+        if (mult * magnitude >= target) {
+            stepBytes = static_cast<std::uint64_t>(mult * magnitude);
+            break;
+        }
+        stepBytes = static_cast<std::uint64_t>(10.0 * magnitude);
+    }
+    if (stepBytes == 0) {
+        return;
+    }
+
+    // Hex de 64 bits a mao: String::toHexString trunca em 32 bits e um ficheiro
+    // passa disso ao fim de 4 GB.
+    const auto hexOf = [](std::uint64_t value) {
+        constexpr char digits[] {"0123456789ABCDEF"};
+        juce::String text {"0x"};
+        bool started = false;
+        for (int shift = 60; shift >= 0; shift -= 4) {
+            const auto nibble = (value >> shift) & 0xFu;
+            if (nibble != 0 || started || shift == 0) {
+                text += digits[nibble];
+                started = true;
+            }
+        }
+        return text;
+    };
+
+    g.setFont(fonts().sans(9.0f));
+    const auto firstTick = (viewStartByte + stepBytes - 1) / stepBytes * stepBytes;
+    for (auto tick = firstTick; tick < viewEndByte;) {
+        const auto x = strip.getX() +
+                       static_cast<float>(tick - viewStartByte) * pxPerByte;
+        g.setColour(palette::alpha(palette::chassisBorder, 0.9f));
+        g.fillRect(juce::Rectangle<float> {x, strip.getBottom() - 5.0f, 1.0f, 5.0f});
+        g.setColour(palette::textOnDarkSub);
+        g.drawText(hexOf(tick),
+                   juce::Rectangle<float> {x + 3.0f, strip.getY(), 76.0f,
+                                            strip.getHeight()},
+                   juce::Justification::centredLeft, false);
+        if (tick > viewEndByte - stepBytes) {
+            break; // sem isto, o ultimo passo voltava por transbordo
+        }
+        tick += stepBytes;
+    }
+
+    // Linha de base da regua.
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.drawHorizontalLine(juce::roundToInt(strip.getBottom()), strip.getX(),
+                         strip.getRight());
+}
+
+void ByteDisplay::paintSourceTag(juce::Graphics& g,
+                                 const juce::Rectangle<float>& plotArea) {
+    // O que se ve nao sao bytes: e' o mapeamento bytes->amostras do pipeline.
+    // Sem o rotulo, a forma de onda mente por omissao — apresenta bytes crus
+    // como se fossem audio. Os bytes crus moram na vista HEX.
+    const juce::String tag {mode_ == ViewMode::waveform ? "MAPPED AUDIO · BYTES->SAMPLES"
+                                                        : "MAPPED AUDIO · ENTROPY"};
+    g.setFont(fonts().sans(9.0f));
+    const auto width = 218.0f;
+    // Em baixo a esquerda: em cima colidiria com os rotulos da regua.
+    const auto tagBounds = juce::Rectangle<float> {plotArea.getX() + 4.0f,
+                                                 plotArea.getBottom() - 18.0f, width,
+                                                  14.0f};
+    g.setColour(palette::alpha(palette::display, 0.72f));
+    g.fillRoundedRectangle(tagBounds, 2.0f);
+    g.setColour(palette::textOnDarkSub);
+    g.drawText(tag, tagBounds.reduced(6.0f, 0.0f), juce::Justification::centredLeft,
+               false);
+}
+
+void ByteDisplay::paintOverview(juce::Graphics& g) {
+    if (regionEnd_ <= regionStart_ || overviewColumns_.empty()) {
+        return;
+    }
+    const auto strip = overviewBounds();
+    if (strip.getWidth() <= 0.0f || strip.getHeight() <= 0.0f) {
+        return;
+    }
+
+    // Calha afundada.
+    g.setColour(palette::display);
+    g.fillRoundedRectangle(strip, 2.0f);
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.drawRoundedRectangle(strip, 2.0f, 1.0f);
+
+    const auto plot = strip.reduced(3.0f, 3.0f);
+    const auto centreY = plot.getCentreY();
+    const auto halfHeight = plot.getHeight() * 0.5f;
+    const auto columnWidth = plot.getWidth() / static_cast<float>(overviewColumns_.size());
+
+    // Miniatura quieta: um envelope so, sem cor por entropia e sem glow. O mapa
+    // e' contexto, nao a leitura — a leitura mora no plot.
+    juce::Path mini;
+    mini.startNewSubPath(plot.getX(), centreY);
+    for (std::size_t i = 0; i < overviewColumns_.size(); ++i) {
+        mini.lineTo(plot.getX() + static_cast<float>(i) * columnWidth,
+                    centreY - std::clamp(overviewColumns_[i].rms, 0.0f, 1.0f) *
+                                  halfHeight);
+    }
+    for (std::size_t i = overviewColumns_.size(); i-- > 0;) {
+        mini.lineTo(plot.getX() + static_cast<float>(i) * columnWidth,
+                    centreY + std::clamp(overviewColumns_[i].rms, 0.0f, 1.0f) *
+                                  halfHeight);
+    }
+    mini.closeSubPath();
+    g.setColour(palette::alpha(palette::waveLow, 0.45f));
+    g.fillPath(mini);
+
+    // O que esta' fora do viewport escurece; o viewport leva moldura ambar.
+    // Forma (retangulo) + posicao contam sem cor — o 1.4.1 vale no mapa.
+    const auto viewX = plot.getX() + viewStart_ * plot.getWidth();
+    const auto viewW = std::max(3.0f, viewLength_ * plot.getWidth());
+    g.setColour(juce::Colours::black.withAlpha(0.45f));
+    if (viewX > plot.getX()) {
+        g.fillRect(
+            juce::Rectangle<float> {plot.getX(), plot.getY(), viewX - plot.getX(),
+                                    plot.getHeight()});
+    }
+    if (viewX + viewW < plot.getRight()) {
+        g.fillRect(juce::Rectangle<float> {viewX + viewW, plot.getY(),
+                                            plot.getRight() - (viewX + viewW),
+                                            plot.getHeight()});
+    }
+    g.setColour(palette::accent);
+    g.drawRect(juce::Rectangle<float> {viewX, plot.getY(), viewW, plot.getHeight()},
+               1.0f);
+
+    // Cabecas no mapa: leitura branca, reproducao ambar com triangulo proprio.
+    // Em fracao da REGIAO (fractionFor), nao do ecra: o mapa mostra a regiao
+    // inteira e o viewport e' so o retangulo.
+    const auto readRegion = static_cast<float>(fractionFor(readHead_));
+    if (readRegion >= 0.0f && readRegion <= 1.0f) {
+        const auto x = plot.getX() + readRegion * plot.getWidth();
+        g.setColour(juce::Colours::white);
+        g.fillRect(juce::Rectangle<float> {x - 0.5f, plot.getY(), 1.0f,
+                                            plot.getHeight()});
+    }
+    if (playheadVisible_) {
+        const auto region = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
+        const auto x = plot.getX() + region * plot.getWidth();
+        g.setColour(palette::accent);
+        g.fillRect(juce::Rectangle<float> {x - 0.5f, plot.getY(), 1.0f,
+                                            plot.getHeight()});
+    }
 }
 
 // Linha colorida por entropia. Usada pela forma de onda (sobre o nucleo de RMS,
@@ -954,10 +1329,10 @@ void ByteDisplay::paintEntropyLine(
         if (paths[b]->isEmpty()) {
             continue;
         }
-        g.setColour(palette::alpha(inks[b], 0.10f));
-        g.strokePath(*paths[b], juce::PathStrokeType {5.0f, juce::PathStrokeType::curved,
-                                                     juce::PathStrokeType::rounded});
-        g.setColour(palette::alpha(inks[b], 0.22f));
+        // Glow contido: um passe so, 3 px e fraco. Dois passes largos somavam
+        // cobertura a cada coluna vizinha e o contorno virava massa solida que
+        // tapava o envelope: pile-up de alfa disfarcado de cor.
+        g.setColour(palette::alpha(inks[b], 0.20f));
         g.strokePath(*paths[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded});
         g.setColour(palette::alpha(inks[b], 0.95f));
@@ -970,8 +1345,15 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
         return;
     }
 
-    const auto bounds = getLocalBounds().toFloat().reduced(kPadding);
-    const auto plot = bounds.withTrimmedLeft(kAxisInset).withTrimmedBottom(kAxisHeight);
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto area = plotBounds();
+    if (area.getWidth() <= 0.0f || area.getHeight() <= 0.0f) {
+        return;
+    }
+    const auto plot = area.withTrimmedLeft(kAxisInset).withTrimmedBottom(kAxisHeight);
+
+    paintRuler(g, {full.getX(), area.getY() - kRulerHeight - 2.0f, full.getWidth(),
+                   kRulerHeight});
 
     // A escala e' 0 a 8 bits por byte, e o eixo escreve os tres valores. Uma curva
     // sem eixo nao tem leitura: 7,5 e' o valor de um .exe normal e 3,5 o de um
@@ -990,7 +1372,7 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
     g.setColour(palette::textOnDarkSub);
     for (const auto bits : {0.0f, 4.0f, 8.0f}) {
         g.drawText(juce::String::formatted("%.0f", static_cast<double>(bits)),
-                   juce::Rectangle<float> {bounds.getX(), yFor(bits) - 7.0f, kAxisInset - 6.0f,
+                   juce::Rectangle<float> {area.getX(), yFor(bits) - 7.0f, kAxisInset - 6.0f,
                                            14.0f},
                    juce::Justification::centredRight, false);
     }
@@ -1018,6 +1400,9 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
     // primeiro.
     const auto yAt = [&](std::size_t i) { return yFor(columns_[i].entropyBits); };
     paintEntropyLine(g, columns_, columnWidth, plot.getX(), yAt, yAt);
+
+    paintSourceTag(g, area);
+    paintOverview(g);
 }
 
 void ByteDisplay::paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area) {
@@ -1042,8 +1427,14 @@ void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>&
         return;
     }
 
-    const auto fraction = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
-    const auto x = area.getX() + fraction * area.getWidth();
+    // Fracao da regiao -> ecra. Fora do viewport nao se prende na borda:
+    // prender mentia sobre onde o som esta.
+    const auto region = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
+    const auto screen = viewLength_ > 0.0f ? (region - viewStart_) / viewLength_ : -1.0f;
+    if (screen < 0.0f || screen > 1.0f) {
+        return;
+    }
+    const auto x = area.getX() + screen * area.getWidth();
 
     // Triangulo em cima e barra em baixo. A barra e' o mesmo sinal que a cabeca de
     // leitura e com a mesma forma, e por isso os dois se confundem no ecra.
@@ -1065,21 +1456,41 @@ void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>&
 std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
     constexpr auto none = std::numeric_limits<std::uint64_t>::max();
 
-    const auto area = getLocalBounds().toFloat().reduced(kPadding);
+    const auto area = mode_ == ViewMode::entropy ? entropyPlotBounds() : plotBounds();
     if (bytes_ == nullptr || area.getWidth() <= 0.0f || regionEnd_ <= regionStart_) {
         return none;
     }
 
-    const auto fraction = (position.x - area.getX()) / area.getWidth();
-    if (fraction < 0.0f || fraction >= 1.0f) {
+    const auto region = regionFractionAt(position.x, area.getX(), area.getWidth());
+    if (region < 0.0f || region >= 1.0f) {
         return none;
     }
 
     // A fracao 1,0 e' silencio no motor, entao o ultimo endereco util e' end - 2.
     // E' a mesma regra de pe::positionForByte, e o caminho inverso e' byteForPosition.
-    const auto address = pe::byteForPosition(static_cast<double>(fraction),
+    const auto address = pe::byteForPosition(static_cast<double>(region),
                                              pe::ByteRange {regionStart_, regionEnd_});
     return address < regionEnd_ ? address : none;
+}
+
+juce::Rectangle<float> ByteDisplay::plotBounds() const noexcept {
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto overviewH = overviewBounds().getHeight();
+    // Medidor (3 px) + respiro + regua (16 px) em cima; overview + respiro
+    // em baixo. O plot e' onde vivem onda, graos e cabecas — tudo alinhado
+    // na mesma area, ou a cabeca marcava um x e a onda outro.
+    return full.withTrimmedTop(kLevelHeight + 5.0f + kRulerHeight)
+        .withTrimmedBottom(overviewH + 4.0f);
+}
+
+juce::Rectangle<float> ByteDisplay::entropyPlotBounds() const noexcept {
+    return plotBounds().withTrimmedLeft(kAxisInset);
+}
+
+juce::Rectangle<float> ByteDisplay::overviewBounds() const noexcept {
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto height = std::min(kOverviewHeight, full.getHeight() * 0.25f);
+    return {full.getX(), full.getBottom() - height, full.getWidth(), height};
 }
 
 void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
@@ -1091,6 +1502,30 @@ void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
 
     if (mode_ == ViewMode::hex) {
         return; // o HexGrid trata do seu
+    }
+
+    // Faixa de navegacao: o clique centra o viewport, o arrasto move-o. Nao
+    // varre a leitura — quem clica no mapa quer navegar, nao ouvir.
+    if (mode_ != ViewMode::hex && overviewBounds().contains(event.position)) {
+        const auto area = overviewBounds();
+        const auto region = regionFractionAt(event.position.x, area.getX(), area.getWidth());
+        if (region >= 0.0f) {
+            viewStart_ = std::clamp(region - viewLength_ * 0.5f, 0.0f, 1.0f - viewLength_);
+            cacheValid_ = false;
+            repaint();
+        }
+        overviewDrag_ = true;
+        lastPanX_ = event.position.x;
+        return;
+    }
+
+    // Pan: botao direito, botao do meio ou Ctrl+clique. O arrasto horizontal
+    // move o viewport; sem zoom (comprimento 1) nao ha para onde ir.
+    if (event.mods.isRightButtonDown() || event.mods.isMiddleButtonDown() ||
+        event.mods.isCtrlDown()) {
+        panning_ = true;
+        lastPanX_ = event.position.x;
+        return;
     }
 
     const auto address = addressAt(event.position);
@@ -1109,10 +1544,30 @@ void ByteDisplay::mouseDrag(const juce::MouseEvent& event) {
         return;
     }
 
+    // Pan pelo mapa ou pelo plot: dx em pixels vira fracao do viewport.
+    if (overviewDrag_ || panning_) {
+        const auto area = overviewDrag_ ? overviewBounds()
+                          : mode_ == ViewMode::entropy ? entropyPlotBounds()
+                                                      : plotBounds();
+        if (area.getWidth() > 0.0f && viewLength_ < 1.0f) {
+            const auto dx = (event.position.x - lastPanX_) / area.getWidth();
+            lastPanX_ = event.position.x;
+            viewStart_ = std::clamp(viewStart_ - dx * viewLength_, 0.0f, 1.0f - viewLength_);
+            cacheValid_ = false;
+            repaint();
+        }
+        return;
+    }
+
     const auto address = addressAt(event.position);
     if (address != std::numeric_limits<std::uint64_t>::max()) {
         pendingScrub_ = address;
     }
+}
+
+void ByteDisplay::mouseUp(const juce::MouseEvent&) {
+    panning_ = false;
+    overviewDrag_ = false;
 }
 
 void ByteDisplay::mouseDoubleClick(const juce::MouseEvent& event) {
@@ -1130,14 +1585,29 @@ void ByteDisplay::mouseDoubleClick(const juce::MouseEvent& event) {
 
 void ByteDisplay::mouseWheelMove(const juce::MouseEvent& event,
                                  const juce::MouseWheelDetails& wheel) {
-    // Nas vistas novas a roda muda a resolucao, que e' quantos bytes cada coluna
-    // representa. E' o unico gesto que faz sentido aqui: a regiao ja esta' toda no
-    // ecra, e nao ha lista para percorrer.
+    // Nas vistas novas a roda e' zoom continuo centrado no cursor: a fracao da
+    // regiao sob o cursor fica quieta e o resto aproxima-se dela. Shift+roda
+    // faz scroll horizontal em vez de zoom. E' a navegacao do Live levada ao
+    // mapeamento de bytes — o gesto e' o mesmo, o material e' que e' outro.
     if (mode_ != ViewMode::hex) {
-        const auto delta = static_cast<float>(wheel.deltaY);
-        columnScale_ = std::clamp(columnScale_ * std::pow(1.15f, delta), 0.25f, 8.0f);
-        cacheValid_ = false;
-        repaint();
+        const auto area =
+            mode_ == ViewMode::entropy ? entropyPlotBounds() : plotBounds();
+        if (event.mods.isShiftDown()) {
+            if (viewLength_ < 1.0f && area.getWidth() > 0.0f) {
+                viewStart_ = std::clamp(viewStart_ - wheel.deltaY * viewLength_ * 2.0f,
+                                        0.0f, 1.0f - viewLength_);
+                cacheValid_ = false;
+                repaint();
+            }
+        } else {
+            const auto centre = regionFractionAt(event.position.x, area.getX(),
+                                                 area.getWidth());
+            const auto inPlot = centre >= 0.0f;
+            const auto delta = static_cast<float>(wheel.deltaY);
+            // Roda para cima (deltaY > 0) aproxima: comprimento cai.
+            zoomAround(std::pow(1.15f, -delta),
+                       inPlot ? (centre - viewStart_) / viewLength_ : 0.5f);
+        }
     }
 
     // No hex a roda e' do HexGrid, que a scroll por linhas. O accumulator dele
