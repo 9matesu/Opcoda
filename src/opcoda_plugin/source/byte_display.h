@@ -248,6 +248,16 @@ private:
     // media, pela mesma razao do contorno do nucleo — o pico e' a leitura.
     void paintEntropyBars(juce::Graphics& g, const juce::Rectangle<float>& strip);
 
+    // Silhueta do RMS: as arestas de cima e de baixo do nucleo, tracadas por
+    // faixa de entropia, com o interior vazio. Duas passagens sobre as colunas
+    // (uma por aresta) e tres Paths por passagem — sem guardar pontos, sem
+    // alocar no paint, sem verticais de altura cheia que fundiam a massa.
+    void paintRmsSilhouette(juce::Graphics& g,
+                            const juce::Rectangle<float>& plotArea,
+                            float centreY,
+                            float halfHeight,
+                            float columnWidth);
+
     // Geometria da faixa: 30 % da largura a direita, e nada abaixo de 120 px —
     // a faixa estreita rouba colunas do hex sem dar leitura, e uma faixa que
     // some volta o hex ao tamanho cheio. Retangulo vazio quando escondida.

@@ -104,21 +104,11 @@ public:
     }
 
     void paint(juce::Graphics& g) override {
-        // Painel do modulo, para o knob nao flotar sobre o chassis liso. O corpo
-        // do knob e' desenhado pelo LookAndFeel, que e' quem sabe o angulo.
-        const auto bounds = getLocalBounds().toFloat();
-        g.setColour(palette::panelBg);
-        g.fillRoundedRectangle(bounds, 2.0f);
-
-        // Realce interno de 1 px no topo do painel: a mesma leitura do header do
-        // editor, em pequeno. Contido no tema escuro (0,08): no claro era 0,28,
-        // e a mesma forca aqui viraria filete branco.
-        g.setColour(palette::alpha(juce::Colours::white, 0.08f));
-        g.drawHorizontalLine(juce::roundToInt(bounds.getY() + 1.5f), bounds.getX() + 3.0f,
-                             bounds.getRight() - 3.0f);
-
-        g.setColour(palette::alpha(palette::chassisBorder, 0.5f));
-        g.drawRoundedRectangle(bounds.reduced(0.5f), 2.0f, 1.0f);
+        // Sem cartao: o knob mora direto no chassis, sem caixa nem borda. Dez
+        // caixas com borda lado a lado eram a cara de "ficheiro de paineis" que
+        // a fileira de parametros tinha — e a informacao (rotulo, disco, valor)
+        // nao precisa de moldura. O corpo do disco continua no LookAndFeel.
+        static_cast<void>(g);
     }
 
 private:

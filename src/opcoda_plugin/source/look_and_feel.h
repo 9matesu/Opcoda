@@ -95,12 +95,12 @@ public:
             // Arco preenchido, do minimo ate ao valor, com halo curto por baixo:
             // a mesma lingua do glow da onda (pilha de alfa, sem blur) e a
             // resposta ao "small outer glow on active controls". Contido: um
-            // passe largo e fraco, so sobre o arco aceso.
+            // passe estreito e fraco — o arco carrega o valor, nao decora.
             juce::Path valueArc;
             valueArc.addCentredArc(centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f,
                                    rotaryStartAngle, angle, true);
-            g.setColour(palette::alpha(palette::accent, 0.16f));
-            g.strokePath(valueArc, juce::PathStrokeType {5.0f, juce::PathStrokeType::curved,
+            g.setColour(palette::alpha(palette::accent, 0.10f));
+            g.strokePath(valueArc, juce::PathStrokeType {4.0f, juce::PathStrokeType::curved,
                                                         juce::PathStrokeType::rounded});
             g.setColour(palette::accent);
             g.strokePath(valueArc, juce::PathStrokeType {2.0f, juce::PathStrokeType::curved,
@@ -339,11 +339,10 @@ public:
                                                   radius * 2.0f, radius * 2.0f};
 
         // Sombra projetada: o corpo flutua sobre o painel em vez de estar
-        // colado nele. Tres elipses concentricas deslocadas 2 px para baixo, da
-        // mais larga e fraca para a mais justa — um blur de verdade nao existe
-        // barato no JUCE, e tres fills por knob a 60 Hz custam menos que um
-        // DropShadowEffect por quadro.
-        for (int i = 3; i >= 1; --i) {
+        // colado nele. Duas elipses concentricas deslocadas 2 px para baixo —
+        // um blur de verdade nao existe barato no JUCE, e dois fills por knob
+        // a 60 Hz custam menos que um DropShadowEffect por quadro.
+        for (int i = 2; i >= 1; --i) {
             const auto spread = static_cast<float>(i);
             g.setColour(palette::alpha(juce::Colours::black, 0.10f - 0.025f * spread));
             g.fillEllipse(rim.expanded(spread).translated(0.0f, 2.0f));

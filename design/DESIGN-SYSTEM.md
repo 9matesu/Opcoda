@@ -132,18 +132,22 @@ De cima para baixo:
   topo e não no rodapé porque o rodapé é do editor e está lá a telemetria escrita.
 - **Vista do material**, o corpo do display:
   - **forma de onda**: régua de endereços no topo, plot no meio, faixa de
-    navegação (overview) no fundo. O corpo é o núcleo de RMS em **teal**,
-    com base fraca do envelope mínimo-máximo em ambar; o contorno do núcleo
-    vai colorido por entropia — teal no previsível, amarelo no meio, rosa no
-    aleatório — com glow contido de um passe. O mínimo e o máximo quase não
+    navegação (overview) no fundo. O envelope mínimo-máximo vai como base
+    fraca em ambar; o corpo é a **silhueta do RMS em teal** — só as arestas de
+    cima e de baixo, interior vazio — cada uma colorida por entropia (teal no
+    previsível, amarelo no meio, rosa no aleatório). O interior vazio é o que
+    devolve os vales: a versão anterior pintava uma vertical de altura cheia
+    por coluna e 870 colunas densas fundiam-se numa massa sólida sem vales.
+    Duas passagens sobre as colunas (uma por aresta), três Paths por passagem,
+    sem guardar pontos e sem alocar no paint. O mínimo e o máximo quase não
     servem para mostrar bytes — o texto de um `.exe` tem quase todos os valores
     de `0x00` a `0xFF`, e o envelope fica com altura quase inteira em todas as
     colunas. O RMS é o que varia, e é o que diz se o material é denso ou
-    repetitivo; a cor diz do que ele é feito. Três Paths por faixa em vez de um
-    stroke por coluna, com subpath novo a cada descontinuidade para não ligar
-    colunas distantes com diagonais. O canto inferior esquerdo carrega
+    repetitivo; a cor diz do que ele é feito. O canto inferior esquerdo carrega
     `MAPPED AUDIO · BYTES->SAMPLES`: o que se vê é o mapeamento do pipeline,
-    não bytes crus — esses moram na vista HEX;
+    não bytes crus — esses moram na vista HEX. A representação é **mono**: um
+    fluxo de bytes dá um canal; desenhar dois seria decorativo, e decorativo
+    não entra;
   - **zoom contínuo**: a roda aproxima centrada no cursor, Shift+roda faz
     scroll, `-`/`+`/`0` e os botões `-`/`+`/`FIT` fazem o mesmo por teclado e
     clique. Arrastar com botão direito/médio (ou Ctrl) move o viewport; clicar
@@ -200,7 +204,9 @@ acima e valor em texto puro abaixo — sem `valBox`.
 Knob circular com ponteiro ambar e arco de valor com halo curto, 1 px de arco
 de fundo `chassisBorder`. **O corpo é desenhado em código e não vem de nenhuma
 imagem**: disco escuro com luz suave de cima, aro fino de 1 px e ponto de
-origem — sem serrilhado, que virava ruído cinzento em diâmetro útil. Rótulo em
+origem — sem serrilhado, que virava ruído cinzento em diâmetro útil. O knob
+mora direto no chassis, sem cartão nem borda: dez caixas lado a lado eram a
+cara de dashboard, e rótulo, disco e valor não precisam de moldura. Rótulo em
 Inter 9 px acima, valor em Inter 10 px abaixo, sem caixa.
 
 **Por que a peça fotografada saiu.** `knob-md.png` eram 186×192 píxeis para pintar

@@ -999,52 +999,19 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
 
         swing.closeSubPath();
 
-        // Base morna fraca: o envelope diz ate onde o material se estica, mas
-        // quem carrega a leitura e' o nucleo em teal — ambar fica reservado a
-        // selecao, reproducao e graos, como na estacao de referencia.
-        g.setColour(palette::alpha(palette::accent, 0.12f));
+        // Base morna fraca: o envelope diz ate onde o material se estica, e nada
+        // mais. O corpo solido morreu aqui: 870 verticais de altura cheia,
+        // uma por coluna, fundiam-se numa massa sem vales — e vales que nao se
+        // veem sao silencio que nao se distingue.
+        g.setColour(palette::alpha(palette::accent, 0.10f));
         g.fillPath(swing);
 
-        // Nucleo de rms, por cima e com peso. E' a parte que varia entre materiais
-        // diferentes, e por isso e' a que o olho segue.
-        juce::Path core;
-        core.startNewSubPath(plot.getX(), centreY);
-        for (std::size_t i = 0; i < columns_.size(); ++i) {
-            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
-            core.lineTo(x, centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
-        }
-        for (std::size_t i = columns_.size(); i-- > 0;) {
-            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
-            core.lineTo(x, centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight);
-        }
-        core.closeSubPath();
-
-        // Corpo em teal: a forma de onda le-se em ciano contido sobre o fundo
-        // escuro, e o contorno colorido por entropia conta o material por cima.
-        g.setColour(palette::alpha(palette::waveLow, 0.55f));
-        g.fillPath(core);
-
-        // Contorno do nucleo colorido por entropia, com glow. Cada coluna pinta
-        // conforme os bits/byte locais — ciano no previsivel, amarelo no meio, rosa
-        // no aleatorio — por isso a linha conta duas leituras de uma vez: onde o
-        // som esta' (posicao) e do que o material e' feito (cor).
-        //
-        // Tres Paths por faixa em vez de um stroke por segmento: um stroke por
-        // coluna seriam milhares de chamadas por quadro a 60 Hz, e tres Paths com
-        // tres cores dao o mesmo desenho. A junta entre faixas vizinhas perde a
-        // continuidade do traco num pixel, e num traco de 1 px isso nao se ve.
-        //
-        // O glow e' pilha de fills com alfa, como o halo dos graos: duas passadas
-        // largas e fracas por baixo do traco de 1 px. Sem DropShadowEffect, sem blur
-        // que o renderizador de software nao tem — e sem custo que apareca no perfil.
-        paintEntropyLine(
-            g, columns_, columnWidth, plot.getX(),
-            [&](std::size_t i) {
-                return centreY - std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
-            },
-            [&](std::size_t i) {
-                return centreY + std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
-            });
+        // Silhueta do RMS: so o contorno de cima e o de baixo, interior vazio.
+        // Cada aresta vai colorida por entropia — teal no previsivel, amarelo
+        // no meio, rosa no aleatorio — por isso a linha conta duas leituras de
+        // uma vez: onde o som esta' (posicao) e do que o material e' feito
+        // (cor). O interior vazio e' o que devolve os vales e o silencio.
+        paintRmsSilhouette(g, plot, centreY, halfHeight, columnWidth);
     }
 
     // O zero. Um envelope sem linha de zero nao diz qual e' o silencio, e o desenho
@@ -1337,6 +1304,56 @@ void ByteDisplay::paintEntropyLine(
                                                      juce::PathStrokeType::rounded});
         g.setColour(palette::alpha(inks[b], 0.95f));
         g.strokePath(*paths[b], juce::PathStrokeType {1.0f});
+    }
+}
+
+void ByteDisplay::paintRmsSilhouette(juce::Graphics& g,
+                                      const juce::Rectangle<float>& plotArea,
+                                      float centreY,
+                                      float halfHeight,
+                                      float columnWidth) {
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+
+    // Uma passagem por aresta: a de cima da esquerda para a direita e a de
+    // baixo idem. Juntar as duas numa so faixa fechada pedia guardar os pontos
+    // da aresta de baixo para os percorrer ao contrario — vector no paint, a
+    // 60 Hz, para economizar uma passagem linear que custa centenas de
+    // nanossegundos. Duas passagens e zero alocacoes.
+    //
+    // `started` em vez de `Path::isEmpty()`: isEmpty ignora move markers, por
+    // isso um subpath com so o move inicial conta como vazio para sempre e o
+    // lineTo nunca corria — foi o que apagou a primeira versao desta funcao
+    // sem deixar rasto (nem erro, nem warning, nem pixel).
+    for (int edge = 0; edge < 2; ++edge) {
+        juce::Path band[3];
+        bool started[3] {false, false, false};
+        std::size_t lastInBucket[3] {0, 0, 0};
+
+        for (std::size_t i = 0; i < columns_.size(); ++i) {
+            const auto x = plotArea.getX() + static_cast<float>(i) * columnWidth;
+            const auto rms = std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+            const auto y = edge == 0 ? centreY - rms : centreY + rms;
+            const auto b = entropyBucket(columns_[i].entropyBits);
+
+            if (!started[b] || lastInBucket[b] + 1 != i) {
+                band[b].startNewSubPath(x, y);
+                started[b] = true;
+            } else {
+                band[b].lineTo(x, y);
+            }
+            lastInBucket[b] = i;
+        }
+
+        for (int b = 0; b < 3; ++b) {
+            if (!started[b]) {
+                continue;
+            }
+            g.setColour(palette::alpha(inks[b], 0.18f));
+            g.strokePath(band[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded});
+            g.setColour(palette::alpha(inks[b], 0.95f));
+            g.strokePath(band[b], juce::PathStrokeType {1.0f});
+        }
     }
 }
 

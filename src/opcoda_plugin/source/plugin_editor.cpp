@@ -416,8 +416,10 @@ void PluginEditor::buildHeader() {
     }
 
     makePlainLabel(fileName_, "-", palette::textDark, fonts().sans(10.0f));
-    makePlainLabel(formatTag_, "", palette::textDark, fonts().sans(10.0f));
-    makePlainLabel(fileSize_, "", palette::textDark, fonts().sans(10.0f));
+    // Formato e tamanho sao metadado tecnico: texto secundario, para o nome da
+    // fonte (o que importa) carregar a hierarquia sozinho.
+    makePlainLabel(formatTag_, "", palette::textSub, fonts().sans(10.0f));
+    makePlainLabel(fileSize_, "", palette::textSub, fonts().sans(10.0f));
     fileName_.setJustificationType(juce::Justification::centred);
     formatTag_.setJustificationType(juce::Justification::centred);
     fileSize_.setJustificationType(juce::Justification::centred);
