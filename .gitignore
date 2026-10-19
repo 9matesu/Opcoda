@@ -38,6 +38,7 @@ leaks.out
 # JUCE / módulos externos
 JUCE/
 modules/
+deps/
 
 # Compilados e objetos
 *.obj

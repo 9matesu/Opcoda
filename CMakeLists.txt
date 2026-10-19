@@ -11,7 +11,7 @@ option(OPCODA_BUILD_PLUGIN "Compila Standalone e VST3" ON)
 option(OPCODA_ASAN "Ativa o AddressSanitizer" OFF)
 option(OPCODA_WERROR "Trata warnings como erro" ON)
 
-set(JUCE_DIR "I:/deps/JUCE" CACHE PATH "Clone do JUCE")
+set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/JUCE" CACHE PATH "Clone do JUCE")
 
 if(OPCODA_ASAN)
     add_compile_options(/fsanitize=address)
@@ -40,7 +40,9 @@ target_compile_options(opcoda_core PUBLIC /W4 /permissive- /Zc:__cplusplus /utf-
 target_compile_definitions(opcoda_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 
 if(OPCODA_WERROR)
-    target_compile_options(opcoda_core PUBLIC /WX)
+    # PRIVATE: o /WX propagado vai parar no codigo C do JUCE (opus), que gera
+    # C4005 inofensivo e derruba o build release inteiro.
+    target_compile_options(opcoda_core PRIVATE /WX)
 endif()
 
 if(OPCODA_BUILD_TESTS)
