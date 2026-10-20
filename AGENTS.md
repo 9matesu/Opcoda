@@ -37,6 +37,28 @@
 
 - Standalone sometimes starts with wrong param values (e.g. `100 ms` vs default `40 ms`). Cause is stale JUCE session state in `%APPDATA%\Opcoda\Opcoda.settings` — delete that file to restore defaults. Dr. Memory confirmed no uninit-memory frame from our code. The writer of the bad values is still unidentified (`docs/16-arquitetura-implementacao.md`).
 
+## Atlas de arquitectura (Catlas)
+
+`docs/atlas/` mapeia o repositorio: inventario, contexto, contentores, fluxo
+de dados e entradas e saidas. A skill do Catlas vive em
+`.opencode/skills/catlas/` e os subagentes em `.opencode/agent/`.
+
+- `powershell -File tools/build-atlas.ps1` e' o pipeline. Passa pelo lint de
+  texto da skill, gera o TikZ a partir dos `.mmd`, renderiza o SVG e o PNG
+  com Edge ou Chrome, e constroi o PDF LaTeX.
+- O `.mmd` em `docs/atlas/diagrams/` e' a fonte da verdade. O `.tex` em
+  `docs/atlas/figuras/` e' gerado por `tools/mmd2tikz.py` e nunca se edita a
+  mao. O `.mmd` e' a mesma figura em duas linguagens: Mermaid para o GitHub
+  desenhar, TikZ para o documento LaTeX.
+- O `mermaid.min.js` nao e' versionado. O `tools/render-mermaid.ps1` obtem a
+  versao fixada (11.4.1), verifica o SHA-256 e escreve o pin ao lado do
+  ficheiro.
+- `latexmk` nao serve: o do MiKTeX e' um script em Perl e nem toda a maquina
+  de build tem Perl. O pipeline chama o `pdflatex` duas vezes.
+- Editar um `.mmd` e' editar o diagrama. O `scripts/mermaid-lint.py` da skill
+  barra os que passam de 12 nos, 14 arestas, rotulos de mais de 15 caracteres
+  ou arestas sem rotulo.
+
 ## Process
 
 - Spec-kit + constitution (`.specify/memory/constitution.md`) prevails over README/comments. Six quality gates (build, tests, realtime, robustness, UI, docs); behavior change must update `docs/` + `specs/` + `README` in the same commit.
