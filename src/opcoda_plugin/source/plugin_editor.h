@@ -9,6 +9,7 @@
 #include "look_and_feel.h"
 #include "palette.h"
 #include "plugin_processor.h"
+#include "vu_meter.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_events/juce_events.h>
@@ -33,6 +34,7 @@ public:
     ~PluginEditor() override = default;
 
     void paint(juce::Graphics& g) override;
+    void paintOverChildren(juce::Graphics& g) override;
     void resized() override;
 
     // isInterestedInFileDrag decide se os demais callbacks chegam, e e' chamado
@@ -60,7 +62,8 @@ public:
 
 private:
     void buildHeader();
-    void buildParameterPanel();
+    void buildMacroBand();
+    void buildFooterBand();
     void timerCallback() override;
     void refresh();
     void refreshTelemetry(const PluginProcessor::SourceInfo& info);
@@ -158,25 +161,38 @@ private:
     ByteAddressField address_;
     juce::TextButton snapButton_;
 
-    BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel dropHint_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voices_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel status_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel engineTitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // Rotulos sem caixa. O outline transparente e' deliberado: o BoxedLabel
+    // pinta a borda mesmo com o fundo transparente, e uma moldura a volta do
+    // wordmark ou de uma leitura era o que fazia a versao anterior parecer um
+    // formulario em vez de um painel.
+    BoxedLabel title_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel subtitle_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel dropHint_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel voices_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel status_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+
+    // Faixa escura do rodape de saida, opaca: o paint do editor so pinta o
+    // metal e nao conhece o layout.
+    BandStrip footerBand_ {palette::footerSurface, palette::frameBorder};
+
+    VuMeter vuMeter_;
+    BoxedLabel outputLabel_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
 
     // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
-    // mock. Todas em texto, nunca so por cor.
-    BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel positionReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // mock. Todas em texto, nunca so por cor. O POS e' o unico com chip, do
+    // bloco de estado do mock.
+    BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel positionReadout_ {palette::posChipBg, palette::posChipBorder, 4.0f, 1.0f};
+    BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel peakReadout_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel rateReadout_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
+    BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
 
-    BoxedLabel fileName_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel formatTag_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel fileSize_ {palette::subPanel, palette::chassisBorder};
+    // Chip do ficheiro: superficie escura do mock, com raio de 4 px. O tamanho
+    // e' texto solto, sem caixa, porque no mock ele vive dentro do mesmo chip.
+    BoxedLabel fileName_ {palette::chipBg, palette::chipBorder, 4.0f, 1.0f};
+    BoxedLabel formatTag_ {palette::tagBg, palette::tagBorder, 3.0f, 1.0f};
+    BoxedLabel fileSize_ {juce::Colours::transparentBlack, juce::Colours::transparentBlack};
 
     juce::TextButton loadButton_;
     std::vector<std::unique_ptr<Knob>> knobs_;

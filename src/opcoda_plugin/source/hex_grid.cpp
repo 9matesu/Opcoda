@@ -171,15 +171,29 @@ void HexGrid::rebuildMetrics() {
     metrics_.cellAdvance = metrics_.cellWidth + 2.0f;
     metrics_.asciiWidth = widthOf("0000000000000000");
 
-    const auto bytesWidth = static_cast<float>(kBytesPerRow) * metrics_.cellAdvance + kGroupGap;
+    const auto minBytesWidth =
+        static_cast<float>(kBytesPerRow) * metrics_.cellAdvance + kGroupGap;
 
     // A coluna ASCII e' a primeira a cair. Perder os caracteres e' perder
     // contexto; perder colunas de hexadecimal parte os enderecos ao meio, e um
     // endereco ao meio e' pior do que nenhum. E' o que faz o criterio 1.4.10
     // de refluxo: a janela estreita perde informacao em vez de a truncar.
     const auto neededWithAscii =
-        metrics_.gutterWidth + bytesWidth + kInnerGap + metrics_.asciiWidth;
+        metrics_.gutterWidth + minBytesWidth + kInnerGap + metrics_.asciiWidth;
     metrics_.showAscii = area.getWidth() >= neededWithAscii;
+
+    // O mock espaca as colunas para ocupar a largura do display; deixa-las com
+    // a largura minima encostava tudo a esquerda e deixava metade da grelha
+    // vazia. A expansao e' limitada a 46 px: sem teto, uma janela muito larga
+    // separava os bytes tanto que deixava de se ler a linha como uma sequencia.
+    const auto usable = area.getWidth() - metrics_.gutterWidth - kInnerGap - kGroupGap
+                        - (metrics_.showAscii ? metrics_.asciiWidth + kInnerGap : 0.0f);
+    const auto minAdvance = metrics_.cellWidth + 2.0f;
+    metrics_.cellAdvance =
+        juce::jlimit(minAdvance, 46.0f, usable / static_cast<float>(kBytesPerRow));
+
+    const auto bytesWidth =
+        static_cast<float>(kBytesPerRow) * metrics_.cellAdvance + kGroupGap;
 
     const auto bodyTop = area.getY() + kHeaderHeight;
 
@@ -402,12 +416,21 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
                                                   juce::jmax(metrics_.cellWidth, right - left),
                                                   kRowHeight};
 
-        g.setColour(palette::alpha(palette::accent, 0.22f));
+        g.setColour(palette::alpha(palette::accent, 0.10f));
         g.fillRect(band);
-        g.setColour(palette::alpha(palette::accent, 0.85f));
-        g.fillRect(band.withHeight(1.0f));
-        g.fillRect(juce::Rectangle<float> {band.getX(), band.getBottom() - 1.0f, band.getWidth(),
-                                            1.0f});
+
+        // Os filetes so marcam o principio e o fim da regiao, nao cada linha. A
+        // cada linha, vinte linhas seguidas faziam uma grelha de laranja que
+        // competia com os digitos; a regiao continua visivel pelo fundo, e os
+        // dois filetes ficam onde a regiao comeca e acaba.
+        g.setColour(palette::alpha(palette::accent, 0.55f));
+        if (regionStart_ >= address && regionStart_ < address + kBytesPerRow) {
+            g.fillRect(band.withHeight(1.0f));
+        }
+        if (regionEnd_ > address && regionEnd_ <= address + kBytesPerRow) {
+            g.fillRect(juce::Rectangle<float> {band.getX(), band.getBottom() - 1.0f,
+                                                band.getWidth(), 1.0f});
+        }
     }
 
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
@@ -419,14 +442,16 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
         const auto cell = cellRect(column, row);
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
 
-        // A cabeca de leitura e' uma barra branca de 2 px na margem esquerda da
+        // A cabeca de leitura e' uma barra ciano de 2 px na margem esquerda da
         // celula, mais um fundo claro por baixo do texto. O fundo sem a barra
         // seria uma celula a tremer; a barra sem o fundo sumia sobre os bytes
-        // claros.
+        // claros. O ciano e' o mesmo do chip POS: a barra da grelha e o endereco
+        // do chip sao a mesma leitura, e por isso nao podiam ter cores
+        // diferentes.
         if (byteAddress == readHead_) {
-            g.setColour(palette::alpha(juce::Colours::white, 0.16f));
+            g.setColour(palette::alpha(palette::oledCyan, 0.16f));
             g.fillRect(cell);
-            g.setColour(juce::Colours::white);
+            g.setColour(palette::oledCyan);
             g.fillRect(cell.withWidth(2.0f));
         }
 

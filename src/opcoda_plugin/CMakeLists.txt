@@ -8,7 +8,10 @@ juce_add_binary_data(OpcodaAssets
     NAMESPACE BinaryData
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/assets/knob-md.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png)
+        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png
+        ${CMAKE_SOURCE_DIR}/resources/assets/ChakraPetch-Bold.ttf
+        ${CMAKE_SOURCE_DIR}/resources/assets/JetBrainsMono-Regular.ttf
+        ${CMAKE_SOURCE_DIR}/resources/assets/JetBrainsMono-Bold.ttf)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
@@ -65,6 +68,7 @@ target_sources(Opcoda
         source/hex_grid.h
         source/byte_address_field.cpp
         source/byte_address_field.h
+        source/vu_meter.h
         source/assets.h
         source/palette.h)
 

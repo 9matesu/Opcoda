@@ -1,6 +1,5 @@
 #pragma once
 
-#include "assets.h"
 #include "boxed_label.h"
 #include "palette.h"
 
@@ -11,18 +10,18 @@
 
 namespace opcoda {
 
-// Um knob: rotulo em cima, slider rotativo no meio, valor em baixo.
+// Um knob: quadrado de cor, rotulo, slider rotativo no meio, valor em baixo.
 //
-// O corpo e' a peca fisica do asset harness, desenhada uma vez e fixa. O que a
-// peca nao tem, e que o codigo desenha por cima: o arco de valor, o ponteiro,
-// o anel de foco e o texto. A divisao e' deliberada, porque e' ela que mantem
-// o que a constitution exige.
+// O corpo creme e a haste sao desenhados pelo LookAndFeel; aqui ficam o rotulo,
+// o quadrado de cor da coluna (o swatch do mock) e o valor em mono sobre o
+// metal. O quadrado de cor nao carrega informacao sozinho: cada knob tem o nome
+// escrito ao lado, que e' o que o criterio 1.4.1 do WCAG exige.
 //
 // **Os knobs sao juce::Slider de verdade, nao desenho customizado.** Isso nao e'
 // padrao: e' o que da foco por teclado, ajuste com setas e AccessibilityHandler
 // de graca, e sao exatamente os criterios que a docs/10-acessibilidade-w3c.md
-// exige. O corpo vem de um PNG, mas o PNG e' so o desenho de fundo: quem opera
-// o controle continua a ser o Slider, e e' ele que tem o foco.
+// exige. O desenho do corpo e' so' o fundo: quem opera o controle continua a ser
+// o Slider, e e' ele que tem o foco.
 //
 // O rotulo curto e' o do mock. O nome accessible e' a descricao completa em
 // portugues: um nome accessible curto demais, so "SIZE", e' inutil para quem
@@ -44,8 +43,8 @@ public:
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(BoxedLabel::sansFont(10.0f, true));
-        title_.setColour(juce::Label::textColourId, palette::textSub);
+        title_.setFont(BoxedLabel::sansFont(10.0f, true).withExtraKerningFactor(0.10f));
+        title_.setColour(juce::Label::textColourId, palette::labelOnMetal);
         addAndMakeVisible(title_);
 
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -59,6 +58,13 @@ public:
         addAndMakeVisible(slider_);
 
         setName(spec.spokenName);
+
+        // Valor impresso no metal, sem caixa: o mock nao tem valBox, o numero
+        // assenta direto na superficie.
+        value_.setJustificationType(juce::Justification::centred);
+        value_.setFont(BoxedLabel::monoFont(10.0f, true));
+        value_.setColour(juce::Label::textColourId, palette::valueOnMetal);
+        value_.setInterceptsMouseClicks(false, false);
         addAndMakeVisible(value_);
         format_ = spec.format;
 
@@ -67,35 +73,54 @@ public:
         // o editor depois do estado do host ja entra com o valor carregado.
         showValue(slider_.getValue());
 
-        setSize(56, 82);
+        setSize(72, 94);
+    }
+
+    // Quadrado de cor da coluna, do mock. Vem do editor porque a cor e' do
+    // modulo e nao do parametro: o knob so' a desenha.
+    void setSwatch(juce::Colour colour) {
+        swatch_ = colour;
+        repaint();
     }
 
     void resized() override {
         auto area = getLocalBounds();
-        title_.setBounds(area.removeFromTop(13));
-        area.removeFromTop(1);
-        area.removeFromBottom(18);
+        title_.setBounds(area.removeFromTop(12));
+        area.removeFromTop(2);
+        area.removeFromBottom(14);
 
-        // Diametro limitado. Sem o teto, o knob cresceria ate preencher a celula
-        // inteira numa janela alta e viraria um disco em vez de um controle.
-        constexpr int maxDiameter {62};
+        // Diametro limitado a 64 px, o w-16 do mock. Sem o teto, o knob crescia
+        // ate preencher a celula numa janela alta e virava um disco.
+        constexpr int maxDiameter {64};
         const auto diameter = juce::jmax(
             16, juce::jmin(maxDiameter, juce::jmin(area.getWidth(), area.getHeight())));
         slider_.setBounds(area.withSizeKeepingCentre(diameter, diameter));
 
-        // Painel fecha o conteudo e o knob e' centrado no que sobra, com teto de
-        // diametro. O titulo e a caixa de valor ficam sempre nas pontas, entao
-        // encolher a janela encolhe o knob sem empurrar o texto para fora.
-        value_.setBounds(getLocalBounds().withTop(getHeight() - 18).reduced(2, 0));
+        value_.setBounds(getLocalBounds().withTop(getHeight() - 14).reduced(2, 0));
     }
 
+    // O corpo e o valor sao filhos; aqui desenha-se so' o quadrado de cor, a
+    // esquerda do titulo. A posicao e' medida a partir da largura real do texto
+    // em vez de um offset fixo: a 10 px, uma letra de diferenca punha o
+    // quadrado por cima da primeira letra.
     void paint(juce::Graphics& g) override {
-        // Painel do modulo, para o knob nao flotar sobre o chassis liso. O corpo
-        // do knob e' desenhado pelo LookAndFeel, que e' quem sabe o angulo.
-        g.setColour(palette::panelBg);
-        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
-        g.setColour(palette::alpha(palette::chassisBorder, 0.5f));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 2.0f, 1.0f);
+        if (swatch_.isTransparent() || title_.getWidth() <= 0) {
+            return;
+        }
+
+        constexpr float swatchSize {8.0f};
+        const auto textWidth =
+            juce::GlyphArrangement::getStringWidth(title_.getFont(), title_.getText());
+        const auto titleCentre = static_cast<float>(title_.getBounds().getCentreX());
+        const auto left = titleCentre - textWidth * 0.5f - 6.0f - swatchSize;
+        const auto top = static_cast<float>(title_.getBounds().getCentreY())
+                         - swatchSize * 0.5f;
+        const auto rect = juce::Rectangle<float> {left, top, swatchSize, swatchSize};
+
+        g.setColour(swatch_);
+        g.fillRoundedRectangle(rect, 1.5f);
+        g.setColour(juce::Colours::black.withAlpha(0.40f));
+        g.drawRoundedRectangle(rect.reduced(0.25f), 1.5f, 1.0f);
     }
 
 private:
@@ -129,7 +154,8 @@ private:
 
     juce::Slider slider_;
     juce::Label title_;
-    BoxedLabel value_ {palette::valBox, palette::chassisBorder};
+    juce::Label value_;
+    juce::Colour swatch_ {juce::Colours::transparentBlack};
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
 };

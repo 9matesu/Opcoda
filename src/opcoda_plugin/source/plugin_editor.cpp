@@ -1,44 +1,44 @@
 #include "plugin_editor.h"
 
+#include "assets.h"
 #include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_position.h"
+
+#include <array>
 
 namespace opcoda {
 namespace {
 
-constexpr int kHeaderHeight {54};
+constexpr int kHeaderHeight {64};
 
-// O display passou de 130-210 px para 200-320 px. Uma grelha com endereco,
+// O display passou de 130-210 px para 200-460 px. Uma grelha com endereco,
 // dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis linhas de
-// 24 px, e a faixa de 14 px do estado e os 16 px do rodape. Com a altura de
-// antes a grelha ficava com tres linhas e meia, e o endianco do ficheiro ficava
-// fora do ecra quase sempre.
+// 24 px, e a faixa de 14 px do estado e os 16 px do rodape. O display absorve
+// o espaco livre entre o header e a faixa de macros, por isso o teto alto: com
+// ele a grelha mostra uma linha e meia a mais por cada degrau de altura da
+// janela, em vez de deixar faixa escura vazia.
 constexpr int kMinDisplayHeight {200};
-constexpr int kMaxDisplayHeight {320};
+constexpr int kMaxDisplayHeight {460};
 
-// Janela minima e' 560x420. A altura subiu de 380 porque uma grelha com
-// endereco, dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis
-// linhas de 24 px, e o painel de parametros precisa de 124 px para o titulo e os
-// seis knobs.
-//
-// A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
-// para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
-// acabar. E a 480 a grelha deixa de ter espaco para a coluna ASCII e passa a
-// omite-la, o que torna o comportamento do criterio 1.4.10 um caso real e nao um
-// ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
-// vozes, e nada mais.
-constexpr int kMinWidth {480};
-constexpr int kMinHeight {420};
+// Janela minima. Header, display, faixa de macro knobs e rodape de saida:
+// 560 px de altura comportam os quatro com a grelha nas seis linhas.
+constexpr int kMinWidth {720};
+constexpr int kMinHeight {560};
 
 constexpr int kAddressFieldWidth {132};
 constexpr int kSnapButtonWidth {72};
-constexpr int kStatusHeight {14};
-constexpr int kFooterHeight {16};
+constexpr int kStatusHeight {18};
+constexpr int kFooterHeight {18};
 
-// Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
-// MOD & OUTPUT do mock ficaram de fora porque biquad, envelope e dry/wet nao
-// existem no nucleo.
-// Inteiro para uma caixa de valor.
+// Alturas das faixas de cima para baixo, com piso e teto para caberem os
+// conteudos: macro (titulo + knob 64 + valor) e rodape (LED strip de saida).
+// A faixa de macros subiu 8 px para o knob de 64 px do mock caber com titulo e
+// valor; o display absorve a diferenca, porque e' ele que tem folga.
+constexpr int kMacroBandHeight {120};
+constexpr int kOutputBandHeight {30};
+
+// Os seis parametros da Tabela 8, e nada mais. Nada aqui e' cena: um comando
+// sem nucleo atraz nao vira botao.
 //
 // **juce::String {valor, 0} nao arredonda.** Em juce_String.cpp, writeDouble so
 // aplica a precisao ao stream quando numDecPlaces > 0; com zero o `o << n` sai
@@ -53,6 +53,18 @@ juce::String asInteger(float value) {
     return juce::String {juce::roundToInt(value)};
 }
 
+// Cores das colunas do mock. Sao a unica decoracao do painel: nao mapeiam
+// estado nem parametro, so' identificam a coluna, e por isso nao substituem o
+// nome escrito ao lado.
+const std::array<juce::Colour, 6> kSwatches {
+    juce::Colour {0xffb91c1c}.withAlpha(0.85f), // vermelho
+    juce::Colour {0xfff59e0b},                  // ambar
+    juce::Colour {0xff84cc16},                  // lima
+    juce::Colour {0xff3b82f6},                  // azul
+    juce::Colour {0xff14b8a6},                  // turquesa
+    juce::Colour {0xffa855f7},                  // purpura
+};
+
 const std::array<Knob::Spec, 6> kSpecs {
     Knob::Spec {"grain", "SIZE", "Tamanho de grao, em milissegundos", 40.0f,
                 [](float v) { return asInteger(v) + " ms"; }},
@@ -63,7 +75,7 @@ const std::array<Knob::Spec, 6> kSpecs {
     Knob::Spec {"spray", "SPRAY", "Spray, dispersao da posicao de inicio", 0.0f,
                 [](float v) { return asInteger(v * 100.0f) + " %"; }},
     // Estas duas ja estavam certas: com uma casa decimal o writeDouble entra no
-    // if e formata em fixo. Ficam como estava para nao mexer no que funciona.
+    // if e formata em fixo.
     Knob::Spec {"pitch", "PITCH", "Afinacao, em semitons", 0.0f,
                 [](float v) { return juce::String {v, 1} + " st"; }},
     Knob::Spec {"volume", "VOLUME", "Volume, em decibels", 0.0f,
@@ -85,27 +97,35 @@ void setIfChanged(juce::Label& label, const juce::String& text) {
 }
 
 PluginEditor::PluginEditor(PluginProcessor& processor)
-    : juce::AudioProcessorEditor(&processor),
-      owner_(processor),
-      fileName_(palette::subPanel, palette::chassisBorder),
-      formatTag_(palette::subPanel, palette::chassisBorder),
-      fileSize_(palette::subPanel, palette::chassisBorder) {
+    : juce::AudioProcessorEditor(&processor), owner_(processor) {
     setLookAndFeel(&lookAndFeel_);
 
-    makePlainLabel(title_, "Opcoda", palette::textDark, BoxedLabel::sansFont(14.0f, true));
-    makePlainLabel(subtitle_, "Granular Synthesizer", palette::textSub,
-                   BoxedLabel::sansFont(10.0f));
+    makePlainLabel(title_, "OPCODA", palette::textDark, assets::fonts::tech(26.0f));
+    makePlainLabel(subtitle_, "PE GRANULAR SYNTHESIZER", palette::subtitleOnMetal,
+                   BoxedLabel::sansFont(10.0f, true).withExtraKerningFactor(0.12f));
     makePlainLabel(dropHint_, "DRAG & DROP BINARY", palette::textField,
                    BoxedLabel::monoFont(9.0f));
-    makePlainLabel(voices_, "VOICES  8", palette::textSub, BoxedLabel::monoFont(10.0f));
+    makePlainLabel(voices_, "VOICES 00 / 08", palette::textSub,
+                   BoxedLabel::monoFont(10.0f, true));
     makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::monoFont(10.0f));
-    makePlainLabel(engineTitle_, "1 - GRANULAR ENGINE", palette::textDark,
-                   BoxedLabel::sansFont(10.0f, true));
+    makePlainLabel(outputLabel_, "OUTPUT", palette::textOnDarkSub,
+                   BoxedLabel::monoFont(10.0f, true));
 
     fileName_.setText("-", juce::dontSendNotification);
+    fileName_.setJustificationType(juce::Justification::centredLeft);
+    fileName_.setBorderSize(juce::BorderSize<int> {0, 7, 0, 5});
+    fileName_.setFont(BoxedLabel::monoFont(11.0f, true));
+    fileName_.setColour(juce::Label::textColourId, palette::amberText);
+
+    formatTag_.setFont(BoxedLabel::monoFont(9.0f));
+    formatTag_.setColour(juce::Label::textColourId, palette::chipText);
+
+    fileSize_.setFont(BoxedLabel::monoFont(10.0f));
+    fileSize_.setColour(juce::Label::textColourId, palette::chipText);
 
     buildHeader();
-    buildParameterPanel();
+    buildMacroBand();
+    buildFooterBand();
 
     // A thread de interface e' a dona da memoria de amostra, entao e' ela que
     // libera o que a thread de audio ja devolveu. 20 Hz nao competem com a
@@ -114,7 +134,7 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
 
     setResizable(true, true);
     setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
-    setSize(900, 540);
+    setSize(1040, 690);
     refresh();
 }
 
@@ -178,10 +198,30 @@ void PluginEditor::buildHeader() {
         readout->setColour(juce::Label::textColourId, palette::textOnDark);
     }
 
+    // Tinta por leitura, como no mock: entropia em ambar, taxa em emerald, pico
+    // em red-400 e o POS em ciano. Tudo continua em texto, nunca so em cor.
+    entropyReadout_.setColour(juce::Label::textColourId, palette::accentSoft);
+    rateReadout_.setColour(juce::Label::textColourId, palette::ok);
+    peakReadout_.setColour(juce::Label::textColourId, palette::peakRed);
+
+    // O POS e' o unico chip do rodape, como o "POS: 0x..." do mock. A fonte
+    // bold separa a leitura do endereco das restantes leituras.
+    positionReadout_.setFont(BoxedLabel::monoFont(10.0f, true));
+    positionReadout_.setColour(juce::Label::textColourId, palette::oledCyan);
+
     loadButton_.setButtonText("LOAD");
     loadButton_.setTooltip("Escolher um binario para sintetizar");
     loadButton_.setName("Carregar binario");
+    loadButton_.setColour(juce::TextButton::buttonColourId, palette::metalButton);
+    loadButton_.setColour(juce::TextButton::textColourOffId, palette::amberText);
+    loadButton_.setColour(juce::TextButton::textColourOnId, palette::amberText);
     loadButton_.onClick = [this] { chooseFile(); };
+
+    // O ALINHAR vive dentro do display e por isso e' cinza, nao ambar: dois
+    // botoes ambar em pontos distantes do painel leem-se como a mesma acao.
+    snapButton_.setColour(juce::TextButton::buttonColourId, juce::Colour {0xff1a2030});
+    snapButton_.setColour(juce::TextButton::textColourOffId, palette::chipText);
+    snapButton_.setColour(juce::TextButton::textColourOnId, palette::chipText);
 }
 
 // Um ponto so para a visibilidade do header, porque ha duas razoes independentes
@@ -197,7 +237,11 @@ void PluginEditor::updateHeaderVisibility() {
     // Duas condicoes, e ambas tem de ser verdade. A peca e' escondida quando nao
     // ha espaco OU quando nao ha conteudo — e nunca se desenha uma moldura vazia,
     // que e' o mesmo motivo pelo qual os chips ja se escondiam por vazio.
-    dropHint_.setVisible(headerFitsHint_);
+    // Sem material o chip mostra a dica de arrasto em vez de um "-" solto: o
+    // "-" nao ensina nada e a dica ocupa o mesmo lugar.
+    const bool hasSource = owner_.hasSource();
+    fileName_.setVisible(hasSource);
+    dropHint_.setVisible(headerFitsHint_ && !hasSource);
     fileSize_.setVisible(headerFitsSize_ && info.sizeBytes > 0);
     formatTag_.setVisible(headerFitsFormat_ && info.formatTag.isNotEmpty());
 }
@@ -211,29 +255,89 @@ void PluginEditor::updateFooterVisibility() {
     entropyReadout_.setVisible(footerFitsEntropy_ && entropyReadout_.getText().isNotEmpty());
 }
 
-void PluginEditor::buildParameterPanel() {
-    addAndMakeVisible(engineTitle_);
-
-    for (const auto& spec : kSpecs) {
-        knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
+void PluginEditor::buildMacroBand() {
+    // Os seis knobs, cada um ligado ao seu parametro real; nada aqui e'
+    // decoracao, o nucleo e' quem responde ao rato.
+    for (std::size_t i = 0; i < kSpecs.size(); ++i) {
+        knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), kSpecs[i]));
+        knobs_.back()->setSwatch(kSwatches[i]);
         addAndMakeVisible(*knobs_.back());
     }
 }
 
+void PluginEditor::buildFooterBand() {
+    addAndMakeVisible(footerBand_);
+    addAndMakeVisible(vuMeter_);
+    addAndMakeVisible(outputLabel_);
+}
+
 void PluginEditor::paint(juce::Graphics& g) {
+    // Corpo escuro do frame. As duas faixas de metal (header e painel de macros)
+    // sao pintadas por cima; o display e' um filho opaco que cobre o propio
+    // intervalo no meio.
+    const auto bounds = getLocalBounds();
     g.fillAll(palette::chassis);
 
-    // Faixa do header: um tom acima do chassis, com a borda de 1 px que separa
-    // as tres faixas.
-    g.setColour(palette::header);
-    g.fillRect(getLocalBounds().withHeight(kHeaderHeight));
-    g.setColour(palette::chassisBorder);
+    // Faixa do header: gradiente de metal escovado do mock, com a borda de 1 px
+    // que separa as tres faixas.
+    const auto header = bounds.withHeight(kHeaderHeight);
+    juce::ColourGradient headerMetal(palette::metalTop,
+                                     static_cast<float>(header.getX()),
+                                     static_cast<float>(header.getY()) - 0.5f,
+                                     palette::metalBottom,
+                                     static_cast<float>(header.getX()),
+                                     static_cast<float>(header.getY()) + static_cast<float>(kHeaderHeight) - 0.5f,
+                                     false);
+    headerMetal.addColour(0.5, palette::metalMiddle);
+    g.setGradientFill(headerMetal);
+    g.fillRect(header);
+
+    g.setColour(palette::metalBorder);
     g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(getWidth()));
 
-    // Realce de 1 px no topo: e' o que da sensacao de superficie em vez de
-    // retangulo liso.
-    g.setColour(juce::Colours::white.withAlpha(0.35f));
+    // Painel de macros tambem e' metal no mock: pintar o metal da base do
+    // header para baixo cobre header e rodape, e as duas faixas — display e
+    // rodape de saida — sao componentes opacos que recolhem a fatia de cada
+    // uma.
+    juce::ColourGradient rackMetal(palette::metalTop,
+                                   static_cast<float>(bounds.getX()),
+                                   static_cast<float>(kHeaderHeight) - 0.5f,
+                                   palette::metalBottom,
+                                   static_cast<float>(bounds.getX()),
+                                   static_cast<float>(bounds.getHeight()) - 0.5f, false);
+    rackMetal.addColour(0.5, palette::metalMiddle);
+    g.setGradientFill(rackMetal);
+    g.fillRect(bounds.withTop(kHeaderHeight));
+
+    // Realce de 1 px no topo: e' o inset 0 1px 0 rgba(255,255,255,0.8) do mock.
+    // E' o que da sensacao de superficie em vez de retangulo liso.
+    g.setColour(juce::Colours::white.withAlpha(0.75f));
     g.drawHorizontalLine(0, 0.0f, static_cast<float>(getWidth()));
+
+    // A moldura e os cantos ficam em paintOverChildren: os filhos opacos
+    // (display e faixas) cobrem o retangulo inteiro, e desenhar a borda aqui
+    // deixava-a por baixo deles.
+}
+
+// Cantos de 8 px do frame (rounded-lg do mock). Nao ha recorte de verdade: o
+// JUCE nao recorta filhos por um Path, por isso mascara-se por cima. O
+// FillType odd-even pinta so' a diferenca entre o retangulo e o retangulo
+// arredondado, que sao os quatro triangulos de fora do canto.
+void PluginEditor::paintOverChildren(juce::Graphics& g) {
+    const auto bounds = getLocalBounds().toFloat();
+    constexpr float radius {8.0f};
+
+    juce::Path mask;
+    mask.addRectangle(bounds);
+    mask.addRoundedRectangle(bounds, radius);
+    // even-odd: o contorno interior (o retangulo arredondado) fura o exterior,
+    // e so' os quatro cantos ficam preenchidos.
+    mask.setUsingNonZeroWinding(false);
+    g.setColour(juce::Colour {0xff0b0c0e});
+    g.fillPath(mask);
+
+    g.setColour(palette::frameBorder);
+    g.drawRoundedRectangle(bounds.reduced(0.5f), radius, 1.0f);
 }
 
 void PluginEditor::resized() {
@@ -243,101 +347,92 @@ void PluginEditor::resized() {
     // Cursor explicito em vez de encadear removeFromLeft: aquele metodo devolve
     // um retangulo novo e NAO consome o original, entao encadear sobrepoe as
 // pecas em vez de avanca-las.
-    const auto header = area.removeFromTop(kHeaderHeight).reduced(10, 0);
+    const auto header = area.removeFromTop(kHeaderHeight).reduced(16, 0);
     int x = header.getX();
 
     // As medidas do header em constantes com nome. O layout e' uma cadeia de
     // larguras que tem de fechar, e numeros soltos nao se somam a olho.
-    constexpr int kLedWidth {16};
-    constexpr int kGap {6};
-    constexpr int kIdentityWidth {180};
-    constexpr int kIdentityGap {12};
-    constexpr int kLoadWidth {76};
-    constexpr int kNameGap {6};
-    constexpr int kMinNameWidth {40};
+    constexpr int kIdentityWidth {214};
+    constexpr int kIdentityGap {16};
+    constexpr int kLedGap {8};
+    constexpr int kLoadWidth {64};
+    constexpr int kMinNameWidth {96};
     constexpr int kChipGap {4};
-    constexpr int kFormatWidth {78};
-    constexpr int kSizeWidth {58};
+    constexpr int kFormatWidth {88};
+    constexpr int kSizeWidth {62};
     constexpr int kStripGap {10};
-    constexpr int kHintGap {8};
-    constexpr int kHintWidth {140};
-    constexpr int kVoicesWidth {78};
+    constexpr int kVoicesWidth {92};
+    constexpr int kChipHeight {28};
+    const auto chipTop = header.getY() + 18;
 
-    powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth, header.getHeight()}
-                             .withSizeKeepingCentre(14, 14));
-    x += kLedWidth + kGap;
-
-    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 19});
-    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 29, kIdentityWidth, 13});
+    // Wordmark do mock: Chakra Petch e o ponto verde logo a seguir. A posicao do
+    // ponto e' medida pela largura real do texto, e nao por um offset fixo: com
+    // outra fonte o ponto cairia por cima do "A" ou a meio metro do logo.
+    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 26});
+    const auto wordWidth =
+        juce::GlyphArrangement::getStringWidth(assets::fonts::tech(26.0f), "OPCODA");
+    powerLed_.setBounds(
+        juce::Rectangle<int> {x + juce::roundToInt(wordWidth) + kLedGap, header.getY() + 10, 14,
+                              26}
+            .withSizeKeepingCentre(12, 12));
+    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 38, kIdentityWidth, 12});
     x += kIdentityWidth + kIdentityGap;
 
     // Lado direito: VOICES colado a borda e sempre visivel. E' leitura de estado,
     // e leitura de estado nao se esconde por falta de espaco.
     voices_.setBounds(juce::Rectangle<int> {header.getRight() - kVoicesWidth, header.getY(),
-                                             kVoicesWidth, 16}
+                                             kVoicesWidth, kHeaderHeight}
                           .withSizeKeepingCentre(kVoicesWidth, 16));
 
-    // Tudo o que fica a esquerda de VOICES tem de caber a serio. `leftLimit` e' o
-    // fim do bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no
-    // minimo. E' contra ele que cada peca decide se cabe.
-    const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
+    // O LOAD fica reservado a direita, antes de VOICES. O chip do ficheiro
+    // encosta a esquerda e tem largura propria: esticado ate' ao LOAD virava
+    // uma barra escura de 600 px com o nome encostado a uma ponta, que nao e'
+    // o chip compacto do mock.
+    const int loadX = header.getRight() - kVoicesWidth - kStripGap - kLoadWidth;
+    loadButton_.setBounds(juce::Rectangle<int> {loadX, chipTop, kLoadWidth, kChipHeight});
 
-    // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
-    // nem `edge`: `cursor` e' um membro de juce::Component e o /W4 trata a
-    // ocultacao como erro, e `edge` ja e' o cursor do rodape mais abaixo, na
-    // mesma funcao. O /W4 ja apanhou este mesmo tropeco duas vezes neste
-    // ficheiro.
-    int stripEdge = header.getRight() - kVoicesWidth;
+    const int nameRight = juce::jmin(loadX - kStripGap, x + 380);
+    const auto nameBounds =
+        juce::Rectangle<int> {x, chipTop, juce::jmax(kMinNameWidth, nameRight - x), kChipHeight};
+    fileName_.setBounds(nameBounds);
+    dropHint_.setBounds(nameBounds);
+    headerFitsHint_ = nameBounds.getWidth() >= 140;
 
-    // A ordem em que se sacrifica e' a ordem de importancia invertida.
-    //
-    // 1. A dica de arrasto primeiro, porque so interessa enquanto nao ha ficheiro
-    //    carregado: depois de carregar, o nome do ficheiro diz o essencial e a
-    //    dica e' redundante.
-    // 2. O formato a seguir, e o tamanho em ultimo: ambos sao informacao sobre o
-    //    material, mas menos importante do que o nome.
-    //
-    // Sem esta regra o chip de formato comeca em 174 px numa janela de 560 e o
-    // botao LOAD acaba em 300 — 126 px de sobreposicao que so nao se via porque
-    // os chips vazios ja se escondem, e por isso so aparecia depois de carregar
-    // um ficheiro.
-    headerFitsHint_ = !owner_.hasSource() && stripEdge - kHintGap - kHintWidth >= leftLimit;
-    dropHint_.setVisible(headerFitsHint_);
-    if (headerFitsHint_) {
-        stripEdge -= kHintGap;
-        dropHint_.setBounds(juce::Rectangle<int> {stripEdge - kHintWidth, header.getY(),
-                                                  kHintWidth, 14});
-        stripEdge -= kHintWidth + kStripGap;
-    }
+    // Tags dentro do mesmo chip, encostadas a direita, como no mock. Sao
+    // desenhadas depois do fileName_ (a ordem de buildHeader), por isso ficam
+    // por cima do fundo escuro sem precisar de um container.
+    const int tagsWidth = kSizeWidth + kChipGap + kFormatWidth;
+    headerFitsSize_ = nameBounds.getWidth() >= kMinNameWidth + tagsWidth + 12;
+    headerFitsFormat_ = nameBounds.getWidth() >= kMinNameWidth + tagsWidth + 12;
 
-    // 2. O tamanho, na ponta direita da faixa.
-    headerFitsSize_ = stripEdge - kSizeWidth >= leftLimit;
+    // Ordem dentro do chip: nome, [formato], tamanho, como no mock.
+    int tagRight = nameBounds.getRight() - 6;
     if (headerFitsSize_) {
-        fileSize_.setBounds(juce::Rectangle<int> {stripEdge - kSizeWidth, header.getY() + 17,
-                                                  kSizeWidth, 16});
-        stripEdge -= kSizeWidth + kChipGap;
+        fileSize_.setBounds(juce::Rectangle<int> {tagRight - kSizeWidth, chipTop + 6, kSizeWidth,
+                                                  kChipHeight - 12});
+        tagRight -= kSizeWidth + kChipGap;
     }
-
-    // 3. O formato, a seguir.
-    headerFitsFormat_ = stripEdge - kFormatWidth >= leftLimit;
     if (headerFitsFormat_) {
-        formatTag_.setBounds(juce::Rectangle<int> {stripEdge - kFormatWidth, header.getY() + 17,
-                                                   kFormatWidth, 16});
-        stripEdge -= kFormatWidth + kChipGap;
+        formatTag_.setBounds(juce::Rectangle<int> {tagRight - kFormatWidth, chipTop + 6,
+                                                   kFormatWidth, kChipHeight - 12});
     }
 
-    // 4. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
-    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kLoadWidth, 28});
-    fileName_.setBounds(juce::Rectangle<int> {x + kLoadWidth + kNameGap, header.getY() + 14,
-                                              juce::jmax(kMinNameWidth,
-                                                         stripEdge - (x + kLoadWidth + kNameGap)),
-                                              24});
+    // O texto do nome tem de parar antes das tags; sem isto um nome comprido
+    // desenhava por baixo do "[64-bit PE]".
+    const int textRightBorder = (headerFitsSize_ || headerFitsFormat_) ? tagsWidth + 12 : 5;
+    fileName_.setBorderSize(juce::BorderSize<int> {0, 7, 0, textRightBorder});
+    dropHint_.setBorderSize(juce::BorderSize<int> {0, 7, 0, textRightBorder});
 
     updateHeaderVisibility();
 
 // ---- display ----
+    // O display e' a superficie maior do frame e absorve o espaco livre entre
+    // o header e o rodape: o calculo desconta a faixa de macros e a faixa de
+    // saida, que tem altura fixa, e clamp no intervalo do conteudo da grelha.
+    constexpr int kFixedBands {kMacroBandHeight + kOutputBandHeight};
     const auto displayHeight =
-        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2);
+        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight,
+                     getHeight() - kHeaderHeight - kFixedBands);
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
@@ -350,10 +445,9 @@ void PluginEditor::resized() {
     // topo do display ele ficava dentro da area da grelha, e o fundo opaco da
     // grelha tapava o "PRONTO" e o "RECUSADO". Tambem so uma captura mostra.
     const auto statusY = displayBounds.getY();
-    statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
+    statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16,
+                                               kStatusHeight}
                              .withSizeKeepingCentre(14, kStatusHeight));
-    status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY,
-                                            displayBounds.getWidth() - 36 - 12, kStatusHeight});
 
     const auto footerY = displayBounds.getBottom() - kFooterHeight - 2;
 
@@ -361,7 +455,7 @@ void PluginEditor::resized() {
     // inicio do rodape. Passar footerY como altura — que e' uma coordenada
     // absoluta e nao um tamanho — esticava a grelha 54 px para baixo, e a ultima
     // linha de bytes ficava por cima das leituras.
-    const auto gridTop = statusY + kStatusHeight + 1;
+    const auto gridTop = statusY + kStatusHeight + 4;
     grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
                                           displayBounds.getWidth(), footerY - gridTop});
 
@@ -374,6 +468,14 @@ void PluginEditor::resized() {
                                                 controlY, kSnapButtonWidth, kStatusHeight + 2});
     address_.setBounds(juce::Rectangle<int> {snapButton_.getX() - 6 - kAddressFieldWidth,
                                              controlY, kAddressFieldWidth, kStatusHeight + 2});
+
+    // O status ocupa o que sobra entre o LED e o campo de endereco. E' o texto
+    // mais longo do painel (o nome do ficheiro), por isso e' ele que cede espaco
+    // para os controles, e nao o contrario.
+    const int statusLeft = displayBounds.getX() + 12 + 16 + 8;
+    status_.setBounds(juce::Rectangle<int> {statusLeft, statusY,
+                                            juce::jmax(0, address_.getX() - statusLeft - 8),
+                                            kStatusHeight});
 
     // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
     // por caixa. A versao anterior media cada caixa a partir da margem esquerda
@@ -388,18 +490,18 @@ void PluginEditor::resized() {
     // constante durante a sessao e por isso a menos informativa; depois o pico;
     // a entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
     // que o painel existe para mostrar.
-    constexpr int footerHeight {16};
+    constexpr int footerHeight {18};
     const int margin = displayBounds.getX() + 12;
     const int footerRight = displayBounds.getRight() - 12;
 
     constexpr int kLedBoxWidth {12};
     constexpr int kBoxGap {8};
-    constexpr int kVoicesBoxWidth {74};
-    constexpr int kRateWidth {78};
-    constexpr int kPeakWidth {86};
-    constexpr int kPositionWidth {116};
-    constexpr int kRegionWidth {116};
-    constexpr int kMinEntropyWidth {96};
+    constexpr int kVoicesBoxWidth {84};
+    constexpr int kRateWidth {76};
+    constexpr int kPeakWidth {80};
+    constexpr int kPositionWidth {112};
+    constexpr int kRegionWidth {160};
+    constexpr int kMinEntropyWidth {100};
 
     // O que nunca sai: o LED e o numero de vozes, o endereco da cabeca de leitura
     // e o intervalo da regiao. E' o que o painel existe para mostrar, e sao as
@@ -423,8 +525,8 @@ void PluginEditor::resized() {
                       kRateWidth;
 
     // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
-    // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
-    // poutineira estar.
+    // grupo: quando uma caixa e' omitida, nao sobra um intervalo vazio onde
+    // nada devia estar.
     int edge = footerRight;
     const auto put = [&edge, footerY](juce::Component& target, int width, bool visible) {
         if (!visible) {
@@ -441,41 +543,58 @@ void PluginEditor::resized() {
     put(rateReadout_, kRateWidth, footerFitsRate_);
     put(peakReadout_, kPeakWidth, footerFitsPeak_);
 
-    // A entropia ocupa o que sobra a esquerda, e por isso fica colada ao
-    // indicador de vozes: e' a unica das tres que cresce em vez de ter largura
-    // fixa, porque o numero que escreve — de 0 a 8 bits por byte — e' o mais
-    // variavel das leituras.
-    entropyReadout_.setBounds(juce::Rectangle<int> {margin, footerY + 2,
-                                                     juce::jmax(0, edge - margin), footerHeight});
+    // A entropia fecha o grupo pela esquerda, como o primeiro item da faixa de
+    // estado do mock. Largura fixa e nao o resto da linha: esticada, o texto
+    // ficava centrado a meio do display, longe das outras leituras.
+    put(entropyReadout_, kMinEntropyWidth, footerFitsEntropy_);
 
     updateFooterVisibility();
 
-    area.removeFromTop(10);
-
-    // ---- painel de parametros ----
-    engineTitle_.setBounds(area.removeFromTop(16).reduced(2, 0));
-
-    // Os seis knobs ficam sempre em uma linha, como no mock. Quebrar em duas
+    // ---- faixa de macros ----
+    // Os seis knobs ficam sempre em uma linha, dentro da faixa de metal que o
+    // paint() do editor ja pintou (o display opaco recolhe a sua fatia, e o
+    // rodape de saida tem faixa opaca propria). Quebrar em duas
     // linhas foi tentado e e' pior: a altura que sobra nao comporta um knob com
     // titulo e valor, e os knobs despencam para poucos pixels. O diametro do
     // knob e' limitado dentro do componente, entao encolhe com a janela sem
     // precisar de um segundo layout.
-    const auto knobArea = area.reduced(8, 2);
-    const int cellWidth = knobArea.getWidth() / static_cast<int>(knobs_.size());
+    const auto macroBand = area.removeFromTop(kMacroBandHeight);
+    const auto knobArea = macroBand.reduced(20, 12);
 
-    // O painel fecha o conteudo (titulo, knob, valor) e fica centrado na
-    // vertical da area. Preencher a celula inteira deixaria um monte de caixa
-    // cinza vazia embaixo do knob.
-    constexpr int knobContentHeight {13 + 1 + 62 + 4 + 18};
+    // gap-3 do mock entre as seis colunas.
+    constexpr int kCellGap {12};
+    const int cellWidth = (knobArea.getWidth()
+                           - kCellGap * (static_cast<int>(knobs_.size()) - 1))
+                          / static_cast<int>(knobs_.size());
+
+    // O knob fecha o conteudo (titulo, corpo, valor) e fica centrado na
+    // vertical da celula. Preencher a celula inteira deixaria os rotulos
+    // flutuando desalinhados, e o mock alinha titulo, corpo e caixa na mesma
+    // coluna.
+    constexpr int knobContentHeight {12 + 2 + 64 + 2 + 14};
     for (std::size_t i = 0; i < knobs_.size(); ++i) {
         const auto cell = juce::Rectangle<int> {knobArea.getX()
-                                                     + (static_cast<int>(i) * cellWidth),
+                                                     + (static_cast<int>(i)
+                                                        * (cellWidth + kCellGap)),
                                                  knobArea.getY(),
                                                  cellWidth,
                                                  knobArea.getHeight()};
-        knobs_[i]->setBounds(cell.reduced(4).withHeight(
-            juce::jmin(knobContentHeight, cell.getHeight() - 8)));
+        knobs_[i]->setBounds(cell.withSizeKeepingCentre(
+            juce::jmin(cell.getWidth(), 110),
+            juce::jmin(knobContentHeight, cell.getHeight())));
     }
+
+    // ---- rodape de saida ----
+    // O rodape e' o que sobra da janela a partir daqui. A faixa escura cobre o
+    // metal pintado por baixo, e o VU le o pico que a telemetria publica.
+    footerBand_.setBounds(area);
+
+    const auto footerCell = area.reduced(16, 4);
+    outputLabel_.setBounds(juce::Rectangle<int> {footerCell.getX(), footerCell.getY(), 64,
+                                                 footerCell.getHeight()}
+                               .withSizeKeepingCentre(64, footerCell.getHeight()));
+    vuMeter_.setBounds(juce::Rectangle<int> {footerCell.getRight() - 110, footerCell.getY(),
+                                             110, footerCell.getHeight()});
 }
 
 void PluginEditor::timerCallback() {
@@ -527,8 +646,14 @@ void PluginEditor::refresh() {
     }
 
     setIfChanged(status_, message);
+    // RECUSADO em vermelho, PRONTO em ambar e o resto em slate, que e' a leitura
+    // da linha de estado do mock. Tres cores, nada de verde/amarelo adjacente
+    // sem texto a differenca.
     status_.setColour(juce::Label::textColourId,
-                      ledState == Led::State::fault ? palette::error : palette::textOnDark);
+                      ledState == Led::State::fault
+                          ? palette::error
+                          : (ledState == Led::State::ready ? palette::accent
+                                                           : palette::textOnDark));
 
     statusLed_.setState(ledState);
     powerLed_.setState(ledState == Led::State::off ? Led::State::off : Led::State::ready);
@@ -573,15 +698,17 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
 
     setIfChanged(entropyReadout_,
                  owner_.hasSource() && !range.empty()
-                     ? juce::String {entropyAtReadHead(readHead, range), 2} + " bits/byte"
+                     ? juce::String {"ENTROPY "}
+                           + juce::String {entropyAtReadHead(readHead, range), 2}
                      : juce::String {});
 
     // A cabeca de leitura em endereco. E' a leitura que responde a pergunta "o
-    // que estou a ouvir", e o que o clique na grelha acabou de escolher.
+    // que estou a ouvir", e o que o clique na grelha acabou de escolher. O
+    // formato "POS: 0x..." e' o do mock; o chip e' o unico do rodape.
     if (owner_.hasSource() && !range.empty()) {
         setIfChanged(positionReadout_,
-                     "POS 0x" + juce::String::formatted(
-                                    "%08X", static_cast<unsigned long long>(readHead)));
+                     "POS: 0x" + juce::String::formatted(
+                                     "%08X", static_cast<unsigned long long>(readHead)));
     } else {
         setIfChanged(positionReadout_, juce::String {});
     }
@@ -599,13 +726,22 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     }
 
     setIfChanged(peakReadout_,
-                 peak < -0.5f ? juce::String {"PK -inf dB"}
-                              : juce::String {"PK "} + juce::String {peak, 1} + " dB");
+                 peak < -0.5f ? juce::String {"PEAK -inf"}
+                              : juce::String {"PEAK "} + juce::String {peak, 1});
     setIfChanged(rateReadout_,
-                 juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
+                 juce::String {"SR "}
+                     + juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f,
+                                     1}
                      + " kHz");
     setIfChanged(voicesReadout_,
                  juce::String {"VOICES "} + juce::String {activeVoices});
+
+    // O header repete o numero de vozes que o rodape mostra, como o "VOICES 08"
+    // do mock, mas com o limite real do motor (8). Duas casas para o numero nao
+    // fazer o texto saltar de largura entre 1 e 10.
+    setIfChanged(voices_, juce::String {"VOICES "}
+                              + juce::String {activeVoices}.paddedLeft('0', 2)
+                              + " / 08");
 
     // Sem material nao ha entropia nem offset para ler. Uma caixa vazia e' um
     // retangulo com moldura e nada dentro, que se le como defeito, e' o mesmo

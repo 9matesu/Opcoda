@@ -53,17 +53,21 @@ public:
 
         const auto tint = colourFor(state_);
 
-        // Halo: do centro para fora, opaco a transparente.
-        const float haloRadius = radius * 2.4f;
+        // Halo: do centro ate' a borda do componente. O raio tem de caber nos
+        // bounds: o desenho e' recortado pelo componente, e um halo maior que a
+        // peca virava o quadrado verde com cantos arredondados que aparecia
+        // depois do wordmark.
+        const float haloRadius = radius * 0.95f;
         juce::ColourGradient halo(tint, centre, tint.withAlpha(0.0f),
                                   centre.translated(haloRadius, 0.0f), true);
         g.setGradientFill(halo);
         g.fillEllipse(centre.x - haloRadius, centre.y - haloRadius,
                       haloRadius * 2.0f, haloRadius * 2.0f);
 
-        // Nucleo aceso, opaco.
+        // Nucleo aceso e pequeno: o halo e' a maior parte da luz, como no ponto
+        // de 8 px do mock.
         g.setColour(tint);
-        g.fillEllipse(bounds.reduced(radius * 0.42f));
+        g.fillEllipse(bounds.reduced(radius * 0.62f));
     }
 
 private:

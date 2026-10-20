@@ -1,33 +1,33 @@
 #pragma once
 
+#include "assets.h"
 #include "palette.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace opcoda {
 
-// Rotulo com fundo. Serve tanto para a caixa de valor dos knobs (valBox) quanto
-// para os chips da faixa de arquivo (subPanel), que e' a mesma coisa com outra
-// cor.
+// Rotulo com fundo. Serve tanto para os chips da faixa de ficheiro (chipBg)
+// quanto para as leituras do display (posChipBg), que sao a mesma coisa com
+// outra cor e outro raio.
 class BoxedLabel : public juce::Label {
 public:
-    explicit BoxedLabel(juce::Colour background, juce::Colour outline)
-        : background_(background), outline_(outline) {
+    explicit BoxedLabel(juce::Colour background,
+                        juce::Colour outline,
+                        float radius = 1.5f,
+                        float outlineOpacity = 0.55f)
+        : background_(background), outline_(outline), radius_(radius),
+          outlineOpacity_(outlineOpacity) {
         setJustificationType(juce::Justification::centred);
         setInterceptsMouseClicks(false, false);
         // Numero e' sempre monoespacado e sempre alinhado: e' o que faz a
-        // leitura parecer instrumento e nao pagina web.
+        // leitura parecer instrumento e nao pagina web. A fonte e' a JetBrains
+        // Mono do mock, embutida no binario.
         setFont(monoFont(10.0f));
     }
 
-    static juce::Font monoFont(float height) {
-        auto font = juce::Font {juce::FontOptions {height, juce::Font::plain}};
-        font.setTypefaceName(getDefaultMonospacedTypefaceName());
-        return font;
-    }
-
-    static const juce::String& getDefaultMonospacedTypefaceName() {
-        return juce::Font::getDefaultMonospacedFontName();
+    static juce::Font monoFont(float height, bool bold = false) {
+        return assets::fonts::mono(height, bold);
     }
 
     static juce::Font sansFont(float height, bool bold = false) {
@@ -39,16 +39,27 @@ public:
 
     void paint(juce::Graphics& g) override {
         const auto bounds = getLocalBounds().toFloat();
-        g.setColour(background_);
-        g.fillRoundedRectangle(bounds, 1.5f);
-        g.setColour(palette::alpha(outline_, 0.55f));
-        g.drawRoundedRectangle(bounds.reduced(0.5f), 1.5f, 1.0f);
+        if (!background_.isTransparent()) {
+            g.setColour(background_);
+            g.fillRoundedRectangle(bounds, radius_);
+        }
+
+        // isTransparent() antes do alpha: `withAlpha` define o alpha em vez de
+        // multiplicar, e um outline transparentBlack transformado com alpha()
+        // vira um contorno preto a 55%. Era isso que punha uma caixa a volta de
+        // cada rotulo sem caixa.
+        if (!outline_.isTransparent()) {
+            g.setColour(palette::alpha(outline_, outlineOpacity_));
+            g.drawRoundedRectangle(bounds.reduced(0.5f), radius_, 1.0f);
+        }
         juce::Label::paint(g);
     }
 
 private:
     juce::Colour background_;
     juce::Colour outline_;
+    float radius_;
+    float outlineOpacity_;
 };
 
 } // namespace opcoda
