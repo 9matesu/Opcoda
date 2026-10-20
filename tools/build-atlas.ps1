@@ -69,6 +69,14 @@ if (-not $SkipLatex) {
     try {
       $previous = $ErrorActionPreference
       $ErrorActionPreference = "Continue"
+      # SOURCE_DATE_EPOCH prende a data que o PDF grava dentro do ficheiro a
+      # uma data fixa. Sem isto, cada build produz um PDF diferente em
+      # bytes, e o diff do artefacto versionado fica sempre sujo.
+      #
+      # A data e' a da primeira versao do atlas. Puxar a data do commit
+      # corrente nao servia: o commit que versiona o PDF e' a posteriori
+      # do commit que o produz, e o artefacto nunca casaria com a origem.
+      $env:SOURCE_DATE_EPOCH = "1792461023"
       # Aqui o directorio corrente ja e' a pasta do atlas, por isso o
       # ficheiro entra pelo nome e nao pelo caminho relativo.
       $name = Split-Path -Leaf $texFile
