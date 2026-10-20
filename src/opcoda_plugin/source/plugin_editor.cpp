@@ -34,11 +34,14 @@ constexpr int kMaxDisplayHeight {320};
 // vozes, e nada mais.
 constexpr int kMinWidth {480};
 constexpr int kMinHeight {434};
-
 constexpr int kAddressFieldWidth {132};
 constexpr int kPlayButtonWidth {60};
 constexpr int kStatusHeight {14};
 constexpr int kFooterHeight {16};
+// Altura da faixa do teclado virtual. 56 px dao uma tecla branca legivel e
+// deixam o painel de knobs com o mesmo espaco: o valor sai da metade do display
+// e nao da faixa de parametros, que a 434 de altura ja esta' no osso.
+constexpr int kKeyboardHeight {56};
 
 // Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
 // MOD & OUTPUT do mock ficaram de fora porque biquad, envelope e dry/wet nao
@@ -64,11 +67,12 @@ const auto cutoffText = [](float v) {
     return v >= 1000.0f ? juce::String {v / 1000.0f, 1} + " kHz" : asInteger(v) + " Hz";
 };
 
-// Os 25 parametros da Tabela 8 em cinco modulos, e nada mais. Os IDs dos seis
-// originais nao mudam — sessoes salvas referenciam por ID — so o titulo e o
-// nome falado passam a ingles. As abas trocam a faixa visivel em vez de
-// empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e cinco
-// fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao promete.
+// Os 28 parametros ja no codigo em seis modulos: os 25 da Tabela 8 e os tres da
+// F018. Os IDs dos seis originais nao mudam — sessoes salvas referenciam por ID
+// — so o titulo e o nome falado passam a ingles. As abas trocam a faixa visivel
+// em vez de empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e
+// seis fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao
+// promete.
 const std::array<Knob::Spec, 10> kGrainSpecs {
     Knob::Spec {"grain", "SIZE", "Grain size, in milliseconds", 40.0f,
                 [](float v) { return asInteger(v) + " ms"; }},
@@ -95,19 +99,43 @@ const std::array<Knob::Spec, 10> kGrainSpecs {
                 [](float v) { return juce::String {v, 2} + "x"; }},
 };
 
-const std::array<Knob::Spec, 4> kEnvelopeSpecs {
+// F020: as tres curvas ficam ao lado dos tempos que moldam. O valor diz a forma
+// e nao um numero: -100 % e' exponencial, 0 linear, +100 % logaritmica.
+const auto curveText = [](float v) {
+    const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
+    return (pct == 0) ? juce::String {"LIN"} : juce::String {pct} + " %";
+};
+
+const std::array<Knob::Spec, 7> kEnvelopeSpecs {
     Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds},
     Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds},
     Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent},
     Knob::Spec {"release", "REL", "Release time", 0.05f, seconds},
+    Knob::Spec {"atkcurve", "ATK CRV", "Attack curve, exponential to logarithmic", 0.0f,
+                curveText},
+    Knob::Spec {"deccurve", "DEC CRV", "Decay curve, exponential to logarithmic", 0.0f,
+                curveText},
+    Knob::Spec {"relcurve", "REL CRV", "Release curve, exponential to logarithmic", 0.0f,
+                curveText},
 };
 
-const std::array<Knob::Spec, 6> kFilterSpecs {
+const std::array<Knob::Spec, 10> kFilterSpecs {
     Knob::Spec {"f1type", "F1 TYPE", "Filter 1 type", 0.0f, {},
                 {"Low-pass", "High-pass", "Band-pass", "Notch"}},
     Knob::Spec {"f1cutoff", "F1 CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText},
     Knob::Spec {"f1q", "F1 Q", "Filter 1 resonance", 0.7071f,
                 [](float v) { return juce::String {v, 2}; }},
+    // F020: caracter analogico. O slope e' a inclinacao; o drive satura antes
+    // do filtro; o keytrack segue a nota e o env abre com o envelope.
+    Knob::Spec {"f1slope", "F1 SLOPE", "Filter 1 slope", 0.0f, {}, {"12 dB", "24 dB"}},
+    Knob::Spec {"f1drive", "F1 DRIVE", "Filter 1 drive, in decibels", 0.0f,
+                [](float v) { return juce::String {v, 1} + " dB"; }},
+    Knob::Spec {"f1keytrack", "F1 KEY", "Filter 1 key tracking", 0.0f, percent},
+    Knob::Spec {"f1env", "F1 ENV", "Filter 1 envelope amount", 0.0f,
+                [](float v) {
+                    const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
+                    return juce::String {pct} + " %";
+                }},
     Knob::Spec {"f2type", "F2 TYPE", "Filter 2 type", 0.0f, {},
                 {"Low-pass", "High-pass", "Band-pass", "Notch"}},
     Knob::Spec {"f2cutoff", "F2 CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText},
@@ -115,7 +143,7 @@ const std::array<Knob::Spec, 6> kFilterSpecs {
                 [](float v) { return juce::String {v, 2}; }},
 };
 
-const std::array<Knob::Spec, 4> kModSpecs {
+const std::array<Knob::Spec, 7> kModSpecs {
     Knob::Spec {"lforate", "RATE", "LFO rate, in hertz", 1.0f,
                 [](float v) { return juce::String {v, 2} + " Hz"; }},
     Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent},
@@ -123,6 +151,27 @@ const std::array<Knob::Spec, 4> kModSpecs {
                 {"Pitch", "Density", "Cutoff", "Position"}},
     Knob::Spec {"lfowave", "WAVE", "LFO waveform", 0.0f, {},
                 {"Sine", "Tri", "Saw", "Square", "S&H"}},
+    // F019: em Sync o RATE deixa de mandar e a divisao passa a mandar. Os dois
+    // ficam visiveis no mesmo modulo porque sao a mesma pergunta ("a que
+    // velocidade"), respondida em duas unidades.
+    Knob::Spec {"lfosync", "SYNC", "LFO follows the host tempo", 0.0f, {},
+                {"Free", "Sync"}},
+    Knob::Spec {"lfodiv", "DIV", "LFO division when synced", 0.0f, {},
+                {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4.", "1/8.",
+                 "1/4T", "1/8T", "1/16T"}},
+    Knob::Spec {"lfosteps", "STEPS", "LFO steps per cycle", 16.0f,
+                [](float v) { return juce::String {static_cast<int>(v + 0.5f)}; }},
+};
+
+// F021: a nuvem e' o mesmo motor com tres graus de liberdade no nascimento do
+// grao. Ficam num modulo proprio para o GRAIN nao passar de dez celulas a 480
+// px — a partir dai o knob encolhe abaixo do que o dedo acerta.
+const std::array<Knob::Spec, 3> kCloudSpecs {
+    Knob::Spec {"cloudsize", "WIDTH", "Temporal width of the grain cloud", 0.0f,
+                [](float v) { return asInteger(v * 500.0f) + " ms"; }},
+    Knob::Spec {"pitchspread", "SPREAD", "Pitch spread across the cloud, in semitones", 0.0f,
+                [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {"grainjit", "JITTER", "Grain duration jitter", 0.0f, percent},
 };
 
 const std::array<Knob::Spec, 1> kOutSpecs {
@@ -131,6 +180,19 @@ const std::array<Knob::Spec, 1> kOutSpecs {
                     return v <= -60.0f ? juce::String {"-inf"}
                                        : juce::String {v, 1} + " dB";
                 }},
+};
+
+// F018: teclado e afinacao. A nota MIDI vira transposicao ja quantizada pela
+// escala; o glide interpola entre notas. Sao tres parametros novos e nenhum
+// dos 25 antigos mudou de sitio.
+const std::array<Knob::Spec, 3> kKeysSpecs {
+    Knob::Spec {"scale", "SCALE", "Scale applied to incoming notes", 0.0f, {},
+                {"Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Dorian",
+                 "Phrygian", "Lydian", "Mixolydian", "Pentatonic Major",
+                 "Pentatonic Minor", "Blues", "Whole Tone"}},
+    Knob::Spec {"root", "ROOT", "Scale root note", 0.0f, {},
+                {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}},
+    Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
 };
 
 } // namespace
@@ -146,7 +208,8 @@ void setIfChanged(juce::Label& label, const juce::String& text) {
 
 PluginEditor::PluginEditor(PluginProcessor& processor)
     : juce::AudioProcessorEditor(&processor),
-      owner_(processor) {
+      owner_(processor),
+      keyboard_(keyboardState_, juce::MidiKeyboardComponent::horizontalKeyboard) {
     setLookAndFeel(&lookAndFeel_);
 
     makePlainLabel(title_, "Opcoda", palette::textDark, fonts().sans(13.0f, true));
@@ -170,6 +233,7 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     buildViewButtons();
     buildPresetSelector();
     buildParameterPanel();
+    buildKeyboard();
 
     // A sujeira do preset chega por Listener da arvore: qualquer PARAM que mexa
     // fora de uma aplicacao de preset marca. O desenho do "*" mora no refresh,
@@ -196,6 +260,11 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
 }
 
 PluginEditor::~PluginEditor() {
+    // Primeiro os note-off, com o listener ainda ligado, senao fechar a janela
+    // com uma tecla premida deixava a nota presa no motor ate ao proximo pânico.
+    // allNotesOff corre na thread de interface e o listener empurra para a fila.
+    keyboardState_.allNotesOff(1);
+    keyboardState_.removeListener(this);
     owner_.parameters().state.removeListener(this);
 }
 
@@ -602,7 +671,7 @@ void PluginEditor::pushTransportAnchor() {
 
 void PluginEditor::buildParameterPanel() {
     // Ordem de construcao e' ordem de modulo: GRAIN, ENVELOPE, FILTER, MOD,
-    // OUT. moduleFirstKnob_/moduleKnobCount_ guardam as fatias para a aba
+    // OUT, KEYS. moduleFirstKnob_/moduleKnobCount_ guardam as fatias para a aba
     // mostrar sem procurar por ID.
     const auto addSpecs = [this](const auto& specs) {
         moduleFirstKnob_.push_back(knobs_.size());
@@ -616,7 +685,9 @@ void PluginEditor::buildParameterPanel() {
     addSpecs(kEnvelopeSpecs);
     addSpecs(kFilterSpecs);
     addSpecs(kModSpecs);
+    addSpecs(kCloudSpecs);
     addSpecs(kOutSpecs);
+    addSpecs(kKeysSpecs);
 
     buildModuleTabs();
     showModule(activeModule_);
@@ -624,8 +695,8 @@ void PluginEditor::buildParameterPanel() {
 
 void PluginEditor::buildModuleTabs() {
     // Mesma lingua das abas de vista: palavra sem cromo, ativa em peso forte
-    // com filete. Cinco abas curtas cabem a 480 sem regra de colapso — GRAIN e'
-    // a mais larga e a soma nao chega a 300 px.
+    // com filete. Seis abas curtas cabem a 480 (52 px cada mais 4 de vao dao
+    // 332 px); GRAIN continua a ser a mais larga.
     const auto setup = [this](juce::TextButton& button, const char* title,
                               const char* spokenName, ParamModule module) {
         button.setButtonText(title);
@@ -642,7 +713,9 @@ void PluginEditor::buildModuleTabs() {
     setup(moduleEnvelopeButton_, "ENV", "Envelope module", ParamModule::envelope);
     setup(moduleFilterButton_, "FILTER", "Filter module", ParamModule::filter);
     setup(moduleModButton_, "MOD", "Modulation module", ParamModule::mod);
+    setup(moduleCloudButton_, "CLOUD", "Grain cloud module", ParamModule::cloud);
     setup(moduleOutButton_, "OUT", "Output module", ParamModule::out);
+    setup(moduleKeysButton_, "KEYS", "Keyboard and tuning module", ParamModule::keys);
 }
 
 void PluginEditor::updateModuleTabs() {
@@ -656,7 +729,9 @@ void PluginEditor::updateModuleTabs() {
     mark(moduleEnvelopeButton_, ParamModule::envelope);
     mark(moduleFilterButton_, ParamModule::filter);
     mark(moduleModButton_, ParamModule::mod);
+    mark(moduleCloudButton_, ParamModule::cloud);
     mark(moduleOutButton_, ParamModule::out);
+    mark(moduleKeysButton_, ParamModule::keys);
 }
 
 void PluginEditor::showModule(ParamModule module) {
@@ -668,6 +743,44 @@ void PluginEditor::showModule(ParamModule module) {
     }
     updateModuleTabs();
     resized();
+}
+
+void PluginEditor::buildKeyboard() {
+    // Teclado horizontal com o mapa de teclas do JUCE por omissao
+    // (A W S E D F T G Y H U J K ...), que e' exatamente o que o spec da F018
+    // pede. O componente ja trata do rato, do foco por Tab e do desenho da tecla
+    // premida; o que falta e' alguem escutar o estado e mandar a nota ao motor.
+    keyboard_.setAvailableRange(36, 96);
+    keyboard_.setLowestVisibleKey(48);
+    keyboard_.setKeyWidth(24.0f);
+    keyboard_.setName("Virtual keyboard: play with the mouse or the computer keys "
+                      "A W S E D F T G Y H U J K");
+    keyboard_.setWantsKeyboardFocus(true);
+
+    keyboard_.setColour(juce::MidiKeyboardComponent::whiteNoteColourId,
+                        palette::textDark.withAlpha(0.92f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::blackNoteColourId, palette::chassisDark);
+    keyboard_.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId, palette::chassisBorder);
+    keyboard_.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId,
+                        palette::accent.withAlpha(0.22f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId,
+                        palette::accent.withAlpha(0.72f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::textLabelColourId, palette::chassisDark);
+    keyboard_.setColour(juce::MidiKeyboardComponent::shadowColourId,
+                        juce::Colours::black.withAlpha(0.35f));
+
+    addAndMakeVisible(keyboard_);
+    keyboardState_.addListener(this);
+}
+
+// Duas linhas e nao uma tabela: o listener do JUCE tem duas entradas, e passar
+// um booleano por dentro obrigaria a uma terceira funcao so para isso.
+void PluginEditor::handleNoteOn(juce::MidiKeyboardState*, int, int midiNoteNumber, float velocity) {
+    owner_.pushKeyboardNote(midiNoteNumber, velocity, true);
+}
+
+void PluginEditor::handleNoteOff(juce::MidiKeyboardState*, int, int midiNoteNumber, float velocity) {
+    owner_.pushKeyboardNote(midiNoteNumber, velocity, false);
 }
 
 void PluginEditor::paint(juce::Graphics& g) {
@@ -694,6 +807,12 @@ void PluginEditor::paint(juce::Graphics& g) {
 
 void PluginEditor::resized() {
     auto area = getLocalBounds();
+
+    // A faixa do teclado e' retirada da base antes de tudo o resto: a partir
+    // daqui nenhuma outra peca pode crescer para cima dela. O que ela custa sai
+    // da metade do display, e nao do painel de knobs — a 540 de altura o painel
+    // fica igual e so no minimo de 434 o mostrador encolhe uns pixels.
+    keyboard_.setBounds(area.removeFromBottom(kKeyboardHeight).reduced(10, 4));
 
     // ---- header ----
     // Cursor explicito em vez de encadear removeFromLeft: aquele metodo devolve
@@ -795,7 +914,7 @@ void PluginEditor::resized() {
 
 // ---- display ----
     const auto displayHeight =
-        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2);
+        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2 - kKeyboardHeight);
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
@@ -1013,8 +1132,8 @@ constexpr int kLedBoxWidth {12};
     //
     // Uma fileira propria entre a vista e os knobs, e nao titulo de modulo: o
     // titulo antigo ("1 - GRANULAR ENGINE") nomeava uma seccao unica, e agora
-    // sao cinco. Mesma altura e lingua das abas de vista; cinco palavras curtas
-    // cabem a 480 sem colapso.
+    // sao sete. Mesma altura e lingua das abas de vista; sete palavras curtas
+    // cabem a 480 sem colapso (7 x 52 + 6 x 4 = 388 px).
     {
         constexpr int kModuleButtonWidth {52};
         constexpr int kModuleButtonHeight {22};
@@ -1023,7 +1142,8 @@ constexpr int kLedBoxWidth {12};
 
         juce::TextButton* buttons[] = {
             &moduleGrainButton_, &moduleEnvelopeButton_, &moduleFilterButton_,
-            &moduleModButton_, &moduleOutButton_,
+            &moduleModButton_, &moduleCloudButton_, &moduleOutButton_,
+            &moduleKeysButton_,
         };
         int tabX = moduleRow.getX();
         for (auto* button : buttons) {
@@ -1090,6 +1210,14 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
 
     // Letras e digitos nao tem codigo no JUCE; ver isTypedCharacter em
     // byte_display.h.
+    if (isTypedCharacter(key, 'K')) {
+        // Atalho para o foco do teclado. Com o foco no teclado quem consome o 'K'
+        // e' o proprio componente, que o toca como nota — por isso o atalho nunca
+        // rouba a nota a quem esta' a tocar.
+        keyboard_.grabKeyboardFocus();
+        return true;
+    }
+
     if (isTypedCharacter(key, 'A')) {
         static_cast<void>(owner_.snapByteRangeToSection());
         return true;

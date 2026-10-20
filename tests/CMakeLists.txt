@@ -34,6 +34,10 @@ add_executable(opcoda_tests
     adsr_test.cpp
     filter_test.cpp
     lfo_test.cpp
+    scale_test.cpp
+    character_test.cpp
+    mod_matrix_test.cpp
+    cloud_test.cpp
     factory_presets_test.cpp
     grain_trail_test.cpp
     pe_mutation_test.cpp)

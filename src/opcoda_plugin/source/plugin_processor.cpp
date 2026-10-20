@@ -22,12 +22,101 @@ PluginProcessor::PluginProcessor()
     // esperando um sinal que o plugin nunca usa, e obrigaria o host a tratar o
     // Opcoda como efeito em vez de instrumento.
 : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters_(*this, nullptr, "Opcoda", createParameterLayout()) {}
+      parameters_(*this, nullptr, "Opcoda", createParameterLayout()) {
+    // F020: a matriz nasce no estado, ao lado dos PARAM, e nao na tabela: o host
+    // nao a ve como parametro, nao a automatiza, e ela viaja no preset e no
+    // .opcoda porque o XML e' o mesmo.
+    ensureModMatrixNode();
+    publishModMatrix();
+    // A tabela publica fecha em 41. A matriz nao entra aqui: se alguem
+    // transformar uma rota em parametro, o host passa a automatiza-la e este
+    // assert — em Debug — e' o aviso.
+    jassert(getParameters().size() == 41);
+}
+
+void PluginProcessor::ensureModMatrixNode() {
+    if (parameters_.state.getChildWithName(kModMatrixNode).isValid()) {
+        return;
+    }
+    juce::ValueTree node {kModMatrixNode};
+    for (int i = 0; i < dsp::kMaxModRoutes; ++i) {
+        juce::ValueTree route {"ROUTE"};
+        route.setProperty("source", 0, nullptr);
+        route.setProperty("dest", 0, nullptr);
+        route.setProperty("amount", 0, nullptr);
+        node.appendChild(route, nullptr);
+    }
+    parameters_.state.appendChild(node, nullptr);
+}
+
+dsp::ModMatrix PluginProcessor::modMatrix() const {
+    dsp::ModMatrixArray words {};
+    const auto node = parameters_.state.getChildWithName(kModMatrixNode);
+    const int count = juce::jmin(node.getNumChildren(), dsp::kMaxModRoutes);
+    for (int i = 0; i < count; ++i) {
+        const auto child = node.getChild(i);
+        const auto base = static_cast<std::size_t>(i * dsp::kModRouteWords);
+        words[base] = static_cast<int>(child.getProperty("source"));
+        words[base + 1] = static_cast<int>(child.getProperty("dest"));
+        words[base + 2] = static_cast<int>(child.getProperty("amount"));
+    }
+    return dsp::fromArray(words);
+}
+
+bool PluginProcessor::setModRoute(int index, dsp::ModRoute route) {
+    if (index < 0 || index >= dsp::kMaxModRoutes) {
+        return false;
+    }
+    ensureModMatrixNode();
+    const auto node = parameters_.state.getChildWithName(kModMatrixNode);
+    if (!node.isValid() || index >= node.getNumChildren()) {
+        return false;
+    }
+    auto child = node.getChild(index);
+    child.setProperty("source", static_cast<int>(route.source), nullptr);
+    child.setProperty("dest", static_cast<int>(route.destination), nullptr);
+    child.setProperty("amount",
+                      static_cast<int>(std::lround(dsp::sanitizeModAmount(route.amount) * 1000.0f)),
+                      nullptr);
+    publishModMatrix();
+    return true;
+}
+
+void PluginProcessor::publishModMatrix() {
+    const auto words = dsp::toArray(modMatrix());
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        modMatrixWords_[i].store(words[i], std::memory_order_relaxed);
+    }
+    // Release depois das palavras: quem ve' a geracao nova ve' as palavras
+    // novas, e um bloco que apanhe a troca fica com a matriz antiga inteira em
+    // vez de metade de cada.
+    modMatrixGeneration_.fetch_add(1, std::memory_order_release);
+}
+
+void PluginProcessor::refreshModMatrix() noexcept {
+    const auto generation = modMatrixGeneration_.load(std::memory_order_acquire);
+    if (generation == modMatrixAppliedGeneration_) {
+        return;
+    }
+    dsp::ModMatrixArray words {};
+    for (std::size_t i = 0; i < words.size(); ++i) {
+        words[i] = modMatrixWords_[i].load(std::memory_order_relaxed);
+    }
+    modMatrixSnapshot_ = dsp::fromArray(words);
+    modMatrixAppliedGeneration_ = generation;
+}
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout() {
     const auto range = [](const char* id, const char* name, float lo, float hi, float def) {
         return std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID {id, 1}, juce::String {name}, juce::NormalisableRange<float> {lo, hi}, def);
+    };
+    // Parametro inteiro com passo 1. O degrau do LFO e' uma contagem (1..16), e
+    // um float continuo dava 3,7 degraus — o motor arredondaria e a automacao
+    // mostraria valores que nao existem.
+    const auto intRange = [](const char* id, const char* name, int lo, int hi, int def) {
+        return std::make_unique<juce::AudioParameterInt>(
+            juce::ParameterID {id, 1}, juce::String {name}, lo, hi, def);
     };
     // Corte em Hz com centro em 1 kHz: linear de 20 a 20000 punha a oitava
     // 40..80 Hz nos primeiros 2 graus do knob e o resto era passeio. O skew so
@@ -56,14 +145,32 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("pan", "Pan", -1.0f, 1.0f, 0.0f),
         range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
         range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
+        // F021: a nuvem. Zero em todos devolve o motor anterior, amostra a
+        // amostra — o espalhamento, a dispersao de afinacao e o jitter so
+        // entram quando o knob sai do zero.
+        range("cloudsize", "Cloud Size", 0.0f, 1.0f, 0.0f),
+        range("pitchspread", "Pitch Spread", 0.0f, 24.0f, 0.0f),
+        range("grainjit", "Grain Jitter", 0.0f, 1.0f, 0.0f),
         range("scanspeed", "Scan Speed", 0.25f, 4.0f, 1.0f),
         range("attack", "Attack", 0.001f, 2.0f, 0.005f),
         range("decay", "Decay", 0.001f, 2.0f, 0.1f),
         range("sustain", "Sustain", 0.0f, 1.0f, 1.0f),
         range("release", "Release", 0.001f, 2.0f, 0.05f),
+        // F020: curvas por estagio. -1 exponencial, 0 linear, +1 logaritmica —
+        // a forma e' phase^(2^(-3*curva)), documentada em dsp/curve.h.
+        range("atkcurve", "Attack Curve", -1.0f, 1.0f, 0.0f),
+        range("deccurve", "Decay Curve", -1.0f, 1.0f, 0.0f),
+        range("relcurve", "Release Curve", -1.0f, 1.0f, 0.0f),
         choice("f1type", "Filter 1 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
         logCutoff("f1cutoff", "Filter 1 Cutoff", 20000.0f),
         range("f1q", "Filter 1 Q", 0.5f, 12.0f, 0.7071f),
+        // F020: caracter analogico do filtro 1. O drive em dB, o keytrack em
+        // profundidade 0..1 (1 = uma oitava de corte por oitava de nota) e o
+        // envelope com sinal, ate' 5 oitavas para cada lado.
+        choice("f1slope", "Filter 1 Slope", {"12 dB", "24 dB"}, 0),
+        range("f1drive", "Filter 1 Drive", 0.0f, 24.0f, 0.0f),
+        range("f1keytrack", "Filter 1 Keytrack", 0.0f, 1.0f, 0.0f),
+        range("f1env", "Filter 1 Env", -1.0f, 1.0f, 0.0f),
         choice("f2type", "Filter 2 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
         logCutoff("f2cutoff", "Filter 2 Cutoff", 20000.0f),
         range("f2q", "Filter 2 Q", 0.5f, 12.0f, 0.7071f),
@@ -71,6 +178,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("lfodepth", "LFO Depth", 0.0f, 1.0f, 0.0f),
         choice("lfotarget", "LFO Target", {"Pitch", "Density", "Cutoff", "Position"}, 0),
         choice("lfowave", "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"}, 0),
+        // F018: teclado e escala. Os IDs nascem em ingles, como os 16 da emenda.
+        choice("scale", "Scale", {"Chromatic", "Major", "Natural Minor", "Harmonic Minor",
+                                  "Dorian", "Phrygian", "Lydian", "Mixolydian",
+                                  "Pentatonic Major", "Pentatonic Minor", "Blues",
+                                  "Whole Tone"}, 0),
+        choice("root", "Root", {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 0),
+        range("glide", "Glide", 0.0f, 2.0f, 0.0f),
+        choice("lfosync", "LFO Sync", {"Free", "Sync"}, 0),
+        choice("lfodiv", "LFO Div", {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64",
+                                     "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"}, 2),
+        intRange("lfosteps", "LFO Steps", 1, 16, 16),
     };
 }
 
@@ -100,13 +218,23 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.pan = value("pan");
     params.grainLevel = value("grainlevel");
     params.pitchRandomSemitones = value("pitchrand");
+    params.cloudSize = value("cloudsize");
+    params.pitchSpreadSemitones = value("pitchspread");
+    params.grainJitter = value("grainjit");
     params.attackSeconds = value("attack");
     params.decaySeconds = value("decay");
     params.sustainLevel = value("sustain");
     params.releaseSeconds = value("release");
+    params.attackCurve = value("atkcurve");
+    params.decayCurve = value("deccurve");
+    params.releaseCurve = value("relcurve");
     params.f1type = dsp::sanitizeFilterType(static_cast<dsp::FilterType>(choiceIndex("f1type")));
     params.f1cutoffHz = value("f1cutoff");
     params.f1q = value("f1q");
+    params.f1Slope = (choiceIndex("f1slope") == 1) ? 1 : 0;
+    params.f1DriveDb = value("f1drive");
+    params.f1Keytrack = value("f1keytrack");
+    params.f1Env = value("f1env");
     params.f2type = dsp::sanitizeFilterType(static_cast<dsp::FilterType>(choiceIndex("f2type")));
     params.f2cutoffHz = value("f2cutoff");
     params.f2q = value("f2q");
@@ -114,6 +242,33 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.lfodepth = value("lfodepth");
     params.lfotarget = dsp::sanitizeLFOTarget(static_cast<dsp::LFOTarget>(choiceIndex("lfotarget")));
     params.lfowave = dsp::sanitizeLFOWave(static_cast<dsp::LFOWave>(choiceIndex("lfowave")));
+
+    // F018: a nota da pilha mono vira transposicao no motor. O indice da escala
+    // e' saneado aqui, como os outros choices: estado corrompido tem de soar.
+    params.noteNumber = notes_.activeNote();
+    const int scaleIndex = choiceIndex("scale");
+    params.scale = (scaleIndex >= 0 && scaleIndex < dsp::kScaleCount)
+                       ? static_cast<dsp::ScaleType>(scaleIndex)
+                       : dsp::ScaleType::kChromatic;
+    params.scaleRoot = dsp::wrap12(choiceIndex("root"));
+    params.glideSeconds = value("glide");
+
+    // F019: modo, divisao, degraus e o tempo do host. Em Sync o motor deriva a
+    // fase do ppq; em Free ignora os dois doubles e usa lforateHz.
+    params.lfoSync = choiceIndex("lfosync") == 1;
+    params.lfoDiv = dsp::sanitizeLFODiv(choiceIndex("lfodiv"));
+    params.lfoSteps = dsp::sanitizeLFOSteps(static_cast<int>(value("lfosteps") + 0.5f));
+    params.hostBpm = hostBpm_.load(std::memory_order_relaxed);
+    params.hostPpq = hostPpq_.load(std::memory_order_relaxed);
+
+    // F020: fontes que o motor nao pode medir sozinho. A matriz vem do
+    // snapshot publicado pela thread de interface; a velocidade e os CCs saem
+    // do NoteTracker, que ja corre na thread de audio.
+    params.velocity = notes_.velocity();
+    params.modWheel = notes_.controller(kModWheelController);
+    params.cc74 = notes_.controller(kDensityController);
+    params.cc71 = notes_.controller(kPositionController);
+    params.modMatrix = modMatrixSnapshot_;
     return params;
 }
 
@@ -411,6 +566,41 @@ void PluginProcessor::releaseReturnedBuffers() {
     }
 }
 
+void PluginProcessor::pushKeyboardNote(int noteNumber, float velocity, bool on) noexcept {
+    const int value = juce::jlimit(0, 127, static_cast<int>(velocity * 127.0f + 0.5f));
+    // push devolve false com a fila cheia; perder uma tecla e' preferivel a
+    // bloquear a thread de interface ou a alocar.
+    static_cast<void>(keyboardNotes_.push({on ? rt::NoteTracker::Event::Kind::noteOn
+                                              : rt::NoteTracker::Event::Kind::noteOff,
+                                           noteNumber & 0x7F, value}));
+}
+
+void PluginProcessor::updateHostTransport() noexcept {
+    double bpm = 120.0;
+    double ppq = -1.0;
+    if (auto* head = getPlayHead()) {
+        if (const auto position = head->getPosition()) {
+            if (const auto hostBpm = position->getBpm()) {
+                if (*hostBpm > 0.0) {
+                    bpm = *hostBpm;
+                }
+            }
+            if (const auto hostPpq = position->getPpqPosition()) {
+                ppq = *hostPpq;
+            }
+        }
+    }
+    hostBpm_.store(bpm, std::memory_order_relaxed);
+    hostPpq_.store(ppq, std::memory_order_relaxed);
+}
+
+void PluginProcessor::drainKeyboardNotes() noexcept {
+    rt::NoteTracker::Event event {};
+    while (keyboardNotes_.pop(event)) {
+        notes_.handle(event);
+    }
+}
+
 void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
     if (midi.isEmpty()) {
         return;
@@ -428,7 +618,8 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
         } else if (message.getControllerNumber() == kCcSustain) {
             kind = rt::NoteTracker::Event::Kind::sustain;
         } else if (message.getControllerNumber() == kCcDensity
-                   || message.getControllerNumber() == kCcPosition) {
+                   || message.getControllerNumber() == kCcPosition
+                   || message.getControllerNumber() == kCcModWheel) {
             kind = rt::NoteTracker::Event::Kind::controller;
         } else if (message.isNoteOn()) {
             kind = rt::NoteTracker::Event::Kind::noteOn;
@@ -436,13 +627,22 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
             kind = rt::NoteTracker::Event::Kind::noteOff;
         }
 
+        // A roda de modulacao (CC1) nao move nenhum parametro: e' fonte da
+        // matriz, e so' modula onde uma rota a ligar. CC74 e CC71 continuam a
+        // ter o mapeamento directo que tinham, e servem de fonte tambem.
+        const float normalised = message.getControllerValue() / 127.0f;
         if (message.getControllerNumber() == kCcDensity) {
-            notes_.setController(kDensityController, message.getControllerValue() / 127.0f);
+            notes_.setController(kDensityController, normalised);
         } else if (message.getControllerNumber() == kCcPosition) {
-            notes_.setController(kPositionController, message.getControllerValue() / 127.0f);
+            notes_.setController(kPositionController, normalised);
+        } else if (message.getControllerNumber() == kCcModWheel) {
+            notes_.setController(kModWheelController, normalised);
         }
 
-        notes_.handle({kind, message.getControllerNumber(), message.getControllerValue()});
+        // O numero tem de ser o da nota: getControllerNumber() devolve 0 numa
+        // mensagem de nota, e passar aquele valor aqui punha todas as notas em 0
+        // (quatro oitavas abaixo) sem que nada falhasse.
+        notes_.handle({kind, message.getNoteNumber(), message.getControllerValue()});
     }
 }
 
@@ -469,6 +669,11 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // acontece por troca de ponteiro, sem alocar e sem esperar.
     drainIncomingQueue();
     readNotes(midi);
+    drainKeyboardNotes();
+    updateHostTransport();
+    // Sem isto o snapshot da matriz so mudava quando a interface tocasse no
+    // motor, e o preset carregado ficaria a soar com as rotas anteriores.
+    refreshModMatrix();
 
 const auto numSamples = buffer.getNumSamples();
 
@@ -604,6 +809,12 @@ bool PluginProcessor::loadStateXml(const juce::XmlElement& xml) {
     }
 
     parameters_.replaceState(juce::ValueTree::fromXml(xml));
+
+    // replaceState copia filhos: um estado antigo, sem MODMATRIX, apagaria o no.
+    // Recriar aqui mantem o estado sempre completo, e republicar garante que a
+    // matriz que vai soar e' a que veio no ficheiro (ou vazia, se nao veio).
+    ensureModMatrixNode();
+    publishModMatrix();
 
 // O arquivo e' reingestado pela mesma via de ingest do arrasto: ler disco,
     // converter e publicar na fila. Nao ha caminho paralelo, e' o mesmo codigo

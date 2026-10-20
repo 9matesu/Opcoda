@@ -199,7 +199,7 @@ Cada arquivo tem uma responsabilidade só:
 | `byte_display.h/.cpp` | as três vistas do material, a caret e a animação |
 | `hex_grid.h/.cpp` | a vista de bytes: endereços, 16 colunas e coluna ASCII |
 | `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
-| `plugin_editor.h/.cpp` | as três faixas e o layout |
+| `plugin_editor.h/.cpp` | as faixas, o teclado virtual e o layout |
 
 **Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
 `Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
@@ -213,10 +213,20 @@ A geometria dele tem três capturas atrás e um redesenho seria o caminho de per
 três. O `ByteDisplay` é o dono do modo e pinta por cima a cabeça de reprodução, que
 é a única peça que o `HexGrid` não conhece.
 
-O editor tem três faixas: header claro, display escuro, painel de parâmetros. É a
+O editor tem três faixas de conteúdo — header claro, display escuro, painel de
+parâmetros — mais a fileira de abas de módulo e a faixa do teclado ao fundo. É a
 convenção do Ableton, e é também a resposta ao pedido de brilho: halo laranja
 sobre superfície clara dá 2,4:1 e desaparece, então toda a energia de glow fica na
 região escura.
+
+**O teclado virtual não atravessa o `MidiBuffer`.** O `MidiKeyboardComponent`
+escreve num `MidiKeyboardState` que o editor escuta, e o listener empurra um
+`NoteTracker::Event` para uma `SpscRing` de 64 lugares; o callback drena-a antes
+de ler os parâmetros e entrega os eventos à mesma `NoteTracker` do MIDI do host.
+A alternativa canónica do JUCE — `MidiMessageCollector` + `processNextMidiBuffer`
+— faz lock e pode alocar dentro do callback, que é o que o guard de alocação
+proíbe. Com a fila, o caminho de áudio continua sem trava e sem alocação, e a
+nota do teclado e a do host são indistinguíveis para o motor.
 
 **Os knobs são `juce::Slider` de verdade, não desenho customizado.** Isso não é
 padrão, é decisão: `Slider` entrega foco por teclado, ajuste com setas e
@@ -227,9 +237,12 @@ referência do `RangedAudioParameter`, não a da árvore inteira.
 
 O nome accessible de cada knob é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
-seria inútil para quem navega por leitor de tela. Os 25 parâmetros vivem em
-cinco módulos (GRAIN, ENVELOPE, FILTER, MOD, OUT) com uma faixa visível de cada
-vez; os knobs de choice (window, tipos de filtro, alvo e forma do LFO) usam o
+seria inútil para quem navega por leitor de tela. Os **41 parâmetros** vivem em
+sete módulos (GRAIN, ENVELOPE, FILTER, MOD, CLOUD, OUT, KEYS), com uma faixa
+visível de cada vez e páginas dentro do módulo quando os controles não cabem —
+o mínimo de 480×434 não comporta mais linhas; sete abas de 52 px mais 4 de vão
+dão 388 px e cabem nos 480. Os knobs de choice (window, tipos de filtro,
+inclinação do filtro, alvo, forma e sincronismo do LFO, escala e tônica) usam o
 mesmo `SliderParameterAttachment` — o JUCE entrega intervalo 0..N-1 com passo 1
 para `AudioParameterChoice` — e só o texto do valor muda para o rótulo.
 
@@ -403,7 +416,7 @@ cabeça de leitura.
 
 ### Defeito observado que não é desta alteração
 
-**Os seis parâmetros arrancam com valores que não são os defaults declarados.**
+**Alguns parâmetros arrancam com valores que não são os defaults declarados.**
 Na captura de ecrã do Standalone, SIZE a 1 ms, DENSITY a 28.756 /s, POSITION a
 6.8 % — e os valores mudam entre execuções. Foi confirmado em `c8006ae`,
 compilado num worktree separado: os mesmos valores, logo não vem da grelha.
@@ -451,6 +464,13 @@ posição a chegar de um controlador MIDI ligado — o próprio `Opcoda.settings
 nomeia um *Arturia MiniLab mkII* como entrada MIDI —, ou automação do host.
 Não foi reproduzido numa sessão controlada com material, porque a automação do
 diálogo de ficheiro não é fiável o suficiente para servir de teste.
+
+**A reprodução controlada passou a ser possível em 19/10/2026**, com o host
+licenciado: a sessão pode ter automação real, CCs reais e um projeto guardado e
+reaberto, que é precisamente o que faltava para separar as duas hipóteses. A
+hipótese dos CCs testa-se com o mesmo controlador ligado e o mapeamento ativo; a
+do host, com automação escrita no projeto. Se nenhuma reproduzir, o registo de
+quem escreveu os valores continua aberto e o contorno abaixo continua a valer.
 
 **Contorno prático, e é real:** apagar `%APPDATA%\Opcoda\Opcoda.settings` traz
 os defaults de volta. É o que o passo 2 demonstra e o que qualquer pessoa pode
@@ -624,6 +644,98 @@ O custo é a latência do timer, cerca de 50 ms. Em troca o parâmetro continua 
 ser a fonte única da verdade: o host é notificado, o knob segue, e o estado do
 projeto fica certo sem caminho paralelo. Os dois valores fazem parte dos
 `NoteTracker` para poderem ser testados sem JUCE.
+
+### A matriz de modulação não é parâmetro
+
+As oito rotas da F020 vivem no estado (`MODMATRIX`, ao lado dos `PARAM`), e não
+na tabela. A consequência é a que a constitution declara: **o host não as vê,
+não as automatiza, e elas viajam no preset e no `.opcoda`** porque o XML é o
+mesmo. Como parâmetros custariam 24 (8 × fonte/destino/amount) e a tabela
+passaria de 41; o desenho para as tornar automatizáveis está em `docs/19`.
+
+Três caminhos foram considerados para atravessar a fronteira das threads:
+
+1. ler a árvore no callback — proibido: `ValueTree` bloqueia e aloca;
+2. um `SpinLock` com o callback à espera — proibido: o callback pode esperar;
+3. **24 inteiros atómicos mais um contador de geração** — escolhido.
+
+A thread de interface escreve as 24 palavras e só depois sobe a geração
+(`release`). A thread de áudio lê a geração (`acquire`) e, se mudou, copia as
+palavras para um snapshot. Um bloco que apanhe a troca fica com a matriz antiga
+inteira ou a nova inteira, nunca metade de cada, porque a geração só sobe depois
+das palavras. A cópia é de 24 inteiros, sem alocação e sem bloqueio.
+
+`amount` viaja em milésimos, um inteiro. A conversão é `toArray`/`fromArray`, a
+mesma que o ensaio de ida e volta exercita; rota com fonte ou destino inválido é
+lida como rota vazia, e `amount` fora de faixa é recortado — estado corrompido
+abre em silêncio.
+
+A matriz é aplicada a uma **cópia** dos parâmetros por bloco. Sem a cópia, a
+soma das rotas acumulava de bloco para bloco e o corte derivava; com ela, cada
+bloco parte do valor declarado e recebe a soma uma vez.
+
+### O filtro com caráter
+
+O filtro 1 ganhou quatro parâmetros, e cada um tem uma decisão que não é óbvia:
+
+- **slope 24 dB** acrescenta um segundo biquad em série com **estado próprio**.
+  Chamar `process` duas vezes no mesmo biquad não é uma cascata: a segunda
+  chamada reutiliza a memória do estágio e a resposta deixa de ser a de dois
+  filtros idênticos. O `filterA2_` existe por isso.
+- **drive** é `tanh(x·g)/g`, e não `tanh(x·g)/tanh(g)`. A segunda normaliza para
+  escala cheia e levanta 12 dB o material baixo; a primeira garante
+  `|tanh(g·x)/g| ≤ |x|`, e o pico nunca sobe. Em `drive = 0` o caminho é
+  desligado, não saturado: um `tanh` a 0 dB já comprime.
+- **keytrack** e **env** movem o corte em oitavas, antes do `makeBiquadCoeffs`.
+  O envelope é o nível do bloco anterior: o gate fecha no fim do bloco, e usar o
+  valor corrente exigiria recalcular coeficientes por amostra.
+- os coeficientes continuam a ser recalculados **no máximo uma vez por bloco**,
+  e a comparação usa o corte já modulado — comparar o cru recalcularia a cada
+  bloco com o LFO ligado, mesmo parado.
+
+### As curvas do envelope
+
+Com as três curvas a zero, o motor usa o laço antigo, amostra a amostra. Não é
+preguiça: os ensaios do ADSR comparam com `EXPECT_FLOAT_EQ` (4 ULP), e trocar a
+aritmética por `pow` mudaria os últimos bits de todos eles. Com qualquer curva
+não nula, a fase do estágio sobe a `2^(3·curva)`:
+
+| curva | expoente | forma |
+| --- | --- | --- |
+| −1 | 1/8 | sobe depressa, aproxima devagar |
+| 0 | 1 | rampa linear |
+| +1 | 8 | fica baixo, fecha depressa |
+
+O sinal do expoente estava trocado na primeira versão: a frase da spec pedia
+"rápido no início em −1" e a fórmula ao lado dela, `2^(-3·curva)`, dava o
+contrário. Vale a frase, que é a convenção do Serum que a `docs/19` declara, e a
+fórmula passou a `2^(+3·curva)`.
+
+### A nuvem
+
+Três parâmetros, todos aplicados no nascimento do grão, nenhum no caminho
+quente:
+
+- **`cloudsize`** sorteia um atraso uniforme em `[0, 0,5 s]` e o grão ocupa o
+  slot **sem escrever** enquanto espera. O que resta do atraso passa para o
+  bloco seguinte, e o grão começa no meio do bloco quando o atraso acaba ali —
+  não no início do bloco, que seria quantizar a nuvem ao tamanho do bloco.
+- **`pitchspread`** soma um desvio simétrico ao detune antes da razão de
+  semitons.
+- **`grainjit`** sorteia um fator em `[0,5×, 1,5×]` e recorta a 1–100 ms. A
+  janela **não é reconstruída por grão**: a tabela é uma por bloco e os oito
+  slots partilham-na, por isso o índice é escalado por
+  `activeWindowLength / grainLength`. Com jitter 0 esse fator é exatamente 1,0
+  e o índice é o de antes.
+
+**Nenhum dos três sorteia quando está a zero.** Um sorteio a mais mudaria a
+sequência do gerador e a saída com os knobs a zero deixaria de reproduzir a
+anterior — que é o critério de aceite da F021, verificado comparando zeros
+explícitos com os defaults.
+
+A semente continua fixa (`kDefaultSeed`). Semear com o relógio em produção
+daria uma nuvem diferente em cada corrida e quebraria a reprodutibilidade de T1
+e T2; `setSeed()` fica disponível para quem queira variar as tomadas.
 
 ### A lacuna do teste de tempo real
 

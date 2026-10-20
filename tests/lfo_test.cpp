@@ -3,6 +3,7 @@
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/dsp/lfo.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -319,4 +320,107 @@ TEST(LFOEngine, NaNRateAndDepthAreSafe) {
             ASSERT_TRUE(std::isfinite(sample)) << "NaN no direito, bloco " << block;
         }
     }
+}
+
+// ---- F019: LFO no tempo do host -------------------------------------------
+
+TEST(Lfo, SyncedEighthAt120BpmIsFourHertz) {
+    // 1/8 = 2 ciclos por batida; a 120 BPM a batida dura 0,5 s -> 4 Hz.
+    EXPECT_NEAR(opcoda::dsp::syncedRateHz(3, 120.0), 4.0, 1e-3);
+}
+
+TEST(Lfo, SyncedEighthAt140BpmIsFourPointSixSixSevenHertz) {
+    EXPECT_NEAR(opcoda::dsp::syncedRateHz(3, 140.0), 4.6667, 1e-3);
+}
+
+TEST(Lfo, DottedIsThreeHalves) {
+    // O comprimento da pontuada e' 1,5x o da base, portanto os ciclos por
+    // batida sao 2/3 � e a razao entre eles da' os 1,5 prometidos.
+    const double base = opcoda::dsp::cyclesPerBeat(3);      // 1/8
+    const double dotted = opcoda::dsp::cyclesPerBeat(8);    // 1/8 pontuada
+    EXPECT_NEAR(base / dotted, 1.5, 1e-9);
+}
+
+TEST(Lfo, TripletIsTwoThirds) {
+    const double base = opcoda::dsp::cyclesPerBeat(3);     // 1/8
+    const double triplet = opcoda::dsp::cyclesPerBeat(10); // 1/8 tercina
+    EXPECT_NEAR(base / triplet, 2.0 / 3.0, 1e-9);
+}
+
+TEST(Lfo, StepsQuantizesIntoFlatPlateaus) {
+    // A serra torna os patamares exatos: com 4 degraus as fases amostradas sao
+    // 0, 1/4, 1/2, 3/4 e a serra devolve -1, -0.5, 0, 0.5. Quatro valores, e a
+    // repeticao de qualquer um deles seria um degrau a mais.
+    LFO lfo;
+    const double rate = 1.0;
+    const int samplesPerCycle = 4800;
+    std::vector<float> values;
+    for (int i = 0; i < samplesPerCycle; ++i) {
+        values.push_back(lfo.valueAt(LFOWave::kSaw, static_cast<float>(rate), i,
+                                     static_cast<double>(samplesPerCycle), 4));
+    }
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    EXPECT_EQ(values.size(), 4U);
+}
+
+TEST(Lfo, SyncWithoutTransportUsesFallbackBpm) {
+    // BPM zero e NaN caem para 120: o LFO continua a oscilar em vez de parar.
+    EXPECT_NEAR(opcoda::dsp::syncedRateHz(3, 0.0), 4.0, 1e-9);
+    EXPECT_NEAR(opcoda::dsp::syncedRateHz(3, std::numeric_limits<double>::quiet_NaN()),
+                4.0, 1e-9);
+    EXPECT_NEAR(opcoda::dsp::syncedRateHz(3, -90.0), 4.0, 1e-9);
+}
+
+TEST(Lfo, ModeChangeKeepsPhaseContinuous) {
+    // A troca de Free para Sync fixa um offset para a fase nao saltar. O ppq e'
+    // de proposito um numero grande e "fora de tempo": sem o offset, a fase
+    // saltaria para 2*ppq e o teste veria um degrau.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    GranularParams params;
+    params.lforateHz = 1.0f;
+    params.lfodepth = 0.0f;
+    params.lfoSync = false;
+
+    std::vector<float> left(kBlock, 0.0f);
+    std::vector<float> right(kBlock, 0.0f);
+    for (int block = 0; block < 10; ++block) {
+        engine.processBlock(left.data(), right.data(), kBlock, params);
+    }
+    const double before = engine.lfoPhase();
+
+    params.lfoSync = true;
+    params.lfoDiv = 3;       // 1/8 -> 2 ciclos por batida
+    params.hostBpm = 120.0;
+    params.hostPpq = 137.25;
+    engine.processBlock(left.data(), right.data(), kBlock, params);
+
+    // Um bloco a 4 Hz: a fase tem de avancar isso e nao saltar para 274,5.
+    const double expected = before + 4.0 * kBlock / kSampleRate;
+    EXPECT_NEAR(engine.lfoPhase(), expected, 1e-9);
+}
+
+TEST(Lfo, SyncFollowsTheHostPosition) {
+    // Com Sync, mexer o transporte reposiciona a fase: e' o comportamento
+    // declarado, e nao um defeito.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    GranularParams params;
+    params.lfoSync = true;
+    params.lfoDiv = 3;
+    params.hostBpm = 120.0;
+    params.hostPpq = 10.0;
+
+    std::vector<float> left(kBlock, 0.0f);
+    std::vector<float> right(kBlock, 0.0f);
+    engine.processBlock(left.data(), right.data(), kBlock, params);
+    const double first = engine.lfoPhase();
+
+    params.hostPpq = 20.0;
+    engine.processBlock(left.data(), right.data(), kBlock, params);
+    // 10 batidas a 2 ciclos por batida sao 20 ciclos de diferenca.
+    EXPECT_NEAR(engine.lfoPhase(), first + 20.0, 1e-9);
 }

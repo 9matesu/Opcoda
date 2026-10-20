@@ -36,4 +36,4 @@ Auditoria WCAG 2.2 nível AA pelo método WCAG-EM. Nos docs, links genéricos fo
 
 ## 5. MVP e validação
 
-Entrega em 03/11: standalone e VST3 x64, arrasto de .exe, 6 parâmetros, MIDI nativo e 8 vozes. Critérios: atenuação de DC de ao menos 40 dB, bloco abaixo de 50% do orçamento, zero segfaults e som em menos de 2 s após o arrasto. CLAP, bateria completa e monografia seguem após a entrega.
+Entrega em 03/11: standalone e VST3 x64, arrasto de .exe, 41 parâmetros, MIDI nativo e 8 grãos simultâneos. Critérios: atenuação de DC de ao menos 40 dB, bloco abaixo de 50% do orçamento, zero segfaults e som em menos de 2 s após o arrasto. CLAP, bateria completa e monografia seguem após a entrega.

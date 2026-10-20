@@ -1,9 +1,12 @@
 #pragma once
 
 #include "opcoda_core/dsp/biquad.h"
+#include "opcoda_core/dsp/curve.h"
 #include "opcoda_core/dsp/dc_blocker.h"
 #include "opcoda_core/dsp/lfo.h"
 #include "opcoda_core/dsp/limiter.h"
+#include "opcoda_core/dsp/mod_matrix.h"
+#include "opcoda_core/dsp/scale.h"
 #include "opcoda_core/dsp/window.h"
 
 #include <algorithm>
@@ -31,6 +34,10 @@ struct GranularParams {
     float decaySeconds {0.1f};
     float sustainLevel {1.0f};
     float releaseSeconds {0.05f};
+    // F020: curvas por estagio, -1..+1, com 0 linear. Ver dsp/curve.h.
+    float attackCurve {0.0f};
+    float decayCurve {0.0f};
+    float releaseCurve {0.0f};
     // Dois filtros em serie por voz. Tipo fora de faixa vira passa-baixa, e nao
     // erro: o tipo chega como indice de choice da UI, e um indice corrompido
     // tem de soar, nao calar. Corte em Hz logaritmico 20..20000 (recortado
@@ -39,6 +46,14 @@ struct GranularParams {
     FilterType f1type {FilterType::kLowPass};
     float f1cutoffHz {20000.0f};
     float f1q {0.7071f};
+    // F020: caracter do filtro 1. 0 = 12 dB/oitava; 1 = 24 dB, com um segundo
+    // biquad identico em serie (estado proprio). O drive satura antes do filtro
+    // e compensa o pico em escala cheia; keytrack move o corte com a nota e
+    // f1env com o envelope, ambos em oitavas.
+    int f1Slope {0};
+    float f1DriveDb {0.0f};
+    float f1Keytrack {0.0f};
+    float f1Env {0.0f};
     FilterType f2type {FilterType::kLowPass};
     float f2cutoffHz {20000.0f};
     float f2q {0.7071f};
@@ -59,6 +74,41 @@ struct GranularParams {
     // razao. Zero desliga sem custo de comportamento: a razao sai identica a de
     // antes, porque o desvio multiplica por zero.
     float pitchRandomSemitones {0.0f};
+    // F021: nuvem. `cloudSize` 0..1 vira uma janela de 0..500 ms em que o
+    // inicio de cada grao cai uniformemente; `pitchSpreadSemitones` dispersa a
+    // afinacao e `grainJitter` a duracao (metade a uma vez e meia, entre 1 e
+    // 100 ms). Zero nos tres devolve o motor anterior amostra a amostra.
+    float cloudSize {0.0f};
+    float pitchSpreadSemitones {0.0f};
+    float grainJitter {0.0f};
+    // F018: nota ativa da pilha mono. Negativo desliga a transposicao por nota;
+    // 60 (Do4) e' a razao 1,0. A escala quantiza a nota antes de virar taxa, e
+    // root e' a tonica em semitons (0 = Do).
+    int noteNumber {-1};
+    ScaleType scale {ScaleType::kChromatic};
+    int scaleRoot {0};
+    // Portamento em segundos, 0 desliga. O tempo e' o da travessia completa,
+    // qualquer que seja o intervalo: 50 ms e' 50 ms de Do4 a Sol4 e de Do4 a Do5.
+    float glideSeconds {0.0f};
+    // F019: LFO no tempo do host. Em Sync a taxa sai de lfoDiv e do BPM, e a
+    // fase e' derivada de hostPpq; em Free continua a ser lforateHz. O nucleo
+    // nao conhece o host: os dois doubles chegam do plugin, uma vez por bloco.
+    // hostPpq < 0 (ou NaN) significa "sem transporte" e cai para 120 BPM.
+    bool lfoSync {false};
+    int lfoDiv {2};
+    int lfoSteps {16};
+    double hostBpm {120.0};
+    double hostPpq {-1.0};
+    // F020: matriz de 8 rotas. Vive no estado do APVTS, e nao na tabela de
+    // parametros: nao e' automatizavel pelo host e viaja no preset. O motor
+    // aplica-a a uma copia dos parametros, uma vez por bloco.
+    ModMatrix modMatrix {};
+    // Fontes que o plugin mede e o motor nao: velocidade da nota, roda de
+    // modulacao e os dois CCs. Normalizadas 0..1 uma vez por bloco.
+    float velocity {1.0f};
+    float modWheel {0.0f};
+    float cc74 {0.0f};
+    float cc71 {0.0f};
 };
 
 struct Grain {
@@ -67,6 +117,11 @@ struct Grain {
     double readStep {};
     int remaining {};
     int windowIndex {};
+    // F021: amostras de espera antes do grao comecar (nuvem temporal) e fator
+    // que mapeia o indice da janela para a tabela quando a duracao foi
+    // sacudida. Com jitter 0 o fator e' exatamente 1,0.
+    int delay {0};
+    double windowScale {1.0};
     int writeIndex {0};
     float gain {};
     float panLeft {};
@@ -308,6 +363,32 @@ public:
     // blocos para produzir audio e tornaria a medicao lenta e fragil.
     [[nodiscard]] float gateLevel() const noexcept { return envelopeLevel_; }
 
+    // Semitons correntes do glide, para o teste medir a travessia sem depender
+    // do agendamento de graos. Em producao ninguem le isto.
+    [[nodiscard]] double glideSemitones() const noexcept { return glideSemitones_; }
+
+    // Corte efectivo do filtro 1 no ultimo calculo de coeficientes (ja com LFO,
+    // keytrack e envelope). Para os ensaios de keytrack; em producao ninguem le.
+    [[nodiscard]] float f1CutoffHz() const noexcept { return lastF1Cutoff_; }
+
+    // F021: o atraso e a dispersao sorteados para o ultimo grao que nasceu. O
+    // ensaio da nuvem mede o que o motor aplicou, e nao o que o gerador devia
+    // ter dado; em producao ninguem le isto.
+    [[nodiscard]] int lastGrainDelaySamples() const noexcept { return lastGrainDelay_; }
+    [[nodiscard]] float lastGrainSpreadSemitones() const noexcept { return lastGrainSpread_; }
+    [[nodiscard]] int lastGrainLengthSamples() const noexcept { return lastGrainLength_; }
+
+    // Semente do gerador. Fixa por omissao, para que a mesma fonte e os mesmos
+    // parametros deem o mesmo som — e' o que torna T1 e T2 reproduziveis. Quem
+    // quiser uma nuvem diferente em cada tomada chama isto com o relogio.
+    static constexpr std::uint64_t kDefaultSeed = 0x9E3779B97F4A7C15ull;
+    void setSeed(std::uint64_t seed) noexcept { seed_ = seed; }
+    [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
+
+    // Fase do LFO, para os ensaios de sincronismo e de continuidade na troca de
+    // modo. So a thread de audio escreve; o teste le entre blocos.
+    [[nodiscard]] double lfoPhase() const noexcept { return lfo_.phase(); }
+
     void processBlock(float* left, float* right, int numSamples,
                       const GranularParams& params) noexcept;
 
@@ -335,6 +416,8 @@ private:
         float depth {0.0f};
         LFOTarget target {LFOTarget::kPitch};
         LFOWave wave {LFOWave::kSine};
+        // 1..16 degraus por ciclo; 16 e' "sem quantizacao".
+        int steps {16};
     };
 
     void rebuildWindow(const GranularParams& params) noexcept;
@@ -345,7 +428,15 @@ private:
                     const LFOSettings& lfo) noexcept;
     void applyGate(float* left, float* right, int numSamples,
                    const GranularParams& params) noexcept;
-
+    // Glide da nota em semitons, uma vez por bloco. Linear no tempo declarado:
+    // a distancia nao muda a duracao, que e' o que o músico espera de um
+    // portamento com tempo.
+    void updateGlide(const GranularParams& params, int numSamples) noexcept;
+    // Matriz de modulacao aplicada a copia dos parametros do bloco. As fontes
+    // saem do proprio params (nota, velocidade, CCs) e do estado do motor (LFO,
+    // envelope, entropia na posicao lida).
+    void applyModMatrix(GranularParams& params, float lfoValue) noexcept;
+    [[nodiscard]] float entropyAtPosition(float position) const noexcept;
 
     double sampleRate_ {44100.0};
 
@@ -362,6 +453,19 @@ private:
 
     double spawnAccumulator_ {0.0};
 
+    // Estado do glide. glideFrom_ e' o ponto de partida da travessia corrente e
+    // glideTarget_ o destino ja saneado; glideRemaining_ conta o tempo que falta.
+    double glideSemitones_ {0.0};
+    double glideFrom_ {0.0};
+    double glideTarget_ {0.0};
+    double glideRemaining_ {0.0};
+
+    // Offset entre a fase livre e a fase derivada do ppq, fixado no instante em
+    // que o Sync liga. Sem ele a troca de modo dava um degrau; com ele o seek do
+    // host continua a saltar, que e' o pretendido.
+    double syncPhaseOffset_ {0.0};
+    bool syncEngaged_ {false};
+
     std::array<float, kMaxEntropyPoints> entropyCurve_ {};
     std::size_t entropyPointCount_ {0};
 
@@ -375,6 +479,11 @@ private:
     // coeficientes, ao contrario, sao iguais para as 8 vozes e calculados uma
     // vez por bloco em processBlock; o cache abaixo decide se recalcula.
     std::array<Biquad, kMaxVoices> filterA_ {};
+    // F020: segundo estagio do filtro 1 quando o slope e' 24 dB. Estado proprio:
+    // chamar process duas vezes no mesmo Biquad nao e' cascata — a segunda
+    // chamada reutiliza a memoria do estagio e a resposta deixa de ser a de
+    // dois filtros identicos em serie.
+    std::array<Biquad, kMaxVoices> filterA2_ {};
     std::array<Biquad, kMaxVoices> filterB_ {};
     BiquadCoeffs coeffsA_ {};
     BiquadCoeffs coeffsB_ {};
@@ -390,6 +499,17 @@ private:
     bool soundingCmd_ {false};
     EnvelopePhase envelopePhase_ {EnvelopePhase::idle};
     float releaseStartLevel_ {0.0f};
+    // F020: fase do estagio corrente (0..1) e nivel de partida do ataque. A
+    // fase existe para a curva ter sobre o que agir; com curva 0 o laco antigo
+    // continua a mandar e estes dois valores so acompanham.
+    float stagePhase_ {0.0f};
+    float attackStartLevel_ {0.0f};
+
+    // F021: semente e o que o ultimo grao recebeu da nuvem (para os ensaios).
+    std::uint64_t seed_ {kDefaultSeed};
+    int lastGrainDelay_ {0};
+    float lastGrainSpread_ {0.0f};
+    int lastGrainLength_ {0};
 
     int lastActiveVoices_ {0};
 

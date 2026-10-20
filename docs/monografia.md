@@ -1,12 +1,12 @@
 ## RESUMO
 
-Este trabalho apresenta o Opcoda, um instrumento que emprega arquivos executáveis do formato Portable Executable como matéria-prima e, simultaneamente, como mecanismo de controle da síntese granular. A proposta parte da identificação de uma lacuna entre dois tratamentos correntes. O databending converte arquivos digitais em áudio por importação de dados brutos e, com isso, reduz o objeto de origem a uma sequência linear de valores, da qual se descarta a organização interna; os sintetizadores granulares convencionais operam sobre amostras previamente preparadas, nas quais a estrutura do arquivo que as originou não é recuperável nem utilizada. Nenhuma das duas abordagens estabelece uma relação verificável entre as propriedades estruturais e estatísticas do arquivo e os parâmetros da síntese. O Opcoda reúne as duas etapas em um instrumento, no qual cada região declarada na tabela de seções do PE constitui fonte granular independente e a entropia de Shannon, calculada sobre janelas de 2048 bytes, é convertida em variável de controle da distribuição dos grãos. A viabilidade dessa integração foi verificada sob as restrições de tempo real do processamento de áudio: a leitura estática e verificada do arquivo, a conversão dos bytes e o condicionamento de sinal ocorrem fora do laço de processamento, e a comunicação com o motor de síntese se dá por fila circular sem trava com ponteiro cru e ordenamento acquire-release. O protótipo foi implementado em C++20 sobre a biblioteca JUCE 8, com núcleo independente de framework de áudio, e gera aplicativo autônomo e plugin no formato VST3 para Windows x64. A suíte de verificação automatizada reúne 196 casos de teste unitário e de integração, mais 8 casos do guard de alocação, que transformam a restrição de tempo real em critério verificável por build. O ensaio espectral confirmou atenuação da componente de corrente contínua acima do critério de 40 dB e energia abaixo de 20 Hz abaixo do critério de -60 dBFS, e os casos de borda do parser foram rejeitados com erro tipado, sem falha de segmentação. A validação dinâmica de latência e o ensaio de aceite com o usuário permanecem bloqueados por ausência de estação de trabalho de áudio licenciada na máquina de desenvolvimento, lacuna declarada e não omitida. O trabalho contribui ao converter propriedades estruturais e estatísticas de um artefato binário em parâmetros de controle de um instrumento musical, com a disciplina de tempo real como requisito de viabilidade e não como contribuição equivalente.
+Este trabalho apresenta o Opcoda, um instrumento que emprega arquivos executáveis do formato Portable Executable como matéria-prima e, simultaneamente, como mecanismo de controle da síntese granular. A proposta parte da identificação de uma lacuna entre dois tratamentos correntes. O databending converte arquivos digitais em áudio por importação de dados brutos e, com isso, reduz o objeto de origem a uma sequência linear de valores, da qual se descarta a organização interna; os sintetizadores granulares convencionais operam sobre amostras previamente preparadas, nas quais a estrutura do arquivo que as originou não é recuperável nem utilizada. Nenhuma das duas abordagens estabelece uma relação verificável entre as propriedades estruturais e estatísticas do arquivo e os parâmetros da síntese. O Opcoda reúne as duas etapas em um instrumento, no qual cada região declarada na tabela de seções do PE constitui fonte granular independente e a entropia de Shannon, calculada sobre janelas de 2048 bytes, é convertida em variável de controle da distribuição dos grãos. A viabilidade dessa integração foi verificada sob as restrições de tempo real do processamento de áudio: a leitura estática e verificada do arquivo, a conversão dos bytes e o condicionamento de sinal ocorrem fora do laço de processamento, e a comunicação com o motor de síntese se dá por fila circular sem trava com ponteiro cru e ordenamento acquire-release. O protótipo foi implementado em C++20 sobre a biblioteca JUCE 8, com núcleo independente de framework de áudio, e gera aplicativo autônomo e plugin no formato VST3 para Windows x64. A suíte de verificação automatizada reúne 289 casos de teste unitário e de integração, mais 8 casos do guard de alocação, que transformam a restrição de tempo real em critério verificável por build. O ensaio espectral confirmou atenuação da componente de corrente contínua acima do critério de 40 dB e energia abaixo de 20 Hz abaixo do critério de -60 dBFS, e os casos de borda do parser foram rejeitados com erro tipado, sem falha de segmentação. A validação dinâmica de latência e o ensaio de aceite com o usuário estão agendados, não bloqueados: a licença da estação de trabalho foi confirmada em 19 de outubro de 2026, e o estudo com produtores está desenhado e aguarda recrutamento. O trabalho contribui ao converter propriedades estruturais e estatísticas de um artefato binário em parâmetros de controle de um instrumento musical, com a disciplina de tempo real como requisito de viabilidade e não como contribuição equivalente.
 
 **Palavras-chave:** Síntese granular. Databending. Formato Portable Executable. Entropia de Shannon. Computação musical. Processamento digital de sinais.
 
 ## ABSTRACT
 
-This work presents Opcoda, an instrument that uses Portable Executable files both as source material and as a control mechanism for granular synthesis. The proposal addresses a gap between two current practices. Databending converts digital files into audio by raw data import, which reduces the source object to a linear sequence of values and discards its internal organization, while conventional granular synthesizers operate on previously prepared audio samples, in which the structure of the originating file is neither recoverable nor used. Neither approach establishes a verifiable relation between the structural and statistical properties of the file and the parameters of the synthesis. Opcoda integrates both stages into a single instrument, in which each region declared in the PE section table constitutes an independent granular source and the Shannon entropy computed over 2048-byte windows is converted into a control variable for grain distribution. The feasibility of this integration was verified under the real-time constraints of audio processing: static and verified file reading, byte conversion, and signal conditioning take place outside the processing callback, and communication with the synthesis engine occurs through a lock-free ring queue carrying a raw pointer with acquire-release ordering. The prototype was implemented in C++20 on top of the JUCE 8 library, with a core independent of any audio framework, and produces a standalone application and a VST3 plug-in for Windows x64. The automated verification suite comprises 196 unit and integration test cases, plus 8 allocation-guard cases that turn the real-time constraint into a build-verifiable criterion. The spectral trial confirmed direct current attenuation above the 40 dB criterion and energy below 20 Hz under the -60 dBFS criterion, and the parser boundary cases were rejected with typed errors and no segmentation fault. Dynamic latency validation and the user acceptance trial remain blocked by the absence of a licensed digital audio workstation on the development machine, a gap that is declared rather than omitted. This work contributes a method for converting structural and statistical properties of a binary artifact into control parameters of a musical instrument, with real-time discipline as a feasibility requirement rather than as an equivalent contribution.
+This work presents Opcoda, an instrument that uses Portable Executable files both as source material and as a control mechanism for granular synthesis. The proposal addresses a gap between two current practices. Databending converts digital files into audio by raw data import, which reduces the source object to a linear sequence of values and discards its internal organization, while conventional granular synthesizers operate on previously prepared audio samples, in which the structure of the originating file is neither recoverable nor used. Neither approach establishes a verifiable relation between the structural and statistical properties of the file and the parameters of the synthesis. Opcoda integrates both stages into a single instrument, in which each region declared in the PE section table constitutes an independent granular source and the Shannon entropy computed over 2048-byte windows is converted into a control variable for grain distribution. The feasibility of this integration was verified under the real-time constraints of audio processing: static and verified file reading, byte conversion, and signal conditioning take place outside the processing callback, and communication with the synthesis engine occurs through a lock-free ring queue carrying a raw pointer with acquire-release ordering. The prototype was implemented in C++20 on top of the JUCE 8 library, with a core independent of any audio framework, and produces a standalone application and a VST3 plug-in for Windows x64. The automated verification suite comprises 289 unit and integration test cases, plus 8 allocation-guard cases that turn the real-time constraint into a build-verifiable criterion. The spectral trial confirmed direct current attenuation above the 40 dB criterion and energy below 20 Hz under the -60 dBFS criterion, and the parser boundary cases were rejected with typed errors and no segmentation fault. Dynamic latency validation and the user acceptance trial are scheduled, not blocked: the licensed workstation was confirmed on 19 October 2026, and the usability study with producers is designed and awaiting recruitment. This work contributes a method for converting structural and statistical properties of a binary artifact into control parameters of a musical instrument, with real-time discipline as a feasibility requirement rather than as an equivalent contribution.
 
 **Keywords:** Granular synthesis. Databending. Portable Executable format. Shannon entropy. Computer music. Digital signal processing.
 
@@ -55,7 +55,7 @@ Estas quatro razões têm naturezas diferentes. As três primeiras são problema
 
 A pergunta que orienta este trabalho é a seguinte: como construir um instrumento em tempo real que leia binários Portable Executable arbitrários com segurança e os converta em material sonoro controlável, por síntese granular guiada por entropia, sem travar ou atrasar o host de áudio?
 
-A hipótese correspondente é que um pipeline com parser isolado, fila sem trava e motor granular com janelamento e filtro de bloqueio de corrente contínua reduz o deslocamento de corrente contínua em pelo menos 40 dB em relação à leitura bruta, mantém o processamento por bloco abaixo de 50% do tempo disponível com oito vozes e registra zero travamentos sob entrada malformada. A hipótese nula é que o tratamento granular e estatístico não produz diferença relevante em relação à leitura bruta direta.
+A hipótese correspondente é que um pipeline com parser isolado, fila sem trava e motor granular com janelamento e filtro de bloqueio de corrente contínua reduz o deslocamento de corrente contínua em pelo menos 40 dB em relação à leitura bruta, mantém o processamento por bloco abaixo de 50% do tempo disponível com oito grãos simultâneos e registra zero travamentos sob entrada malformada. A hipótese nula é que o tratamento granular e estatístico não produz diferença relevante em relação à leitura bruta direta.
 
 A hipótese é deliberadamente mensurável. Cada componente dela corresponde a um ensaio com critério de aceite escrito antes da implementação: a atenuação é medida por análise espectral da saída, a fração de tempo é medida por latência de bloco e a robustez é medida por execução repetida sobre entradas inválidas. A escolha por números verificáveis, em vez de afirmações qualitativas sobre qualidade, é o que distingue um trabalho de engenharia de uma demonstração.
 
@@ -67,7 +67,7 @@ Os objetivos específicos se distribuem em três áreas.
 
 Na área de engenharia de software estão o parser do formato PE, próprio, que valida assinatura MZ, assinatura PE, número de seções e limites de cada seção, e converte bytes em ponto flutuante normalizado; a ingestão somente leitura, que aceita abertura por diálogo e arrasto do sistema operacional, faz cópia defensiva e devolve códigos de erro claros para arquivos truncados, sem propagar exceção através da interface binária do plugin; e a fila sem trava entre interface e processamento de sinais, com troca de amostra por duplo tampão.
 
-Na área de processamento de sinais estão o motor granular polifônico de oito vozes, com tamanho de grão de 1 a 100 ms, densidade, posição, dispersão, afinação e volume, e janelas Hann e gaussiana; o cálculo de entropia de Shannon por janela de 2048 bytes e por seção, usado para controlar a dispersão e a aleatoriedade dos grãos; e a cadeia de condicionamento, com centralização da corrente contínua, filtro de primeira ordem com coeficiente de 0,9983 e limitador de saída com teto de -1 dBFS.
+Na área de processamento de sinais estão o motor granular mono com oito grãos simultâneos, com tamanho de grão de 1 a 100 ms, densidade, posição, dispersão, afinação e volume, e janelas Hann e gaussiana; o cálculo de entropia de Shannon por janela de 2048 bytes e por seção, usado para controlar a dispersão e a aleatoriedade dos grãos; e a cadeia de condicionamento, com centralização da corrente contínua, filtro de primeira ordem com coeficiente de 0,9983 e limitador de saída com teto de -1 dBFS.
 
 Na área de interface estão a interface de três faixas com mapa de seções do PE e grelha navegável de bytes, com controles automatizáveis na estação de trabalho; o isolamento entre interface e processamento, sem acesso direto ao estado do áudio, verificado por guard de alocação; e o mapeamento MIDI nativo, com notas, pedal de sustentação e dois controladores de mudança de controle, nos parâmetros granulares, tanto no aplicativo autônomo quanto no plugin.
 
@@ -77,7 +77,7 @@ O escopo é delimitado de forma deliberada, e o que fica de fora é parte do arg
 
 O Opcoda não executa o binário. Não há análise dinâmica, não há depuração, não há emulação de instruções e não há interpretação semântica do código de máquina. O arquivo é tratado exclusivamente como uma sequência de bytes para leitura, e a hipótese acústica é de que a estrutura estatística dessa sequência, e não o significado das instruções, é o que produz a textura sonora. Essa escolha também é a razão pela qual o trabalho não exige permissão especial para além de leitura de arquivo: um artefato que o usuário poderia executar de outro modo é tratado aqui com o mesmo cuidado com que se trata uma imagem corrompida.
 
-Também estão fora do escopo a análise de malware, o desmonte de código para inspeção, o reconhecimento de assinaturas de empacotadores como critério de correção, a modulação por rede, a reprodução em Linux ou macOS, e a montagem de mais de oito vozes simultâneas. O formato CLAP está previsto no projeto, mas a entrega do MVP é em VST3.
+Também estão fora do escopo a análise de malware, o desmonte de código para inspeção, o reconhecimento de assinaturas de empacotadores como critério de correção, a modulação por rede, a reprodução em Linux ou macOS, e a montagem de mais de oito grãos simultâneos simultâneas. O formato CLAP está previsto no projeto, mas a entrega do MVP é em VST3.
 
 ## 1.5 Contribuições
 
@@ -181,7 +181,7 @@ Essa escolha metodológica tem uma consequência que convém explicitar. Como n�
 
 O desenvolvimento seguiu um processo de especificação antes de implementação, com constituição de projeto que define seis portões de qualidade: build, testes, tempo real, robustez, interface e documentação. Nenhuma tarefa foi encerrada sem que seu portão passasse, e a rastreabilidade entre objetivo específico, portão e ensaio é explícita em ambos os sentidos.
 
-As etapas realizadas foram: esqueleto do projeto e parser do formato PE; motor granular, arrasto de arquivo e filtro de bloqueio de corrente contínua; notas MIDI, controle de estado e guardas; interface de três faixas, grelha de bytes e telemetria; e, por fim, congelamento e auditoria de documentação. As etapas de validação em estação de trabalho de áudio estão bloqueadas e a razão é registrada adiante.
+As etapas realizadas foram: esqueleto do projeto e parser do formato PE; motor granular, arrasto de arquivo e filtro de bloqueio de corrente contínua; notas MIDI, controle de estado e guardas; interface de três faixas, grelha de bytes e telemetria; e, por fim, congelamento e auditoria de documentação. As etapas de validação em estação de trabalho de áudio passaram de bloqueadas a agendadas em 19 de outubro de 2026, quando se confirmou que a instalação do host é licenciada e funcional, e a razão da mudança é registrada adiante.
 
 ## 3.3 Instrumentos de verificação
 
@@ -189,11 +189,11 @@ A verificação do protótipo se apoia em quatro instrumentos.
 
 O ensaio espectral mede a atenuação da componente de corrente contínua e a energia de baixa frequência da saída do motor. Usa três binários de referência, incluindo um executável do sistema, um binário comprimido com empacotador e um arquivo sintético zerado. A captura tem dez segundos com grão de 40 ms e densidade média, e a análise usa transformada rápida de Fourier com 65536 pontos e janela Blackman-Harris. O critério é atenuação de ao menos 40 dB no bin de corrente contínua em relação à leitura bruta, e energia abaixo de 20 Hz menor que -60 dBFS. O protocolo inclui um controle negativo que renderiza a mesma conversão de byte para amostra sem motor granular e sem condicionamento, e é esse controle que dá sentido à comparação.
 
-O ensaio de latência e carga sob polifonia mede tempo médio e percentil 99 do processamento por bloco, em sessão de estação de trabalho de áudio com buffers de 128, 256 e 512 amostras a 44,1 e 48 kHz, com casos de uma, quatro e oito vozes e grãos de 10 e 100 ms. O critério é percentil 99 abaixo de 50% do orçamento, o que equivale a 2,9 ms para 128 amostras a 44,1 kHz, e zero falhas em cinco minutos contínuos.
+O ensaio de latência e carga mede tempo médio e percentil 99 do processamento por bloco, em sessão de estação de trabalho de áudio com buffers de 128, 256 e 512 amostras a 44,1 e 48 kHz. Com o instrumento mono, o caso não é contado por vozes: varia o tamanho de grão (10 e 100 ms) e a densidade (mínima, média e máxima), com um, quatro e oito grãos ativos, que é o que carrega o processador. O critério é percentil 99 abaixo de 50% do orçamento, o que equivale a 2,9 ms para 128 amostras a 44,1 kHz, e zero falhas em cinco minutos contínuos.
 
 O ensaio de estresse com binários corrompidos executa o parser em laço sobre um corpus de mutações por inversão de bit, truncamento e cabeçalhos forjados, mais dez casos de borda como arquivo vazio, arquivo de um byte e deslocamento apontando fora do arquivo. O critério é zero falha de segmentação, zero vazamento, rejeição de cem por cento das entradas inválidas com erro tipado e cobertura de ramo do parser acima de 70%.
 
-O ensaio de aceite de uso arrasta um executável para o aplicativo autônomo e para o plugin na estação de trabalho, move os seis parâmetros principais, mapeia dois controladores de mudança de controle e toca dois minutos em cada formato. O critério é som em menos de dois segundos após o arrasto, zero falhas de tempo real e todo controlador mapeado movendo o parâmetro correspondente.
+O ensaio de aceite de uso arrasta um executável para o aplicativo autônomo e para o plugin na estação de trabalho, move os 41 parâmetros, mapeia dois controladores de mudança de controle e toca dois minutos em cada formato. O critério é som em menos de dois segundos após o arrasto, zero falhas de tempo real e todo controlador mapeado movendo o parâmetro correspondente.
 
 ## 3.4 Limitações da plataforma de validação
 
@@ -209,15 +209,15 @@ A consequência prática sobre os ensaios é a seguinte, e é a diferença entre
 | Ensaio | Situação | Como é verificado |
 |--------|----------|-------------------|
 | Espectral | executado | Transformada rápida de Fourier com 65536 pontos e janela Blackman-Harris em teste automatizado |
-| Latência | bloqueado | Percentil 99 medido em teste de núcleo; o ensaio com oito vozes reais exige host licenciado |
+| Latência | agendado | Percentil 99 medido em teste de núcleo; o ensaio no host licenciado, por grão e densidade, está agendado desde 19 de outubro de 2026 |
 | Robustez | executado | Cinquenta mutações de bit e dez casos de borda, todos automatizados e com erro tipado |
-| Aceite | bloqueado | exige instalar o bundle num host licenciado e repetir arrasto, parâmetros e controladores |
+| Aceite | agendado | instalar o bundle no host licenciado e repetir arrasto, os 41 parâmetros e os controladores |
 | ThreadSanitizer | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
 | MemorySanitizer | indisponível | não existe para o compilador da Microsoft no Windows; o substituto é instrumentar o arranque em três pontos |
 | Comportamento indefinido | indisponível | substituído por avisos tratados como erro e pelos testes de borda |
 | Conformidade do bundle | indisponível | o validador trava nesta máquina; a conformidade é conferida no manifesto gerado pelo framework |
 
-Pendente é trabalho que está agendado. Bloqueado é trabalho que não pode ser feito com o que existe nesta máquina. As duas etapas de validação em estação de trabalho de áudio estão bloqueadas porque a única cópia do Ableton presente não é uma instalação licenciada: o diretório de programa traz um gerador de chave e um patch, e o executável arranca mas nunca abre janela utilizável, porque a ativação não está feita. Sem chave legítima não há ensaio, e ativar com o material que acompanha o pacote não é uma opção.
+Pendente é trabalho que está agendado. Bloqueado é trabalho que não pode ser feito com o que existe nesta máquina. Até 19 de outubro de 2026, as duas etapas de validação em estação de trabalho de áudio estavam bloqueadas porque a única cópia do Ableton presente não era uma instalação licenciada. Nessa data a instalação foi confirmada como licenciada e funcional, e as duas etapas passaram a agendadas: o impedimento deixou de ser a ferramenta e passou a ser a ordem de execução. O texto mantém a distinção porque ela continua a ser o critério, e registra a mudança porque um documento que apenas apaga a frase antiga esconde a razão pela qual ela mudou.
 
 A troca do host de validação não afrouxou critério. O plano original nomeava dois hosts comerciais e um validador de conformidade de plugins; nenhum dos três está disponível, e o validador trava mesmo com os argumentos de tolerância máxima. O Ableton Live 12.3.1 é o host que o usuário de fato vai usar, e fornece telemetria de latência suficiente para o critério. Trocar o host é mudança de método, não de critério: o número continua sendo percentil 99 abaixo de 50% do orçamento com zero falhas.
 
@@ -235,8 +235,8 @@ Doze requisitos funcionais principais foram derivados do problema de pesquisa e 
 | RF02 | Validar assinatura MZ, assinatura PE, número de seções e limites por seção | OE1 | T3 |
 | RF03 | Converter bytes em ponto flutuante normalizado no intervalo de -1 a 1 | OE1 | T1 |
 | RF04 | Medir entropia de Shannon por janela de 2048 bytes e por seção | OE5 | T1 |
-| RF05 | Sintetizar até oito vozes granulares com tamanho entre 1 e 100 ms | OE4 | T2 |
-| RF06 | Expor seis parâmetros automatizáveis na estação de trabalho | OE4, OE7 | T4 |
+| RF05 | Sintetizar até oito grãos simultâneos granulares com tamanho entre 1 e 100 ms | OE4 | T2 |
+| RF06 | Expor 41 parâmetros automatizáveis na estação de trabalho | OE4, OE7 | T4 |
 | RF07 |condicionar o sinal com bloqueio de corrente contínua e limitador | OE6 | T1 |
 | RF08 | Controlar o motor por notas, pedal de sustentação e dois controladores de mudança de controle | OE9 | T4 |
 | RF09 | Mostrar a estrutura do arquivo em grelha de bytes navegável | OE7 | T4 |
@@ -298,7 +298,7 @@ A distinção entre deslocamentos merece registro técnico, porque um erro de do
 
 ## 5.4 O motor granular e o agendamento
 
-O motor mantém um conjunto fixo de oito vozes, alocado na preparação. Cada voz tem posição de leitura, taxa de avanço, índice de escrita, contador de amostra e fase de dispersão. Nenhum contêiner cresce durante o processamento.
+O motor mantém um conjunto fixo de oito grãos simultâneos, alocado na preparação. Cada voz tem posição de leitura, taxa de avanço, índice de escrita, contador de amostra e fase de dispersão. Nenhum contêiner cresce durante o processamento.
 
 O agendamento é onde a previsibilidade é conquistada, e vale explicar as três decisões que a tornam possível.
 
@@ -361,7 +361,7 @@ A biblioteca JUCE é restrita ao adaptador. O núcleo compila como biblioteca C+
 
 ## 6.2 Cadeia de sinal e conversões
 
-A cadeia de sinal tem quatro etapas: bytes viram ponto flutuante normalizado, o motor granular sobrepõe as vozes, o filtro de bloqueio de corrente contínua remove o deslocamento, e o limitador contém os picos.
+A cadeia de sinal tem quatro etapas: bytes viram ponto flutuante normalizado, o motor granular sobrepõe os grãos, o filtro de bloqueio de corrente contínua remove o deslocamento, e o limitador contém os picos.
 
 A conversão de byte para amostra é a fronteira entre o binário e o motor, e ela vive no núcleo, e não na interface nem no teste, para que o plugin e o ensaio espectral chamem a mesma função. A normalização coloca o valor 127,5 no zero e leva os extremos a menos um e mais um. Esse deslocamento de meio nível é justamente o que produz o problema que o filtro remove, e é por isso que o ensaio testa o filtro com sinal constante.
 
@@ -385,7 +385,7 @@ A restrição de tempo real é transformada em código por substituição do ope
 
 Isso é o critério de tempo real virando código, e não revisão manual. Oito casos de teste cobrem o guard.
 
-Há uma lacuna que o guard não cobre e que precisa ser dita: ele roda sobre o núcleo e não vê o processamento de bloco do plugin, onde as mensagens MIDI são lidas. A leitura de notas é uma passagem por um buffer de mensagens já contadas, sem alocação previsível, mas isso é raciocínio e não medição. O que fecha essa lacuna é o ensaio de latência com tráfego MIDI real, que depende de host licenciado.
+Há uma lacuna que o guard não cobre e que precisa ser dita: ele roda sobre o núcleo e não vê o processamento de bloco do plugin, onde as mensagens MIDI são lidas. A leitura de notas é uma passagem por um buffer de mensagens já contadas, sem alocação previsível, mas isso é raciocínio e não medição. O que fecha essa lacuna é o ensaio de latência com tráfego MIDI real, agendado desde 19 de outubro de 2026 com o host licenciado.
 
 ## 6.5 A interface e os defeitos de layout
 
@@ -409,7 +409,7 @@ Essas correções são registradas em tabela de decisões no apêndice, e a regr
 
 ## 7.1 Suíte de testes automatizados
 
-A suíte de verificação reúne 196 casos em 24 conjuntos, mais 8 casos do guard de alocação. Todos os casos passam na configuração de release. A distribuição por área, conforme a execução real da suíte, é a seguinte.
+A suíte de verificação reuniu, no retrato registrado na tabela abaixo, 196 casos em 24 conjuntos, mais 8 casos do guard de alocação; todos passam na configuração de release. Na medição de 19 de outubro de 2026, depois das features F011 a F016, o binário reporta 289 casos. A tabela preserva o retrato por área e é regenerada com a contagem final na versão congelada.
 
 <!-- caption: Distribuição dos casos de teste por área funcional, conforme execução da suíte em configuração de release -->
 | Área funcional | Casos | O que cobre |
@@ -449,19 +449,19 @@ O portão de cobertura de ramo acima de 70% não tem medição automática, porq
 
 ## 7.4 Resultado do ensaio de latência
 
-O ensaio de latência está bloqueado e não executado. O número não existe porque exige uma estação de trabalho de áudio licenciada, e a única cópia presente na máquina de desenvolvimento não é uma instalação válida.
+O ensaio de latência está agendado e não executado. O número ainda não existe porque o ensaio exige uma sessão no host com tráfego real, e essa sessão foi agendada em 19 de outubro de 2026, quando a licença da instalação foi confirmada.
 
 O que se pode afirmar sem host é que o percentil 99 do tempo de processamento é medido em teste de núcleo, e que o guard de alocação passa. Isso cobre a fração estática do contrato de tempo real, e não cobre a fração dinâmica, que é a que o ensaio com host mediria. A distinção é mantida: o que não foi medido não é afirmado.
 
 ## 7.5 Resultado do ensaio de aceite
 
-O ensaio de aceite está bloqueado pelo mesmo motivo. O que já foi verificado sem estação de trabalho é que o manifesto do bundle declara as categorias de instrumento e sintetizador, e que o carregamento da biblioteca do plugin foi exercitado em host real quando o plugin foi aceite em uma sessão anterior. O que falta é a telemetria de latência com tráfego real e a confirmação de que todo controlador mapeado move o parâmetro correspondente.
+O ensaio de aceite está agendado, pela mesma ordem de execução. O que já foi verificado sem estação de trabalho é que o manifesto do bundle declara as categorias de instrumento e sintetizador, e que o carregamento da biblioteca do plugin foi exercitado em host real quando o plugin foi aceite em uma sessão anterior. O que falta é a telemetria de latência com tráfego real e a confirmação de que todo controlador mapeado move o parâmetro correspondente.
 
 ## 7.6 Defeito conhecido e não corrigido
 
 Há um defeito conhecido, visível no aplicativo autônomo e não corrigido, que o trabalho deve reportar com honestidade.
 
-Os seis parâmetros arrancam com valores que não são os padrões declarados no descritor de layout. As caixas de valor mostram o que fica: 1 ms, cerca de 29 por segundo e 69 por cento, onde os padrões são 40 ms, 20 por segundo e 50 por cento. Foi confirmado em compilação separada, logo não vem de nenhum componente de interface.
+Alguns parâmetros arrancam com valores que não são os padrões declarados no descritor de layout. As caixas de valor mostram o que fica: 1 ms, cerca de 29 por segundo e 69 por cento, onde os padrões são 40 ms, 20 por segundo e 50 por cento. Foi confirmado em compilação separada, logo não vem de nenhum componente de interface.
 
 A instrumentação por escrita em arquivo de texto em três pontos estabeleceu o seguinte, em valores normalizados, que é o que o método de leitura devolve nesta biblioteca.
 
@@ -491,11 +491,11 @@ A atenuação da corrente contínua é confirmada por ensaio automatizado com cr
 
 A robustez diante de entrada malformada é confirmada nos dez casos de borda automatizados, todos com erro tipado e sem falha de segmentação. A prática de leitura defensiva com verificação de limites, sem executor o binário, é o que torna isso possível.
 
-A restrição de tempo real é confirmada no núcleo: o guard de alocação passa, inclusive em cinco minutos de reprodução sintética, e a fila sem trava com ponteiro cru cobre a fronteira entre os dois domínios. A ressalva é que o guard não cobre o processamento de bloco do plugin, e a validação dinâmica está bloqueada por ausência de host licenciado.
+A restrição de tempo real é confirmada no núcleo: o guard de alocação passa, inclusive em cinco minutos de reprodução sintética, e a fila sem trava com ponteiro cru cobre a fronteira entre os dois domínios. A ressalva é que o guard não cobre o processamento de bloco do plugin, e a validação dinâmica está agendada, com o host licenciado confirmado em 19 de outubro de 2026.
 
 ## 8.2 O que não foi confirmado
 
-A fração dinâmica do contrato de tempo real não foi medida, e o ensaio de aceite com o usuário não foi executado. Ambos estão bloqueados, não atrasados, e a diferença é registrada em todo o texto.
+A fração dinâmica do contrato de tempo real não foi medida, e o ensaio de aceite com o usuário não foi executado. Ambos estavam bloqueados até 19 de outubro de 2026 e passaram a agendados, com a licença do host confirmada; a diferença entre pendente, bloqueado e agendado é registrada em todo o texto.
 
 O portão de cobertura de ramo acima de 70% não tem medição automática, porque a ferramenta de cobertura de ramo não está disponível no toolchain de compilador único que a plataforma impôs.
 
@@ -515,15 +515,15 @@ A terceira é o duplo tampão substituído por dupla fila. A primeira versão er
 
 A quarta é o host de validação trocado. O plano original nomeava dois hosts comerciais e um validador de conformidade; o validador trava nesta máquina e o Ableton é o host que o usuário de fato vai usar. A troca não afrouxou critério, apenas mudou de método.
 
-A quinta é o escopo. Oito vozes, seis parâmetros, Windows, dois formatos. Nada disso foi antecipado. Um instrumento com dezesseis vozes e modulação matricial seria mais impressionante e menos verificável, e a escolha foi pela verificabilidade.
+A quinta é o escopo. Oito grãos simultâneos, quarenta e um parâmetros, Windows, dois formatos. Nada disso foi antecipado no início; a modulação matricial entrou na emenda 1.2.0, com o custo já medido em número de parâmetros, e a escolha continuou sendo pela verificabilidade: o que não tem teste não entra.
 
 ## 8.4 Limitações
 
 As limitações do trabalho se dividem em três grupos.
 
-A primeira é da plataforma de validação: ausência de ThreadSanitizer e de MemorySanitizer no Windows com o compilador disponível, ausência de estação de trabalho de áudio licenciada e ausência de ferramenta de cobertura de ramo automática.
+A primeira é da plataforma de validação: ausência de ThreadSanitizer e de MemorySanitizer no Windows com o compilador disponível e ausência de ferramenta de cobertura de ramo automática.
 
-A segunda é do escopo: apenas oito vozes, apenas janelas Hann e gaussiana, apenas Windows x64, sem reconhecimento de assinaturas de empacotadores e sem modulação por rede.
+A segunda é do escopo: apenas oito grãos simultâneos, apenas janelas Hann e gaussiana, apenas Windows x64, sem reconhecimento de assinaturas de empacotadores e sem modulação por rede.
 
 A terceira é da natureza da avaliação: a qualidade musical não foi medida com ouvintes, e a validação de usabilidade com escala SUS está prevista no plano mas não executada.
 
@@ -537,13 +537,13 @@ A segunda é que o tratamento de sinal converte material inadequado em material 
 
 A terceira é que a disciplina de tempo real pode ser imposta por construção e verificada por build. A separação entre o núcleo, que não conhece a interface, e o adaptador, que conhece o framework, torna impossível o acesso do motor ao estado da interface sem criar um caminho novo. O guard de alocação falha o build se o caminho de áudio alocar, e passa em cinco minutos de reprodução sintética.
 
-As limitações também foram verificadas e são parte do resultado. A validação dinâmica de tempo real e o ensaio de aceite com o usuário estão bloqueados por ausência de estação de trabalho de áudio licenciada, e essa lacuna está escrita em vez de omitida. A ferramenta que detectaria leitura de memória não inicializada não existe para o compilador disponível no Windows, e por isso o defeito dos parâmetros que arrancam com valores errados fica com hipótese registrada e sem confirmação. A cobertura de ramo do parser não é medida por falta de ferramenta.
+As limitações também foram verificadas e são parte do resultado. A validação dinâmica de tempo real e o ensaio de aceite com o usuário estão agendados, com a licença do host confirmada em 19 de outubro de 2026, e essa lacuna continua escrita em vez de omitida até serem executados. A ferramenta que detectaria leitura de memória não inicializada não existe para o compilador disponível no Windows, e por isso o defeito dos parâmetros que arrancam com valores errados fica com hipótese registrada e sem confirmação. A cobertura de ramo do parser não é medida por falta de ferramenta.
 
 O trabalho também produziu evidência sobre um ponto que costuma ser tratado como preferências de estilo. A separação entre domínio de interface e domínio de processamento, com fila sem trava e ponteiro cru na fronteira, não é uma declaração de intenção: é uma estrutura que os sanitizadores alcançam, e é o que permitiu que o ensaio de ponta a ponta existisse e que os defeitos de maior impacto fossem encontrados por ensaio e não por acaso em sessão de uso.
 
 ## 9.1 Trabalhos futuros
 
-O primeiro caminho é o fechamento das etapas bloqueadas, que exige obter uma estação de trabalho de áudio licenciada e executar os ensaios de latência e de aceite com oito vozes reais e tráfego MIDI real. Sem esse passo, a fração dinâmica do contrato de tempo real permanece não medida.
+O primeiro caminho é o fechamento das etapas agendadas: executar os ensaios de latência e de aceite no host licenciado, por grão e densidade, com tráfego MIDI real. Sem esse passo, a fração dinâmica do contrato de tempo real permanece não medida.
 
 O segundo é o formato CLAP, previsto na arquitetura e fora da entrega do MVP, que dá portabilidade para Linux e macOS sem recompilar o núcleo.
 
@@ -585,13 +585,13 @@ Nenhum desses códigos propaga exceção através da interface binária do plugi
 |----------|--------|--------|----------|
 | OE1, parser com verificação de limites | B, D | T1, T3 | executado |
 | OE2, ingestão somente leitura com erros tipados | D | T3 | executado |
-| OE3, fila sem trava entre interface e motor | C | T2 | núcleo verificado, ensaio com host bloqueado |
-| OE4, motor granular de oito vozes | B, C | T1, T2 | núcleo verificado, ensaio com host bloqueado |
+| OE3, fila sem trava entre interface e motor | C | T2 | núcleo verificado, ensaio com host agendado |
+| OE4, motor granular de oito grãos simultâneos | B, C | T1, T2 | núcleo verificado, ensaio com host agendado |
 | OE5, entropia por janela e por seção | B | T1 | executado |
 | OE6, condicionamento com filtro e limitador | B | T1 | executado |
-| OE7, interface com grelha e parâmetros automatizáveis | E | T4 | bloqueado |
-| OE8, isolamento entre interface e motor | C | T2 | guard de alocação verde, ensaio com host bloqueado |
-| OE9, mapeamento MIDI nativo | B, E | T4 | núcleo verificado, ensaio com host bloqueado |
+| OE7, interface com grelha e parâmetros automatizáveis | E | T4 | agendado |
+| OE8, isolamento entre interface e motor | C | T2 | guard de alocação verde, ensaio com host agendado |
+| OE9, mapeamento MIDI nativo | B, E | T4 | núcleo verificado, ensaio com host agendado |
 
 ## APÊNDICE C ,  Divergências de documentação corrigidas
 
@@ -614,6 +614,6 @@ Nenhum desses códigos propaga exceção através da interface binária do plugi
 |-----------|--------|------------------|
 | Núcleo, código C++20 | 2.382 | parser, conversão, entropia, motor granular, filtro, limitador, fila, rastreador de notas |
 | Adaptador, código com framework | 4.965 | processador de áudio, formatos, interface de três faixas, grelha de bytes |
-| Testes | 3.958 | 196 casos em 24 conjuntos, mais 8 do guard de alocação |
+| Testes | 3.958 | 289 casos medidos em 19/10/2026, mais 8 do guard de alocação |
 
 O volume de teste é maior que o do núcleo, e isso é deliberado: no núcleo, quase toda linha executável decide se um arquivo arbitrário é aceito ou rejeitado, e a verificação correspondente é a parte que não se negocia.

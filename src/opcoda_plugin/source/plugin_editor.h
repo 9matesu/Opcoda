@@ -10,6 +10,7 @@
 #include "plugin_processor.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -18,16 +19,17 @@
 
 namespace opcoda {
 
-// Editor em quatro faixas: header claro, display escuro, abas de modulo e
-// faixa de parametros.
+// Editor em cinco faixas: header claro, display escuro, abas de modulo, faixa de
+// parametros e teclado.
 //
-// Os 25 parametros da Tabela 8 em cinco modulos — GRAIN, ENVELOPE, FILTER, MOD
-// e OUT — com os nomes exibidos em ingles e os IDs dos seis originais
-// intactos. Uma aba mostra a sua faixa; empilhar as cinco pedia 700 px de
-// janela e a promessa e' 480x434.
+// Os 31 parametros ja no codigo em seis modulos — GRAIN, ENVELOPE, FILTER, MOD,
+// OUT e KEYS — com os nomes exibidos em ingles e os IDs dos seis originais
+// intactos. Uma aba mostra a sua faixa; empilhar as seis pedia 700 px de janela
+// e a promessa e' 480x434.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      private juce::ValueTree::Listener,
+                     private juce::MidiKeyboardState::Listener,
                      public juce::FileDragAndDropTarget {
 public:
     explicit PluginEditor(PluginProcessor& processor);
@@ -72,6 +74,15 @@ public:
 private:
     void buildHeader();
     void buildParameterPanel();
+    void buildKeyboard();
+
+    // O teclado virtual toca pela mesma NoteTracker do MIDI do host. O listener
+    // so empurra para a fila do processador; nada aqui toca no motor.
+    void handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
+                      float velocity) override;
+    void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
+                       float velocity) override;
+
     void timerCallback() override;
     void refresh();
     void refreshTelemetry(const PluginProcessor::SourceInfo& info);
@@ -174,6 +185,15 @@ private:
     PluginProcessor& owner_;
     OpcodaLookAndFeel lookAndFeel_;
 
+    // Teclado virtual. O estado vive no editor e o componente desenha-o; o som
+    // sai pela fila do processador, porque o caminho de audio nao pode consultar
+    // um objeto de interface.
+    //
+    // A ordem dos dois membros e' a da construcao: o componente guarda referencia
+    // ao estado, por isso nao pode nascer primeiro.
+    juce::MidiKeyboardState keyboardState_;
+    juce::MidiKeyboardComponent keyboard_;
+
     Led powerLed_ {Led::State::off};
     Led statusLed_ {Led::State::off};
     Led voicesLed_ {Led::State::off};
@@ -261,10 +281,13 @@ private:
     void loadPresetFromFile();
     void savePresetToFile();
 
-    // Cinco modulos, uma faixa visivel de cada vez. Todos os 25 knobs existem
+    // Sete modulos, uma faixa visivel de cada vez. Todos os 41 knobs existem
     // desde a construcao — os attachments vivem neles — e a aba so decide quem
     // aparece. Recriar knobs por aba recriaria attachments e largaria o undo.
-    enum class ParamModule { grain, envelope, filter, mod, out };
+    //
+    // A ordem do enum e' a ordem de construcao em buildParameterPanel: os dois
+    // arrays de fatias sao indexados por static_cast<size_t>(module).
+    enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys };
     ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::vector<std::size_t> moduleFirstKnob_ {};
@@ -273,7 +296,9 @@ private:
     juce::TextButton moduleEnvelopeButton_;
     juce::TextButton moduleFilterButton_;
     juce::TextButton moduleModButton_;
+    juce::TextButton moduleCloudButton_;
     juce::TextButton moduleOutButton_;
+    juce::TextButton moduleKeysButton_;
 
     void buildModuleTabs();
     void updateModuleTabs();

@@ -9,6 +9,8 @@
 #include <vector>
 
 using opcoda::dsp::GranularEngine;
+using opcoda::dsp::ModDest;
+using opcoda::dsp::ModSource;
 using opcoda::dsp::GranularParams;
 using opcoda::rt::ScopedAudioThread;
 using opcoda::rt::Transport;
@@ -78,6 +80,23 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     GranularParams params;
     params.densityGrainsPerSec = 120.0f;
     params.grainSizeMs = 20.0f;
+    // F020 ligado: drive, 24 dB, as tres curvas e tres rotas. Sem isto o guard
+    // media o motor de antes da matriz e nao provava o caminho novo.
+    params.f1DriveDb = 18.0f;
+    params.f1Slope = 1;
+    params.f1Keytrack = 1.0f;
+    params.f1Env = 0.5f;
+    params.noteNumber = 72;
+    params.attackCurve = -1.0f;
+    params.decayCurve = 0.5f;
+    params.releaseCurve = 1.0f;
+    // F021: a nuvem no maximo — atraso, dispersao e jitter — pela mesma razao.
+    params.cloudSize = 1.0f;
+    params.pitchSpreadSemitones = 12.0f;
+    params.grainJitter = 1.0f;
+    params.modMatrix.routes[0] = {ModSource::kLfo, ModDest::kCutoff1, 0.5f};
+    params.modMatrix.routes[1] = {ModSource::kEnvelope, ModDest::kPitch, 0.25f};
+    params.modMatrix.routes[2] = {ModSource::kVelocity, ModDest::kDensity, 0.5f};
 
     const auto violations = allocationsInsideAudioWindow([&] {
         for (int block = 0; block < 50; ++block) {

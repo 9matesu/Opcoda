@@ -43,23 +43,37 @@ Nenhuma tarefa é concluída sem que seu portão passe. Os seis portões:
 
 O portão C tem uma ressalva registrada em `docs/17-guia-de-build.md`: o pacote LLVM para Windows não distribui runtime de ThreadSanitizer. A verificação de concorrência é feita por guard de alocação, ensaio de xrun e revisão, e a lacuna do TSan fica declarada como limitação honesta em vez de ser omitida.
 
+**Desde 19/10/2026 o portão C deixou de ter a sua maior lacuna.** A estação de trabalho com host licenciado está disponível, e o T2 mede a fração dinâmica do contrato — p99 e xruns com tráfego MIDI real — que o guard de alocação não alcança. O que era "bloqueado, não atrasado" em `docs/07` e `docs/08` passou a trabalho agendado.
+
 ### V. Simplicidade e escopo do instrumento
 
-Oito vozes, Windows x64, e o conjunto fechado de 25 parâmetros automatizáveis da tabela abaixo — todos com ID e nome em inglês. IDs dos seis originais (`grain`, `density`, `position`, `spray`, `pitch`, `volume`) não mudam, para não quebrar sessões salvas; só o nome exibido passa a inglês. O que não está na tabela não entra por antecipação. YAGNI vale: sem abstração especulativa, sem dependência para uso futuro hipotético.
+**O instrumento é mono.** Uma tecla de cada vez, com prioridade à última nota. As oito vozes são *slots de grão simultâneos*, não vozes de nota: o motor sempre foi mono — um gate só e envelope global na saída — e a emenda 1.2.0 corrige a documentação, que dizia "polifónico de 8 vozes" (`docs/04-objetivos.md`). O envelope é global pela mesma razão, e não por voz.
+
+Windows x64, e o conjunto fechado de **41 parâmetros automatizáveis** da tabela abaixo — todos com ID e nome em inglês. IDs dos 25 da emenda 1.1.0 **não mudam**, para não quebrar sessões salvas nem os presets `.opcoda`; os 16 novos nascem já com ID inglês. O que não está na tabela não entra por antecipação. YAGNI vale: sem abstração especulativa, sem dependência para uso futuro hipotético.
 
 | Grupo | Parâmetros (ID) |
 | --- | --- |
 | Grão (originais) | `grain`, `density`, `position`, `spray`, `pitch`, `volume` |
-| Grão (novos) | `window` (choice: Hann, Gaussian, Hamming, Blackman — o motor já tem as 4), `pan`, `grainlevel`, `pitchrand`, `scanspeed` (multiplicador do `advance` do transporte) |
-| Envelope | `attack`, `decay`, `sustain`, `release` — o gate com rampa vira ADSR por nota; `all-notes-off` e sustain entram na matriz de teste, sem nota presa |
+| Grão (1.1.0) | `window` (choice: Hann, Gaussian, Hamming, Blackman — o motor já tem as 4), `pan`, `grainlevel`, `pitchrand`, `scanspeed` (multiplicador do `advance` do transporte) |
+| Envelope | `attack`, `decay`, `sustain`, `release` — o gate com rampa vira ADSR; `all-notes-off` e sustain entram na matriz de teste, sem nota presa |
+| Envelope, curvas (1.2.0) | `atkcurve`, `deccurve`, `relcurve` — forma de cada estágio (exponencial a linear), na convenção do Serum |
 | Filtros | por filtro (×2, em série, por voz): `f1type`/`f2type` (choice: LP, HP, BP, Notch), `f1cutoff`/`f2cutoff` (log 20–20 kHz), `f1q`/`f2q`. Coeficientes recalculados só quando cutoff/Q mudam, nunca por amostra |
+| Filtro, caráter (1.2.0) | `f1slope` (12/24 dB), `f1drive`, `f1keytrack` (corte segue a nota), `f1env` (profundidade do envelope no corte) |
 | LFO | `lforate` (Hz), `lfodepth`, `lfotarget` (choice: pitch, density, cutoff, position), `lfowave` (choice: sine, tri, saw, square, S&H) |
+| LFO rítmico (1.2.0) | `lfosync` (free/sync com o tempo do host), `lfodiv` (1/1 a 1/64, com pontuada e tercina), `lfosteps` (degraus do padrão, na forma `steps`) |
+| Teclado e escala (1.2.0) | `scale` (choice), `root` (choice, 12 notas), `glide` (portamento entre notas) |
+| Nuvem de grãos (1.2.0) | `cloudsize` (largura temporal da nuvem), `pitchspread` (dispersão de afinação por grão), `grainjit` (jitter de duração) |
 
 Cortes declarados, não escondidos: **FM não entra** — grão é playback amostrado, não oscilador, e FM de verdade exigiria portadora por voz; o LFO no pitch cobre o musicalmente útil. **Seleção inteligente de blocos (§8) continua adiada** — a própria especificação manda adiar, e a entropia já modula o spray hoje. **CLAP continua pós-entrega**, como no objetivo.
 
+Dois desenhos ficam **fora da tabela por decisão, não por esquecimento**, e ambos têm o desenho completo escrito em `docs/19-parametrizacao-do-estudo-e-briefing.md`:
+
+- **A matriz de modulação tem 8 rotas e vive no estado, não nos parâmetros.** Cada rota é um terno (fonte, destino, profundidade) guardado na árvore do APVTS como propriedade — o mesmo padrão que o `sourcePath` e a região já usam. A consequência é declarada: **as rotas viajam no preset `.opcoda` e no estado do projeto, mas o host não as automatiza.** Torná-las automatizáveis custaria 24 parâmetros (3 por rota) e levaria a tabela a 65.
+- **O caráter analógico do filtro entra só no filtro 1.** O filtro 2 mantém tipo, corte e Q. Restaurar a paridade custa 4 parâmetros (`f2slope`, `f2drive`, `f2keytrack`, `f2env`) e a tabela passaria a 45; fica no desenho completo, para a próxima emenda decidir com número à frente.
+
 Consequência sobre FFT: o caminho de áudio não usa FFT. A entropia é frequência de bytes, não análise espectral. A FFT existe apenas na ferramenta offline de medição do ensaio T1, como dependência exclusiva daquela ferramenta. Não é preciso modelo demachine learning, framework de áudio alternativo nem camada de plugin de terceiros.
 
-A Tabela 8 do artigo e o ensaio T4 foram reescritos para o novo conjunto: a Tabela 8 lista os 25 parâmetros com faixas, e o T4 mede os 25 em vez dos 6.
+A Tabela 8 do artigo e o ensaio T4 foram reescritos duas vezes, e a segunda na emenda 1.2.0: a Tabela 8 lista os **41 parâmetros** com faixas, e o T4 mede os 41. O ensaio T2 deixou de contar vozes — o instrumento é mono — e passa a medir por tamanho de grão e densidade, que é o que carrega o CPU.
 
 ### VI. Documentação como parte do código
 
@@ -71,7 +85,8 @@ A rastreabilidade é explícita e bidirecional: cada spec declara quais OE atend
 
 - C++20. `clang-cl` para desenvolvimento, MSVC para build de release.
 - CMake com Ninja Multi-Config. Presets versionados em `CMakePresets.json`.
-- JUCE 8.0.14 restrito a `src/opcoda_ui/` e `src/opcoda_plugin/`. O VST3 SDK vem embutido no JUCE; não há SDK externo no repositório.
+- JUCE 8.0.14 restrito a `src/opcoda_plugin/` (o editor vive lá; não existe `src/opcoda_ui/`). O VST3 SDK vem embutido no JUCE; não há SDK externo no repositório.
+- `juce_opengl` entra pelo OpenGL dos visualizadores, e **só** no alvo do plugin: o núcleo continua sem framework nenhum. O contexto é criado na message thread, e se não ativar o componente volta a pintar por software — a queda é declarada na interface, não silenciosa.
 - GoogleTest para unidade, GoogleTest com `gtest_filter` para integração, `libFuzzer` para o corpus do parser, `llvm-cov` para cobertura.
 - ASan e UBSan em presets separados de TSan, porque não combinam entre si.
 - Nenhuma chave, token ou credencial versionada. Segredos vêm de variável de ambiente referenciada por `{env:...}`.
@@ -86,7 +101,7 @@ Erro de parser sempre aparece como texto com código tipado, nunca só por cor. 
 
 O desenvolvimento segue spec-kit: `/speckit-constitution`, depois `/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement` para cada feature. Uma feature corresponde a um objetivo ou a um ensaio, não a um agrupamento arbitrário de tarefas.
 
-Mapas de features: F001 fundação e build · F002 parser PE e ingestão (OE1, OE2) · F003 fila lock-free (OE3, OE8) · F004 entropia de Shannon (OE5) · F005 motor granular (OE4) · F006 condicionamento de saída (OE6) · F007 telemetria · F008 interface e acessibilidade (OE7) · F009 MIDI (OE9) · F010 bateria de validação T1–T4 · F011 parâmetros estendidos do motor (window, pan, grainlevel, pitchrand, scanspeed) · F012 ADSR por nota · F013 dois biquads em série por voz · F014 LFO com roteamento · F015 módulos de UI e nomes em inglês (§9) · F016 presets (fábrica + `.opcoda`) · F017 teto de ingestão e análise cancelável (§3/§11). A ordem real é F002 antes de F001, porque o núcleo é que se constrói primeiro; a numeração registra dependência, não cronologia.
+Mapas de features: F001 fundação e build · F002 parser PE e ingestão (OE1, OE2) · F003 fila lock-free (OE3, OE8) · F004 entropia de Shannon (OE5) · F005 motor granular (OE4) · F006 condicionamento de saída (OE6) · F007 telemetria · F008 interface e acessibilidade (OE7) · F009 MIDI (OE9) · F010 bateria de validação T1–T4 · F011 parâmetros estendidos do motor (window, pan, grainlevel, pitchrand, scanspeed) · F012 ADSR por nota · F013 dois biquads em série por voz · F014 LFO com roteamento · F015 módulos de UI e nomes em inglês (§9) · F016 presets (fábrica + `.opcoda`) · F017 teto de ingestão e análise cancelável (§3/§11) · F018 teclado e afinação (nota vira taxa, escala, glide) · F019 LFO rítmico (tempo do host, nota/pontuada/tercina, degraus) · F020 caráter analógico do filtro e curvas do envelope · F021 nuvem de grãos (§8) · F022 waveform PCM do ficheiro inteiro, sobre a F017 · F023 interface v2 (§9: LookAndFeel, SVG, visualizadores, menu de contexto) · F024 visualizadores OpenGL com queda para software. A ordem real é F002 antes de F001, porque o núcleo é que se constrói primeiro; a numeração registra dependência, não cronologia.
 
 Revisão por agente especializado é obrigatória antes de declarar uma tarefa concluída: `pe-parser-reviewer` para o parser, `rt-dsp-auditor` para o DSP, `test-engineer` para testes. Os agentes de interface, desempenho e documentação entram junto com as etapas F008 e F010, que são as que dão objeto a eles.
 
@@ -98,4 +113,4 @@ Esta constitution prevalece sobre README, comentários de código e preferência
 
 Exceções são permitidas quando o ensaio que a comprova não existe na plataforma, desde que a lacuna seja declarada por escrito em `docs/07-plano-testes.md` e repetida nos artefatos entregues. O caso do TSan é o exemplo corrente: a limitação é documentada, não escondida.
 
-**Versão**: 1.1.0 | **Ratificada**: 2026-10-01 | **Última alteração**: 2026-10-08
+**Versão**: 1.2.0 | **Ratificada**: 2026-10-01 | **Última alteração**: 2026-10-19

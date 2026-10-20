@@ -8,7 +8,9 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <array>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -228,6 +230,12 @@ bool snapByteRangeToSection();
         }
     }
 
+    // Teclado virtual e teclas do computador. A thread de interface empurra o
+    // evento e o callback consome na fila sem trava: a nota entra pela mesma
+    // NoteTracker que o MIDI do host, sem passar pelo MidiBuffer (que o host
+    // manda, nao a interface) e sem alocar no caminho de audio.
+    void pushKeyboardNote(int noteNumber, float velocity, bool on) noexcept;
+
     // Ancora de busca do transporte. O valor vem do parametro POSITION, e so
     // quando o utilizador o move: se o editor escrevesse isto a cada quadro, o
     // transporte voltava ao ponto de ancoragem sessenta vezes por segundo e a
@@ -310,6 +318,28 @@ bool snapByteRangeToSection();
     // o knob segue, e o estado do projeto fica certo sem caminho paralelo.
     void applyPendingControllerChanges();
 
+    // Drena os eventos do teclado virtual. Roda no callback, antes de
+    // currentParams(), para a nota deste bloco ja entrar na altura.
+    void drainKeyboardNotes() noexcept;
+
+    // --- F020: matriz de modulacao ---
+    //
+    // 8 rotas vivem no estado (no MODMATRIX, ao lado dos PARAM) e nao na tabela
+    // de parametros: nao sao automatizaveis e viajam no preset. A thread de
+    // interface escreve, a de audio le uma copia por bloco.
+    //
+    // A publicacao sao 24 inteiros atomicos mais uma geracao. Um bloco que
+    // apanhe a troca ve' a matriz antiga inteira, e nao metade de cada, porque a
+    // geracao so' sobe depois das palavras.
+    [[nodiscard]] dsp::ModMatrix modMatrix() const;
+    bool setModRoute(int index, dsp::ModRoute route);
+    void publishModMatrix();
+
+    // Le BPM e ppq do host uma vez por bloco e guarda-os em atomicos. O nucleo
+    // nao conhece o host; estes dois doubles sao tudo o que atravessa. Sem
+    // transporte (Standalone) o BPM fica em 120 e o ppq em -1, que o motor le
+    // como "sem ppq".
+    void updateHostTransport() noexcept;
     // live_ e' publicado pela thread de audio e consultado pela de interface.
     // Sem o atomico a leitura do editor seria uma corrida com a troca de
     // material, o que o compilador nao pode flagar porque os ponteiros sao do
@@ -338,6 +368,15 @@ private:
     // unica que pode liberar a memoria.
     void drainIncomingQueue() noexcept;
 
+    // Garante o no MODMATRIX no estado. Chamado na construcao e depois de
+    // replaceState: um projeto gravado antes da F020 nao traz o no, e o estado
+    // tem de continuar a escrever-se completo.
+    void ensureModMatrixNode();
+
+    // Le a matriz publicada para o snapshot do bloco corrente. Roda na thread
+    // de audio, nao aloca e so' copia quando a geracao muda.
+    void refreshModMatrix() noexcept;
+
     // Le o MidiBuffer do bloco e atualiza a contagem de notas. Roda na thread
     // de audio e nao aloca nem bloqueia: um MidiBuffer e' so uma lista de
     // mensagens com contadores ja resolvidos.
@@ -361,6 +400,17 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // terminou de usar.
     rt::SpscRing<PublishedMaterial, 4> incoming_;
     rt::SpscRing<PublishedMaterial, 4> returned_;
+
+    // Eventos do teclado virtual. Capacidade 64: um bloco de 2048 amostras a
+    // 48 kHz dura 43 ms, e nesse tempo nao se carrega em 64 teclas. A fila
+    // cheia descarta, como manda o desenho das filas sem trava.
+    rt::SpscRing<rt::NoteTracker::Event, 64> keyboardNotes_;
+
+    // Tempo do host, escrito uma vez por bloco pelo callback e lido por
+    // currentParams() no mesmo bloco. Relaxado chega: os dois valores vem do
+    // mesmo bloco e nao ordenam nada entre si.
+    std::atomic<double> hostBpm_ {120.0};
+    std::atomic<double> hostPpq_ {-1.0};
 
     // Donos de toda a memoria de amostra. So a thread de interface escreve
     // aqui, e so remove um buffer depois que a thread de audio o devolveu.
@@ -401,10 +451,22 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;
+    static constexpr int kCcModWheel = 1;  // Roda de modulacao: fonte da matriz
     static constexpr int kCcDensity = 74;  // Brightness: DENSITY
     static constexpr int kCcPosition = 71; // Resonance: POSITION
     static constexpr int kDensityController = 0;
     static constexpr int kPositionController = 1;
+    static constexpr int kModWheelController = 2;
+
+    static constexpr const char* kModMatrixNode = "MODMATRIX";
+
+    // Palavras publicadas (fonte, destino, amount) e o snapshot do bloco. O
+    // snapshot so' e' escrito pela thread de audio; as palavras so' pela de
+    // interface. Nenhum dos dois lados escreve no que o outro le.
+    std::array<std::atomic<int>, dsp::kMaxModRoutes * dsp::kModRouteWords> modMatrixWords_ {};
+    std::atomic<std::uint32_t> modMatrixGeneration_ {0};
+    std::uint32_t modMatrixAppliedGeneration_ {0};
+    dsp::ModMatrix modMatrixSnapshot_ {};
 
     juce::AudioProcessorValueTreeState parameters_;
 };

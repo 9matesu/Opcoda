@@ -316,9 +316,9 @@ parâmetros documentados. `Voices` vira leitura, não controle. O bloco
 cobre o LFO e `OUT` o volume. `Dry/Wet`, `Distance`, `Drive` e `Shape` do Stitch
 continuam fora: o que não está na tabela de 25 não entra.
 
-**O botão de reprodução não é um sétimo parâmetro**, e é preciso escrever isto porque
-a tentação existe: `PLAY` comanda o motor granular pela mesma porta que as notas
-usam, e poderia ser um `AudioParameterFloat` com automating. Não é, porque o OE4
-fixa seis parâmetros e o ensaio T4 mede seis. A audição é momentânea e não faz parte
+**O botão de reprodução não é um quadragésimo segundo parâmetro**, e é preciso escrever
+isto porque a tentação existe: `PLAY` comanda o motor granular pela mesma porta que as
+notas usam, e poderia ser um `AudioParameterFloat` com automação. Não é, porque o OE4
+fixa 41 parâmetros e o ensaio T4 mede 41. A audição é momentânea e não faz parte
 do estado do projeto: `getStateInformation` guarda `sourcePath`, `byteStart` e
 `byteEnd`, e nada de reprodução.

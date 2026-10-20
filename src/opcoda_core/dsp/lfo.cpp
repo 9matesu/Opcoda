@@ -75,18 +75,19 @@ void LFO::advance(float rateHz, int numSamples, double sampleRate) noexcept {
 float LFO::valueAt(LFOWave wave,
                    float rateHz,
                    int offsetSamples,
-                   double sampleRate) const noexcept {
+                   double sampleRate,
+                   int steps) const noexcept {
     if (!(sampleRate > 0.0) || !(rateHz >= 0.0f)) {
-        return waveAt(wave, phase_);
+        return waveAt(wave, quantizeLFOPhase(phase_, steps));
     }
     const double at = phase_ + static_cast<double>(rateHz) *
                                     static_cast<double>(offsetSamples >= 0 ? offsetSamples : 0) /
                                     sampleRate;
-    return waveAt(wave, at);
+    return waveAt(wave, quantizeLFOPhase(at, steps));
 }
 
-float LFO::blockValue(LFOWave wave) const noexcept {
-    return waveAt(wave, phase_);
+float LFO::blockValue(LFOWave wave, int steps) const noexcept {
+    return waveAt(wave, quantizeLFOPhase(phase_, steps));
 }
 
 } // namespace opcoda::dsp
