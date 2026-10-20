@@ -28,11 +28,12 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Paleta do guia de estilo do Catlas: cinza UML para agrupamento, branco com
-# contorno vermelho escuro para ficheiro ou funcao.
-GRAY = "9AA0A6"
-RED = "8B1A1A"
-INK = "202124"
+# Paleta: amarelo e preto. As caixas sao amarelas com contorno preto, o
+# texto e' preto, e os grupos recebem um amarelo mais escuro para se
+# distinguirem das caixas de ficheiro.
+YELLOW = "FFD400"
+AMBER = "FFB000"
+BLACK = "000000"
 
 # Largura de um caractere em \small com newtxtext, em cm. Medido em LaTeX: o
 # pior caso observado ("Arquivo PE") da 0,166 cm/char. O valor aqui e' um pouco
@@ -40,17 +41,21 @@ INK = "202124"
 # caixa. Um texto que nao cabe na caixa e' partido em duas linhas, e o desenho
 # perde a forma sem erro nenhum.
 CHAR_CM = 0.18
+# Margem da caixa: o `inner sep` do TikZ dos dois lados. A largura da caixa e'
+# a do texto mais esta margem, e e' por isso que duas caixas da mesma coluna
+# com a mesma largura de texto sao iguais as vistas.
 PAD_CM = 0.5
-LAYER_GAP_CM = 1.1
-ROW_GAP_CM = 1.25
+BOX_PAD_CM = 0.36
+LAYER_GAP_CM = 1.9
+ROW_GAP_CM = 1.55
 # Largura maxima de uma fila. O atlas e' uma pagina deitada, com 25,7 cm de
 # texto, e a cadeia de camadas parte-se em filas antes de passar la.
 MAX_ROW_CM = 24.6
 ROW_BREAK_CM = 2.4
-BAND_GAP_CM = 0.35
-TB_LAYER_CM = 2.2
+BAND_GAP_CM = 1.3
+TB_LAYER_CM = 2.45
 SEQ_GAP_CM = 0.7
-SEQ_ROW_CM = 1.15
+SEQ_ROW_CM = 1.3
 
 NODE_RE = re.compile(
     r"(?P<id>[A-Za-z_][A-Za-z0-9_]*)\s*\[(?P<label>[^\]]*)\]"
@@ -101,6 +106,9 @@ class Node:
     layer: int = 0
     row: int = 0
     band: tuple = ()
+    # Largura do texto e largura total da caixa. Todas as caixas de uma
+    # coluna ficam com a mesma largura, para a grelha fechar.
+    text_width: float = 0.0
     x: float = 0.0
     y: float = 0.0
     width: float = 0.0
@@ -187,11 +195,11 @@ def label_to_latex(label: str) -> str:
     return r"\\".join(parts) if parts else ""
 
 
-def estimate_width(node: Node) -> float:
-    """Largura estimada da caixa, em cm.
+def estimate_text_width(node: Node) -> float:
+    """Largura do texto de um rotulo, em cm.
 
-    As medidas vem de \\\\small com newtxtext, medidas em LaTeX: uma minuscula
-    da 0,165 cm, uma maiuscula 0,23 cm e um espaco 0,085 cm. Os 0,10 cm de
+    As medidas vem de \\small sem serifa, medidas em LaTeX: uma minuscula da
+    0,165 cm, uma maiuscula 0,23 cm e um espaco 0,085 cm. Os 0,10 cm de
     margem cobrem a diferenca entre a media e o pior caso, e um rotulo que
     nao cabe na caixa parte-se em duas linhas sem erro nenhum.
     """
@@ -206,7 +214,12 @@ def estimate_width(node: Node) -> float:
             width += 0.165
         else:
             width += 0.12
-    return width + 0.10 + PAD_CM
+    return width + 0.10
+
+
+def estimate_width(node: Node) -> float:
+    """Largura total da caixa, em cm."""
+    return estimate_text_width(node) + BOX_PAD_CM
 
 
 # --------------------------------------------------------------------------
@@ -530,11 +543,46 @@ def group_blocks(layers: dict[int, list[Node]], groups: list[Group]) -> list[lis
     return ordered
 
 
+def band_levels(bands: dict[tuple, list[Node]]) -> dict[tuple, int]:
+    """Nivel vertical de cada faixa.
+
+    Duas faixas cujas colunas se sobrepoem nao podem estar no mesmo nivel,
+    senao as caixas de uma ficariam por cima das caixas da outra. Duas faixas
+    em colunas distintas podem, e e' isso que poe o sistema no meio: as
+    fontes a esquerda, os destinos a direita.
+    """
+    intervals: dict[tuple, tuple[int, int]] = {}
+    for key, members in bands.items():
+        layers = [node.layer for node in members]
+        intervals[key] = (min(layers), max(layers))
+
+    order = sorted(bands, key=lambda key: (intervals[key][0], intervals[key][1]))
+    levels: dict[tuple, int] = {}
+    placed: list[list[tuple[int, int]]] = []
+    for key in order:
+        low, high = intervals[key]
+        level = 0
+        while level < len(placed):
+            clash = any(
+                not (high < other_low or low > other_high)
+                for other_low, other_high in placed[level]
+            )
+            if not clash:
+                break
+            level += 1
+        if level == len(placed):
+            placed.append([])
+        placed[level].append(intervals[key])
+        levels[key] = level
+    return levels
+
+
 def layout_flowchart(diagram: Diagram) -> None:
     if not diagram.nodes:
         return
     for node in diagram.nodes:
-        node.width = estimate_width(node)
+        node.text_width = estimate_text_width(node)
+        node.width = node.text_width + BOX_PAD_CM
         node.height = 0.95 if len(node.lines) > 1 else 0.72
 
     layer = assign_layers(diagram)
@@ -546,13 +594,25 @@ def layout_flowchart(diagram: Diagram) -> None:
     for node in diagram.nodes:
         layers.setdefault(layer[node.id], []).append(node)
 
+    # Todas as caixas de uma linha ficam com a mesma largura. E' o que fecha
+    # a grelha: sem isto, duas caixas da mesma linha com nomes de
+    # comprimento diferente ficam com bordas desalinhadads.
+    for depth, members in layers.items():
+        text_width = max(node.text_width for node in members)
+        for node in members:
+            node.text_width = text_width
+            node.width = text_width + BOX_PAD_CM
+
     if diagram.direction == "TB":
-        # Camadas viram faixas verticais, e os nos de uma faixa ficam lado a lado.
         for depth in sorted(layers):
             members = layers[depth]
-            for index, node in enumerate(members):
-                node.x = (index - (len(members) - 1) / 2.0) * (LAYER_GAP_CM + 1.0)
+            gap = LAYER_GAP_CM
+            total = sum(node.width for node in members) + gap * (len(members) - 1)
+            cursor = -total / 2.0
+            for node in members:
+                node.x = cursor + node.width / 2.0
                 node.y = -depth * TB_LAYER_CM
+                cursor += node.width + gap
         return
 
     # Direccao LR: camadas horizontais, nos empilhados dentro de cada uma.
@@ -621,24 +681,41 @@ def layout_flowchart(diagram: Diagram) -> None:
             return (lowest, 0 if key[0] == "g" else 1, group_order)
 
         band_keys = sorted(bands, key=band_order)
-        band_top = 0.0
+        levels = band_levels(bands)
+
+        # As faixas de um nivel partilham a mesma altura, e cada uma comeca
+        # no topo do nivel. As faixas do nivel seguinte ficam por baixo.
+        band_rows: dict[int, int] = {}
+        for key in band_keys:
+            members = bands[key]
+            per_layer: dict[int, int] = {}
+            for node in members:
+                per_layer[node.layer] = per_layer.get(node.layer, 0) + 1
+            band_rows[levels[key]] = max(
+                band_rows.get(levels[key], 0), max(per_layer.values()))
+
+        level_top: dict[int, float] = {}
+        cursor = 0.0
+        for level in sorted(band_rows):
+            level_top[level] = cursor
+            cursor -= band_rows[level] * ROW_GAP_CM + BAND_GAP_CM
+
         band_bottom: dict[tuple, float] = {}
         for key in band_keys:
             members = bands[key]
             per_layer: dict[int, int] = {}
             for node in members:
                 per_layer[node.layer] = per_layer.get(node.layer, 0) + 1
-            rows_in_band = max(per_layer.values())
-            band_height = rows_in_band * ROW_GAP_CM
+            band_height = max(per_layer.values()) * ROW_GAP_CM
+            top = level_top[levels[key]] - drop
             index_in_layer: dict[int, int] = {}
             for node in sorted(members, key=lambda n: (n.layer, n.id)):
                 slot = index_in_layer.get(node.layer, 0)
                 index_in_layer[node.layer] = slot + 1
-                node.y = band_top - slot * ROW_GAP_CM - drop
+                node.y = top - slot * ROW_GAP_CM
                 node.band = key
-            band_top -= band_height + BAND_GAP_CM
-            band_bottom[key] = band_top + BAND_GAP_CM
-            band_bottom_all[key] = band_top + BAND_GAP_CM
+            band_bottom[key] = top - band_height
+            band_bottom_all[key] = top - band_height
 
         # Agora as colunas: a largura de uma camada e' a do no mais largo
         # que nela esta, seja de que faixa vier.
@@ -687,7 +764,8 @@ def layout_classdiagram(diagram: Diagram) -> None:
         lines: list[list[Node]] = []
         x = 0.0
         for node in members:
-            node.width = max(2.0, len(node.label) * CHAR_CM + PAD_CM)
+            node.text_width = max(1.6, len(node.label) * CHAR_CM)
+            node.width = node.text_width + BOX_PAD_CM
             node.height = 0.85
             if line and x + node.width > MAX_ROW_CM:
                 lines.append(line)
@@ -700,6 +778,12 @@ def layout_classdiagram(diagram: Diagram) -> None:
             lines.append(line)
 
         for sub, members_of_line in enumerate(lines):
+            # Todas as classes de uma linha ficam com a mesma largura, para
+            # a fila fechar como uma grelha.
+            text_width = max(node.text_width for node in members_of_line)
+            for node in members_of_line:
+                node.text_width = text_width
+                node.width = text_width + BOX_PAD_CM
             total = sum(node.width for node in members_of_line) + 0.8 * (len(members_of_line) - 1)
             cursor = -total / 2.0
             for node in members_of_line:
@@ -714,7 +798,8 @@ def layout_sequence(diagram: Diagram) -> None:
     # mais larga que nela cabe. Uma largura fixa deixava colunas vazias ou
     # caixas sobrepostas, conforme o numero de participantes.
     for participant in diagram.participants:
-        participant.width = estimate_width(participant)
+        participant.text_width = estimate_text_width(participant)
+        participant.width = participant.text_width + BOX_PAD_CM
         participant.height = 0.8
 
     x = 0.0
@@ -732,34 +817,32 @@ def layout_sequence(diagram: Diagram) -> None:
 
 
 def preamble(diagram: Diagram) -> list[str]:
-    # As cores entram por concatenacao, e nao por f-string: o `!` de xcolor
-    # (GRAY!85!black) colide com a sintaxe de conversao do f-string.
-    gray_dark = GRAY + "!85!black"
-    gray_mid = GRAY + "!75!black"
-    gray_line = GRAY + "!80!black"
-    ink_soft = INK + "!80"
+    # A tipografia e' sem serifa em todo o desenho, e a negrito. O desenho
+    # e' lido de longe, e o peso ajuda a separar o rotulo do ruido do
+    # fundo. O pacote helvet da o Arial em metricas, e esta em qualquer
+    # TeX Live e MiKTeX, ao contrario da fonte do sistema.
     return [
-        r"\definecolor{atlasgray}{HTML}{" + GRAY + "}",
-        r"\definecolor{atlasred}{HTML}{" + RED + "}",
-        r"\definecolor{atlasink}{HTML}{" + INK + "}",
+        r"\definecolor{atlasyellow}{HTML}{" + YELLOW + "}",
+        r"\definecolor{atlasamber}{HTML}{" + AMBER + "}",
+        r"\definecolor{atlasblack}{HTML}{" + BLACK + "}",
         r"\begin{tikzpicture}[",
-        "  font=\\small,",
-        "  atlasgroup/.style={draw=atlasgray!75!black, fill=atlasgray, rounded corners=3pt, inner xsep=12pt, inner ysep=15pt},",
-        "  atlasgrouptext/.style={font=\\scriptsize\\bfseries, text=white, anchor=north west, inner sep=1pt},",
-        "  atlasleaf/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\\small},",
-        "  atlasleafabstract/.style={atlasleaf, fill=atlasgray, text=white, font=\\small\\itshape},",
-        "  atlasflow/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, line width=0.6pt},",
-        "  atlasasync/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, dashed, line width=0.6pt},",
-        "  atlaslabel/.style={font=\\scriptsize, fill=white, inner sep=1.5pt, text=black!75},",
-        "  atlasclass/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=6pt, font=\\small},",
-        "  atlasclassabstract/.style={atlasclass, fill=atlasgray, text=white, font=\\small\\itshape},",
-        "  atlasuml/.style={-{Triangle[length=2.3mm,width=2.8mm]}, draw=atlasred, line width=0.7pt},",
-        "  atlascomp/.style={-{Diamond[length=2.5mm]}, draw=atlasred, line width=0.7pt},",
-        "  atlaslife/.style={draw=atlasgray!80!black, dashed, line width=0.5pt},",
-        "  atlasmsg/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, line width=0.6pt},",
-        "  atlasmsgback/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, dashed, line width=0.6pt},",
-        "  atlasmsglabel/.style={font=\\scriptsize, fill=white, inner sep=1.5pt, text=black!75},",
-        "  atlasparticipant/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\\small},",
+        "  font=\\sffamily\\bfseries\\small,",
+        "  atlasgroup/.style={draw=atlasblack, fill=atlasamber, line width=0.9pt, rounded corners=4pt, inner xsep=14pt, inner ysep=26pt},",
+        "  atlasgrouptext/.style={font=\\sffamily\\bfseries\\small, text=atlasblack, anchor=north west, inner sep=1pt},",
+        "  atlasleaf/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\\sffamily\\bfseries\\small},",
+        "  atlasleafabstract/.style={atlasleaf, fill=atlasamber},",
+        "  atlasflow/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, line width=0.8pt},",
+        "  atlasasync/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, dashed, line width=0.8pt},",
+        "  atlaslabel/.style={font=\\sffamily\\bfseries\\tiny, fill=white, inner sep=1.2pt, text=atlasblack},",
+        "  atlasclass/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=6pt, font=\\sffamily\\bfseries\\small},",
+        "  atlasclassabstract/.style={atlasclass, fill=atlasamber},",
+        "  atlasuml/.style={-{Triangle[length=2.4mm,width=2.9mm]}, draw=atlasblack, line width=0.9pt},",
+        "  atlascomp/.style={-{Diamond[length=2.6mm]}, draw=atlasblack, line width=0.9pt},",
+        "  atlaslife/.style={draw=atlasblack, dashed, line width=0.6pt},",
+        "  atlasmsg/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, line width=0.8pt},",
+        "  atlasmsgback/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, dashed, line width=0.8pt},",
+        "  atlasmsglabel/.style={font=\\sffamily\\bfseries\\scriptsize, fill=white, inner sep=1.5pt, text=atlasblack},",
+        "  atlasparticipant/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\\sffamily\\bfseries\\small},",
         "]",
     ]
 
@@ -774,17 +857,40 @@ def render_flowchart(diagram: Diagram) -> list[str]:
 
     for node in diagram.nodes:
         out.append(
-            f"  \\node[{node_style(node)}, text width={max(node.width - PAD_CM, 1.2):.2f}cm] "
+            f"  \\node[{node_style(node)}, text width={max(node.text_width, 1.2):.2f}cm] "
             f"({node.id}) at ({node.x:.2f},{node.y:.2f}) {{{label_to_latex(node.label)}}};"
         )
 
     # As arestas sao desenhadas depois dos nos, para ficarem por cima.
-    # Uma aresta que salta camadas e' desviada por cima de tudo, senao
-    # atravessa as caixas brancas pelo meio e o desenho fica ilegivel.
-    top = max((node.y + node.height / 2.0 for node in diagram.nodes), default=0.0)
+    # Uma aresta que salta camadas e' desviada por baixo da faixa de
+    # origem, senao atravessa as caixas do meio.
+    #
+    # Duas arestas que chegam ao mesmo no colocam o rotulo no mesmo sitio.
+    # O rotulo e' deslocado ao longo da aresta, para as duas nao se
+    # sobrepoarem.
     long_edge = 0
+    label_slot: dict[str, int] = {}
+    pair_slot: dict[frozenset, int] = {}
     for edge in diagram.edges:
         style = "atlasasync" if edge.op in ("-.->", "-.-") else "atlasflow"
+        # O rotulo desloca-se ao longo da aresta. Duas arestas que chegam ao
+        # mesmo no, e duas arestas entre o mesmo par de nos, precisam de
+        # deslocacoes diferentes, senao os rotulos ficam um em cima do outro.
+        by_target = label_slot.get(edge.dst, 0)
+        pair = frozenset((edge.src, edge.dst))
+        by_pair = pair_slot.get(pair, 0)
+        label_slot[edge.dst] = by_target + 1
+        pair_slot[pair] = by_pair + 1
+        slot = max(by_target, by_pair)
+        # Duas arestas entre o mesmo par de nos correm sobre a mesma linha.
+        # Os rotulos de uma e de outra ficam um de cada lado, senao um tapa o
+        # outro.
+        side = "below" if by_pair % 2 else "above"
+        # Numa aresta recta o rotulo desloca-se ao longo do troco. Numa aresta
+        # desviada por baixo, o troco util e' o horizontal do meio: o
+        # rotulo no vertical ficava um em cima do outro.
+        pos = min(0.32 + 0.14 * slot, 0.74)
+        pos_routed = min(0.5 + 0.13 * slot, 0.84)
         if edge.src == edge.dst:
             out.append(
                 f"  \\draw[{style}] ({edge.src}.east) to[loop right, min distance=1.2cm] "
@@ -805,20 +911,21 @@ def render_flowchart(diagram: Diagram) -> list[str]:
         elif same_row and span <= 1:
             out.append(
                 f"  \\draw[{style}] ({edge.src}) -- "
-                f"node[atlaslabel, above] {{{label_to_latex(edge.label)}}} ({edge.dst});"
+                f"node[atlaslabel, {side}, pos={pos:.2f}] "
+                f"{{{label_to_latex(edge.label)}}} ({edge.dst});"
             )
         else:
             # A aresta salta camadas ou faixas. O caminho passa por baixo da
             # faixa de origem, senao atravessa as caixas do meio.
             band = diagram.band_bottom.get(source.band, source.y - 0.5)
-            route = band - 0.45 - 0.45 * long_edge
+            route = band - 0.6 - 1.0 * long_edge
             long_edge += 1
             drop = source.y - route
             out.append(
                 f"  \\draw[{style}] ({edge.src}.south) -- "
                 f"([yshift=-{drop:.2f}cm]{edge.src}.south) |- "
                 f"([yshift=-{drop:.2f}cm]{edge.dst}.south) -- ({edge.dst}.south) "
-                f"node[atlaslabel, pos=0.5, below] {{{label_to_latex(edge.label)}}};"
+                f"node[atlaslabel, pos={pos_routed:.2f}, below] {{{label_to_latex(edge.label)}}};"
             )
 
     # As caixas de agrupamento vao para a camada de fundo, com o texto no topo.
@@ -845,7 +952,7 @@ def render_classdiagram(diagram: Diagram) -> list[str]:
     for node in diagram.nodes:
         style = "atlasclassabstract" if node.cls == "abstract" else "atlasclass"
         out.append(
-            f"  \\node[{style}, text width={max(node.width - PAD_CM, 1.2):.2f}cm] "
+            f"  \\node[{style}, text width={max(node.text_width, 1.2):.2f}cm] "
             f"({node.id}) at ({node.x:.2f},{node.y:.2f}) {{{label_to_latex(node.label)}}};"
         )
 
@@ -862,9 +969,15 @@ def render_classdiagram(diagram: Diagram) -> list[str]:
                 f"  \\draw[atlasuml] ({edge.src}.south) -- ({edge.dst}.north);"
             )
         elif edge.op == "*--":
-            out.append(
-                f"  \\draw[atlascomp] ({edge.src}.south) -- ({edge.dst}.north);"
-            )
+            if label:
+                out.append(
+                    f"  \\draw[atlascomp] ({edge.src}.south) -- "
+                    f"node[atlaslabel, above, pos=0.35] {{{label}}} ({edge.dst}.north);"
+                )
+            else:
+                out.append(
+                    f"  \\draw[atlascomp] ({edge.src}.south) -- ({edge.dst}.north);"
+                )
         elif edge.op == "-->":
             if backwards:
                 # A associacao vai de tras para a frente. A linha reta
@@ -897,7 +1010,7 @@ def render_sequence(diagram: Diagram) -> list[str]:
 
     for participant in diagram.participants:
         out.append(
-            f"  \\node[atlasparticipant, text width={max(participant.width - PAD_CM, 1.2):.2f}cm] "
+            f"  \\node[atlasparticipant, text width={max(participant.text_width, 1.2):.2f}cm] "
             f"({participant.id}) at ({participant.x:.2f},{participant.y:.2f}) "
             f"{{{label_to_latex(participant.label)}}};"
         )
@@ -916,13 +1029,19 @@ def render_sequence(diagram: Diagram) -> list[str]:
         style = "atlasmsgback" if message.op.startswith("--") else "atlasmsg"
         if message.src == message.dst:
             out.append(
-                f"  \\draw[{style}] ({message.src}.east) to[loop right, min distance=1.0cm] "
-                f"node[atlasmsglabel, above] {{{text}}} ({message.src}.east);"
+                f"  \\draw[{style}] ({message.src}.east |- 0,{y:.2f}) "
+                f"to[loop right, min distance=1.4cm] "
+                f"node[atlasmsglabel, above] {{{text}}} "
+                f"({message.src}.east |- 0,{y:.2f});"
             )
             continue
+        # As duas pontas ficam na altura da mensagem: o `|-` toma o x do
+        # participante e o y da linha da mensagem. Sem isso, todas as
+        # mensagens caem na mesma linha, em cima da fila dos participantes.
         out.append(
-            f"  \\draw[{style}] ({message.src}.east) -- "
-            f"node[atlasmsglabel, above] {{{text}}} ({message.dst}.west);"
+            f"  \\draw[{style}] ({message.src}.east |- 0,{y:.2f}) -- "
+            f"node[atlasmsglabel, above] {{{text}}} "
+            f"({message.dst}.west |- 0,{y:.2f});"
         )
     return out
 

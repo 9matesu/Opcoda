@@ -53,6 +53,13 @@ de dados e entradas e saidas. A skill do Catlas vive em
 - O `mermaid.min.js` nao e' versionado. O `tools/render-mermaid.ps1` obtem a
   versao fixada (11.4.1), verifica o SHA-256 e escreve o pin ao lado do
   ficheiro.
+- A paleta dos diagramas e' amarelo e preto, com texto a negrito e sem
+  serifa: caixa `#FFD400`, grupo `#FFB000`, contorno e texto `#000000`. Vale
+  para o Mermaid e para o TikZ. O `classDef` do classDiagram tem de levar as
+  mesmas cores, senao o `classDef` ganha ao tema.
+- O Mermaid e' mais estrito que o lint na sintaxe do classDiagram: aceita
+  `A --> B : rotulo` e recusa `A -->|rotulo| B`. O lint, esse, exige o `|`.
+  A saida e' usar composicao, `A *-- B : rotulo`, que os dois aceitam.
 - `latexmk` nao serve: o do MiKTeX e' um script em Perl e nem toda a maquina
   de build tem Perl. O pipeline chama o `pdflatex` duas vezes.
 - Editar um `.mmd` e' editar o diagrama. O `scripts/mermaid-lint.py` da skill

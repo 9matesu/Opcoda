@@ -117,12 +117,24 @@ foreach ($f in $files) {
   # O codigo vai num script de tipo texto: fica fora do DOM ja desenhado, e
   # as tags HTML nao sao interpretadas pelo Mermaid.
   #
-  # O tema e' o 'base' com as variaveis que o guia de estilo do Catlas fixa:
-  # nos brancos com contorno vermelho escuro, texto de consola e agrupamentos
-  # cinza. O GitHub desenha o .mmd com o tema dele, e por isso o SVG
-  # versionado e' o registo visual fiel.
+  # O tema e' o 'base' com a paleta do atlas: caixas amarelas com contorno
+  # preto, texto preto a negrito e sem serifa. O GitHub desenha o .mmd com o
+  # tema dele, e por isso o SVG versionado e' o registo visual fiel.
   $html = @"
 <!doctype html><meta charset="utf-8"><body style="margin:0;background:#ffffff">
+<style>
+  /* O Mermaid nao passa o peso da letra, e o titulo do grupo sai com a cor
+     do tema. A folha de estilo poem tudo a preto, a negrito e em sem
+     serifa, que e' o que o TikZ faz do outro lado. */
+  #diagrama svg text {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: 700 !important;
+    fill: #000000 !important;
+  }
+  #diagrama svg .edgeLabel, #diagrama svg .label, #diagrama svg .label text {
+    fill: #000000 !important;
+  }
+</style>
 <script type="text/plain" id="fonte">$esc</script>
 <div id="diagrama"></div>
 <script src="$mermaidUri"></script>
@@ -131,22 +143,30 @@ foreach ($f in $files) {
   mermaid.initialize({
     theme: 'base',
     themeVariables: {
-      primaryColor: '#ffffff',
-      primaryTextColor: '#202124',
-      primaryBorderColor: '#8B1A1A',
-      lineColor: '#5F6368',
-      clusterBkg: '#9AA0A6',
-      clusterBorder: '#5F6368',
-      fontFamily: 'Consolas, monospace',
+      primaryColor: '#FFD400',
+      primaryTextColor: '#000000',
+      primaryBorderColor: '#000000',
+      lineColor: '#000000',
+      secondaryColor: '#FFB000',
+      tertiaryColor: '#FFB000',
+      clusterBkg: '#FFB000',
+      clusterBorder: '#000000',
+      edgeLabelBackground: '#ffffff',
+      fontFamily: 'Arial, Helvetica, sans-serif',
       fontSize: '15px'
     },
-    flowchart: { useMaxWidth: false, htmlLabels: false },
-    sequence: { useMaxWidth: false }
+    flowchart: { useMaxWidth: false, htmlLabels: false, curve: 'linear' },
+    sequence: { useMaxWidth: false, fontSize: '15px' }
   });
   const fonte = document.getElementById('fonte').textContent;
-  const { svg } = await mermaid.render('g', fonte);
-  document.getElementById('diagrama').innerHTML = svg;
-  document.title = 'pronto';
+  try {
+    const { svg } = await mermaid.render('g', fonte);
+    document.getElementById('diagrama').innerHTML = svg;
+    document.title = 'pronto';
+  } catch (erro) {
+    document.getElementById('diagrama').textContent = 'ERRO: ' + erro.message;
+    document.title = 'erro';
+  }
 })();
 </script>
 "@
@@ -167,7 +187,16 @@ foreach ($f in $files) {
   $width = 1600
   $height = 1000
   if ($svg.Success -and $svg.Value.Length -gt 500) {
-    $svg.Value | Out-File -Encoding utf8 $svgPath
+    # O SVG e' guardado sozinho, sem a folha de estilo da pagina. A tipografia
+    # tem de entrar no ficheiro, senao o SVG versionado sai com o texto
+    # normal e com o titulo do grupo na cor do tema.
+    $style = '<style>text{font-family:Arial,Helvetica,sans-serif !important;font-weight:700 !important;fill:#000000 !important}.edgeLabel rect{fill:#ffffff;stroke:none}</style>'
+    $markup = $svg.Value
+    $cut = $markup.IndexOf('>')
+    if ($cut -gt 0) {
+      $markup = $markup.Substring(0, $cut + 1) + $style + $markup.Substring($cut + 1)
+    }
+    $markup | Out-File -Encoding utf8 $svgPath
     # A janela do screenshot segue a dimensao do desenho, senao o PNG fica
     # com meia pagina em branco por baixo.
     $viewBox = [regex]::Match($svg.Value, 'viewBox="([\d.\-]+)\s+([\d.\-]+)\s+([\d.]+)\s+([\d.]+)"')

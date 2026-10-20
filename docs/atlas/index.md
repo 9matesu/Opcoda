@@ -19,6 +19,11 @@ Renderizador: Mermaid `11.4.1`, fixado com SHA-256
 Chrome headless. A figura LaTeX e' gerada por `tools/mmd2tikz.py` a partir
 do mesmo ficheiro `.mmd`.
 
+A paleta e' a mesma nas duas saidas: caixa amarela com contorno preto,
+texto preto a negrito, e um amarelo mais escuro nos grupos. A tipografia e'
+sem serifa, e as caixas de uma mesma linha ficam com a mesma largura, para
+a grelha fechar.
+
 ## Mapa
 
 * `01-inventory.md`: os ficheiros por papel. Comece aqui quando precisar de

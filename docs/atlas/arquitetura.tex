@@ -17,7 +17,8 @@
 \usepackage[utf8]{inputenc}
 \usepackage[brazil]{babel}
 \usepackage{lmodern}
-\usepackage{newtxtext}
+\usepackage[scaled=0.95]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
 \usepackage{geometry}
 \geometry{top=1.8cm,bottom=1.8cm,left=2cm,right=2cm}
 \usepackage{setspace}
@@ -25,12 +26,17 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage[table]{xcolor}
 \usepackage{longtable}
 \usepackage{multicol}
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta,fit,calc,shapes.misc,backgrounds,shapes.multipart}
+
+% A paleta e' a mesma dos diagramas: amarelo e preto.
+\definecolor{atlasyellow}{HTML}{FFD400}
+\definecolor{atlasamber}{HTML}{FFB000}
 
 \pagestyle{plain}
 \setlength{\parindent}{0.8cm}
@@ -49,6 +55,30 @@
     \usebox{\figbox}%
   \fi
 }
+
+% Uma figura com legenda. A figura enche a medida da pagina: encolhe o
+% que for mais largo do que a caixa e cresce ate a altura alvo, para que
+% nenhum desenho fique pequeno no meio do papel. O texto de dentro cresce
+% ou encolhe com a figura, e as caixas mantem-se proporcionais.
+%
+% A escala e' calculada com o pgfmath e nao com o \dimexpr: a divisao do
+% \dimexpr trunca para sp inteiro, e uma razao de menos de um sp dava zero.
+% Com o zero a comparacao ia para o lado errado e a figura saia da pagina.
+\newcommand{\figura}[2]{%
+  \sbox{\figbox}{\input{figuras/#1.tex}}%
+  \pgfmathsetmacro{\atlasw}{\the\wd\figbox}%
+  \pgfmathsetmacro{\atlasalt}{\the\ht\figbox + \the\dp\figbox}%
+  \pgfmathsetmacro{\atlaslin}{\the\linewidth}%
+  \pgfmathsetmacro{\atlask}{min(\atlaslin/\atlasw, 432.00168/\atlasalt)}%
+  \pgfmathsetmacro{\atlasnw}{\atlasw*\atlask}%
+  \begin{center}%
+  \resizebox{\atlasnw pt}{!}{\usebox{\figbox}}\\[5pt]
+  {\footnotesize\bfseries #2}%
+  \end{center}%
+}
+
+% Cabecalho de tabela: fundo amarelo, texto preto a negrito.
+\newcommand{\cab}[1]{\rowcolor{atlasyellow}\textbf{#1}}
 
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 % As tabelas somam 25,7 cm de texto. Com o \tabcolsep por omissao, a soma
@@ -85,7 +115,8 @@ poder ser testado sem uma janela e sem um host.
 \begin{center}
 \begin{tabular}{@{}L{6.0cm}L{19.0cm}@{}}
 \toprule
-Pasta & Papel \\
+\rowcolor{atlasyellow}
+\textbf{Pasta} & \textbf{Papel} \\
 \midrule
 \path{src/opcoda\_core/pe} & Leitura defensiva do PE, conversao de bytes, selecao de regiao \\
 \path{src/opcoda\_core/entropy} & Entropia de Shannon por janela \\
@@ -104,14 +135,13 @@ host entrega MIDI e parametros, e o host entrega o estado de um projecto
 guardado. Do outro lado, o plugin devolve audio, devolve estado e escreve
 ficheiros de preset.
 
-\begin{center}
-\maxfig{context}
-\end{center}
+\figura{context}{Figura 1. Contexto. O que entra no Opcoda vem da esquerda, o que sai vai para a direita, e o plugin fica no meio.}
 
 \begin{center}
 \begin{tabular}{@{}L{3.6cm}L{6.6cm}L{6.4cm}L{8.4cm}@{}}
 \toprule
-Fluxo & Origem & Destino & Tipo \\
+\rowcolor{atlasyellow}
+\textbf{Fluxo} & \textbf{Origem} & \textbf{Destino} & \textbf{Tipo} \\
 \midrule
 caminho & \path{plugin\_processor.cpp:145} & \path{pe\_parser.cpp:65} & \texttt{vector<uint8\_t>} \\
 arrasto & \path{plugin\_editor.h:66} & \path{plugin\_processor.cpp:144} & \texttt{juce::String} \\
@@ -128,14 +158,13 @@ antigo, para que a interface possa libertar a memoria quando quiser.
 
 \section*{3 Contentores}
 
-\begin{center}
-\maxfig{containers}
-\end{center}
+\figura{containers}{Figura 2. Contentores. O nucleo C++20 puro abaixo, o plugin JUCE acima, e a fila SPSC a unica passagem entre os dois.}
 
 \begin{center}
 \begin{tabular}{@{}L{7.0cm}L{6.4cm}L{11.6cm}@{}}
 \toprule
-Relacao & Onde & O que significa \\
+\rowcolor{atlasyellow}
+\textbf{Relacao} & \textbf{Onde} & \textbf{O que significa} \\
 \midrule
 \texttt{opcoda\_core} para \texttt{pe} & \path{CMakeLists.txt:22} & leitura do PE, conversao de bytes, selecao de regiao \\
 \texttt{opcoda\_core} para \texttt{entropy} & \path{CMakeLists.txt:27} & entropia de Shannon por janela \\
@@ -170,14 +199,13 @@ o ter devolvido.
 Da esquerda para a direita: o ficheiro entra, o audio sai. As duas caixas
 cinzentas sao as duas threads, e a fila SPSC e' a unica passagem entre elas.
 
-\begin{center}
-\maxfig{dataflow-l0}
-\end{center}
+\figura{dataflow-l0}{Figura 3. Fluxo de dados de nivel 0. Da leitura do ficheiro aos samples no barramento, com a fila SPSC a marcar a fronteira entre as duas threads.}
 
 \begin{center}
 \begin{tabular}{@{}L{3.4cm}L{5.4cm}L{7.6cm}L{8.6cm}@{}}
 \toprule
-Fluxo & Tipo & Origem & Destino \\
+\rowcolor{atlasyellow}
+\textbf{Fluxo} & \textbf{Tipo} & \textbf{Origem} & \textbf{Destino} \\
 \midrule
 bytes & \texttt{vector<uint8\_t>} & \path{plugin\_processor.cpp:145} & \path{pe\_parser.cpp:65} \\
 bytes & \texttt{vector<uint8\_t>} & \path{plugin\_processor.cpp:145} & \path{byte\_to\_sample.cpp:5} \\
@@ -203,14 +231,13 @@ trabalho do tamanho da regiao dentro da thread de audio.
 Do ficheiro ate a fila. Tudo o que acontece aqui corre na thread de
 interface, e por isso pode alocar.
 
-\begin{center}
-\maxfig{dataflow-l1-ingest}
-\end{center}
+\figura{dataflow-l1-ingest}{Figura 4. Nivel 1 do ingest. Do ficheiro ate a fila, com o erro tipado a sair pelo ramo de baixo.}
 
 \begin{center}
 \begin{tabular}{@{}L{1.4cm}L{7.0cm}L{16.6cm}@{}}
 \toprule
-Passo & Codigo & O que move \\
+\rowcolor{atlasyellow}
+\textbf{Passo} & \textbf{Codigo} & \textbf{O que move} \\
 \midrule
 1 & \path{plugin\_processor.cpp:144} & o caminho do ficheiro \\
 2 & \path{plugin\_processor.cpp:160} & os bytes crus \\
@@ -231,14 +258,13 @@ Passo & Codigo & O que move \\
 Do host ate ao barramento. Nada disto aloca, nada disto bloqueia, e nada
 disto le disco.
 
-\begin{center}
-\maxfig{dataflow-l1-audio}
-\end{center}
+\figura{dataflow-l1-audio}{Figura 5. Nivel 1 do bloco de audio. Da leitura do MIDI ate ao limitador, tudo na thread de audio.}
 
 \begin{center}
 \begin{tabular}{@{}L{1.4cm}L{7.0cm}L{16.6cm}@{}}
 \toprule
-Passo & Codigo & O que move \\
+\rowcolor{atlasyellow}
+\textbf{Passo} & \textbf{Codigo} & \textbf{O que move} \\
 \midrule
 1 & \path{plugin\_processor.cpp:465} & o buffer e o MIDI do bloco \\
 2 & \path{plugin\_processor.cpp:356} & o \texttt{PublishedMaterial} que chegou \\
@@ -265,11 +291,13 @@ mantem o tecto de saida independente de quantas notas estao a soar.
 
 \begin{longtable}{@{}L{6.4cm}L{8.6cm}L{10.0cm}@{}}
 \toprule
-Entrada & Sitio & Dado \\
+\rowcolor{atlasyellow}
+\textbf{Entrada} & \textbf{Sitio} & \textbf{Dado} \\
 \midrule
 \endfirsthead
 \toprule
-Entrada & Sitio & Dado \\
+\rowcolor{atlasyellow}
+\textbf{Entrada} & \textbf{Sitio} & \textbf{Dado} \\
 \midrule
 \endhead
 dialogo de ficheiro & \path{plugin\_editor.cpp:1430} & caminho, \texttt{juce::String} \\
@@ -289,11 +317,13 @@ ficheiro PE pelo nucleo & \path{pe\_parser.cpp:166} & \texttt{vector<uint8\_t>} 
 
 \begin{longtable}{@{}L{6.4cm}L{8.6cm}L{10.0cm}@{}}
 \toprule
-Saida & Sitio & Dado \\
+\rowcolor{atlasyellow}
+\textbf{Saida} & \textbf{Sitio} & \textbf{Dado} \\
 \midrule
 \endfirsthead
 \toprule
-Saida & Sitio & Dado \\
+\rowcolor{atlasyellow}
+\textbf{Saida} & \textbf{Sitio} & \textbf{Dado} \\
 \midrule
 \endhead
 audio para o host & \path{plugin\_processor.cpp:499} & \texttt{float}, dois canais \\
@@ -318,7 +348,8 @@ estavel, e a interface mostra a cadeia tal e qual.
 \begin{center}
 \begin{tabular}{@{}L{8.0cm}L{17.0cm}@{}}
 \toprule
-Codigo & Quando \\
+\rowcolor{atlasyellow}
+\textbf{Codigo} & \textbf{Quando} \\
 \midrule
 \texttt{E\_OPEN} & o ficheiro nao abre \\
 \texttt{E\_EMPTY} & o ficheiro esta vazio \\
@@ -338,9 +369,7 @@ Codigo & Quando \\
 
 \subsection*{5.4 Caminho quente}
 
-\begin{center}
-\maxfig{sequence-hot-path}
-\end{center}
+\figura{sequence-hot-path}{Figura 6. Caminho quente. A ordem das chamadas desde o arrasto do ficheiro ate ao audio no barramento.}
 
 \begin{multicols}{2}
 O arrasto e' tratado em \texttt{PluginEditor::filesDropped}, que chama

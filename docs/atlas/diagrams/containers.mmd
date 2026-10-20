@@ -21,6 +21,6 @@ classDiagram
   opcoda_plugin *-- opcoda_core
   opcoda_plugin <|-- processor
   opcoda_plugin <|-- editor
-  processor -->|fila SPSC| dsp
-  classDef abstract fill:#9AA0A6,stroke:#5F6368,color:#fff,fontStyle:italic
-  classDef concrete fill:#ffffff,stroke:#8B1A1A,stroke-width:1px,color:#202124
+  processor *-- dsp : fila SPSC
+  classDef abstract fill:#FFB000,stroke:#000000,color:#000000
+  classDef concrete fill:#FFD400,stroke:#000000,color:#000000
