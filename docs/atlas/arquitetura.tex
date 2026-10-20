@@ -1,0 +1,358 @@
+\documentclass[11pt,a4paper,landscape]{article}
+
+% Atlas de arquitectura do Opcoda.
+%
+% Este documento e' a forma LaTeX do mesmo atlas que esta em Markdown em
+% docs/atlas/*.md. As figuras vem de docs/atlas/figuras/*.tex, geradas por
+% tools/mmd2tikz.py a partir de docs/atlas/diagrams/*.mmd. O .mmd e' a fonte
+% da verdade; este ficheiro e' a montagem.
+%
+% A pagina e' deitada porque os diagramas de fluxo sao largos: uma cadeia de
+% camadas nao cabe numa folha deitada com o texto a dobrar a largura. O
+% texto corrido vai em duas colunas, que e' a medida que se le.
+%
+% Para gerar: powershell -File tools/build-atlas.ps1
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{lmodern}
+\usepackage{newtxtext}
+\usepackage{geometry}
+\geometry{top=1.8cm,bottom=1.8cm,left=2cm,right=2cm}
+\usepackage{setspace}
+\setstretch{1.1}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{multicol}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,shapes.misc,backgrounds,shapes.multipart}
+
+\pagestyle{plain}
+\setlength{\parindent}{0.8cm}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{3cm}
+\setlength{\columnsep}{0.8cm}
+
+% As figuras sao largas. O TikZ gerado parte a cadeia de camadas em filas
+% para caber na largura, e esta macro so encolhe o que ainda nao caiba.
+\newsavebox{\figbox}
+\newcommand{\maxfig}[1]{%
+  \sbox{\figbox}{\input{figuras/#1.tex}}%
+  \ifdim\wd\figbox>\linewidth
+    \resizebox{\linewidth}{!}{\usebox{\figbox}}%
+  \else
+    \usebox{\figbox}%
+  \fi
+}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+% As tabelas somam 25,7 cm de texto. Com o \tabcolsep por omissao, a soma
+% das colunas passa do alinhamento e o LaTeX reclama com um overfull.
+\setlength{\tabcolsep}{4pt}
+
+\begin{document}
+
+\begin{center}
+\MakeUppercase{Opcoda: atlas da arquitectura}
+\end{center}
+
+\begin{flushright}
+Mateus Costa de Oliveira Santos\\
+Rafael Augusto Garcez Elisei\\
+Prof. Me. Warner Brezolin (orientador)
+\end{flushright}
+
+\section*{1 Mapa do repositorio}
+
+\begin{multicols}{2}
+O Opcoda e' um sintetizador granular que transforma ficheiros executaveis do
+formato Portable Executable em som. A thread de audio nunca le disco: a
+leitura, a analise e a conversao do material acontecem na thread de
+interface, e a unica passagem entre as duas e' uma fila circular sem trava
+que carrega ponteiro cru.
+
+O repositorio tem duas camadas. \texttt{opcoda\_core} e' C++20 puro e nao
+inclui JUCE em lado nenhum; \texttt{opcoda\_plugin} e' a unica camada que
+depende do framework e da thread de audio do host. O nucleo existe para
+poder ser testado sem uma janela e sem um host.
+\end{multicols}
+
+\begin{center}
+\begin{tabular}{@{}L{6.0cm}L{19.0cm}@{}}
+\toprule
+Pasta & Papel \\
+\midrule
+\path{src/opcoda\_core/pe} & Leitura defensiva do PE, conversao de bytes, selecao de regiao \\
+\path{src/opcoda\_core/entropy} & Entropia de Shannon por janela \\
+\path{src/opcoda\_core/dsp} & Motor granular, janelas, filtros, limitador \\
+\path{src/opcoda\_core/rt} & Fila sem trava, transporte, notas, guard de alocacao \\
+\path{src/opcoda\_core/view} & Rastro dos graos, sem JUCE \\
+\path{src/opcoda\_plugin/source} & Processador JUCE, editor, grelha de bytes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section*{2 Contexto}
+
+O Opcoda entra em cena por tres vias: o utilizador larga um executavel, o
+host entrega MIDI e parametros, e o host entrega o estado de um projecto
+guardado. Do outro lado, o plugin devolve audio, devolve estado e escreve
+ficheiros de preset.
+
+\begin{center}
+\maxfig{context}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}L{3.6cm}L{6.6cm}L{6.4cm}L{8.4cm}@{}}
+\toprule
+Fluxo & Origem & Destino & Tipo \\
+\midrule
+caminho & \path{plugin\_processor.cpp:145} & \path{pe\_parser.cpp:65} & \texttt{vector<uint8\_t>} \\
+arrasto & \path{plugin\_editor.h:66} & \path{plugin\_processor.cpp:144} & \texttt{juce::String} \\
+midi e params & \path{plugin\_processor.cpp:471} & \path{note\_tracker.cpp:7} & \texttt{MidiBuffer} e \texttt{float} \\
+audio e estado & \path{plugin\_processor.cpp:499} & barramento do host & \texttt{float}, dois canais \\
+preset & \path{plugin\_processor.cpp:658} & ficheiro \texttt{.opcoda} & texto XML \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+O ficheiro PE entra pela thread de interface e nunca pela thread de audio. O
+que viaja para o motor e' um ponteiro, e o que o motor devolve e' o ponteiro
+antigo, para que a interface possa libertar a memoria quando quiser.
+
+\section*{3 Contentores}
+
+\begin{center}
+\maxfig{containers}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}L{7.0cm}L{6.4cm}L{11.6cm}@{}}
+\toprule
+Relacao & Onde & O que significa \\
+\midrule
+\texttt{opcoda\_core} para \texttt{pe} & \path{CMakeLists.txt:22} & leitura do PE, conversao de bytes, selecao de regiao \\
+\texttt{opcoda\_core} para \texttt{entropy} & \path{CMakeLists.txt:27} & entropia de Shannon por janela \\
+\texttt{opcoda\_core} para \texttt{dsp} & \path{CMakeLists.txt:33} & motor granular, janelas, filtros, limitador \\
+\texttt{opcoda\_core} para \texttt{rt} & \path{CMakeLists.txt:34} & fila sem trava, transporte, notas, guard de alocacao \\
+\texttt{opcoda\_core} para \texttt{view} & \path{grain\_trail.h:1} & rastro dos graos, sem JUCE \\
+\texttt{opcoda\_plugin} para \texttt{opcoda\_core} & \path{opcoda\_plugin/CMakeLists.txt:82} & o plugin liga o nucleo \\
+\texttt{opcoda\_plugin} para \texttt{processor} & \path{opcoda\_plugin/CMakeLists.txt:61} & fronteira com o host \\
+\texttt{opcoda\_plugin} para \texttt{editor} & \path{opcoda\_plugin/CMakeLists.txt:63} & interface \\
+\texttt{processor} para \texttt{dsp} & \path{plugin\_processor.cpp:356} & fila SPSC, sem alocacao \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{3.1 Onde esta a fronteira de tempo real}
+
+\texttt{PluginProcessor::processBlock} e' o unico ponto onde a thread de
+audio entra. A \texttt{PluginProcessor} tem duas filas: \texttt{incoming\_}
+leva material novo para o motor, \texttt{returned\_} traz de volta o
+ponteiro que o motor ja nao usa. As duas tem capacidade 4 e
+\texttt{SpscRing} exige tipo trivial, por isso o que circula e' ponteiro
+cru e nao \texttt{shared\_ptr}.
+
+O buffer vive em \texttt{owned\_}, que e' da thread de interface. A interface
+liberta-o em \texttt{PluginEditor::refresh}, a 60 Hz, e so depois de o motor
+o ter devolvido.
+
+\section*{4 Fluxo de dados}
+
+\subsection*{4.1 Nivel 0}
+
+Da esquerda para a direita: o ficheiro entra, o audio sai. As duas caixas
+cinzentas sao as duas threads, e a fila SPSC e' a unica passagem entre elas.
+
+\begin{center}
+\maxfig{dataflow-l0}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}L{3.4cm}L{5.4cm}L{7.6cm}L{8.6cm}@{}}
+\toprule
+Fluxo & Tipo & Origem & Destino \\
+\midrule
+bytes & \texttt{vector<uint8\_t>} & \path{plugin\_processor.cpp:145} & \path{pe\_parser.cpp:65} \\
+bytes & \texttt{vector<uint8\_t>} & \path{plugin\_processor.cpp:145} & \path{byte\_to\_sample.cpp:5} \\
+bytes & \texttt{vector<uint8\_t>} & \path{plugin\_processor.cpp:145} & \path{column\_reduction.cpp:54} \\
+secoes & \texttt{pe::Section} & \path{pe\_parser.cpp:126} & \path{column\_reduction.cpp:54} \\
+amostras & \texttt{vector<float>} & \path{byte\_to\_sample.cpp:14} & \path{plugin\_processor.cpp:352} \\
+curva & \texttt{vector<float>} & \path{column\_reduction.cpp:163} & \path{plugin\_processor.cpp:353} \\
+fila & \texttt{PublishedMaterial} & \path{plugin\_processor.cpp:356} & \path{granular\_engine.cpp:118} \\
+midi & \texttt{MidiBuffer} & \path{plugin\_processor.cpp:471} & \path{note\_tracker.cpp:7} \\
+gate & \texttt{bool} & \path{note\_tracker.cpp:48} & \path{granular\_engine.cpp:65} \\
+parametros & \texttt{GranularParams} & \path{plugin\_processor.cpp:484} & \path{granular\_engine.cpp:280} \\
+audio & \texttt{float}, dois canais & \path{granular\_engine.cpp:478} & \path{plugin\_processor.cpp:499} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A curva de entropia viaja com as amostras porque o motor nao a pode calcular.
+Medir a entropia de toda a regiao dentro de \texttt{processBlock} seria
+trabalho do tamanho da regiao dentro da thread de audio.
+
+\subsection*{4.2 Nivel 1: o ingest}
+
+Do ficheiro ate a fila. Tudo o que acontece aqui corre na thread de
+interface, e por isso pode alocar.
+
+\begin{center}
+\maxfig{dataflow-l1-ingest}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}L{1.4cm}L{7.0cm}L{16.6cm}@{}}
+\toprule
+Passo & Codigo & O que move \\
+\midrule
+1 & \path{plugin\_processor.cpp:144} & o caminho do ficheiro \\
+2 & \path{plugin\_processor.cpp:160} & os bytes crus \\
+3 & \path{pe\_parser.cpp:65} & a estrutura do PE, ou um erro tipado \\
+4 & \path{pe\_parser.cpp:126} & uma \texttt{Section} por seccao \\
+5 & \path{shannon\_entropy.cpp:21} & os bits por byte de cada seccao \\
+6 & \path{byte\_to\_sample.cpp:14} & as amostras em $[-1, 1]$ \\
+7 & \path{column\_reduction.cpp:163} & minimo, maximo, RMS e entropia de cada coluna \\
+8 & \path{plugin\_processor.cpp:317} & as amostras e a curva, em dois vectores \\
+9 & \path{plugin\_processor.cpp:356} & os dois ponteiros, para a fila \\
+10 & \path{plugin\_processor.cpp:167} & o erro, como \texttt{const char*} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{4.3 Nivel 1: o bloco de audio}
+
+Do host ate ao barramento. Nada disto aloca, nada disto bloqueia, e nada
+disto le disco.
+
+\begin{center}
+\maxfig{dataflow-l1-audio}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}L{1.4cm}L{7.0cm}L{16.6cm}@{}}
+\toprule
+Passo & Codigo & O que move \\
+\midrule
+1 & \path{plugin\_processor.cpp:465} & o buffer e o MIDI do bloco \\
+2 & \path{plugin\_processor.cpp:356} & o \texttt{PublishedMaterial} que chegou \\
+3 & \path{plugin\_processor.cpp:387} & o ponteiro das amostras e o da curva \\
+4 & \path{plugin\_processor.cpp:414} & os eventos MIDI do bloco \\
+5 & \path{note\_tracker.cpp:7} & as notas premidas e o pedal \\
+6 & \path{transport.cpp:122} & a fracao da regiao que o transporte leu \\
+7 & \path{granular\_engine.cpp:65} & o comando de abrir ou fechar o gate \\
+8 & \path{granular\_engine.cpp:178} & o grao: posicao, ganho, pan e janela \\
+9 & \path{granular\_engine.cpp:392} & a amostra interpolada, ja filtrada \\
+10 & \path{granular\_engine.cpp:495} & o nivel do envelope, aplicado a mistura \\
+11 & \path{limiter.cpp:62} & o sinal saturado \\
+12 & \path{plugin\_processor.cpp:499} & os dois canais no barramento \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+O gate vem antes do limitador de proposito. Fechar a rampa antes de saturar
+mantem o tecto de saida independente de quantas notas estao a soar.
+
+\section*{5 Entradas e saidas}
+
+\subsection*{5.1 Entradas}
+
+\begin{longtable}{@{}L{6.4cm}L{8.6cm}L{10.0cm}@{}}
+\toprule
+Entrada & Sitio & Dado \\
+\midrule
+\endfirsthead
+\toprule
+Entrada & Sitio & Dado \\
+\midrule
+\endhead
+dialogo de ficheiro & \path{plugin\_editor.cpp:1430} & caminho, \texttt{juce::String} \\
+arrasto de ficheiro & \path{plugin\_editor.h:66} & \texttt{juce::StringArray} \\
+estado do host & \path{plugin\_processor.cpp:637} & bloco XML \\
+MIDI do host & \path{plugin\_processor.cpp:471} & \texttt{juce::MidiBuffer} \\
+parametros do host & \path{plugin\_processor.cpp:83} & \texttt{float}, 28 parametros \\
+taxa de amostragem & \path{plugin\_processor.cpp:120} & \texttt{double} \\
+fila de entrada & \path{plugin\_processor.cpp:356} & \texttt{PublishedMaterial} \\
+fila de devolucao & \path{plugin\_processor.cpp:380} & \texttt{PublishedMaterial} \\
+preset do disco & \path{plugin\_processor.cpp:601} & \texttt{juce::XmlElement} \\
+ficheiro PE pelo nucleo & \path{pe\_parser.cpp:166} & \texttt{vector<uint8\_t>} \\
+\bottomrule
+\end{longtable}
+
+\subsection*{5.2 Saidas}
+
+\begin{longtable}{@{}L{6.4cm}L{8.6cm}L{10.0cm}@{}}
+\toprule
+Saida & Sitio & Dado \\
+\midrule
+\endfirsthead
+\toprule
+Saida & Sitio & Dado \\
+\midrule
+\endhead
+audio para o host & \path{plugin\_processor.cpp:499} & \texttt{float}, dois canais \\
+estado para o host & \path{plugin\_processor.cpp:595} & bloco XML \\
+parametro para o host & \path{plugin\_processor.cpp:457} & \texttt{float} normalizado \\
+preset para o disco & \path{plugin\_processor.cpp:658} & texto XML \\
+telemetria para a interface & \path{plugin\_processor.cpp:522} & atomicos \\
+grafos para a interface & \path{granular\_engine.cpp:492} & \texttt{GrainTelemetry} \\
+erro de parser & \path{plugin\_processor.cpp:167} & \texttt{const char*} \\
+erro de abertura & \path{plugin\_processor.cpp:147} & \texttt{const char*} \\
+erro de fila cheia & \path{plugin\_processor.cpp:359} & \texttt{const char*} \\
+erro de fonte em falta & \path{plugin\_processor.cpp:632} & \texttt{const char*} \\
+\bottomrule
+\end{longtable}
+
+\subsection*{5.3 Erros}
+
+Os erros do Opcoda sao codigos de texto, nao excepcoes.
+\texttt{pe::toString} traduz o enumerado \texttt{PeError} para uma cadeia
+estavel, e a interface mostra a cadeia tal e qual.
+
+\begin{center}
+\begin{tabular}{@{}L{8.0cm}L{17.0cm}@{}}
+\toprule
+Codigo & Quando \\
+\midrule
+\texttt{E\_OPEN} & o ficheiro nao abre \\
+\texttt{E\_EMPTY} & o ficheiro esta vazio \\
+\texttt{E\_TRUNCATED} & a leitura devolveu menos bytes do que o tamanho declarado \\
+\texttt{E\_BAD\_MZ} & a assinatura \texttt{MZ} nao esta no inicio \\
+\texttt{E\_BAD\_E\_LFANEW} & o offset do cabecalho PE esta fora do ficheiro \\
+\texttt{E\_BAD\_PE} & a assinatura \texttt{PE} nao esta no sitio \\
+\texttt{E\_BAD\_OPTIONAL\_HEADER} & o cabecalho opcional e' curto demais \\
+\texttt{E\_TOO\_MANY\_SECTIONS} & o numero de seccoes e' zero ou passa de 96 \\
+\texttt{E\_BAD\_SECTION\_TABLE} & a tabela de seccoes nao cabe no ficheiro \\
+\texttt{E\_OOB} & uma seccao declara mais bytes do que o ficheiro tem \\
+\texttt{E\_BUSY} & a fila de entrada esta cheia \\
+\texttt{E\_SOURCE\_MISSING} & o projecto aponta para um ficheiro que ja nao esta la \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{5.4 Caminho quente}
+
+\begin{center}
+\maxfig{sequence-hot-path}
+\end{center}
+
+\begin{multicols}{2}
+O arrasto e' tratado em \texttt{PluginEditor::filesDropped}, que chama
+\texttt{ingestFirst}. O dialogo de ficheiro faz o mesmo por
+\texttt{chooseFile}. Os dois caminhos acabam no mesmo
+\texttt{PluginProcessor::ingest}, e nao ha caminho paralelo.
+
+A troca de material acontece no inicio do bloco, em
+\texttt{drainIncomingQueue}. O motor recebe o ponteiro novo em
+\texttt{setSource} e o ponteiro antigo volta pela fila de devolucao. A
+interface liberta-o no \texttt{refresh} seguinte, a 60 Hz.
+\end{multicols}
+
+\end{document}
+

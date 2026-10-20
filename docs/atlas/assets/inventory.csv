@@ -1,0 +1,89 @@
+path,language,role,entry,notes
+CMakeLists.txt,cmake,config,yes,Alvo opcoda_core e a raiz da compilacao
+CMakePresets.json,json,config,no,Presets dev e release
+cmake/msvc.cmake,cmake,config,no,Carrega o ambiente do Visual Studio
+src/opcoda_core/pe/pe_parser.cpp,cpp,logic,yes,Leitura defensiva do PE
+src/opcoda_core/pe/pe_parser.h,h,logic,no,Tipos do PE e o codigo de erro
+src/opcoda_core/pe/byte_to_sample.cpp,cpp,logic,no,Byte para amostra em [-1,1]
+src/opcoda_core/pe/byte_to_sample.h,h,logic,no,Assinatura de toSamples
+src/opcoda_core/pe/byte_range.cpp,cpp,logic,no,Valida e alinha a regiao lida
+src/opcoda_core/pe/byte_range.h,h,logic,no,ByteRange e o contrato das regras
+src/opcoda_core/pe/byte_to_position.cpp,cpp,logic,no,Endereco para fracao e volta
+src/opcoda_core/pe/byte_to_position.h,h,logic,no,Funcoes de posicao
+src/opcoda_core/pe/column_reduction.cpp,cpp,logic,no,Reduz a regiao a colunas
+src/opcoda_core/pe/column_reduction.h,h,logic,no,Estrutura Column
+src/opcoda_core/entropy/shannon_entropy.cpp,cpp,logic,no,Entropia de Shannon
+src/opcoda_core/entropy/shannon_entropy.h,h,logic,no,Assinaturas da entropia
+src/opcoda_core/dsp/granular_engine.cpp,cpp,logic,no,Motor granular
+src/opcoda_core/dsp/granular_engine.h,h,logic,no,Params, graos e telemetria
+src/opcoda_core/dsp/window.cpp,cpp,logic,no,Janelas Hann, Gaussian, Hamming, Blackman
+src/opcoda_core/dsp/window.h,h,logic,no,Enum de janela
+src/opcoda_core/dsp/biquad.cpp,cpp,logic,no,Filtros biquad
+src/opcoda_core/dsp/biquad.h,h,logic,no,Coeficientes e estado do filtro
+src/opcoda_core/dsp/lfo.cpp,cpp,logic,no,LFO amostrado
+src/opcoda_core/dsp/lfo.h,h,logic,no,Alvo, forma e estado do LFO
+src/opcoda_core/dsp/dc_blocker.cpp,cpp,logic,no,Remove a componente continua
+src/opcoda_core/dsp/dc_blocker.h,h,logic,no,Estado do bloqueador
+src/opcoda_core/dsp/limiter.cpp,cpp,logic,no,Limitador no fim da cadeia
+src/opcoda_core/dsp/limiter.h,h,logic,no,Estado do limitador
+src/opcoda_core/rt/alloc_guard.cpp,cpp,logic,no,Substitui o operator new global
+src/opcoda_core/rt/alloc_guard.h,h,logic,no,Conta as alocacoes na thread de audio
+src/opcoda_core/rt/note_tracker.cpp,cpp,logic,no,Notas premidas e pedal
+src/opcoda_core/rt/note_tracker.h,h,logic,no,Eventos e contadores de nota
+src/opcoda_core/rt/transport.cpp,cpp,logic,no,Transporte de audicao
+src/opcoda_core/rt/transport.h,h,logic,no,Ancora, geracao e posicao
+src/opcoda_core/rt/spsc_ring.h,h,logic,no,Fila circular sem trava
+src/opcoda_core/rt/atomic_param.h,h,logic,no,Parametro atomico com suavizacao
+src/opcoda_core/view/grain_trail.h,h,logic,no,Rastro dos graos, sem JUCE
+src/opcoda_plugin/CMakeLists.txt,cmake,config,yes,Alvo do plugin e guarda do IS_SYNTH
+src/opcoda_plugin/source/plugin_processor.cpp,cpp,entry,yes,Fronteira com o host
+src/opcoda_plugin/source/plugin_processor.h,h,entry,no,Estado do processador e filas
+src/opcoda_plugin/source/plugin_editor.cpp,cpp,entry,yes,Editor e temporizador de 60 Hz
+src/opcoda_plugin/source/plugin_editor.h,h,entry,no,Arranque de ficheiro por arrasto
+src/opcoda_plugin/source/byte_display.cpp,cpp,logic,no,Desenho da forma de onda
+src/opcoda_plugin/source/byte_display.h,h,logic,no,Modos de vista e teclas
+src/opcoda_plugin/source/hex_grid.cpp,cpp,logic,no,Grelha de bytes
+src/opcoda_plugin/source/hex_grid.h,h,logic,no,Estados da grelha
+src/opcoda_plugin/source/byte_address_field.cpp,cpp,logic,no,Campo de endereco
+src/opcoda_plugin/source/byte_address_field.h,h,logic,no,Edicao do endereco
+src/opcoda_plugin/source/look_and_feel.h,h,logic,no,Cores e tipografia da interface
+src/opcoda_plugin/source/palette.h,h,logic,no,Paleta
+src/opcoda_plugin/source/knob.h,h,logic,no,Knob com resposta a MIDI
+src/opcoda_plugin/source/led.h,h,logic,no,LED de estado
+src/opcoda_plugin/source/animator.h,h,logic,no,Animacao com delta medido
+src/opcoda_plugin/source/display_panel.h,h,logic,no,Painel do display
+src/opcoda_plugin/source/factory_presets.h,h,config,no,Seis presets de fabrica
+src/opcoda_plugin/source/fonts.h,h,config,no,Fontes embebidas
+tools/build.ps1,powershell,config,yes,Unico ponto de entrada do build
+tools/build-atlas.ps1,powershell,config,yes,Pipeline do atlas
+tools/render-mermaid.ps1,powershell,config,yes,Render dos diagramas
+tools/mmd2tikz.py,python,config,yes,Mermaid para TikZ
+tools/capture-ui.ps1,powershell,config,no,Capturas da interface
+tools/install-vst3.ps1,powershell,config,no,Instala o VST3
+tools/vendor_fonts.py,python,config,no,Reduz as fontes embebidas
+tools/generate_mochila_deck.py,python,config,no,Gerador de apresentacao
+tools/generate_pptx_deck.py,python,config,no,Gerador de apresentacao
+tools/generate_tight_mochila_deck.py,python,config,no,Gerador de apresentacao
+tests/CMakeLists.txt,cmake,config,yes,Dois binarios de teste
+tests/pe_builder.h,h,test,no,Construtor de PE para os ensaios
+tests/pe_parser_test.cpp,cpp,test,no,Ensaio do parser
+tests/pe_mutation_test.cpp,cpp,test,no,Ensaio de mutacao do PE
+tests/byte_range_test.cpp,cpp,test,no,Ensaio das regras de regiao
+tests/byte_position_test.cpp,cpp,test,no,Ensaio de posicao
+tests/column_reduction_test.cpp,cpp,test,no,Ensaio da reducao a colunas
+tests/shannon_entropy_test.cpp,cpp,test,no,Ensaio da entropia
+tests/dsp_test.cpp,cpp,test,no,Ensaio do motor
+tests/filter_test.cpp,cpp,test,no,Ensaio dos filtros
+tests/lfo_test.cpp,cpp,test,no,Ensaio do LFO
+tests/adsr_test.cpp,cpp,test,no,Ensaio do envelope
+tests/grain_params_test.cpp,cpp,test,no,Ensaio dos parametros
+tests/grain_trail_test.cpp,cpp,test,no,Ensaio do rastro
+tests/note_tracker_test.cpp,cpp,test,no,Ensaio do tracker
+tests/transport_test.cpp,cpp,test,no,Ensaio do transporte
+tests/transport_rate_test.cpp,cpp,test,no,Ensaio da taxa do transporte
+tests/rt_test.cpp,cpp,test,no,Ensaio dos atomicos e da fila
+tests/sample_exchange_test.cpp,cpp,test,no,Ensaio da troca de material
+tests/end_to_end_test.cpp,cpp,test,no,Ensaio de ponta a ponta
+tests/t1_spectral_test.cpp,cpp,test,no,Ensaio espectral
+tests/factory_presets_test.cpp,cpp,test,no,Ensaio dos presets
+tests/alloc_guard_test.cpp,cpp,test,no,Ensaio do guard de alocacao

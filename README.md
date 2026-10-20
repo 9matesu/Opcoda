@@ -26,6 +26,7 @@ src/opcoda_core/    núcleo C++20 puro, sem JUCE
 src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
 tests/              GoogleTest, 237 casos mais 8 do guard de alocação
 docs/               documentação acadêmica e técnica
+docs/atlas/         atlas da arquitetura, com diagramas e tabelas de rastreio
 specs/              especificações por feature, do spec-kit
 ```
 
@@ -87,6 +88,10 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
   encontrados
 - `docs/17-guia-de-build.md`: toolchain, presets e limitações declaradas
 - `docs/18-processo-sdd.md`: spec-kit, constitution, portões e agentes
+- `docs/atlas/`: o atlas da arquitetura, com o inventário de ficheiros, os
+  diagramas de contexto, contentores e fluxo de dados, e as entradas e saídas
+  com a linha exacta de cada uma. O mesmo conteúdo está em
+  `docs/atlas/arquitetura.pdf`, gerado por `tools/build-atlas.ps1`
 - `specs/001-ingestao-pe/spec.md`: ingestão de PE, com as armadilhas encontradas
 - `specs/003-troca-material/spec.md`: troca entre interface e áudio
 - `specs/008-transporte-e-vistas/spec.md`: transporte de audição e as três leituras

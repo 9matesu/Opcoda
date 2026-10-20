@@ -4,6 +4,10 @@ Este documento registra as decisões de implementação que não estão em
 `06-metodologia-arquitetura.md`, que descreve a arquitetura proposta na fase de
 escrita do TG. Aqui está o que o código faz de fato.
 
+O mapa com a linha exata de cada coisa está em `docs/atlas/`, com os
+diagramas de contexto, contentores e fluxo de dados, e com as tabelas de
+entradas e saídas. Onde este documento e o código divergem, o código manda.
+
 ## Divisão em camadas
 
 ```

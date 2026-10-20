@@ -1,0 +1,22 @@
+%% Caminho quente: largar um ficheiro e ouvir o resultado.
+%% direction TB: as mensagens correm de cima para baixo, e o ciclo do host
+%% repete-se a cada bloco de audio.
+sequenceDiagram
+  participant U as Utilizador
+  participant E as Editor<br/>plugin_editor
+  participant P as Processor<br/>processor
+  participant C as Nucleo<br/>opcoda_core
+  participant H as Host DAW
+  U->>E: arrasta um executavel
+  E->>P: ingest(caminho)
+  P->>C: pe::parse(bytes)
+  C-->>P: secoes e entropia
+  P->>C: toSamples(regiao)
+  P->>P: incoming_.push(material)
+  loop a cada bloco de audio
+    H->>P: processBlock(buffer, midi)
+    P->>P: drainIncomingQueue()
+    P->>C: setSource(ptr, curva)
+    P->>C: engine_.processBlock(l, r)
+    C-->>H: audio no barramento
+  end

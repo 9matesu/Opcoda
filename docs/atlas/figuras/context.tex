@@ -1,0 +1,40 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/context.mmd. Nao editar a mao.
+% git blob da fonte: 19bb708e21bac6f76219ab8c05c81a30d94894c7
+\definecolor{atlasgray}{HTML}{9AA0A6}
+\definecolor{atlasred}{HTML}{8B1A1A}
+\definecolor{atlasink}{HTML}{202124}
+\begin{tikzpicture}[
+  font=\small,
+  atlasgroup/.style={draw=atlasgray!75!black, fill=atlasgray, rounded corners=3pt, inner xsep=12pt, inner ysep=15pt},
+  atlasgrouptext/.style={font=\scriptsize\bfseries, text=white, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasgray, text=white, font=\small\itshape},
+  atlasflow/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, line width=0.6pt},
+  atlasasync/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, dashed, line width=0.6pt},
+  atlaslabel/.style={font=\scriptsize, fill=white, inner sep=1.5pt, text=black!75},
+  atlasclass/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=6pt, font=\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasgray, text=white, font=\small\itshape},
+  atlasuml/.style={-{Triangle[length=2.3mm,width=2.8mm]}, draw=atlasred, line width=0.7pt},
+  atlascomp/.style={-{Diamond[length=2.5mm]}, draw=atlasred, line width=0.7pt},
+  atlaslife/.style={draw=atlasgray!80!black, dashed, line width=0.5pt},
+  atlasmsg/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, line width=0.6pt},
+  atlasmsgback/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, dashed, line width=0.6pt},
+  atlasmsglabel/.style={font=\scriptsize, fill=white, inner sep=1.5pt, text=black!75},
+  atlasparticipant/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\small},
+]
+  \node[atlasleaf, text width=1.82cm] (USER) at (1.27,-1.25) {Utilizador};
+  \node[atlasleaf, text width=2.03cm] (DISK) at (1.27,0.00) {Ficheiro PE};
+  \node[atlasleaf, text width=1.60cm] (HOST) at (8.31,-4.45) {Host DAW};
+  \node[atlasleaf, text width=2.35cm] (PRESET) at (8.31,-5.70) {Preset .opcoda};
+  \node[atlasleaf, text width=1.65cm] (PROC) at (4.71,-2.85) {Processor\\processor};
+  \draw[atlasflow] (DISK) -- node[atlaslabel, above] {caminho} (PROC);
+  \draw[atlasflow] (USER) -- node[atlaslabel, above] {arrasto} (PROC);
+  \draw[atlasflow] (HOST) -- node[atlaslabel, above] {midi e params} (PROC);
+  \draw[atlasflow] (PROC) -- node[atlaslabel, above] {audio e estado} (HOST);
+  \draw[atlasflow] (PROC) -- node[atlaslabel, above] {preset} (PRESET);
+  \draw[atlasflow] (PRESET) -- node[atlaslabel, above] {preset} (PROC);
+  \begin{scope}[on background layer]
+    \node[atlasgroup, fit=(PROC)] (grp_repo) {};
+  \end{scope}
+  \node[atlasgrouptext] at ([xshift=7pt,yshift=-5pt]grp_repo.north west) {Opcoda};
+\end{tikzpicture}

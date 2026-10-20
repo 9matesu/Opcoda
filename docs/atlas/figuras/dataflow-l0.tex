@@ -1,0 +1,55 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/dataflow-l0.mmd. Nao editar a mao.
+% git blob da fonte: 367a61fe7e74eb02f6a32553287709dd66223986
+\definecolor{atlasgray}{HTML}{9AA0A6}
+\definecolor{atlasred}{HTML}{8B1A1A}
+\definecolor{atlasink}{HTML}{202124}
+\begin{tikzpicture}[
+  font=\small,
+  atlasgroup/.style={draw=atlasgray!75!black, fill=atlasgray, rounded corners=3pt, inner xsep=12pt, inner ysep=15pt},
+  atlasgrouptext/.style={font=\scriptsize\bfseries, text=white, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasgray, text=white, font=\small\itshape},
+  atlasflow/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, line width=0.6pt},
+  atlasasync/.style={-{Stealth[length=2.1mm]}, draw=atlasgray!85!black, dashed, line width=0.6pt},
+  atlaslabel/.style={font=\scriptsize, fill=white, inner sep=1.5pt, text=black!75},
+  atlasclass/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=6pt, font=\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasgray, text=white, font=\small\itshape},
+  atlasuml/.style={-{Triangle[length=2.3mm,width=2.8mm]}, draw=atlasred, line width=0.7pt},
+  atlascomp/.style={-{Diamond[length=2.5mm]}, draw=atlasred, line width=0.7pt},
+  atlaslife/.style={draw=atlasgray!80!black, dashed, line width=0.5pt},
+  atlasmsg/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, line width=0.6pt},
+  atlasmsgback/.style={-{Stealth[length=2.0mm]}, draw=atlasink!80, dashed, line width=0.6pt},
+  atlasmsglabel/.style={font=\scriptsize, fill=white, inner sep=1.5pt, text=black!75},
+  atlasparticipant/.style={draw=atlasred, fill=white, text=atlasink, rounded corners=3pt, align=center, inner sep=5pt, font=\small},
+]
+  \node[atlasleaf, text width=1.58cm] (READ) at (4.76,-2.85) {Leitura\\processor};
+  \node[atlasleaf, text width=1.58cm] (PARSE) at (8.60,-4.10) {Parser\\pe\_parser};
+  \node[atlasleaf, text width=2.41cm] (CONV) at (8.60,-2.85) {Amostras\\byte\_to\_sample};
+  \node[atlasleaf, text width=1.58cm] (COL) at (12.20,-2.85) {Colunas\\reduction};
+  \node[atlasleaf, text width=1.83cm] (Q) at (15.51,-5.70) {Fila SPSC\\spsc\_ring};
+  \node[atlasleaf, text width=2.08cm] (TRK) at (4.76,-5.70) {Notas\\note\_tracker};
+  \node[atlasleaf, text width=2.58cm] (ENG) at (19.31,-5.70) {Motor granular\\granular\_engine};
+  \node[atlasleaf, text width=1.87cm] (FILE) at (1.18,0.00) {Arquivo PE};
+  \node[atlasleaf, text width=1.60cm] (HOST) at (1.18,-1.25) {Host DAW};
+  \node[atlasleaf, text width=1.82cm] (OUT) at (23.10,-7.30) {Barramento};
+  \draw[atlasflow] (FILE) -- node[atlaslabel, above] {bytes} (READ);
+  \draw[atlasflow] (READ) -- node[atlaslabel, above] {bytes} (PARSE);
+  \draw[atlasflow] (READ) -- node[atlaslabel, above] {bytes} (CONV);
+  \draw[atlasflow] (READ.south) -- ([yshift=-2.95cm]READ.south) |- ([yshift=-2.95cm]COL.south) -- (COL.south) node[atlaslabel, pos=0.5, below] {bytes};
+  \draw[atlasflow] (PARSE) -- node[atlaslabel, above] {secoes} (COL);
+  \draw[atlasflow] (CONV.south) -- ([yshift=-3.40cm]CONV.south) |- ([yshift=-3.40cm]Q.south) -- (Q.south) node[atlaslabel, pos=0.5, below] {amostras};
+  \draw[atlasflow] (COL) -- node[atlaslabel, above] {curva} (Q);
+  \draw[atlasasync] (Q) -- node[atlaslabel, above] {fila} (ENG);
+  \draw[atlasflow] (HOST) -- node[atlaslabel, above] {midi} (TRK);
+  \draw[atlasflow] (TRK.south) -- ([yshift=-2.60cm]TRK.south) |- ([yshift=-2.60cm]ENG.south) -- (ENG.south) node[atlaslabel, pos=0.5, below] {gate};
+  \draw[atlasflow] (HOST.south) -- ([yshift=-3.05cm]HOST.south) |- ([yshift=-3.05cm]ENG.south) -- (ENG.south) node[atlaslabel, pos=0.5, below] {parametros};
+  \draw[atlasflow] (ENG) -- node[atlaslabel, above] {audio} (OUT);
+  \begin{scope}[on background layer]
+    \node[atlasgroup, fit=(READ) (PARSE) (CONV) (COL)] (grp_ui) {};
+  \end{scope}
+  \node[atlasgrouptext] at ([xshift=7pt,yshift=-5pt]grp_ui.north west) {Interface};
+  \begin{scope}[on background layer]
+    \node[atlasgroup, fit=(Q) (TRK) (ENG)] (grp_rt) {};
+  \end{scope}
+  \node[atlasgrouptext] at ([xshift=7pt,yshift=-5pt]grp_rt.north west) {Audio};
+\end{tikzpicture}
