@@ -1,0 +1,46 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/sequence-hot-path.mmd. Nao editar a mao.
+% git blob da fonte: 6b4c30db61577232da37f80db725b5c36e37aebe
+\definecolor{atlasyellow}{HTML}{FFD400}
+\definecolor{atlasamber}{HTML}{FFB000}
+\definecolor{atlasblack}{HTML}{000000}
+\begin{tikzpicture}[
+  font=\sffamily\bfseries\small,
+  atlasgroup/.style={draw=atlasblack, fill=atlasamber, line width=0.9pt, rounded corners=4pt, inner xsep=14pt, inner ysep=26pt},
+  atlasgrouptext/.style={font=\sffamily\bfseries\small, text=atlasblack, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasamber},
+  atlasflow/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasasync/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlaslabel/.style={font=\sffamily\bfseries\tiny, fill=white, inner sep=1.2pt, text=atlasblack},
+  atlasclass/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=6pt, font=\sffamily\bfseries\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasamber},
+  atlasuml/.style={-{Triangle[length=2.4mm,width=2.9mm]}, draw=atlasblack, line width=0.9pt},
+  atlascomp/.style={-{Diamond[length=2.6mm]}, draw=atlasblack, line width=0.9pt},
+  atlaslife/.style={draw=atlasblack, dashed, line width=0.6pt},
+  atlasmsg/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasmsgback/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlasmsglabel/.style={font=\sffamily\bfseries\scriptsize, fill=white, inner sep=1.5pt, text=atlasblack},
+  atlasparticipant/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+]
+  \node[atlasparticipant, text width=1.82cm] (U) at (1.09,0.00) {Utilizador};
+  \node[atlasparticipant, text width=2.25cm] (E) at (4.18,0.00) {Editor\\plugin\_editor};
+  \node[atlasparticipant, text width=1.65cm] (P) at (7.19,0.00) {Processor\\processor};
+  \node[atlasparticipant, text width=1.92cm] (C) at (10.03,0.00) {Nucleo\\opcoda\_core};
+  \node[atlasparticipant, text width=1.60cm] (H) at (12.85,0.00) {Host DAW};
+  \draw[atlaslife] (U.south) -- (1.09,-15.55);
+  \draw[atlaslife] (E.south) -- (4.18,-15.55);
+  \draw[atlaslife] (P.south) -- (7.19,-15.55);
+  \draw[atlaslife] (C.south) -- (10.03,-15.55);
+  \draw[atlaslife] (H.south) -- (12.85,-15.55);
+  \draw[atlasmsg] (U.east |- 0,-1.25) -- node[atlasmsglabel, above] {arrasta um executavel} (E.west |- 0,-1.25);
+  \draw[atlasmsg] (E.east |- 0,-2.55) -- node[atlasmsglabel, above] {ingest(caminho)} (P.west |- 0,-2.55);
+  \draw[atlasmsg] (P.east |- 0,-3.85) -- node[atlasmsglabel, above] {pe::parse(bytes)} (C.west |- 0,-3.85);
+  \draw[atlasmsgback] (C.east |- 0,-5.15) -- node[atlasmsglabel, above] {secoes e entropia} (P.west |- 0,-5.15);
+  \draw[atlasmsg] (P.east |- 0,-6.45) -- node[atlasmsglabel, above] {toSamples(regiao)} (C.west |- 0,-6.45);
+  \draw[atlasmsg] (P.east |- 0,-7.75) to[loop right, min distance=1.4cm] node[atlasmsglabel, above] {incoming\_.push(material)} (P.east |- 0,-7.75);
+  \draw[atlasmsg] (H.east |- 0,-9.05) -- node[atlasmsglabel, above] {processBlock(buffer, midi)} (P.west |- 0,-9.05);
+  \draw[atlasmsg] (P.east |- 0,-10.35) to[loop right, min distance=1.4cm] node[atlasmsglabel, above] {drainIncomingQueue()} (P.east |- 0,-10.35);
+  \draw[atlasmsg] (P.east |- 0,-11.65) -- node[atlasmsglabel, above] {setSource(ptr, curva)} (C.west |- 0,-11.65);
+  \draw[atlasmsg] (P.east |- 0,-12.95) -- node[atlasmsglabel, above] {engine\_.processBlock(l, r)} (C.west |- 0,-12.95);
+  \draw[atlasmsgback] (C.east |- 0,-14.25) -- node[atlasmsglabel, above] {audio no barramento} (H.west |- 0,-14.25);
+\end{tikzpicture}

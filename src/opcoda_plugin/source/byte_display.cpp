@@ -1,0 +1,1635 @@
+#include "byte_display.h"
+
+#include "opcoda_core/pe/byte_to_position.h"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace opcoda {
+namespace {
+
+// O min/max quase nao serve para mostrar bytes (o texto de um .exe cobre 0x00
+// a 0xFF em quase todas as colunas) e por isso o rms desenha o corpo: um
+// material aleatorio fica perto de 0,577, um filler de zero estica a 1 e um
+// filler de 0xFF tambem — sao as alturas que dizem se o material e' denso ou
+// repetitivo. O envelope min/max fica como base fraca.
+
+} // namespace
+
+ByteDisplay::ByteDisplay() {
+    setOpaque(true);
+    setInterceptsMouseClicks(true, false);
+    setMouseCursor(juce::MouseCursor::PointingHandCursor);
+
+    // **Focalizavel, e e' o que retira a excecao ao criterio 2.5.8.** A excecao
+    // estava escrita em hex_grid.h e em docs/10 porque as celulas eram pintadas e
+    // nao componentes, e um Component so nao tem filhos acessiveis. Isso continua
+    // verdadeiro: nao ha 200 componentes. O que passou a existir e' um cursor de
+    // navegacao com nome e valor, e com ele a operacao completa por teclado que o
+    // portao E exige.
+    //
+    // Nao ha setFocusable: no JUCE 8 a focalizabilidade e' implicita e o que se
+    // escreve e' que o componente quer o foco do teclado. E' setWantsKeyboardFocus.
+    setWantsKeyboardFocus(true);
+
+    font_ = fonts().sans(10.0f);
+
+    // 4.1.2. O nome diz o que e' e o texto de ajuda diz o que se pode fazer, porque
+    // um componente que so se opera com o rato e' um buraco sem nome para quem
+    // navega por leitor de tela.
+    setName("Display do material binario");
+    setHelpText(
+        "Tres vistas do material: forma de onda, grelha de bytes e curva de "
+        "entropia. Clique para mover a cabeca de leitura. Com o teclado: setas "
+        "movem o cursor, Enter ativa o byte, Esc volta a cabeca de leitura, "
+        "espaco liga e desliga a reproducao, 1, 2 e 3 mudam de vista, + e - "
+        "zoom, 0 enquadra a regiao e A alinha a "
+        "regiao a uma secao PE.");
+
+    hex_.onCellActivated = [this](std::uint64_t address) {
+        if (onAddressActivated != nullptr) {
+            onAddressActivated(address);
+        }
+    };
+    hex_.onSnapRequested = [this] {
+        if (onSnapRequested != nullptr) {
+            onSnapRequested();
+        }
+    };
+
+    // **O primeiro gesto do utilizador na grelha corta o seguimento dos graos.**
+    // A janela do hex segue o material enquanto ninguem mexe, e isso e' o que torna
+    // os graos visiveis, mas quem esta' a ler bytes nao pode ter o ecra a mexer
+    // sozinho. A partir da rolagem ou do clique, quem manda e' a pessoa.
+    hex_.onUserScrolled = [this] { grainFollow_ = false; };
+
+    addAndMakeVisible(hex_);
+
+    // **A visibilidade do hex tem de sair do modo, e nao de uma mudanca de modo.**
+    // A primeira versao escondia o HexGrid no construtor e so o mostrava dentro de
+    // setMode(), e o setMode nao corre quando o modo pedido ja e' o corrente. Com o
+    // modo inicial em hex, a vista ficava permanentemente vazia: um visor em branco
+    // com um botao marcado como activo. applyModeVisibility e' chamado aqui e em
+    // setMode, para o estado derivado nunca depender de qual dos dois correu.
+    applyModeVisibility();
+}
+
+void ByteDisplay::applyModeVisibility() {
+    const auto hexMode = mode_ == ViewMode::hex;
+
+    hex_.setVisible(hexMode);
+    hex_.setInterceptsMouseClicks(hexMode, hexMode);
+}
+
+void ByteDisplay::setSource(const std::vector<std::uint8_t>* bytes,
+                            std::uint64_t fileSize) {
+    bytes_ = bytes;
+    fileSize_ = fileSize;
+
+    // A cache e' invalidada aqui e nao em setRegion: os bytes mudam com o ingest e
+    // a regiao pode ser a mesma. Confundir as duas dava uma curva de entropia do
+    // ficheiro anterior desenhada sobre o ficheiro novo.
+    cacheValid_ = false;
+    overviewValid_ = false;
+
+    hex_.setSource(bytes, fileSize);
+    repaint();
+}
+
+void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
+    const auto clampedEnd = juce::jmax(end, start);
+    if (clampedEnd == regionEnd_ && start == regionStart_) {
+        return;
+    }
+
+    regionStart_ = start;
+    regionEnd_ = clampedEnd;
+
+    if (clampedEnd != cachedRegionEnd_ || start != cachedRegionStart_) {
+        cacheValid_ = false;
+    }
+    overviewValid_ = false;
+
+    // Regiao nova, viewport cheio: o zoom anterior media-se da regiao antiga e
+    // manter um viewport de 1/8 sobre material novo escondia 7/8 do som sem
+    // nenhum sinal. O utilizador volta a ver tudo e volta a aproximar.
+    viewStart_ = 0.0f;
+    viewLength_ = 1.0f;
+
+    hex_.setRegion(regionStart_, regionEnd_);
+
+    // **A regiao mudou, portanto a fracao mudou de significado.** Um grao que
+    // estava a ler o fim da regiao antiga tem fracao 0,9, e 0,9 na regiao nova e'
+    // um sitio completamente diferente. Sem esvaziar, o rastro velho aparecia
+    // sobre o material novo e parecia um grao a dar um salto.
+    grainTrails_.clear();
+    repaint();
+}
+
+void ByteDisplay::setOutputLevel(float decibels) {
+    // O piso e' -60 dB e nao -inf. Um medidor que desaparece quando o sinal e'
+    // pequeno deixa de dizer "ha sinal fraco" e passa a dizer "nao ha sinal", que
+    // sao coisas diferentes. O texto do rodape ja distingue os dois com PK -inf.
+    const auto clamped = std::clamp(decibels, kLevelFloorDb, 0.0f);
+
+    // **A primeira leitura e' um salto, as seguintes deslizam.** O alvo e' uma
+    // posicao na barra e o valor esta' no mesmo espaco, mas animar desde zero no
+    // primeiro bloco faria a barra varrer o ecra de uma vez.
+    if (!levelAnimated_) {
+        outputLevel_.jumpTo(normalisedLevel(clamped));
+        levelAnimated_ = true;
+    } else {
+        outputLevel_.set(normalisedLevel(clamped));
+    }
+
+    repaint();
+}
+
+float ByteDisplay::normalisedLevel(float decibels) noexcept {
+    const auto span = 0.0f - kLevelFloorDb;
+    return std::clamp((decibels - kLevelFloorDb) / span, 0.0f, 1.0f);
+}
+
+void ByteDisplay::tickAnimation(float deltaSeconds) {
+    // Descarrega o arrasto pendente antes de animar: a cabeca ja desliza para o
+    // alvo mais recente no mesmo quadro, em vez de correr atras com um quadro
+    // de atraso. Uma escrita por quadro e' o tecto — o rato manda eventos a
+    // mais de 60 Hz, e cada escrita e' uma notificacao ao host.
+    if (pendingScrub_ != std::numeric_limits<std::uint64_t>::max() &&
+        onAddressActivated != nullptr) {
+        onAddressActivated(pendingScrub_);
+        pendingScrub_ = std::numeric_limits<std::uint64_t>::max();
+    }
+
+    if (!playheadVisible_) {
+        playheadFraction_.jumpTo(0.0f);
+    }
+
+    const auto before = readHeadFraction_.value() + playheadFraction_.value() +
+                        modeFade_.value();
+
+    readHeadFraction_.tick(deltaSeconds, kReadHeadHalfLife);
+    playheadFraction_.tick(deltaSeconds, kPlayheadHalfLife);
+    modeFade_.tick(deltaSeconds, kModeHalfLife);
+    outputLevel_.tick(deltaSeconds, kLevelHalfLife);
+
+    // Repintar so quando algo se mexeu de verdade. Um repaint por quadro sem
+    // diferenca visivel e' o preco de uma animacao mal feita, e o editor tem mais
+    // coisas para pintar a 60 Hz.
+    const auto after = readHeadFraction_.value() + playheadFraction_.value() +
+                       modeFade_.value() + outputLevel_.value();
+    if (std::abs(after - before) > 1.0e-4f) {
+        repaint();
+    }
+}
+
+void ByteDisplay::setGrains(
+    const std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices>& views, int count) {
+    // As posicoes sao fracoes **da regiao**, e a regiao e' a mesma nas tres vistas.
+    // No hex a fracao e' convertida em endereco dentro do `push`, porque o hex mostra
+    // o ficheiro inteiro e nao a regiao.
+    //
+    // So se guarda o que interessa. Um display sem material nao tem regiao para ser
+    // interpreted, entao um rastro de graos sobre o ecra vazio seria ruido.
+    const bool drawable = bytes_ != nullptr && !bytes_->empty() &&
+                          regionEnd_ > regionStart_;
+    const auto toRead = drawable ? std::clamp(count, 0, dsp::GrainTelemetry::kMaxVoices) : 0;
+
+    for (int i = 0; i < toRead; ++i) {
+        const auto& view = views[static_cast<std::size_t>(i)];
+
+        // **A identidade e' `view.voice`, nunca o indice `i`.** O publish do motor
+        // compacta os graos activos para a frente, portanto `i` diz em que ordem
+        // apareceram e nao que grao e'. A cauda da voz 3 e' a cauda da voz 3, e um
+        // rastro ligado ao slot saltaria de grao a cada bloco.
+        grainTrails_.push(view.voice, view.position);
+    }
+
+    // No hex, a janela segue os graos. Ver followGrainsInHex para o porque e para o
+    // que custa.
+    if (toRead > 0 && mode_ == ViewMode::hex) {
+        followGrainsInHex();
+    }
+
+    // Repintar: os rastros que existiam e nao receberam nada hoje ainda estao a
+    // desvanecer, e sem este repaint eles ficariam congelados a meio do ecra.
+    repaint();
+}
+
+void ByteDisplay::followGrainsInHex() noexcept {
+    if (!grainFollow_ || regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // **A regiao tem de caber na janela, senao nao ha para onde ir.** A janela sao
+    // `metrics_.rows` linhas e a regiao pode ter dezenas de milhares. Ancorar no
+    // grao mais baixo faz a janela saltar de baixo para cima a cada bloco conforme
+    // o agendador sorteia as vozes, e um ecra que treme e pior do que um ecra sem
+    // graos.
+    //
+    // Ancorar no **primeiro endereco da regiao** mantem a janela quieta: ela fica
+    // onde a regiao comeca e so se mexe quando o utilizador rola. E o que torna
+    // visivel o inicio do material, que e' onde o transporte comeca.
+    hex_.scrollToAddress(regionStart_);
+}
+
+void ByteDisplay::setMode(ViewMode mode) {
+    if (mode == mode_) {
+        return;
+    }
+
+    // A fracao da regiao continua a valer nas tres vistas, mas o desenho muda e
+    // um rastro antigo em cima do hex novo e' ruido sem informacao.
+    grainTrails_.clear();
+    mode_ = mode;
+
+    // O hex e' o unico modo com um Component proprio, porque o seu desenho tem
+    // metricas derivadas da fonte e areas de clique por celula. Nos outros dois o
+    // desenho e' um Path por coluna e nao ha filhos. A faixa de entropia so
+    // existe no hex, por isso a troca de vista mexe na geometria dele — e so
+    // dele, que e' a excepcao a regra do resized().
+    applyModeVisibility();
+    layoutHex();
+
+    repaint();
+}
+
+int ByteDisplay::entropyBucket(float bits) noexcept {
+    if (bits < 3.0f) {
+        return 0;
+    }
+    return bits < 6.0f ? 1 : 2;
+}
+
+juce::Rectangle<int> ByteDisplay::entropyStripBounds() const noexcept {
+    if (mode_ != ViewMode::hex) {
+        return {};
+    }
+
+    const auto full = getLocalBounds();
+    const auto stripW = full.getWidth() * 30 / 100;
+    if (stripW < 120) {
+        return {};
+    }
+    return {full.getRight() - stripW, full.getY(), stripW, full.getHeight()};
+}
+
+void ByteDisplay::layoutHex() {
+    const auto strip = entropyStripBounds();
+    hex_.setBounds(strip.isEmpty() ? getLocalBounds()
+                                   : getLocalBounds().withTrimmedRight(
+                                         strip.getWidth() +
+                                         static_cast<int>(kPadding)));
+}
+
+void ByteDisplay::resized() {
+    // O hex ocupa tudo menos a faixa de entropia. Nas outras vistas e'
+    // invisivel mas continua a receber o layout, para que a troca de vista nao
+    // mude a geometria do ecra.
+    layoutHex();
+
+    // O numero de colunas depende da largura E do zoom, e a cache esta' indexada
+    // pelo numero. O zoom vive no componente e nao no tamanho: mudar o tamanho
+    // fightaria com o resized do editor, que e' o dono da geometria.
+    const auto wanted = columnCountForWidth();
+    if (wanted != cachedColumnCount_) {
+        cacheValid_ = false;
+    }
+}
+
+std::uint32_t ByteDisplay::columnCountForWidth() const noexcept {
+    const auto width = getLocalBounds().toFloat().reduced(kPadding).getWidth();
+    // Uma coluna por pixel e' o limite util: mais colunas que pixels e' trabalho
+    // que nao aparece, menos e' perda de resolucao sem ganho. O zoom nao mexe
+    // aqui — muda o intervalo de bytes (viewByteRange), e a mesma densidade de
+    // colunas passa a cobrir menos material. E' a piramide sem estrutura extra.
+    const auto scaled = static_cast<float>(width);
+    return static_cast<std::uint32_t>(std::clamp(scaled, 16.0f, 8192.0f));
+}
+
+void ByteDisplay::rebuildColumnsIfNeeded() {
+    const auto wanted = columnCountForWidth();
+    if (cacheValid_ && wanted == cachedColumnCount_ && regionStart_ == cachedRegionStart_ &&
+        regionEnd_ == cachedRegionEnd_ && viewStart_ == cachedViewStart_ &&
+        viewLength_ == cachedViewLength_) {
+        return;
+    }
+
+    columns_.clear();
+
+    if (bytes_ != nullptr && !bytes_->empty() && regionEnd_ > regionStart_) {
+        const auto [viewStart, viewEnd] = viewByteRange();
+        if (viewEnd > viewStart) {
+            static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(),
+                                                  viewStart, viewEnd, wanted, columns_));
+        }
+    }
+
+    cachedColumnCount_ = wanted;
+    cachedRegionStart_ = regionStart_;
+    cachedRegionEnd_ = regionEnd_;
+    cachedViewStart_ = viewStart_;
+    cachedViewLength_ = viewLength_;
+    cacheValid_ = true;
+}
+
+void ByteDisplay::rebuildOverviewIfNeeded() {
+    if (overviewValid_ && overviewRegionStart_ == regionStart_ &&
+        overviewRegionEnd_ == regionEnd_) {
+        return;
+    }
+    overviewColumns_.clear();
+    if (bytes_ != nullptr && !bytes_->empty() && regionEnd_ > regionStart_) {
+        static constexpr std::uint32_t kOverviewColumns {192};
+        static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(),
+                                              regionStart_, regionEnd_,
+                                              kOverviewColumns, overviewColumns_));
+    }
+    overviewRegionStart_ = regionStart_;
+    overviewRegionEnd_ = regionEnd_;
+    overviewValid_ = true;
+}
+
+std::pair<std::uint64_t, std::uint64_t> ByteDisplay::viewByteRange() const noexcept {
+    if (regionEnd_ <= regionStart_) {
+        return {regionStart_, regionStart_};
+    }
+    const auto length = regionEnd_ - regionStart_;
+    const auto start = regionStart_ + static_cast<std::uint64_t>(viewStart_ * length);
+    const auto end = regionStart_ + static_cast<std::uint64_t>(
+                                          std::min(1.0f, viewStart_ + viewLength_) * length);
+    return {std::min(start, regionEnd_), std::max(end, std::min(start + 1, regionEnd_))};
+}
+
+float ByteDisplay::regionFractionAt(float x, float areaX, float areaWidth) const noexcept {
+    if (areaWidth <= 0.0f) {
+        return -1.0f;
+    }
+    const auto screen = (x - areaX) / areaWidth;
+    if (screen < 0.0f || screen > 1.0f) {
+        return -1.0f;
+    }
+    return viewStart_ + screen * viewLength_;
+}
+
+void ByteDisplay::zoomAround(float factor, float centreFraction) {
+    if (regionEnd_ <= regionStart_ || !(factor > 0.0f) ||
+        centreFraction < 0.0f || centreFraction > 1.0f) {
+        return;
+    }
+    const auto regionLength = regionEnd_ - regionStart_;
+    const auto minLength = std::min(1.0f, static_cast<float>(kMinViewBytes) /
+                                             static_cast<float>(regionLength));
+    const auto anchored = std::clamp(viewStart_ + centreFraction * viewLength_, 0.0f, 1.0f);
+    const auto newLength = std::clamp(viewLength_ * factor, minLength, 1.0f);
+    viewStart_ = std::clamp(anchored - centreFraction * newLength, 0.0f, 1.0f - newLength);
+    viewLength_ = newLength;
+    cacheValid_ = false;
+    repaint();
+}
+
+void ByteDisplay::zoomIn() {
+    zoomAround(0.5f, 0.5f);
+}
+
+void ByteDisplay::zoomOut() {
+    zoomAround(2.0f, 0.5f);
+}
+
+void ByteDisplay::fitView() {
+    if (viewStart_ == 0.0f && viewLength_ == 1.0f) {
+        return;
+    }
+    viewStart_ = 0.0f;
+    viewLength_ = 1.0f;
+    cacheValid_ = false;
+    repaint();
+}
+
+double ByteDisplay::fractionFor(std::uint64_t address) const noexcept {
+    return pe::positionForByte(address, pe::ByteRange {regionStart_, regionEnd_});
+}
+
+float ByteDisplay::fractionOf(std::uint64_t address) const noexcept {
+    if (viewLength_ <= 0.0f) {
+        return -1.0f;
+    }
+    const auto region = static_cast<float>(fractionFor(address));
+    return (region - viewStart_) / viewLength_;
+}
+
+void ByteDisplay::setReadHead(std::uint64_t address) {
+    readHead_ = address;
+    hex_.setReadHead(address);
+
+    // A caret segue a cabeca de leitura ate o utilizador lhe tocar. O editor
+    // reenvia a cabeca a cada tique, e sem esta guarda uma volta de 60 Hz repunha
+    // a caret no meio e as setas nao mexiam em nada.
+    if (!caretMoved_) {
+        caret_ = address;
+    }
+
+    // A primeira chamada e' um salto, as seguintes deslizam. Sem esta distincao o
+    // primeiro desenho animava desde zero e a cabeca de leitura varreria o ecra
+    // inteiro ao carregar um ficheiro.
+    const auto fraction = fractionOf(address);
+    if (!readHeadAnimated_) {
+        readHeadFraction_.jumpTo(fraction);
+        readHeadAnimated_ = true;
+    } else {
+        readHeadFraction_.set(fraction);
+    }
+
+    repaint();
+}
+
+void ByteDisplay::setCaret(std::uint64_t address) {
+    caret_ = std::clamp(address, regionStart_, highestUsableAddress());
+    caretMoved_ = caret_ != readHead_;
+    repaint();
+}
+
+std::uint64_t ByteDisplay::highestUsableAddress() const noexcept {
+    // Com menos de dois bytes nao ha nenhum endereco que produza som, e o clamp de
+    // juce::jmax abaixo mantem a caret dentro da regiao vazia.
+    return regionEnd_ >= regionStart_ + 2 ? regionEnd_ - 2 : regionStart_;
+}
+
+void ByteDisplay::focusGained(juce::Component::FocusChangeType) {
+    repaint();
+}
+
+void ByteDisplay::focusLost(juce::Component::FocusChangeType) {
+    repaint();
+}
+
+void ByteDisplay::handleNavigationKey(const juce::KeyPress& key) {
+    if (regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // O comprimento da regiao e' a unidade de uma linha. Nas vistas novas nao ha
+    // linha, e um salto de 16 e' a granularidade que o hex usa e a que um
+    // utilizador de teclado espera: um byte de cada vez em 12 MB e' impraticavel.
+    constexpr std::uint64_t kStep {1};
+    constexpr std::uint64_t kRow {16};
+
+    // Uma "pagina" e' uma regiao de 1024 bytes, que e' a janela que o rodape mede a
+    // entropia. Ligar o salto a um numero que ja existe no codigo e' melhor do que
+    // inventar um em proportion a altura, que mudaria com a janela e tornaria a
+    // mesma tecla um salto diferente em cada tamanho de janela.
+    constexpr std::uint64_t kPage {1024};
+
+    const auto upper = highestUsableAddress();
+    const auto shift = key.getModifiers().isShiftDown();
+    const auto code = key.getKeyCode();
+    std::uint64_t target = caret_;
+    bool handled = true;
+
+    // **`if` e nao `switch`.** Os codigos do KeyPress sao `static const int`
+    // inicializados no .cpp da biblioteca, e nao constantes de compilacao: um
+    // `case juce::KeyPress::leftKey` da "a expressao nao foi avaliada como uma
+    // constante". Foi o que a primeira versao usou e o que o compilador apanhou.
+    if (code == juce::KeyPress::leftKey) {
+        target = caret_ - std::min(caret_, shift ? kRow : kStep);
+    } else if (code == juce::KeyPress::rightKey) {
+        target = caret_ + (shift ? kRow : kStep);
+    } else if (code == juce::KeyPress::upKey) {
+        target = caret_ - std::min(caret_, kRow);
+    } else if (code == juce::KeyPress::downKey) {
+        target = caret_ + kRow;
+    } else if (code == juce::KeyPress::pageUpKey) {
+        target = caret_ - std::min(caret_, kPage);
+    } else if (code == juce::KeyPress::pageDownKey) {
+        target = caret_ + kPage;
+    } else if (code == juce::KeyPress::homeKey) {
+        target = regionStart_;
+    } else if (code == juce::KeyPress::endKey) {
+        target = upper;
+    } else if (code == juce::KeyPress::returnKey) {
+        // Ativar e' o que o clique faz. E' a unica tecla que escreve: as setas
+        // movem a caret e nao mudam o som, e e' por isso que navegar e inofensivo.
+        //
+        // Depois de ativar, a caret volta a seguir a cabeca de leitura. Sem isto, a
+        // proxima volta do timer mantinha a caret onde o utilizador a deixou e as
+        // setas recomecavam de um sitio que ja nao e' o sitio da leitura.
+        caretMoved_ = false;
+        if (onAddressActivated != nullptr) {
+            onAddressActivated(caret_);
+        }
+        return;
+    } else {
+        handled = false;
+    }
+
+    if (!handled) {
+        return;
+    }
+
+    // O clamp e' a unica proteccao contra transbordo. Um `caret_ - 16` sem isto
+    // daria um numero enorme e o Editor escreveria uma posicao absurda.
+    setCaret(std::clamp(target, regionStart_, upper));
+}
+
+bool ByteDisplay::handleTransportKey(const juce::KeyPress& key) {
+    if (key.getKeyCode() == juce::KeyPress::spaceKey) {
+        if (onToggleTransport != nullptr) {
+            onToggleTransport();
+            return true;
+        }
+        return false;
+    }
+
+    if (isTypedCharacter(key, 'A') && onSnapRequestedFromKey != nullptr) {
+        onSnapRequestedFromKey();
+        return true;
+    }
+
+    return false;
+}
+
+bool ByteDisplay::keyPressed(const juce::KeyPress& key) {
+    if (key.getKeyCode() == juce::KeyPress::escapeKey) {
+        // Devolve a caret a cabeca de leitura: e' a forma de desfazer uma
+        // navegacao sem passar pelo knob.
+        setCaret(readHead_);
+        return true;
+    }
+
+    // As teclas de transporte sao respondidas aqui e nao so no editor, porque o
+    // display e' o unico componente que fica com foco quando nao ha campo de
+    // endereco com foco. Devolvem o resultado para que o editor saiba que ja foram
+    // consumidas.
+    if (handleTransportKey(key)) {
+        return true;
+    }
+
+    if (isDigitKey(key, '1')) {
+        setMode(ViewMode::waveform);
+        return true;
+    }
+    if (isDigitKey(key, '2')) {
+        setMode(ViewMode::hex);
+        return true;
+    }
+    if (isDigitKey(key, '3')) {
+        setMode(ViewMode::entropy);
+        return true;
+    }
+
+    if (isTypedCharacter(key, '+') || isTypedCharacter(key, '=')) {
+        zoomIn();
+        return true;
+    }
+    if (isTypedCharacter(key, '-')) {
+        zoomOut();
+        return true;
+    }
+    if (isTypedCharacter(key, '0')) {
+        fitView();
+        return true;
+    }
+
+    handleNavigationKey(key);
+    return true;
+}
+
+void ByteDisplay::paintFocusRing(juce::Graphics& g) {
+    // 2.4.7 Foco visivel.
+    //
+    // O anel e' o sinal de que as setas mexem na caret. Sem ele, quem esta' a
+    // navegar por teclado nao sabe que o display tem o foco, e as setas parecem nao
+    // fazer nada — que e' a falha que o portao E descreve.
+    if (!hasKeyboardFocus(true)) {
+        return;
+    }
+
+    g.setColour(palette::accent);
+    g.drawRect(getLocalBounds().toFloat().reduced(1.0f), 2.0f);
+}
+
+void ByteDisplay::paint(juce::Graphics& g) {
+    g.fillAll(palette::displayPanel);
+
+    if (bytes_ == nullptr || bytes_->empty() || regionEnd_ <= regionStart_) {
+        g.setColour(palette::textOnDarkSub);
+        g.setFont(font_);
+        g.drawText("SEM BINARIO", getLocalBounds().toFloat(), juce::Justification::centred,
+                   false);
+        return;
+    }
+
+    rebuildColumnsIfNeeded();
+    rebuildOverviewIfNeeded();
+
+    switch (mode_) {
+        case ViewMode::waveform: paintWaveform(g); break;
+        case ViewMode::entropy: paintEntropy(g); break;
+        case ViewMode::hex: paintEntropyBars(g, entropyStripBounds().toFloat()); break;
+    }
+
+    // Os graos vao sobre o conteudo e por baixo das cabecas. No hex o HexGrid e'
+    // um Component filho e pinta-se a si proprio, portanto `paint` acontece antes
+    // dele: e' `paintOverChildren` que os coloca por cima.
+    if (mode_ == ViewMode::waveform) {
+        paintGrains(g, plotBounds());
+    } else if (mode_ == ViewMode::entropy) {
+        paintGrains(g, entropyPlotBounds());
+    }
+
+    // **Nao ha banda da regiao nas vistas novas, e a diferenca e' intentional.**
+    // No hex a regiao e' uma faixa sobre celulas de largura fixa, porque o que se
+    // ve e' o ficheiro inteiro. Na forma de onda e na curva o que se ve ja e' a
+    // regiao, do primeiro ao ultimo pixel, e uma banda a marcar o que ocupa tudo
+    // seria ruido. A regiao continua marcada pelas duas coisas que importam: o
+    // endereco no gutter do hex e o intervalo no rodape, como TP e REG.
+    if (mode_ != ViewMode::hex) {
+        paintSectionTicks(g);
+    }
+}
+
+void ByteDisplay::paintEntropyBars(juce::Graphics& g, const juce::Rectangle<float>& strip) {
+    if (strip.isEmpty() || columns_.empty()) {
+        return;
+    }
+
+    // Uma barra por grupo de colunas, com a altura do maximo do grupo. O maximo
+    // e nao a media, pela mesma razao do contorno do nucleo: o pico e' a
+    // leitura, e a media esconderia o transiente que a barra existe para
+    // mostrar.
+    //
+    // Sem glow aqui: a barra ja e' cor solida sobre fundo escuro, e um halo em
+    // cada uma de ate 96 barras viraria pasta. O glow mora na linha da onda,
+    // que e' um traco so.
+    const auto plot =
+        strip.reduced(kPadding * 0.5f, 4.0f);
+    const int barCount = juce::jlimit(8, 96, static_cast<int>(plot.getWidth() / 3.0f));
+    const auto barWidth = plot.getWidth() / static_cast<float>(barCount);
+
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+
+    for (int b = 0; b < barCount; ++b) {
+        const auto first =
+            static_cast<std::size_t>(b) * columns_.size() / static_cast<std::size_t>(barCount);
+        const auto last = static_cast<std::size_t>(b + 1) * columns_.size() /
+                          static_cast<std::size_t>(barCount);
+
+        float peak = 0.0f;
+        for (auto i = first; i < last && i < columns_.size(); ++i) {
+            peak = juce::jmax(peak, columns_[i].entropyBits);
+        }
+
+        const auto height = std::clamp(peak, 0.0f, 8.0f) / 8.0f * plot.getHeight();
+        if (height <= 0.0f) {
+            continue;
+        }
+
+        const auto x = plot.getX() + static_cast<float>(b) * barWidth;
+        g.setColour(palette::alpha(inks[entropyBucket(peak)], 0.85f));
+        g.fillRect(juce::Rectangle<float> {x, plot.getBottom() - height,
+                                           juce::jmax(1.0f, barWidth - 1.0f), height});
+    }
+}
+
+void ByteDisplay::paintGrainsInHex(juce::Graphics& g) {
+    if (regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    // **Aqui o alvo e' a celula, e nao a coluna.** Um grao desenha-se sobre a celula
+    // do byte que esta' a ler, porque no hex o que interessa e' *qual byte*. Desenhar
+    // a fracao da regiao como se fosse a posicao no ecra seria uma mentira
+    // geometrica, e a captura mostrava uma mancha desfocada a meio da linha em vez
+    // de uma celula.
+    for (int voice = 0; voice < view::GrainTrailSet::kMaxVoices; ++voice) {
+        if (!grainTrails_.active(voice)) {
+            continue;
+        }
+
+        const auto cell = hex_.cellRectForAddress(grainTrails_.address(voice));
+        if (cell.isEmpty()) {
+            continue;
+        }
+
+        // **Sem rastro no hex.** A cauda serve quando o grao se mexe no ecra, e no
+        // hex um grao de 40 ms muda de byte a cada bloco: a cauda ocuparia tres ou
+        // quatro celulas e marcaria bytes por onde o grao ja passou, que e'
+        // informacao falsa — diria que o grao esta' a ler onde ja nao esta'. A
+        // forma de onda e' que mostra a varredura; o hex mostra o byte.
+        g.setColour(palette::alpha(juce::Colours::white, 0.28f));
+        g.fillRect(cell.reduced(1.0f));
+        g.setColour(palette::alpha(juce::Colours::white, 0.92f));
+        g.drawRect(cell.reduced(1.0f), 1.5f);
+    }
+}
+
+void ByteDisplay::paintGrains(juce::Graphics& g, const juce::Rectangle<float>& area) {
+    // Desenhados em `paint`, antes da cabeca de leitura e da de reproducao, que
+    // sao em `paintOverChildren`. A ordem e' a da leitura: o que responde a "o que
+    // estou a ouvir" fica por cima, e o grao e' contexto.
+    //
+    // **A celula do hex e' o sitio onde a coisa esta' a acontecer**, e e' por isso
+    // que o hex tambem mostra graos. A fracao publicada e' da regiao e o hex
+    // mostra o ficheiro inteiro, entao a conversao passa pelo endereco.
+    for (int voice = 0; voice < view::GrainTrailSet::kMaxVoices; ++voice) {
+        if (!grainTrails_.active(voice)) {
+            continue;
+        }
+
+        paintGrain(g, area, grainTrails_.trail(voice), 1.0f);
+    }
+}
+
+void ByteDisplay::paintGrain(juce::Graphics& g,
+                             const juce::Rectangle<float>& area,
+                             const view::GrainTrailSet::Trail& trail,
+                             float gain) {
+    // **Esta funcao e' so para a forma de onda e para a curva.** Nelas a janela e'
+    // a regiao, e a fracao do grao e' a posicao no ecra — e' por isso que a
+    // fracao vai directamente para x. No hex a escala e' outra: a janela e' o
+    // ficheiro inteiro e o grao desenha-se na celula do byte, em
+    // `paintGrainsInHex`.
+    const auto xOf = [this, &area](float regionFraction) {
+        if (viewLength_ <= 0.0f) {
+            return -1.0f;
+        }
+        const auto screen = (regionFraction - viewStart_) / viewLength_;
+        if (screen <= 0.0f || screen >= 1.0f) {
+            return -1.0f; // fora do viewport: melhor nao desenhar do que adivinhar
+        }
+        return area.getX() + screen * area.getWidth();
+    };
+
+    // O indice 0 e' o mais recente, porque o deslocamento empurra para o fim.
+    const auto newestX = xOf(trail.positions[0]);
+    if (newestX < 0.0f) {
+        return;
+    }
+
+    // O risco e' **baixo**, com a altura a dar o ganho, e nunca a toda a altura.
+    // Desenhado a toda a altura, o grao ficava indistinto da cabeca de leitura:
+    // duas barras brancas do mesmo tamanho no mesmo ecra. A cabeca responde a "o
+    // que estou a ouvir" e tem de ganhar. Um risco baixo e um risco de altura
+    // total nao se confundem, mesmo sendo a mesma cor - e o 1.4.1 e' sobre forma,
+    // nao so sobre cor.
+    const auto centreY = area.getCentreY();
+    const auto height = juce::jmax(6.0f, area.getHeight() * 0.30f * gain);
+    const auto top = centreY - height * 0.5f;
+
+    float oldestX = newestX;
+    for (int f = 1; f < trail.count; ++f) {
+        const auto x = xOf(trail.positions[static_cast<std::size_t>(f)]);
+        if (x >= 0.0f) {
+            oldestX = std::min(oldestX, x);
+        }
+    }
+
+    // **O rastro e' uma pilha de quadris com alfa crescente, e nao um
+    // gradiente.** O gradiente foi a segunda tentativa e dava faixas visiveis:
+    // o JUCE quantiza para 8 bits por canal, e num gradiente de meio alfa
+    // durante seis pixels cada degrau de 1/255 aparece como uma banda. Com seis
+    // pixels de curso nao ha lado nenhum para um gradiente: uma pilha de retangulos
+    // de 2 px com alfa a dar para tras da a mesma leitura e nao tem bandas.
+    const auto span = newestX - oldestX;
+    if (trail.count > 1 && span > 0.5f) {
+        // Do mais antigo para o mais recente. O alfa cresce com a proximidade do
+        // grao actual, que e' o que faz o olho ler a direccao do varrimento sem
+        // seta nem legenda.
+        constexpr int kSteps {6};
+        const auto step = juce::jmax(1.0f, std::ceil(span / static_cast<float>(kSteps)));
+        for (int s = 0; s < kSteps; ++s) {
+            const auto t = static_cast<float>(s + 1) / static_cast<float>(kSteps);
+            const auto x0 = oldestX + step * static_cast<float>(s);
+            if (x0 >= newestX) {
+                break;
+            }
+            const auto width = juce::jmin(step, newestX - x0);
+            g.setColour(palette::alpha(juce::Colours::white, 0.42f * gain * t * t));
+            g.fillRect(juce::Rectangle<float> {x0, top, width, height});
+        }
+    }
+
+    // A cabeca do rastro: o ponto mais recente, opaco. E' este o que diz "o grao
+    // esta' aqui", e e' o unico elemento do rastro que nao pode faltar.
+    //
+    // **Branco, e nao a cor do grao.** A primeira versao desenhou o grao em
+    // accentSoft, e ele desaparecia. A razao e' medida: o envelope da forma de
+    // onda e' accent a 62%, que da #a6690b, e contra isso
+    //
+    //   accentSoft  2,92:1     accentWarn  2,62:1     textOnDark  2,74:1
+    //
+    // todos abaixo dos 3:1 que o 1.4.11 exige de um grafico que precisa de
+    // contraste para ser entendido. Um grao laranja sobre um envelope laranja so
+    // se distinguia por matiz, que e' o que o criterio proibe. O branco da 4,52:1
+    // sobre o envelope e 13,4:1 sobre o fundo, e passa nos dois.
+    g.setColour(palette::alpha(juce::Colours::white, 0.14f * gain));
+    g.fillRoundedRectangle(juce::Rectangle<float> {newestX - kGrainGlowWidth * 0.5f,
+                                                   top - 1.5f, kGrainGlowWidth,
+                                                   height + 3.0f},
+                           kGrainGlowWidth * 0.5f);
+    g.setColour(palette::alpha(juce::Colours::white, 0.9f * gain));
+    g.fillRoundedRectangle(juce::Rectangle<float> {newestX - kGrainCoreWidth * 0.5f, top,
+                                                   kGrainCoreWidth, height},
+                           kGrainCoreWidth * 0.5f);
+}
+
+void ByteDisplay::paintSectionTicks(juce::Graphics& g) {
+    // Marcas dos limites de secao sobre a curva e a forma de onda.
+    //
+    // **Sao marcas e nao bandas**, por duas razoes: a regiao ja ocupa tudo o ecra,
+    // e uma banda de 12 MB de largura nao diria nada; e o criterio 1.4.1 pede um
+    // sinal que nao seja a cor, e um filete de 1 px e' um sinal. O gutter do hex
+    // mantem o nome da secao; aqui o nome nao cabe e o que interessa e' onde a
+    // secao acaba.
+    if (sections_.empty() || regionEnd_ <= regionStart_) {
+        return;
+    }
+
+    const auto area = plotBounds();
+    if (area.getWidth() <= 0.0f) {
+        return;
+    }
+
+    for (const auto& section : sections_) {
+        if (section.rawSize == 0) {
+            continue;
+        }
+        const auto start = static_cast<std::uint64_t>(section.rawOffset);
+        if (start < regionStart_ || start >= regionEnd_) {
+            continue;
+        }
+
+        const auto screen = fractionOf(start);
+        if (screen < 0.0f || screen > 1.0f) {
+            continue; // fora do viewport
+        }
+        const auto x = area.getX() + screen * area.getWidth();
+
+        g.setColour(palette::alpha(palette::chassisBorder, 0.8f));
+        g.fillRect(juce::Rectangle<float> {x, area.getY(), 1.0f, area.getHeight()});
+    }
+}
+
+void ByteDisplay::paintOverChildren(juce::Graphics& g) {
+    if (bytes_ == nullptr || bytes_->empty()) {
+        return;
+    }
+
+    // Nas vistas novas as cabecas vivem no plot (regua em cima, overview
+    // em baixo); no hex ocupam a area toda. Na entropia o plot recua para o
+    // eixo, como a curva.
+    juce::Rectangle<float> area = getLocalBounds().toFloat().reduced(kPadding);
+    if (mode_ == ViewMode::waveform) {
+        area = plotBounds();
+    } else if (mode_ == ViewMode::entropy) {
+        area = entropyPlotBounds();
+    }
+
+    // No hex os graos entram aqui, e nao em `paint`: o HexGrid e' um Component
+    // filho e pinta-se depois de `paint` do pai, portanto qualquer marca minha
+    // feita em `paint` ficaria **por baixo** da grelha e invisivel.
+    //
+    // O alvo e' a celula do byte, e nao a fracao da regiao. Ver paintGrainsInHex.
+    if (mode_ == ViewMode::hex) {
+        paintGrainsInHex(g);
+    }
+
+    // A cabeca de leitura so e' desenhada aqui nas vistas novas. No hex o
+    // HexGrid desenha a sua, dentro da celula, porque a cabe a linha e a coluna da
+    // celula e nao a uma fracao da largura.
+    if (mode_ != ViewMode::hex) {
+        paintReadHead(g, area);
+    }
+
+    // A cabeca de reproducao esta' nas tres, incluindo no hex. E' a unica peca que
+    // o HexGrid nao conhece, e sem ela o botao PLAY nao tinha nada que mostrar
+    // na vista dos bytes.
+    paintPlayhead(g, area);
+
+    // A caret e' so desenhada com o foco do teclado. Sem foco ela seria uma marca
+    // a mais entre a cabeca de leitura e a de reproducao, e tres barras verticais
+    // no mesmo ecra nao se distinguem.
+    if (hasKeyboardFocus(true) && mode_ != ViewMode::hex) {
+        const auto screen = fractionOf(caret_);
+        if (screen >= 0.0f && screen <= 1.0f) {
+            const auto caretX = area.getX() + screen * area.getWidth();
+            g.setColour(palette::accentSoft);
+            g.drawRect(juce::Rectangle<float> {caretX - 3.0f, area.getY() + 2.0f, 6.0f,
+                                               area.getHeight() - 4.0f},
+                       1.0f);
+        }
+    }
+
+    paintFocusRing(g);
+
+    paintOutputLevel(g);
+}
+
+void ByteDisplay::paintOutputLevel(juce::Graphics& g) {
+    const auto bounds = getLocalBounds().toFloat().reduced(kPadding);
+    const auto barHeight = kLevelHeight;
+
+    // No topo do display, e nao em baixo: o rodape e' do editor e esta la a telemetria
+    // escrita, e um medidor ao pe de uma lista de leituras confundia-se com mais uma
+    // leitura. Aqui em cima ele responde ao que se ouve sem competir com nada.
+    const auto bar = juce::Rectangle<float> {bounds.getX(), bounds.getY() + 2.0f,
+                                             bounds.getWidth(), barHeight};
+
+    // A calha, sempre visivel. Um medidor sem calha desaparece quando o sinal
+    // desaparece, e sem ele nao se sabe se o medidor esta' a trabalhar.
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.fillRect(bar);
+
+    const auto level = outputLevel_.value();
+    const auto filled = bar.withWidth(bar.getWidth() * level);
+    if (filled.getWidth() > 0.0f) {
+        // A cor muda perto do topo: o medidor tem de avisar antes do limitador
+        // meter, e so a cor e o que diz. Por isso o valor em texto no rodape
+        // importa — sem ele, quem nao distingue o verde do laranja nao sabe.
+        const auto hot = level > 0.85f;
+        g.setColour(palette::alpha(hot ? palette::accentWarn : palette::okBright, 0.9f));
+        g.fillRect(filled);
+    }
+}
+
+void ByteDisplay::paintWaveform(juce::Graphics& g) {
+    if (columns_.empty()) {
+        return;
+    }
+
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto plot = plotBounds();
+    if (plot.getWidth() <= 0.0f || plot.getHeight() <= 0.0f) {
+        return;
+    }
+
+    paintRuler(g, {full.getX(), plot.getY() - kRulerHeight - 2.0f, full.getWidth(),
+                   kRulerHeight});
+
+    const auto centreY = plot.getCentreY();
+    const auto halfHeight = plot.getHeight() * 0.5f;
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto columnWidth = plot.getWidth() / static_cast<float>(columns_.size());
+
+    if (sampleDotsVisible()) {
+        // Zoom fundo: os bytes reais em vez da miniatura. A polilinha passa
+        // pelos valores mapeados e cada amostra leva ponto — o transiente
+        // le-se amostra a amostra, sem esticar nada.
+        paintSampleDots(g, plot, viewStartByte, viewEndByte);
+    } else {
+        // Minimo e maximo num Path so, com dois movimentos: subir pela coluna maxima e
+        // descer pela minima. Um Path por coluna custava sete vezes mais e nao mudava o
+        // desenho.
+        juce::Path swing;
+        swing.startNewSubPath(plot.getX(), centreY);
+
+        for (std::size_t i = 0; i < columns_.size(); ++i) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            const auto top = centreY - std::clamp(columns_[i].maximum, -1.0f, 1.0f) * halfHeight;
+            swing.lineTo(x, top);
+        }
+
+        for (std::size_t i = columns_.size(); i-- > 0;) {
+            const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+            const auto bottom =
+                centreY - std::clamp(columns_[i].minimum, -1.0f, 1.0f) * halfHeight;
+            swing.lineTo(x, bottom);
+        }
+
+        swing.closeSubPath();
+
+        // Base morna fraca: o envelope diz ate onde o material se estica, e nada
+        // mais. O corpo solido morreu aqui: 870 verticais de altura cheia,
+        // uma por coluna, fundiam-se numa massa sem vales — e vales que nao se
+        // veem sao silencio que nao se distingue.
+        g.setColour(palette::alpha(palette::accent, 0.10f));
+        g.fillPath(swing);
+
+        // Silhueta do RMS: so o contorno de cima e o de baixo, interior vazio.
+        // Cada aresta vai colorida por entropia — teal no previsivel, amarelo
+        // no meio, rosa no aleatorio — por isso a linha conta duas leituras de
+        // uma vez: onde o som esta' (posicao) e do que o material e' feito
+        // (cor). O interior vazio e' o que devolve os vales e o silencio.
+        paintRmsSilhouette(g, plot, centreY, halfHeight, columnWidth);
+    }
+
+    // O zero. Um envelope sem linha de zero nao diz qual e' o silencio, e o desenho
+    // da grelha tem essa linha ha muito tempo.
+    g.setColour(palette::alpha(juce::Colours::white, 0.16f));
+    g.drawHorizontalLine(juce::roundToInt(centreY), plot.getX(), plot.getRight());
+
+    paintSourceTag(g, plot);
+    paintOverview(g);
+}
+
+bool ByteDisplay::sampleDotsVisible() const noexcept {
+    if (regionEnd_ <= regionStart_ || bytes_ == nullptr) {
+        return false;
+    }
+    const auto plotWidth = plotBounds().getWidth();
+    if (plotWidth <= 0.0f) {
+        return false;
+    }
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto viewBytes =
+        viewEndByte > viewStartByte ? (viewEndByte - viewStartByte) : 0;
+    // <=2 bytes por pixel: ha ecra para cada amostra. Acima disso os pontos
+    // colapsavam uns sobre os outros e a polilinha das colunas conta melhor.
+    return viewBytes > 0 &&
+           static_cast<float>(viewBytes) / plotWidth <= 2.0f;
+}
+
+void ByteDisplay::paintSampleDots(juce::Graphics& g,
+                                  const juce::Rectangle<float>& plotArea,
+                                  std::uint64_t viewStartByte,
+                                  std::uint64_t viewEndByte) {
+    if (bytes_ == nullptr || viewEndByte <= viewStartByte ||
+        viewStartByte >= bytes_->size()) {
+        return;
+    }
+    const auto last = std::min(viewEndByte, static_cast<std::uint64_t>(bytes_->size()));
+    const auto count = last - viewStartByte;
+    if (count == 0 || count > 8192) {
+        return;
+    }
+
+    const auto centreY = plotArea.getCentreY();
+    const auto halfHeight = plotArea.getHeight() * 0.5f;
+    const auto xOf = [&](std::uint64_t byte) {
+        return plotArea.getX() +
+               (static_cast<float>(byte - viewStartByte) + 0.5f) /
+                   static_cast<float>(count) * plotArea.getWidth();
+    };
+    const auto yOf = [&](std::uint8_t byte) {
+        return centreY -
+               ((static_cast<float>(byte) - 127.5f) / 127.5f) * halfHeight;
+    };
+
+    // A mesma conta do nucleo (byteToSample duplicada e presa por ensaio):
+    // o ponto e' o byte, sem agregacao pelo meio.
+    juce::Path line;
+    bool started = false;
+    for (auto byte = viewStartByte; byte < last; ++byte) {
+        const auto x = xOf(byte);
+        const auto y = yOf((*bytes_)[static_cast<std::size_t>(byte)]);
+        if (!started) {
+            line.startNewSubPath(x, y);
+            started = true;
+        } else {
+            line.lineTo(x, y);
+        }
+    }
+    g.setColour(palette::waveLow);
+    g.strokePath(line, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                             juce::PathStrokeType::rounded});
+
+    g.setColour(palette::alpha(palette::waveLow, 0.95f));
+    for (auto byte = viewStartByte; byte < last; ++byte) {
+        const auto x = xOf(byte);
+        const auto y = yOf((*bytes_)[static_cast<std::size_t>(byte)]);
+        g.fillEllipse(x - 1.5f, y - 1.5f, 3.0f, 3.0f);
+    }
+}
+
+void ByteDisplay::paintRuler(juce::Graphics& g, const juce::Rectangle<float>& strip) {
+    if (regionEnd_ <= regionStart_ || strip.getWidth() <= 0.0f) {
+        return;
+    }
+    const auto [viewStartByte, viewEndByte] = viewByteRange();
+    const auto viewBytes = viewEndByte > viewStartByte ? viewEndByte - viewStartByte : 0;
+    if (viewBytes == 0) {
+        return;
+    }
+
+    // Passo "bonito" 1/2/5 x 10^n para ~90 px por tick maior.
+    const auto pxPerByte = strip.getWidth() / static_cast<float>(viewBytes);
+    const auto target = 90.0 / static_cast<double>(pxPerByte);
+    const auto magnitude = std::pow(10.0, std::floor(std::log10(std::max(target, 1.0))));
+    std::uint64_t stepBytes {1};
+    for (const auto mult : {1.0, 2.0, 5.0, 10.0}) {
+        if (mult * magnitude >= target) {
+            stepBytes = static_cast<std::uint64_t>(mult * magnitude);
+            break;
+        }
+        stepBytes = static_cast<std::uint64_t>(10.0 * magnitude);
+    }
+    if (stepBytes == 0) {
+        return;
+    }
+
+    // Hex de 64 bits a mao: String::toHexString trunca em 32 bits e um ficheiro
+    // passa disso ao fim de 4 GB.
+    const auto hexOf = [](std::uint64_t value) {
+        constexpr char digits[] {"0123456789ABCDEF"};
+        juce::String text {"0x"};
+        bool started = false;
+        for (int shift = 60; shift >= 0; shift -= 4) {
+            const auto nibble = (value >> shift) & 0xFu;
+            if (nibble != 0 || started || shift == 0) {
+                text += digits[nibble];
+                started = true;
+            }
+        }
+        return text;
+    };
+
+    g.setFont(fonts().sans(9.0f));
+    const auto firstTick = (viewStartByte + stepBytes - 1) / stepBytes * stepBytes;
+    for (auto tick = firstTick; tick < viewEndByte;) {
+        const auto x = strip.getX() +
+                       static_cast<float>(tick - viewStartByte) * pxPerByte;
+        g.setColour(palette::alpha(palette::chassisBorder, 0.9f));
+        g.fillRect(juce::Rectangle<float> {x, strip.getBottom() - 5.0f, 1.0f, 5.0f});
+        g.setColour(palette::textOnDarkSub);
+        g.drawText(hexOf(tick),
+                   juce::Rectangle<float> {x + 3.0f, strip.getY(), 76.0f,
+                                            strip.getHeight()},
+                   juce::Justification::centredLeft, false);
+        if (tick > viewEndByte - stepBytes) {
+            break; // sem isto, o ultimo passo voltava por transbordo
+        }
+        tick += stepBytes;
+    }
+
+    // Linha de base da regua.
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.drawHorizontalLine(juce::roundToInt(strip.getBottom()), strip.getX(),
+                         strip.getRight());
+}
+
+void ByteDisplay::paintSourceTag(juce::Graphics& g,
+                                 const juce::Rectangle<float>& plotArea) {
+    // O que se ve nao sao bytes: e' o mapeamento bytes->amostras do pipeline.
+    // Sem o rotulo, a forma de onda mente por omissao — apresenta bytes crus
+    // como se fossem audio. Os bytes crus moram na vista HEX.
+    const juce::String tag {mode_ == ViewMode::waveform ? "MAPPED AUDIO · BYTES->SAMPLES"
+                                                        : "MAPPED AUDIO · ENTROPY"};
+    g.setFont(fonts().sans(9.0f));
+    const auto width = 218.0f;
+    // Em baixo a esquerda: em cima colidiria com os rotulos da regua.
+    const auto tagBounds = juce::Rectangle<float> {plotArea.getX() + 4.0f,
+                                                 plotArea.getBottom() - 18.0f, width,
+                                                  14.0f};
+    g.setColour(palette::alpha(palette::display, 0.72f));
+    g.fillRoundedRectangle(tagBounds, 2.0f);
+    g.setColour(palette::textOnDarkSub);
+    g.drawText(tag, tagBounds.reduced(6.0f, 0.0f), juce::Justification::centredLeft,
+               false);
+}
+
+void ByteDisplay::paintOverview(juce::Graphics& g) {
+    if (regionEnd_ <= regionStart_ || overviewColumns_.empty()) {
+        return;
+    }
+    const auto strip = overviewBounds();
+    if (strip.getWidth() <= 0.0f || strip.getHeight() <= 0.0f) {
+        return;
+    }
+
+    // Calha afundada.
+    g.setColour(palette::display);
+    g.fillRoundedRectangle(strip, 2.0f);
+    g.setColour(palette::alpha(palette::displayBorder, 0.9f));
+    g.drawRoundedRectangle(strip, 2.0f, 1.0f);
+
+    const auto plot = strip.reduced(3.0f, 3.0f);
+    const auto centreY = plot.getCentreY();
+    const auto halfHeight = plot.getHeight() * 0.5f;
+    const auto columnWidth = plot.getWidth() / static_cast<float>(overviewColumns_.size());
+
+    // Miniatura quieta: um envelope so, sem cor por entropia e sem glow. O mapa
+    // e' contexto, nao a leitura — a leitura mora no plot.
+    juce::Path mini;
+    mini.startNewSubPath(plot.getX(), centreY);
+    for (std::size_t i = 0; i < overviewColumns_.size(); ++i) {
+        mini.lineTo(plot.getX() + static_cast<float>(i) * columnWidth,
+                    centreY - std::clamp(overviewColumns_[i].rms, 0.0f, 1.0f) *
+                                  halfHeight);
+    }
+    for (std::size_t i = overviewColumns_.size(); i-- > 0;) {
+        mini.lineTo(plot.getX() + static_cast<float>(i) * columnWidth,
+                    centreY + std::clamp(overviewColumns_[i].rms, 0.0f, 1.0f) *
+                                  halfHeight);
+    }
+    mini.closeSubPath();
+    g.setColour(palette::alpha(palette::waveLow, 0.45f));
+    g.fillPath(mini);
+
+    // O que esta' fora do viewport escurece; o viewport leva moldura ambar.
+    // Forma (retangulo) + posicao contam sem cor — o 1.4.1 vale no mapa.
+    const auto viewX = plot.getX() + viewStart_ * plot.getWidth();
+    const auto viewW = std::max(3.0f, viewLength_ * plot.getWidth());
+    g.setColour(juce::Colours::black.withAlpha(0.45f));
+    if (viewX > plot.getX()) {
+        g.fillRect(
+            juce::Rectangle<float> {plot.getX(), plot.getY(), viewX - plot.getX(),
+                                    plot.getHeight()});
+    }
+    if (viewX + viewW < plot.getRight()) {
+        g.fillRect(juce::Rectangle<float> {viewX + viewW, plot.getY(),
+                                            plot.getRight() - (viewX + viewW),
+                                            plot.getHeight()});
+    }
+    g.setColour(palette::accent);
+    g.drawRect(juce::Rectangle<float> {viewX, plot.getY(), viewW, plot.getHeight()},
+               1.0f);
+
+    // Cabecas no mapa: leitura branca, reproducao ambar com triangulo proprio.
+    // Em fracao da REGIAO (fractionFor), nao do ecra: o mapa mostra a regiao
+    // inteira e o viewport e' so o retangulo.
+    const auto readRegion = static_cast<float>(fractionFor(readHead_));
+    if (readRegion >= 0.0f && readRegion <= 1.0f) {
+        const auto x = plot.getX() + readRegion * plot.getWidth();
+        g.setColour(juce::Colours::white);
+        g.fillRect(juce::Rectangle<float> {x - 0.5f, plot.getY(), 1.0f,
+                                            plot.getHeight()});
+    }
+    if (playheadVisible_) {
+        const auto region = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
+        const auto x = plot.getX() + region * plot.getWidth();
+        g.setColour(palette::accent);
+        g.fillRect(juce::Rectangle<float> {x - 0.5f, plot.getY(), 1.0f,
+                                            plot.getHeight()});
+    }
+}
+
+// Linha colorida por entropia. Usada pela forma de onda (sobre o nucleo de RMS,
+// espelhado no centro) e pela curva de entropia (sobre a propria curva, sem
+// espelho): o dado e' o mesmo, `columns_[i].entropyBits`, e a escala e' a
+// mesma — 0 a 8. O `topOf` diz o y de cada coluna; `bottomOf` devolve o mesmo y
+// quando nao ha espelho.
+void ByteDisplay::paintEntropyLine(
+    juce::Graphics& g,
+    const std::vector<pe::Column>& columns,
+    float columnWidth,
+    float originX,
+    const std::function<float(std::size_t)>& topOf,
+    const std::function<float(std::size_t)>& bottomOf) {
+    juce::Path low;
+    juce::Path mid;
+    juce::Path high;
+
+    // Ultima coluna que entrou em cada faixa. Sem isto, duas colunas da mesma
+    // faixa separadas por colunas de outra faixa sairiam ligadas por uma
+    // diagonal atravessando o ecra — que e' o que a primeira versao desenhava, e
+    // a captura mostrava diagonais cor-de-rosa de uma ponta a outra.
+    std::size_t lastInBucket[3] {columns.size(), columns.size(), columns.size()};
+
+    for (std::size_t i = 0; i < columns.size(); ++i) {
+        const auto x = originX + static_cast<float>(i) * columnWidth;
+        const auto b = entropyBucket(columns[i].entropyBits);
+
+        auto& path = b == 0 ? low : b == 1 ? mid : high;
+        if (path.isEmpty() || lastInBucket[b] + 1 != i) {
+            path.startNewSubPath(x, topOf(i));
+        } else {
+            path.lineTo(x, topOf(i));
+        }
+        path.lineTo(x, bottomOf(i));
+        lastInBucket[b] = i;
+    }
+
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+    const juce::Path* paths[3] {&low, &mid, &high};
+    for (int b = 0; b < 3; ++b) {
+        if (paths[b]->isEmpty()) {
+            continue;
+        }
+        // Glow contido: um passe so, 3 px e fraco. Dois passes largos somavam
+        // cobertura a cada coluna vizinha e o contorno virava massa solida que
+        // tapava o envelope: pile-up de alfa disfarcado de cor.
+        g.setColour(palette::alpha(inks[b], 0.20f));
+        g.strokePath(*paths[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+        g.setColour(palette::alpha(inks[b], 0.95f));
+        g.strokePath(*paths[b], juce::PathStrokeType {1.0f});
+    }
+}
+
+void ByteDisplay::paintRmsSilhouette(juce::Graphics& g,
+                                      const juce::Rectangle<float>& plotArea,
+                                      float centreY,
+                                      float halfHeight,
+                                      float columnWidth) {
+    const juce::Colour inks[3] {palette::waveLow, palette::accentSoft, palette::waveHigh};
+
+    // Uma passagem por aresta: a de cima da esquerda para a direita e a de
+    // baixo idem. Juntar as duas numa so faixa fechada pedia guardar os pontos
+    // da aresta de baixo para os percorrer ao contrario — vector no paint, a
+    // 60 Hz, para economizar uma passagem linear que custa centenas de
+    // nanossegundos. Duas passagens e zero alocacoes.
+    //
+    // `started` em vez de `Path::isEmpty()`: isEmpty ignora move markers, por
+    // isso um subpath com so o move inicial conta como vazio para sempre e o
+    // lineTo nunca corria — foi o que apagou a primeira versao desta funcao
+    // sem deixar rasto (nem erro, nem warning, nem pixel).
+    for (int edge = 0; edge < 2; ++edge) {
+        juce::Path band[3];
+        bool started[3] {false, false, false};
+        std::size_t lastInBucket[3] {0, 0, 0};
+
+        for (std::size_t i = 0; i < columns_.size(); ++i) {
+            const auto x = plotArea.getX() + static_cast<float>(i) * columnWidth;
+            const auto rms = std::clamp(columns_[i].rms, 0.0f, 1.0f) * halfHeight;
+            const auto y = edge == 0 ? centreY - rms : centreY + rms;
+            const auto b = entropyBucket(columns_[i].entropyBits);
+
+            if (!started[b] || lastInBucket[b] + 1 != i) {
+                band[b].startNewSubPath(x, y);
+                started[b] = true;
+            } else {
+                band[b].lineTo(x, y);
+            }
+            lastInBucket[b] = i;
+        }
+
+        for (int b = 0; b < 3; ++b) {
+            if (!started[b]) {
+                continue;
+            }
+            g.setColour(palette::alpha(inks[b], 0.18f));
+            g.strokePath(band[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded});
+            g.setColour(palette::alpha(inks[b], 0.95f));
+            g.strokePath(band[b], juce::PathStrokeType {1.0f});
+        }
+    }
+}
+
+void ByteDisplay::paintEntropy(juce::Graphics& g) {
+    if (columns_.empty()) {
+        return;
+    }
+
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto area = plotBounds();
+    if (area.getWidth() <= 0.0f || area.getHeight() <= 0.0f) {
+        return;
+    }
+    const auto plot = area.withTrimmedLeft(kAxisInset).withTrimmedBottom(kAxisHeight);
+
+    paintRuler(g, {full.getX(), area.getY() - kRulerHeight - 2.0f, full.getWidth(),
+                   kRulerHeight});
+
+    // A escala e' 0 a 8 bits por byte, e o eixo escreve os tres valores. Uma curva
+    // sem eixo nao tem leitura: 7,5 e' o valor de um .exe normal e 3,5 o de um
+    // repositorio de bytes iguais, e sem numeros nao se sabe qual dos dois se esta
+    // a ver.
+    const auto yFor = [&plot](float bits) {
+        return plot.getBottom() - std::clamp(bits, 0.0f, 8.0f) / 8.0f * plot.getHeight();
+    };
+
+    g.setColour(palette::alpha(palette::displayGrid, 1.4f));
+    for (const auto bits : {0.0f, 4.0f, 8.0f}) {
+        g.drawHorizontalLine(juce::roundToInt(yFor(bits)), plot.getX(), plot.getRight());
+    }
+
+    g.setFont(font_);
+    g.setColour(palette::textOnDarkSub);
+    for (const auto bits : {0.0f, 4.0f, 8.0f}) {
+        g.drawText(juce::String::formatted("%.0f", static_cast<double>(bits)),
+                   juce::Rectangle<float> {area.getX(), yFor(bits) - 7.0f, kAxisInset - 6.0f,
+                                           14.0f},
+                   juce::Justification::centredRight, false);
+    }
+    g.drawText("bits/byte", juce::Rectangle<float> {plot.getX(), plot.getBottom() + 1.0f,
+                                                    plot.getWidth(), kAxisHeight - 2.0f},
+               juce::Justification::centredRight, false);
+
+    const auto columnWidth = plot.getWidth() / static_cast<float>(columns_.size());
+
+    juce::Path curve;
+    curve.startNewSubPath(plot.getX(), plot.getBottom());
+    for (std::size_t i = 0; i < columns_.size(); ++i) {
+        const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
+        curve.lineTo(x, yFor(columns_[i].entropyBits));
+    }
+    curve.lineTo(plot.getRight(), plot.getBottom());
+    curve.closeSubPath();
+
+    g.setColour(palette::alpha(palette::accent, 0.42f));
+    g.fillPath(curve);
+
+    // A linha por cima, colorida pela propria entropia que desenha: a curva que
+    // sobe para o rosa diz "aqui o material e' aleatorio" sem precisar do eixo.
+    // Sem espelho — a curva tem um y so por coluna, e o segundo lambda repete o
+    // primeiro.
+    const auto yAt = [&](std::size_t i) { return yFor(columns_[i].entropyBits); };
+    paintEntropyLine(g, columns_, columnWidth, plot.getX(), yAt, yAt);
+
+    paintSourceTag(g, area);
+    paintOverview(g);
+}
+
+void ByteDisplay::paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area) {
+    const auto fraction = readHeadFraction_.value();
+    if (fraction < 0.0f || fraction > 1.0f) {
+        return;
+    }
+
+    const auto x = area.getX() + fraction * area.getWidth();
+
+    // Barra de 2 px a toda a altura, com um realce mais largo por baixo. O realce
+    // sem a barra e' uma celula a tremer; a barra sem realce desaparece sobre um
+    // envelope claro — que e' exactamente o que uma regiao de bytes 0xFF produz.
+    g.setColour(palette::alpha(juce::Colours::white, 0.16f));
+    g.fillRect(juce::Rectangle<float> {x - 2.0f, area.getY(), 4.0f, area.getHeight()});
+    g.setColour(juce::Colours::white);
+    g.fillRect(juce::Rectangle<float> {x - 1.0f, area.getY(), 2.0f, area.getHeight()});
+}
+
+void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>& area) {
+    if (!playheadVisible_ || columns_.empty()) {
+        return;
+    }
+
+    // Fracao da regiao -> ecra. Fora do viewport nao se prende na borda:
+    // prender mentia sobre onde o som esta.
+    const auto region = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
+    const auto screen = viewLength_ > 0.0f ? (region - viewStart_) / viewLength_ : -1.0f;
+    if (screen < 0.0f || screen > 1.0f) {
+        return;
+    }
+    const auto x = area.getX() + screen * area.getWidth();
+
+    // Triangulo em cima e barra em baixo. A barra e' o mesmo sinal que a cabeca de
+    // leitura e com a mesma forma, e por isso os dois se confundem no ecra.
+    //
+    // O triangulo e' a distincao: e' o unico elemento com uma forma diferente no
+    // display inteiro, e por isso da para dizer "isto anda sozinho" sem escrever
+    // uma legenda. O 1.4.1 pede nome ou padrao alem da cor, e um triangulo e' um
+    // padrao.
+    juce::Path marker;
+    marker.addTriangle(x - 4.0f, area.getY(), x + 4.0f, area.getY(), x, area.getY() + 5.0f);
+    g.setColour(palette::accentSoft);
+    g.fillPath(marker);
+
+    g.setColour(palette::alpha(palette::accentSoft, 0.55f));
+    g.fillRect(juce::Rectangle<float> {x - 0.5f, area.getY() + 5.0f, 1.0f,
+                                        area.getHeight() - 5.0f});
+}
+
+std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
+    constexpr auto none = std::numeric_limits<std::uint64_t>::max();
+
+    const auto area = mode_ == ViewMode::entropy ? entropyPlotBounds() : plotBounds();
+    if (bytes_ == nullptr || area.getWidth() <= 0.0f || regionEnd_ <= regionStart_) {
+        return none;
+    }
+
+    const auto region = regionFractionAt(position.x, area.getX(), area.getWidth());
+    if (region < 0.0f || region >= 1.0f) {
+        return none;
+    }
+
+    // A fracao 1,0 e' silencio no motor, entao o ultimo endereco util e' end - 2.
+    // E' a mesma regra de pe::positionForByte, e o caminho inverso e' byteForPosition.
+    const auto address = pe::byteForPosition(static_cast<double>(region),
+                                             pe::ByteRange {regionStart_, regionEnd_});
+    return address < regionEnd_ ? address : none;
+}
+
+juce::Rectangle<float> ByteDisplay::plotBounds() const noexcept {
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto overviewH = overviewBounds().getHeight();
+    // Medidor (3 px) + respiro + regua (16 px) em cima; overview + respiro
+    // em baixo. O plot e' onde vivem onda, graos e cabecas — tudo alinhado
+    // na mesma area, ou a cabeca marcava um x e a onda outro.
+    return full.withTrimmedTop(kLevelHeight + 5.0f + kRulerHeight)
+        .withTrimmedBottom(overviewH + 4.0f);
+}
+
+juce::Rectangle<float> ByteDisplay::entropyPlotBounds() const noexcept {
+    return plotBounds().withTrimmedLeft(kAxisInset);
+}
+
+juce::Rectangle<float> ByteDisplay::overviewBounds() const noexcept {
+    const auto full = getLocalBounds().toFloat().reduced(kPadding);
+    const auto height = std::min(kOverviewHeight, full.getHeight() * 0.25f);
+    return {full.getX(), full.getBottom() - height, full.getWidth(), height};
+}
+
+void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
+    // **O clique da o foco do teclado ao display.** Sem isto, um utilizador que
+    // clica no display e depois carrega em Espaco veria o transporte nao responder, e
+    // a unica pista seria o anel de foco que so aparece depois de um Tab. E' o mesmo
+    // cuidado que o campo de endereco tem em grabFocusOnField.
+    grabKeyboardFocus();
+
+    if (mode_ == ViewMode::hex) {
+        return; // o HexGrid trata do seu
+    }
+
+    // Faixa de navegacao: o clique centra o viewport, o arrasto move-o. Nao
+    // varre a leitura — quem clica no mapa quer navegar, nao ouvir.
+    if (mode_ != ViewMode::hex && overviewBounds().contains(event.position)) {
+        const auto area = overviewBounds();
+        const auto region = regionFractionAt(event.position.x, area.getX(), area.getWidth());
+        if (region >= 0.0f) {
+            viewStart_ = std::clamp(region - viewLength_ * 0.5f, 0.0f, 1.0f - viewLength_);
+            cacheValid_ = false;
+            repaint();
+        }
+        overviewDrag_ = true;
+        lastPanX_ = event.position.x;
+        return;
+    }
+
+    // Pan: botao direito, botao do meio ou Ctrl+clique. O arrasto horizontal
+    // move o viewport; sem zoom (comprimento 1) nao ha para onde ir.
+    if (event.mods.isRightButtonDown() || event.mods.isMiddleButtonDown() ||
+        event.mods.isCtrlDown()) {
+        panning_ = true;
+        lastPanX_ = event.position.x;
+        return;
+    }
+
+    const auto address = addressAt(event.position);
+    if (address != std::numeric_limits<std::uint64_t>::max() && onAddressActivated != nullptr) {
+        caretMoved_ = false;
+        onAddressActivated(address);
+    }
+}
+
+void ByteDisplay::mouseDrag(const juce::MouseEvent& event) {
+    // Varrer: o mesmo caminho do clique, mas sem pressa. O evento do rato chega
+    // a mais de 60 Hz e cada escrita notifica o host, por isso o endereco fica
+    // guardado e o tickAnimation descarrega um por quadro. No hex o arrasto e'
+    // do HexGrid (rolagem por celula) e aqui nao se faz nada.
+    if (mode_ == ViewMode::hex) {
+        return;
+    }
+
+    // Pan pelo mapa ou pelo plot: dx em pixels vira fracao do viewport.
+    if (overviewDrag_ || panning_) {
+        const auto area = overviewDrag_ ? overviewBounds()
+                          : mode_ == ViewMode::entropy ? entropyPlotBounds()
+                                                      : plotBounds();
+        if (area.getWidth() > 0.0f && viewLength_ < 1.0f) {
+            const auto dx = (event.position.x - lastPanX_) / area.getWidth();
+            lastPanX_ = event.position.x;
+            viewStart_ = std::clamp(viewStart_ - dx * viewLength_, 0.0f, 1.0f - viewLength_);
+            cacheValid_ = false;
+            repaint();
+        }
+        return;
+    }
+
+    const auto address = addressAt(event.position);
+    if (address != std::numeric_limits<std::uint64_t>::max()) {
+        pendingScrub_ = address;
+    }
+}
+
+void ByteDisplay::mouseUp(const juce::MouseEvent&) {
+    panning_ = false;
+    overviewDrag_ = false;
+}
+
+void ByteDisplay::mouseDoubleClick(const juce::MouseEvent& event) {
+    if (mode_ == ViewMode::hex) {
+        return;
+    }
+
+    if (addressAt(event.position) == std::numeric_limits<std::uint64_t>::max()) {
+        return;
+    }
+    if (onSnapRequested != nullptr) {
+        onSnapRequested();
+    }
+}
+
+void ByteDisplay::mouseWheelMove(const juce::MouseEvent& event,
+                                 const juce::MouseWheelDetails& wheel) {
+    // Nas vistas novas a roda e' zoom continuo centrado no cursor: a fracao da
+    // regiao sob o cursor fica quieta e o resto aproxima-se dela. Shift+roda
+    // faz scroll horizontal em vez de zoom. E' a navegacao do Live levada ao
+    // mapeamento de bytes — o gesto e' o mesmo, o material e' que e' outro.
+    if (mode_ != ViewMode::hex) {
+        const auto area =
+            mode_ == ViewMode::entropy ? entropyPlotBounds() : plotBounds();
+        if (event.mods.isShiftDown()) {
+            if (viewLength_ < 1.0f && area.getWidth() > 0.0f) {
+                viewStart_ = std::clamp(viewStart_ - wheel.deltaY * viewLength_ * 2.0f,
+                                        0.0f, 1.0f - viewLength_);
+                cacheValid_ = false;
+                repaint();
+            }
+        } else {
+            const auto centre = regionFractionAt(event.position.x, area.getX(),
+                                                 area.getWidth());
+            const auto inPlot = centre >= 0.0f;
+            const auto delta = static_cast<float>(wheel.deltaY);
+            // Roda para cima (deltaY > 0) aproxima: comprimento cai.
+            zoomAround(std::pow(1.15f, -delta),
+                       inPlot ? (centre - viewStart_) / viewLength_ : 0.5f);
+        }
+    }
+
+    // No hex a roda e' do HexGrid, que a scroll por linhas. O accumulator dele
+    // trata da fracao de entalhe, e um delta aqui viraria duas rolagens por entalhe.
+    static_cast<void>(event);
+}
+
+} // namespace opcoda

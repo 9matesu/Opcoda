@@ -1,0 +1,45 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/dataflow-l1-ingest.mmd. Nao editar a mao.
+% git blob da fonte: d6b7d2da7c7950271184e89e2f819d24804827d0
+\definecolor{atlasyellow}{HTML}{FFD400}
+\definecolor{atlasamber}{HTML}{FFB000}
+\definecolor{atlasblack}{HTML}{000000}
+\begin{tikzpicture}[
+  font=\sffamily\bfseries\small,
+  atlasgroup/.style={draw=atlasblack, fill=atlasamber, line width=0.9pt, rounded corners=4pt, inner xsep=14pt, inner ysep=26pt},
+  atlasgrouptext/.style={font=\sffamily\bfseries\small, text=atlasblack, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasamber},
+  atlasflow/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasasync/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlaslabel/.style={font=\sffamily\bfseries\tiny, fill=white, inner sep=1.2pt, text=atlasblack},
+  atlasclass/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=6pt, font=\sffamily\bfseries\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasamber},
+  atlasuml/.style={-{Triangle[length=2.4mm,width=2.9mm]}, draw=atlasblack, line width=0.9pt},
+  atlascomp/.style={-{Diamond[length=2.6mm]}, draw=atlasblack, line width=0.9pt},
+  atlaslife/.style={draw=atlasblack, dashed, line width=0.6pt},
+  atlasmsg/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasmsgback/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlasmsglabel/.style={font=\sffamily\bfseries\scriptsize, fill=white, inner sep=1.5pt, text=atlasblack},
+  atlasparticipant/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+]
+  \node[atlasleaf, text width=1.59cm] (ING) at (0.00,0.00) {Ingest\\processor};
+  \node[atlasleaf, text width=1.59cm] (RD) at (0.00,-2.45) {Leitura\\processor};
+  \node[atlasleaf, text width=2.41cm] (PS) at (-4.67,-4.90) {Validar PE\\pe\_parser};
+  \node[atlasleaf, text width=1.82cm] (SEC) at (-4.07,-7.35) {Secoes\\pe\_parser};
+  \node[atlasleaf, text width=2.58cm] (ENT) at (-2.42,-9.80) {Entropia\\shannon\_entropy};
+  \node[atlasleaf, text width=2.41cm] (TS) at (0.00,-4.90) {Amostras\\byte\_to\_sample};
+  \node[atlasleaf, text width=2.41cm] (RG) at (4.67,-4.90) {Colunas\\reduction};
+  \node[atlasleaf, text width=1.82cm] (PB) at (0.00,-7.35) {Publica\\processor};
+  \node[atlasleaf, text width=2.58cm] (PUSH) at (2.42,-9.80) {incoming\_.push\\spsc\_ring};
+  \node[atlasleaf, text width=1.82cm] (ERR) at (4.08,-7.35) {lastError\_\\processor};
+  \draw[atlasflow] (ING) -- node[atlaslabel, above, pos=0.32] {caminho} (RD);
+  \draw[atlasflow] (RD) -- node[atlaslabel, above, pos=0.32] {bytes} (PS);
+  \draw[atlasflow] (RD) -- node[atlaslabel, above, pos=0.32] {bytes} (TS);
+  \draw[atlasflow] (RD) -- node[atlaslabel, above, pos=0.32] {bytes} (RG);
+  \draw[atlasflow] (PS) -- node[atlaslabel, above, pos=0.32] {secoes} (SEC);
+  \draw[atlasflow] (SEC) -- node[atlaslabel, above, pos=0.32] {entropia} (ENT);
+  \draw[atlasflow] (TS) -- node[atlaslabel, above, pos=0.32] {amostras} (PB);
+  \draw[atlasflow] (RG) -- node[atlaslabel, above, pos=0.46] {curva} (PB);
+  \draw[atlasflow] (PB) -- node[atlaslabel, above, pos=0.32] {material} (PUSH);
+  \draw[atlasflow] (PS) -- node[atlaslabel, above, pos=0.32] {erro} (ERR);
+\end{tikzpicture}

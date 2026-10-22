@@ -1,0 +1,26 @@
+%% Contentores: os modulos de dentro do repositorio e as fronteiras entre eles.
+%% direction TB: o nucleo e' a base e o plugin esta por cima.
+%% O nucleo e' C++20 puro e nao inclui JUCE. O plugin e' a unica camada que
+%% depende do JUCE e da thread de audio do host.
+classDiagram
+  direction TB
+  class opcoda_core:::abstract
+  class opcoda_plugin:::abstract
+  class pe:::concrete
+  class entropy:::concrete
+  class dsp:::concrete
+  class rt:::concrete
+  class view:::concrete
+  class processor:::concrete
+  class editor:::concrete
+  opcoda_core <|-- pe
+  opcoda_core <|-- entropy
+  opcoda_core <|-- dsp
+  opcoda_core <|-- rt
+  opcoda_core <|-- view
+  opcoda_plugin *-- opcoda_core
+  opcoda_plugin <|-- processor
+  opcoda_plugin <|-- editor
+  processor *-- dsp : fila SPSC
+  classDef abstract fill:#FFB000,stroke:#000000,color:#000000
+  classDef concrete fill:#FFD400,stroke:#000000,color:#000000

@@ -1,28 +1,28 @@
 #pragma once
 
-#include "assets.h"
-#include "boxed_label.h"
+#include "fonts.h"
 #include "palette.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <cmath>
 #include <functional>
 
 namespace opcoda {
 
 // Um knob: rotulo em cima, slider rotativo no meio, valor em baixo.
 //
-// O corpo e' a peca fisica do asset harness, desenhada uma vez e fixa. O que a
-// peca nao tem, e que o codigo desenha por cima: o arco de valor, o ponteiro,
-// o anel de foco e o texto. A divisao e' deliberada, porque e' ela que mantem
-// o que a constitution exige.
+// O corpo e' desenhado em codigo pelo LookAndFeel, desenhado uma vez e fixo. O
+// que o corpo nao tem, e que o codigo desenha por cima: o arco de valor, o
+// ponteiro, o anel de foco e o texto. A divisao e' deliberada, porque e' ela que
+// mantem o que a constitution exige.
 //
 // **Os knobs sao juce::Slider de verdade, nao desenho customizado.** Isso nao e'
-// padrao: e' o que da foco por teclado, ajuste com setas e AccessibilityHandler
+// padrao: e o que da foco por teclado, ajuste com setas e AccessibilityHandler
 // de graca, e sao exatamente os criterios que a docs/10-acessibilidade-w3c.md
-// exige. O corpo vem de um PNG, mas o PNG e' so o desenho de fundo: quem opera
-// o controle continua a ser o Slider, e e' ele que tem o foco.
+// exige. O corpo e' so o desenho de fundo: quem opera o controle continua a ser o
+// Slider, e e' ele que tem o foco.
 //
 // O rotulo curto e' o do mock. O nome accessible e' a descricao completa em
 // portugues: um nome accessible curto demais, so "SIZE", e' inutil para quem
@@ -35,6 +35,12 @@ public:
         const char* spokenName;  // nome accessible, descritivo
         float defaultValue;
         std::function<juce::String(float)> format;
+        // So para choices: os rotulos na ordem do AudioParameterChoice. Com a
+        // lista, o valor mostra o rotulo em vez do numero — um knob de forma
+        // que diz "2" e' adivinhacao, e a decisao foi knob com degraus, nao
+        // combo. O attachment ja poe o intervalo 0..N-1 com passo 1 a partir
+        // do parametro, por isso aqui so falta o texto.
+        juce::StringArray choiceLabels {};
     };
 
     // Sem parametro de tamanho: o editor posiciona por celula e o knob se ajusta
@@ -44,9 +50,16 @@ public:
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(BoxedLabel::sansFont(10.0f, true));
+        title_.setFont(fonts().sans(9.0f, true));
         title_.setColour(juce::Label::textColourId, palette::textSub);
         addAndMakeVisible(title_);
+
+        // Valor em texto puro, sem caixa: a moldura valBox era ruido repetido
+        // seis vezes, e o numero alinha-se ao centro como antes.
+        value_.setJustificationType(juce::Justification::centred);
+        value_.setFont(fonts().sans(10.0f));
+        value_.setColour(juce::Label::textColourId, palette::textDark);
+        value_.setInterceptsMouseClicks(false, false);
 
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
@@ -61,6 +74,7 @@ public:
         setName(spec.spokenName);
         addAndMakeVisible(value_);
         format_ = spec.format;
+        choiceLabels_ = spec.choiceLabels;
 
         slider_.addListener(this);
         // O valor inicial vem do parametro, e nao do zero do slider: quem cria
@@ -90,12 +104,11 @@ public:
     }
 
     void paint(juce::Graphics& g) override {
-        // Painel do modulo, para o knob nao flotar sobre o chassis liso. O corpo
-        // do knob e' desenhado pelo LookAndFeel, que e' quem sabe o angulo.
-        g.setColour(palette::panelBg);
-        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2.0f);
-        g.setColour(palette::alpha(palette::chassisBorder, 0.5f));
-        g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 2.0f, 1.0f);
+        // Sem cartao: o knob mora direto no chassis, sem caixa nem borda. Dez
+        // caixas com borda lado a lado eram a cara de "ficheiro de paineis" que
+        // a fileira de parametros tinha — e a informacao (rotulo, disco, valor)
+        // nao precisa de moldura. O corpo do disco continua no LookAndFeel.
+        static_cast<void>(g);
     }
 
 private:
@@ -119,19 +132,30 @@ private:
     }
 
     void showValue(double value) {
-        if (format_) {
-            const auto text = format_(static_cast<float>(value));
-            if (text != value_.getText()) {
-                value_.setText(text, juce::dontSendNotification);
-            }
+        juce::String text;
+        if (!choiceLabels_.isEmpty()) {
+            // isfinite antes do roundToInt: float-para-int fora de faixa e' UB
+            // formal, e NaN nao passa nem pelo jlimit. NaN mostra o primeiro
+            // rotulo em vez de um acesso selvagem.
+            const auto index = std::isfinite(value)
+                                   ? juce::jlimit(0, choiceLabels_.size() - 1,
+                                                  juce::roundToInt(value))
+                                   : 0;
+            text = choiceLabels_[index];
+        } else if (format_) {
+            text = format_(static_cast<float>(value));
+        }
+        if (text.isNotEmpty() && text != value_.getText()) {
+            value_.setText(text, juce::dontSendNotification);
         }
     }
 
     juce::Slider slider_;
     juce::Label title_;
-    BoxedLabel value_ {palette::valBox, palette::chassisBorder};
+    juce::Label value_;
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
+    juce::StringArray choiceLabels_;
 };
 
 } // namespace opcoda

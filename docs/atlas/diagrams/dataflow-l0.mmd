@@ -1,0 +1,32 @@
+%% Fluxo de dados de nivel 0: da fonte ao destino, da esquerda para a direita.
+%% direction LR: fontes a esquerda, destinos a direita.
+%% As duas subgrafos sao as duas threads. A fila SPSC e' a unica passagem
+%% entre elas.
+flowchart LR
+  direction LR
+  subgraph ui[Interface]
+    READ[Leitura<br/>processor]
+    PARSE[Parser<br/>pe_parser]
+    CONV[Amostras<br/>byte_to_sample]
+    COL[Colunas<br/>reduction]
+  end
+  subgraph rt[Audio]
+    Q[Fila SPSC<br/>spsc_ring]
+    TRK[Notas<br/>note_tracker]
+    ENG[Motor granular<br/>granular_engine]
+  end
+  FILE[Arquivo PE]
+  HOST[Host DAW]
+  OUT[Barramento]
+  FILE -->|bytes| READ
+  READ -->|bytes| PARSE
+  READ -->|bytes| CONV
+  READ -->|bytes| COL
+  PARSE -->|secoes| COL
+  CONV -->|amostras| Q
+  COL -->|curva| Q
+  Q -.->|fila| ENG
+  HOST -->|midi| TRK
+  TRK -->|gate| ENG
+  HOST -->|parametros| ENG
+  ENG -->|audio| OUT

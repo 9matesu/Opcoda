@@ -1,0 +1,20 @@
+%% Contexto: quem chama o Opcoda e o que o Opcoda chama.
+%% direction LR: a esquerda e o que entra, a direita e o que sai.
+%% Fonte da verdade do diagrama. O .tex em docs/atlas/figuras e' gerado a
+%% partir deste ficheiro por tools/mmd2tikz.py.
+flowchart LR
+  direction LR
+  USER[Utilizador]
+  DISK[Ficheiro PE]
+  HOST[Host DAW]
+  PRESET[Preset .opcoda]
+  subgraph repo[Opcoda]
+    direction TB
+    PROC[Processor<br/>processor]
+  end
+  DISK -->|caminho| PROC
+  USER -->|arrasto| PROC
+  HOST -->|midi e params| PROC
+  PROC -->|audio e estado| HOST
+  PROC -->|preset| PRESET
+  PRESET -->|preset| PROC

@@ -9,11 +9,12 @@
   "preambulo": "",
   "artigo": true,
   "docstyle": "opcoda",
-  "fonte": "Elaborado pelos autores (2026).",
+  "fonte": "Autores",
   "figuras": {
     "pipeline": "pipeline",
     "parser": "parser_defensivo",
     "agendamento": "agendamento",
     "grelha": "grelha"
-  }
+  },
+  "compacto": true
 }

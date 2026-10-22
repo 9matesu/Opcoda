@@ -39,6 +39,18 @@ public:
         g.setColour(juce::Colours::white.withAlpha(0.10f));
         g.drawHorizontalLine(juce::roundToInt(bounds.getCentreY()), 0.0f, bounds.getWidth());
 
+        // Brilho interno da moldura: duas linhas brancas cada vez mais fracas
+        // para dentro. E' o que afunda o ecra em relacao ao chassi — luz que vem
+        // de dentro do device, nao de cima dele.
+        //
+        // Branco e sem acento de proposito: qualquer laranja aqui teria de passar
+        // o 1.4.11, e brilho decorativo nao precisa de cor para se ler como
+        // profundidade.
+        g.setColour(juce::Colours::white.withAlpha(0.07f));
+        g.drawRect(bounds.reduced(1.0f), 1.0f);
+        g.setColour(juce::Colours::white.withAlpha(0.03f));
+        g.drawRect(bounds.reduced(2.0f), 1.0f);
+
         g.setColour(palette::displayBorder);
         g.drawRect(bounds, 1.0f);
     }

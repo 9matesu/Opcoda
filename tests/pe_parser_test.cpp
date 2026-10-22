@@ -160,15 +160,31 @@ TEST(PeParser, ErrorCodesAreStable) {
 }
 
 TEST(PeParser, HandlesEveryByteValueWithoutCrash) {
-    // Varredura ampla: nenhum byte isolado pode derrubar o parser.
-    PeBuilder builder;
+    // Varredura ampla: nenhum byte isolado pode derrubar o parser. A atribuicao
+    // anterior verificava `ok() || error != kOk`, que e' verdadeiro para todos
+    // os valores possiveis de PeError e portanto nunca falhava. O que se quer
+    // provar e que o parser devolve sempre um estado bem formado, e nao que
+    // devolve qualquer coisa.
+    PeBuilder reference;
+    reference.fillTextWithGradient(0x00, 16);
+
     for (std::size_t i = 0; i < 256; ++i) {
         PeBuilder mutated;
-        mutated.bytes[0x100 + (i % 64)] = static_cast<std::uint8_t>(i);
+        mutated.fillTextWithGradient(0x00, 16);
+        const std::size_t offset = 0x100 + (i % 64);
+        mutated.bytes[offset] = static_cast<std::uint8_t>(i);
+
         const auto result = parse(mutated.bytes.data(), mutated.bytes.size());
-        EXPECT_TRUE(result.ok() || result.error != PeError::kOk);
+        ASSERT_LE(result.image.numberOfSections, 96u);
+        if (result.ok()) {
+            for (std::size_t s = 0; s < result.image.numberOfSections; ++s) {
+                const auto& section = result.image.sections[s];
+                EXPECT_LE(section.rawOffset, mutated.bytes.size());
+                EXPECT_LE(static_cast<std::size_t>(section.rawSize),
+                          mutated.bytes.size() - section.rawOffset);
+            }
+        }
     }
-    (void)builder;
 }
 
 TEST(PeParser, TruncatedAtEveryLength) {

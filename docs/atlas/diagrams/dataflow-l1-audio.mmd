@@ -1,0 +1,30 @@
+%% Fluxo de nivel 1: o bloco de audio, do host ate ao barramento.
+%% direction TB: de cima para baixo, na ordem das chamadas.
+%% Tudo o que corre aqui e' na thread de audio: sem alocacao, sem trava.
+flowchart TB
+  direction TB
+  PB[processBlock<br/>processor]
+  DR[Troca material<br/>processor]
+  SS[setSource<br/>granular_engine]
+  RN[Le notas<br/>processor]
+  NT[Notas<br/>note_tracker]
+  TR[Transporte<br/>transport]
+  GS[setSounding<br/>granular_engine]
+  SP[startGrain<br/>granular_engine]
+  RV[renderVoice<br/>granular_engine]
+  GT[applyGate<br/>granular_engine]
+  LM[Limite<br/>limiter]
+  OUT[Barramento]
+  PB -->|material| DR
+  DR -->|amostras| SS
+  PB -->|midi| RN
+  RN -->|eventos| NT
+  PB -->|posicao| TR
+  NT -->|sounding| GS
+  TR -->|posicao| GS
+  GS -->|gate| RV
+  SS -->|amostras| SP
+  SP -->|grao| RV
+  RV -->|mistura| GT
+  GT -->|sinal| LM
+  LM -->|audio| OUT

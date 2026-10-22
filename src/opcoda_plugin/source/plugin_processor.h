@@ -4,10 +4,13 @@
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
+#include "opcoda_core/rt/transport.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <array>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -22,6 +25,21 @@ namespace opcoda {
 // libera depois que a thread de audio devolveu o ponteiro pela fila de
 // retorno.
 using SampleBuffer = std::shared_ptr<const std::vector<float>>;
+// O que viaja pela fila: as amostras E a curva de entropia ja reduzida.
+//
+// **A curva viaja porque nao pode ser calculada na thread de audio.** O motor
+// modulava a dispersao dos graos pela entropia local, e media-a dentro de
+// processBlock: O(regiao) por troca de material, sem alocar nada — o histograma e'
+// de pilha — e portanto invisivel para o guard de alocacao. Com o transporte,
+// arrastar a regiao republica o material a cada evento de rato, e cada publicacao
+// virava uma passagem completa na thread de audio.
+//
+// A struct tem de continuar trivial para a SpscRing: dois ponteiros, nada mais.
+struct PublishedMaterial {
+    const std::vector<float>* samples {nullptr};
+    const float* entropyCurve {nullptr};
+};
+
 using SamplePtr = const std::vector<float>*;
 
 // AudioProcessor com editor minimo: a forma que carrega um binario e produz
@@ -45,7 +63,18 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    // A cauda e' o maior grao, porque e' o tempo que um grao que ja nasceu ainda
+    // tem para acabar depois de o gate fechar.
+    //
+    // **Devolver 0 era verdade antes do transporte e passou a ser mentira.** Sem
+    // transporte so havia notas, e uma nota acabava com o gate. Com o botao, o gate
+    // fecha no STOP e ha ate' 100 ms de graos em voo — e o host, avisado de que nao
+    // ha cauda, corta-os. Carregar STOP sem uma tecla premida passava a dar um
+    // corte duro a meio de um grao, e a rampa de 5 ms do gate protecte precisamente
+    // o sitio que o corte apagava.
+    double getTailLengthSeconds() const override {
+        return static_cast<double>(dsp::GranularEngine::kMaxGrainMs) / 1000.0;
+    }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -53,7 +82,7 @@ public:
     const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String&) override {}
 
-// Estado: os seis parametros e o ficheiro carregado.
+// Estado: os 25 parametros, o ficheiro carregado e a regiao.
 //
 // copyState e replaceState da APVTS tratam dos parametros, incluindo os que o
 // host exponentiale ja' tinha empurrado para dentro com setValueNotifyingHost.
@@ -63,8 +92,25 @@ public:
 // A parte do binario e' uma arvore Value na APVTS, e nao um campo solto, pelo
 // mesmo motivo: o host pede o estado quando o projeto e' aberto, e o caminho
 // que ele percorre e' o mesmo dos parametros.
+//
+// O .opcoda e' este mesmo XML em ficheiro: stateXml/loadStateXml sao a via
+// unica, usada pelo host E pelo Save/Load de preset. Duas serializacoes dariam
+// dois formatos que divergem no primeiro parametro novo.
 void getStateInformation(juce::MemoryBlock& destData) override;
 void setStateInformation(const void* data, int sizeInBytes) override;
+
+// Presets de fabrica (F016): 6 pontos de partida em factory_presets.h. So na
+// thread de interface: 25 setValueNotifyingHost com undo do host.
+void applyFactoryPreset(int index);
+
+// XML do estado completo, ou nullptr se a arvore nao serializar. Quem guarda
+// (host ou .opcoda) decide o contentor; o conteudo e' um so.
+[[nodiscard]] std::unique_ptr<juce::XmlElement> stateXml();
+// Aplica um XML como o do stateXml. Devolve false sem tocar em nada se nao for
+// um estado Opcoda — sessao ou .opcoda de outro plugin nao calam este.
+bool loadStateXml(const juce::XmlElement& xml);
+bool savePresetToFile(const juce::File& file);
+bool loadPresetFromFile(const juce::File& file);
 
     // Chamado na thread de interface. Le o arquivo, converte e publica na fila.
     // Devolve false e preenche lastError em caso de recusa.
@@ -137,9 +183,112 @@ bool snapByteRangeToSection();
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};
+
+        // Transporte. Sao tres campos e nao um, porque o display precisa de duas
+        // coisas diferentes: *onde* esta a cabeca e *quanto tempo* dura a volta.
+        // publishedPosition vem da thread de audio a cada bloco, e as outras duas
+        // sao estado da interface lido de lado.
+        std::atomic<float> playheadFraction {0.0f};
+        std::atomic<double> playDurationSeconds {0.0};
+        std::atomic<bool> playing {false};
     };
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
+
+    // Onde esta' cada grao. A thread de audio publica uma vez por bloco renderizado;
+    // o editor le isto a 60 Hz para desenhar os graos sobre a forma de onda.
+    //
+    // **Isto e' leitura de lado. O que nao se pode e' chamar processBlock() a
+    // partir da thread de interface**, porque esse seria o caminho que escreve
+    // no motor. O read() em si so escreve no array de quem chama, e nao toca em
+    // nada do motor.
+    [[nodiscard]] const dsp::GrainTelemetry& grainTelemetry() const noexcept {
+        return engine_.telemetry();
+    }
+
+    // Transporte de audicao: percorre a regiao sem nota MIDI, para se ouvir o
+    // material sem teclado. E' o que torna a forma de onda navegavel audivel, e
+    // nao so visivel.
+    //
+    // Os tres metodos sao a interface publica do transporte, e sao chamados da
+    // thread de interface. A thread de audio nunca os chama: ela so' chama
+    // advance(), e isso acontece dentro de processBlock.
+    [[nodiscard]] bool isTransportPlaying() const noexcept { return transport_.isPlaying(); }
+
+    // Verdadeiro quando a regiao actual produz som. Com menos de tres bytes nao ha
+    // posicao que o motor leia, e o botao de reproducao tem de ficar desativado em
+    // vez de aceitar o toque e produzir um drone de uma amostra.
+    [[nodiscard]] bool hasPlayableRegion() const noexcept { return transport_.hasRegion(); }
+
+    void startTransport() noexcept { transport_.play(); }
+    void stopTransport() noexcept { transport_.stop(); }
+    void toggleTransport() noexcept {
+        if (transport_.isPlaying()) {
+            transport_.stop();
+        } else {
+            transport_.play();
+        }
+    }
+
+    // Teclado virtual e teclas do computador. A thread de interface empurra o
+    // evento e o callback consome na fila sem trava: a nota entra pela mesma
+    // NoteTracker que o MIDI do host, sem passar pelo MidiBuffer (que o host
+    // manda, nao a interface) e sem alocar no caminho de audio.
+    void pushKeyboardNote(int noteNumber, float velocity, bool on) noexcept;
+
+    // Ancora de busca do transporte. O valor vem do parametro POSITION, e so
+    // quando o utilizador o move: se o editor escrevesse isto a cada quadro, o
+    // transporte voltava ao ponto de ancoragem sessenta vezes por segundo e a
+    // cabeca nunca passava dele.
+    void seekTransportTo(float fraction) noexcept { transport_.seekToFraction(fraction); }
+
+    [[nodiscard]] float transportPosition() const noexcept {
+        return transport_.positionFraction();
+    }
+
+    [[nodiscard]] double transportDurationSeconds() const noexcept {
+        return transport_.durationSeconds();
+    }
+
+    // Verdadeiro quando o host esta' a correr o transporte.
+    //
+    // **Sem isto o botao de reproducao mente.** O motor so' existe enquanto o host
+    // chama processBlock, e um host parado nao chama. Um botao que aceita o toque
+    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque, e
+    // por isso a interface desativa-o e diz porquê.
+    //
+    // getPlayHead() pode ser nulo: e' o que acontece num teste sem host, e o
+    //nullptr e' resposta valida e nao um erro.
+    // **Verdadeiro apenas quando sabemos que o host esta' parado.** E o inverso de
+    // "o host esta' a tocar", e a distincao e' o ponto.
+    //
+    // Sem isto o botao de reproducao mente. O motor so' existe enquanto o host
+    // chama processBlock, e um host parado nao chama: um botao que aceita o toque
+    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque.
+    //
+    // A distincao esta' no que acontece quando o host nao diz nada. getPosition()
+    // devolve nullopt num host que nao fornece informacao de tempo, e nesse caso a
+    // resposta e' `false` — nao sabemos que parou. Tratar o desconhecido como
+    // parado desabilitaria o botao para sempre em qualquer host que nao de tempo,
+    // e o Standalone sem dispositivo de audio e' um deles.
+    [[nodiscard]] bool hostTransportIsKnownToBeStopped() const noexcept {
+        const auto* head = getPlayHead();
+        if (head == nullptr) {
+            // Sem host nenhum nao ha quem mande. Num teste, isto e' o que evita
+            // que o botao fique travado.
+            return false;
+        }
+
+        // A API actual do JUCE 8 e' getPosition(), que devolve um Optional.
+        // CurrentPositionInfo com isPlaying foi depreciada, e por isso nao e'
+        // usada: um aviso de depreciacao num /WX parte o build, e vale a pena que
+        // o portao aponte o uso de API velha.
+        const auto position = head->getPosition();
+        if (!position.hasValue()) {
+            return false; // host sem informacao de tempo: desconhecido, nao parado
+        }
+        return !position->getIsPlaying();
+    }
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
@@ -169,6 +318,28 @@ bool snapByteRangeToSection();
     // o knob segue, e o estado do projeto fica certo sem caminho paralelo.
     void applyPendingControllerChanges();
 
+    // Drena os eventos do teclado virtual. Roda no callback, antes de
+    // currentParams(), para a nota deste bloco ja entrar na altura.
+    void drainKeyboardNotes() noexcept;
+
+    // --- F020: matriz de modulacao ---
+    //
+    // 8 rotas vivem no estado (no MODMATRIX, ao lado dos PARAM) e nao na tabela
+    // de parametros: nao sao automatizaveis e viajam no preset. A thread de
+    // interface escreve, a de audio le uma copia por bloco.
+    //
+    // A publicacao sao 24 inteiros atomicos mais uma geracao. Um bloco que
+    // apanhe a troca ve' a matriz antiga inteira, e nao metade de cada, porque a
+    // geracao so' sobe depois das palavras.
+    [[nodiscard]] dsp::ModMatrix modMatrix() const;
+    bool setModRoute(int index, dsp::ModRoute route);
+    void publishModMatrix();
+
+    // Le BPM e ppq do host uma vez por bloco e guarda-os em atomicos. O nucleo
+    // nao conhece o host; estes dois doubles sao tudo o que atravessa. Sem
+    // transporte (Standalone) o BPM fica em 120 e o ppq em -1, que o motor le
+    // como "sem ppq".
+    void updateHostTransport() noexcept;
     // live_ e' publicado pela thread de audio e consultado pela de interface.
     // Sem o atomico a leitura do editor seria uma corrida com a troca de
     // material, o que o compilador nao pode flagar porque os ponteiros sao do
@@ -197,6 +368,15 @@ private:
     // unica que pode liberar a memoria.
     void drainIncomingQueue() noexcept;
 
+    // Garante o no MODMATRIX no estado. Chamado na construcao e depois de
+    // replaceState: um projeto gravado antes da F020 nao traz o no, e o estado
+    // tem de continuar a escrever-se completo.
+    void ensureModMatrixNode();
+
+    // Le a matriz publicada para o snapshot do bloco corrente. Roda na thread
+    // de audio, nao aloca e so' copia quando a geracao muda.
+    void refreshModMatrix() noexcept;
+
     // Le o MidiBuffer do bloco e atualiza a contagem de notas. Roda na thread
     // de audio e nao aloca nem bloqueia: um MidiBuffer e' so uma lista de
     // mensagens com contadores ja resolvidos.
@@ -218,12 +398,27 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
     // publica o material novo e recolhe o ponteiro que a thread de audio ja
     // terminou de usar.
-    rt::SpscRing<SamplePtr, 4> incoming_;
-    rt::SpscRing<SamplePtr, 4> returned_;
+    rt::SpscRing<PublishedMaterial, 4> incoming_;
+    rt::SpscRing<PublishedMaterial, 4> returned_;
+
+    // Eventos do teclado virtual. Capacidade 64: um bloco de 2048 amostras a
+    // 48 kHz dura 43 ms, e nesse tempo nao se carrega em 64 teclas. A fila
+    // cheia descarta, como manda o desenho das filas sem trava.
+    rt::SpscRing<rt::NoteTracker::Event, 64> keyboardNotes_;
+
+    // Tempo do host, escrito uma vez por bloco pelo callback e lido por
+    // currentParams() no mesmo bloco. Relaxado chega: os dois valores vem do
+    // mesmo bloco e nao ordenam nada entre si.
+    std::atomic<double> hostBpm_ {120.0};
+    std::atomic<double> hostPpq_ {-1.0};
 
     // Donos de toda a memoria de amostra. So a thread de interface escreve
     // aqui, e so remove um buffer depois que a thread de audio o devolveu.
     std::vector<SampleBuffer> owned_;
+
+    // A curva de entropiareduzida que acompanha cada buffer. Vive ao lado de
+    // owned_ com o mesmo indice, e viaja com o ponteiro na fila.
+    std::vector<std::vector<float>> entropyCurves_;
 
     std::atomic<SamplePtr> live_ {nullptr};
     juce::String lastError_;
@@ -246,13 +441,32 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // A regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter testes.
     // Aqui so se traduz MidiMessage em Event, que e' a parte fina.
     rt::NoteTracker notes_;
+
+    // Transporte de audicao. Vive ao lado da engine e nao dentro dela porque sao
+    // duas perguntas diferentes: a engine pergunta "que som produzir agora" e o
+    // transporte pergunta "de onde comecar". O motor recebe a posicao ja
+    // resolvida, e continua a nao saber que existe um transporte.
+    rt::Transport transport_;
+
     Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;
+    static constexpr int kCcModWheel = 1;  // Roda de modulacao: fonte da matriz
     static constexpr int kCcDensity = 74;  // Brightness: DENSITY
     static constexpr int kCcPosition = 71; // Resonance: POSITION
     static constexpr int kDensityController = 0;
     static constexpr int kPositionController = 1;
+    static constexpr int kModWheelController = 2;
+
+    static constexpr const char* kModMatrixNode = "MODMATRIX";
+
+    // Palavras publicadas (fonte, destino, amount) e o snapshot do bloco. O
+    // snapshot so' e' escrito pela thread de audio; as palavras so' pela de
+    // interface. Nenhum dos dois lados escreve no que o outro le.
+    std::array<std::atomic<int>, dsp::kMaxModRoutes * dsp::kModRouteWords> modMatrixWords_ {};
+    std::atomic<std::uint32_t> modMatrixGeneration_ {0};
+    std::uint32_t modMatrixAppliedGeneration_ {0};
+    dsp::ModMatrix modMatrixSnapshot_ {};
 
     juce::AudioProcessorValueTreeState parameters_;
 };

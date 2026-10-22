@@ -1,166 +1,58 @@
-\documentclass[
-  12pt,
-  openright,
-  oneside,
-  a4paper,
-  brazil
-]{abntex2}
+\documentclass[12pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[brazil]{babel}
-\usepackage[alf]{abntex2cite}
-\usepackage{microtype}
+\usepackage{lmodern}
+\usepackage{newtxtext}
+\usepackage{geometry}
+\geometry{top=3cm,bottom=2cm,left=3cm,right=2cm}
+\usepackage{setspace}
+\setstretch{1.5}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{float}
 \usepackage{url}
 \usepackage{hyperref}
-% Fonte Arial (uarial = clone metrico do Arial para pdflatex)
-\usepackage{uarial}
-\renewcommand{\familydefault}{\sfdefault}
-% Títulos ABNT em Arial 12 pt, sem cabeçalho corrente
-\chapterstyle{section}
-\setsecnumdepth{subsection}
-\setsecheadstyle{\fontfamily{ua1}\selectfont\bfseries\fontsize{12}{14}\selectfont}
-\setsubsecheadstyle{\fontfamily{ua1}\selectfont\bfseries\fontsize{12}{14}\selectfont}
-\makepagestyle{opcoda}
-\makeevenhead{opcoda}{}{}{}
-\makeoddhead{opcoda}{}{}{}
-\makeevenfoot{opcoda}{}{\thepage}{}
-\makeoddfoot{opcoda}{}{\thepage}{}
-\makepagestyle{headings}
-\makeevenhead{headings}{}{}{}
-\makeoddhead{headings}{}{}{}
-\makeevenfoot{headings}{}{\thepage}{}
-\makeoddfoot{headings}{}{\thepage}{}
-\makepagestyle{abntheadings}
-\makeevenhead{abntheadings}{}{}{}
-\makeoddhead{abntheadings}{}{}{}
-\makeevenfoot{abntheadings}{}{\thepage}{}
-\makeoddfoot{abntheadings}{}{\thepage}{}
-\makepagestyle{abntchapfirst}
-\makeevenhead{abntchapfirst}{}{}{}
-\makeoddhead{abntchapfirst}{}{}{}
-\makeevenfoot{abntchapfirst}{}{\thepage}{}
-\makeoddfoot{abntchapfirst}{}{\thepage}{}
-\pagestyle{opcoda}
-\aliaspagestyle{chapter}{opcoda}
-\aliaspagestyle{chapter}{abntchapfirst}
-\usepackage{listings}
-\usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{positioning, arrows, shapes, calc}
-\definecolor{codegray}{gray}{0.95}
-\lstset{
-  backgroundcolor=\color{codegray},
-  basicstyle=\ttfamily\footnotesize,
-  breaklines=true,
-  frame=single,
-  showstringspaces=false
-}
-% ABNT: recuo de paragrafo 1,25 cm, sem espaco extra entre paragrafos
-\setlength{\parindent}{1.25cm}
+% O abntex2-alf escreve \citeonline para entradas @online; sem o pacote
+%abntex2cite carregado o .bbl aborta com "Undefined control sequence".
+\usepackage[alf]{abntex2cite}
+\pagestyle{plain}
+\setlength{\parindent}{1.0cm}
 \setlength{\parskip}{0pt}
-% ABNT: titulos de secoes em negrito (abntex2 ja o faz por padrao)
-\titulo{Opcoda: s\'intese granular em tempo real a partir da an\'alise est\'atica de bin\'arios no formato Portable Executable com processamento digital de sinais}
-\autor{Mateus Costa de Oliveira Santos}
-\instituicao{Faculdade de Tecnologia Prof. Waldomiro May \\ Cruzeiro/SP}
-\local{Cruzeiro/SP}
-\data{2026}
-\orientador{[a definir antes da vers\~ao final]}
-\preambulo{Trabalho de Gradua\c{c}\~ao apresentado \`a Faculdade de Tecnologia Prof. Waldomiro May, como parte dos requisitos para obten\c{c}\~ao do t\'itulo de Tecn\'ologo em An\'alise e Desenvolvimento de Sistemas.}
+\setlength{\emergencystretch}{3cm}
 \begin{document}
-\pretextual
-\imprimircapa
-\imprimirfolhaderosto{}
 
-\begin{resumo}
-Este trabalho apresenta o Opcoda, um instrumento virtual que converte arquivos executáveis do formato Portable Executable em material sonoro por síntese granular em tempo real. A proposta parte de uma prática musical já estabelecida, o databending, no qual arquivos não sonoros são lidos como áudio bruto, e investiga os limites dessa leitura quando ela precisa acontecer dentro de uma estação de trabalho de áudio. Abrir um executável como amostras PCM produz material com offset de corrente contínua extremo, transientes espúrios nas fronteiras dos cabeçalhos, componentes acima do limite de Nyquist e risco de instabilidade quando um leitor de cabeçalho confiando em campos do arquivo acessa memória fora dos limites. O instrumento isometricamente leitura estática e verificada do arquivo binário, descreve o material por entropia de Shannon em janelas, converte os bytes em som por um motor granular de oito vozes com janelamento e condicionamento de sinal, e entrega o resultado sob as restrições de tempo real do callback de áudio. A arquitetura separa o domínio de interface, que admite alocação de memória e acesso a disco, do domínio de processamento de sinais, que não aloca, não bloqueia e não chama o sistema operacional; a comunicação entre os dois ocorre por fila circular sem trava, com ponteiro cru e ordenamento acquire-release. O protótipo foi implementado em C++20 sobre a biblioteca JUCE 8, com núcleo independente de framework de áudio, e genera aplicativo autônomo e plugin no formato VST3 para Windows x64. A suíte de verificação automatizada reúne 153 casos de teste unitário e de integração, mais 6 casos do guard de alocação que transformam a restrição de tempo real em critério verificável por build. O ensaio espectral confirmou atenuação da componente de corrente contínua acima do critério de 40 dB e energia abaixo de 20 Hz abaixo do critério de -60 dBFS. A validação de latência e de aceite com o usuário permanece bloqueada por ausência de estação de trabalho de áudio licenciada na máquina de desenvolvimento, lacuna declarada e não omitida.
+\begin{center}\MakeUppercase{Opcoda: s\'intese granular orientada pela an\'alise estrutural e estat\'istica de bin\'arios PE}\end{center}
 
-\vspace{\onelineskip}
-\noindent\textbf{Palavras-chave:} Síntese granular. Processamento digital de sinais. Formato Portable Executable. Entropia de Shannon. Áudio digital em tempo real. Engenharia de software.
-\end{resumo}
+\begin{flushright}Mateus Costa de Oliveira Santos\\[0.4em]Rafael Augusto Garcez Elisei\\[0.4em]Prof. Me. Warner Brezolin (orientador)\par\end{flushright}
 
-\begin{otherlanguage}{english}
-\begin{resumo}[Abstract]
-This work presents Opcoda, a virtual instrument that converts Portable Executable binary files into sound material through real-time granular synthesis. The proposal builds on an established musical practice, databending, in which non-audio files are read as raw audio, and investigates the limits of that reading when it must happen inside a digital audio workstation. Opening an executable as PCM samples yields material with an extreme direct current offset, spurious transients at header boundaries, components above the Nyquist limit, and a stability risk whenever a header reader trusts file-reported fields and accesses memory out of bounds. The instrument performs static and verified reading of the binary file, describes the material with windowed Shannon entropy, converts bytes into sound with an eight-voice granular engine with windowing and signal conditioning, and delivers the result under the real-time constraints of the audio callback. The architecture separates the interface domain, which permits memory allocation and disk access, from the signal processing domain, which does not allocate, does not block, and does not call the operating system; communication between them occurs through a lock-free ring queue carrying a raw pointer with acquire-release ordering. The prototype was implemented in C++20 on top of the JUCE 8 library, with a core independent of any audio framework, and produces a standalone application and a VST3 plugin for Windows x64. The automated verification suite comprises 153 unit and integration test cases, plus 6 allocation-guard cases that turn the real-time constraint into a build-verifiable criterion. The spectral trial confirmed direct current attenuation above the 40 dB criterion and energy below 20 Hz under the -60 dBFS criterion. Latency and user acceptance validation remain blocked by the absence of a licensed digital audio workstation on the development machine, a gap that is declared rather than omitted.
+{\small
 
-\vspace{\onelineskip}
-\noindent\textbf{Keywords:} Granular synthesis. Digital signal processing. Portable Executable format. Shannon entropy. Real-time digital audio. Software engineering.
-\end{resumo}
-\end{otherlanguage}
+\noindent\textbf{RESUMO}\par\vspace{2pt}
+\noindent Este trabalho apresenta o Opcoda, um instrumento que emprega arquivos executáveis do formato Portable Executable como matéria-prima e, simultaneamente, como mecanismo de controle da síntese granular. A proposta parte da identificação de uma lacuna entre dois tratamentos correntes. O databending converte arquivos digitais em áudio por importação de dados brutos e, com isso, reduz o objeto de origem a uma sequência linear de valores, da qual se descarta a organização interna; os sintetizadores granulares convencionais operam sobre amostras previamente preparadas, nas quais a estrutura do arquivo que as originou não é recuperável nem utilizada. Nenhuma das duas abordagens estabelece uma relação verificável entre as propriedades estruturais e estatísticas do arquivo e os parâmetros da síntese. O Opcoda reúne as duas etapas em um instrumento, no qual cada região declarada na tabela de seções do PE constitui fonte granular independente e a entropia de Shannon, calculada sobre janelas de 2048 bytes, é convertida em variável de controle da distribuição dos grãos. A viabilidade dessa integração foi verificada sob as restrições de tempo real do processamento de áudio: a leitura estática e verificada do arquivo, a conversão dos bytes e o condicionamento de sinal ocorrem fora do laço de processamento, e a comunicação com o motor de síntese se dá por fila circular sem trava com ponteiro cru e ordenamento acquire-release. O protótipo foi implementado em C++20 sobre a biblioteca JUCE 8, com núcleo independente de framework de áudio, e gera aplicativo autônomo e plugin no formato VST3 para Windows x64. A suíte de verificação automatizada reúne 196 casos de teste unitário e de integração, mais 8 casos do guard de alocação, que transformam a restrição de tempo real em critério verificável por build. O ensaio espectral confirmou atenuação da componente de corrente contínua acima do critério de 40 dB e energia abaixo de 20 Hz abaixo do critério de -60 dBFS, e os casos de borda do parser foram rejeitados com erro tipado, sem falha de segmentação. A validação dinâmica de latência e o ensaio de aceite com o usuário permanecem bloqueados por ausência de estação de trabalho de áudio licenciada na máquina de desenvolvimento, lacuna declarada e não omitida. O trabalho contribui ao converter propriedades estruturais e estatísticas de um artefato binário em parâmetros de controle de um instrumento musical, com a disciplina de tempo real como requisito de viabilidade e não como contribuição equivalente.\par
+\vspace{4pt}\noindent\textbf{Palavras-chave:} Síntese granular. Databending. Formato Portable Executable. Entropia de Shannon. Computação musical. Processamento digital de sinais.\par
 
-\chapter*[Lista de Abreviaturas e Siglas]{Lista de Abreviaturas e Siglas}
-\addcontentsline{toc}{chapter}{Lista de Abreviaturas e Siglas}
+{\small\itshape
 
-\begin{tabular}{@{}p{2.6cm}p{11.5cm}@{}}
+\noindent\textbf{ABSTRACT}\par\vspace{2pt}
+\noindent This work presents Opcoda, an instrument that uses Portable Executable files both as source material and as a control mechanism for granular synthesis. The proposal addresses a gap between two current practices. Databending converts digital files into audio by raw data import, which reduces the source object to a linear sequence of values and discards its internal organization, while conventional granular synthesizers operate on previously prepared audio samples, in which the structure of the originating file is neither recoverable nor used. Neither approach establishes a verifiable relation between the structural and statistical properties of the file and the parameters of the synthesis. Opcoda integrates both stages into a single instrument, in which each region declared in the PE section table constitutes an independent granular source and the Shannon entropy computed over 2048-byte windows is converted into a control variable for grain distribution. The feasibility of this integration was verified under the real-time constraints of audio processing: static and verified file reading, byte conversion, and signal conditioning take place outside the processing callback, and communication with the synthesis engine occurs through a lock-free ring queue carrying a raw pointer with acquire-release ordering. The prototype was implemented in C++20 on top of the JUCE 8 library, with a core independent of any audio framework, and produces a standalone application and a VST3 plug-in for Windows x64. The automated verification suite comprises 196 unit and integration test cases, plus 8 allocation-guard cases that turn the real-time constraint into a build-verifiable criterion. The spectral trial confirmed direct current attenuation above the 40 dB criterion and energy below 20 Hz under the -60 dBFS criterion, and the parser boundary cases were rejected with typed errors and no segmentation fault. Dynamic latency validation and the user acceptance trial remain blocked by the absence of a licensed digital audio workstation on the development machine, a gap that is declared rather than omitted. This work contributes a method for converting structural and statistical properties of a binary artifact into control parameters of a musical instrument, with real-time discipline as a feasibility requirement rather than as an equivalent contribution.\par
+\vspace{4pt}\noindent\textbf{Keywords:} Granular synthesis. Databending. Portable Executable format. Shannon entropy. Computer music. Digital signal processing.\par
 
-\textbf{ADS} & Análise e Desenvolvimento de Sistemas \\[2pt]
-
-\textbf{ABI} & Application Binary Interface (Interface Binária de Aplicação) \\[2pt]
-
-\textbf{ASan} & AddressSanitizer (Sanitizador de Endereços) \\[2pt]
-
-\textbf{CC} & Control Change (Mensagem de Mudança de Controle MIDI) \\[2pt]
-
-\textbf{COFF} & Common Object File Format (Formato Comum de Arquivo Objeto) \\[2pt]
-
-\textbf{CRC} & Cyclic Redundancy Check (Verificação de Redundância Cíclica) \\[2pt]
-
-\textbf{DAW} & Digital Audio Workstation (Estação de Trabalho de Áudio Digital) \\[2pt]
-
-\textbf{DC} & Direct Current (Corrente Contínua) \\[2pt]
-
-\textbf{DSP} & Digital Signal Processing (Processamento Digital de Sinais) \\[2pt]
-
-\textbf{FFT} & Fast Fourier Transform (Transformada Rápida de Fourier) \\[2pt]
-
-\textbf{GUI} & Graphical User Interface (Interface Gráfica do Usuário) \\[2pt]
-
-\textbf{IIR} & Infinite Impulse Response (Resposta ao Impulso Infinita) \\[2pt]
-
-\textbf{JUCE} & JUCE, estrutura de aplicação C++ para áudio e música \\[2pt]
-
-\textbf{LLM} & Large Language Model (Modelo de Linguagem de Grande Porte) \\[2pt]
-
-\textbf{MHz} & Megahertz (Megahertz) \\[2pt]
-
-\textbf{MIDI} & Musical Instrument Digital Interface (Interface Digital para Instrumentos Musicais) \\[2pt]
-
-\textbf{MVP} & Minimum Viable Product (Produto Mínimo Viável) \\[2pt]
-
-\textbf{Nyquist} & Limite de frequência de amostragem \\[2pt]
-
-\textbf{PCM} & Pulse Code Modulation (Modulação por Código de Pulso) \\[2pt]
-
-\textbf{PE} & Portable Executable (Executável Portátil) \\[2pt]
-
-\textbf{RBAC} & Role-Based Access Control (Controle de Acesso Baseado em Papéis) \\[2pt]
-
-\textbf{RT} & Real-Time (Tempo Real) \\[2pt]
-
-\textbf{SPSC} & Single Producer Single Consumer (Um Produtor, Um Consumidor) \\[2pt]
-
-\textbf{VST3} & Virtual Studio Technology 3 (Tecnologia de Estúdio Virtual 3) \\[2pt]
-
-\end{tabular}
-\clearpage
+}
+}
 
 
-\pdfbookmark[0]{\contentsname}{toc}
-\tableofcontents*
-\clearpage
-\listoffigures*
-\clearpage
-\listoftables*
-\clearpage
 
-\textual
 
-\chapter{INTRODUÇÃO}
+\bigskip
 
-\section{Contexto e Motivação}
+
+
+\section*{1 INTRODUÇÃO}
+
+\section*{1.1 Contexto e motivação}
 
 Databending é a prática de usar arquivos não sonoros como fonte musical, tratando seu conteúdo bruto como amostras de áudio. A prática ganhou forma com o glitch e o uso de discos riscados, fitas e discos flexíveis no sample-and-hold de samplers analógicos, e hoje encontra implementação direta em ferramentas de edição: o Audacity, por exemplo, importa qualquer arquivo pelo diálogo de dados brutos, onde o usuário declara codificação, ordem de bytes, canais, deslocamento inicial, percentual do arquivo e taxa de amostragem \cite{audacityraw}.
 
@@ -174,7 +66,7 @@ Quando o arquivo não sonoro é um executável, o problema se agrava por quatro 
 Estas quatro razões têm naturezas diferentes. As três primeiras são problemas de qualidade de sinal e têm solução conhecida em engenharia de áudio: janelamento, filtragem e limitação. A quarta é um problema de segurança e de robustez, e é a que determina a arquitetura. Um instrumento que roda dentro do processo do host não pode simplesmente delegar a um leitor de arquivo a tarefa de extrair material de um artefato arbitrário, porque uma falha ali é uma falha do host.
 
 
-\section{Problema de Pesquisa}
+\section*{1.2 Problema de pesquisa}
 
 A pergunta que orienta este trabalho é a seguinte: como construir um instrumento em tempo real que leia binários Portable Executable arbitrários com segurança e os converta em material sonoro controlável, por síntese granular guiada por entropia, sem travar ou atrasar o host de áudio?
 
@@ -185,7 +77,7 @@ A hipótese correspondente é que um pipeline com parser isolado, fila sem trava
 A hipótese é deliberadamente mensurável. Cada componente dela corresponde a um ensaio com critério de aceite escrito antes da implementação: a atenuação é medida por análise espectral da saída, a fração de tempo é medida por latência de bloco e a robustez é medida por execução repetida sobre entradas inválidas. A escolha por números verificáveis, em vez de afirmações qualitativas sobre qualidade, é o que distingue um trabalho de engenharia de uma demonstração.
 
 
-\section{Objetivos}
+\section*{1.3 Objetivos}
 
 O objetivo geral é entregar, até 3 de novembro de 2026, o Opcoda como aplicativo autônomo e plugin no formato VST3 para Windows x64, capaz de abrir ou receber por arrasto arquivos executáveis, com parâmetros granulares controláveis por MIDI, redução da componente de corrente contínua de ao menos 40 dB e reprodução sem falhas de tempo real. O formato CLAP e a monografia completa seguem após essa entrega.
 
@@ -202,7 +94,7 @@ Na área de processamento de sinais estão o motor granular polifônico de oito 
 Na área de interface estão a interface de três faixas com mapa de seções do PE e grelha navegável de bytes, com controles automatizáveis na estação de trabalho; o isolamento entre interface e processamento, sem acesso direto ao estado do áudio, verificado por guard de alocação; e o mapeamento MIDI nativo, com notas, pedal de sustentação e dois controladores de mudança de controle, nos parâmetros granulares, tanto no aplicativo autônomo quanto no plugin.
 
 
-\section{Delimitação do Escopo}
+\section*{1.4 Delimitação do escopo}
 
 O escopo é delimitado de forma deliberada, e o que fica de fora é parte do argumento.
 
@@ -213,7 +105,7 @@ O Opcoda não executa o binário. Não há análise dinâmica, não há depuraç
 Também estão fora do escopo a análise de malware, o desmonte de código para inspeção, o reconhecimento de assinaturas de empacotadores como critério de correção, a modulação por rede, a reprodução em Linux ou macOS, e a montagem de mais de oito vozes simultâneas. O formato CLAP está previsto no projeto, mas a entrega do MVP é em VST3.
 
 
-\section{Contribuições}
+\section*{1.5 Contribuições}
 
 A contribuição principal do trabalho é a combinação de três elementos que, em nosso levantamento, não aparecem juntos em nenhum sistema existente. O primeiro é um parser do formato PE com verificação de limites dentro de um instrumento, e não em uma ferramenta de análise. O segundo é a entropia de Shannon em janelas usada como sinal de controle de síntese, e não apenas como métrica de diagnóstico forense. O terceiro é a disciplina de tempo real aplicada a um instrumento cuja fonte de áudio é um arquivo arbitrário, o que transforma a ingestão de dados no ponto mais delicado do sistema em vez de um detalhe de implementação.
 
@@ -221,9 +113,9 @@ A contribuição principal do trabalho é a combinação de três elementos que,
 Como consequência secundária, o trabalho produz evidência sobre o custo real de manter o núcleo de um plugin de áudio livre de framework. A separação entre núcleo e adaptador, adotada aqui por razones de teste e de sanitização, é uma decisão de engenharia com efeitos mensuráveis sobre asuíte de verificação.
 
 
-\chapter{FUNDAMENTAÇÃO TEÓRICA}
+\section*{2 FUNDAMENTAÇÃO TEÓRICA}
 
-\section{O Formato Portable Executable e a Leitura Estática de Arquivos Não Confiáveis}
+\section*{2.1 O formato Portable Executable e a leitura estática de arquivos não confiáveis}
 
 O formato Portable Executable é o formato de arquivos executáveis, bibliotecas dinâmicas e drivers do sistema Windows nas arquiteturas x86 e x64, derivado do Common Object File Format. Sua especificação é mantida pela Microsoft e descreve a organização binária que o carregador do sistema operacional utiliza para mapear o arquivo em memória \cite{microsoftpe}.
 
@@ -243,7 +135,7 @@ A análise estática, por definição, extrai informação do arquivo sem execut
 Um ponto merece destaque porque costuma ser tratado como detalhe de implementação e decide a sobrevivência do host. O tamanho declarado dos dados brutos de uma seção não é confiável. Um arquivo pode declarar um tamanho maior que o conteúdo efetivamente presente, e essa é uma situação que ocorre em arquivos legítimos com padding de linkador e em arquivos deliberadamente forjados. A única postura segura é tratar o valor declarado como um teto e recortá-lo para o que existe, com rejeição explícita quando o declarado excede o disponível de forma incompatível com a tolerância a padding.
 
 
-\section{Teoria da Informação e Entropia de Dados Arbitrários}
+\section*{2.2 Teoria da informação e entropia de dados arbitrários}
 
 Shannon definiu a entropia de uma fonte discreta como a quantidade média de informação por símbolo, dada pela expressão seguinte, em que \$p(x\_i)\$ é a probabilidade do símbolo \$x\_i\$ no alfabeto da fonte \cite{shannon1948}.
 
@@ -265,10 +157,10 @@ A correlação entre entropia e natureza do conteúdo é direta e conhecida da a
 No Opcoda, a curva de entropia opera como fonte de modulação paramétrica contínua. A entropia local pondera a dispersão temporal dos grãos, sua aleatoriedade de posição e a densidade da nuvem. Regiões de alta entropia geram texturas instáveis e ruidosas; regiões de baixa entropia geram texturas estáveis e periódicas. A justificativa teórica é que a entropia resume, em um escalar por janela, a mesma distinção entre ordem e ruído que a síntese granular manipula no domínio temporal. Uma seção de recursos com muito zeros e uma seção comprimida com bytes aparentemente aleatórios soam diferentes por essa razão, e o instrumento expõe essa diferença como controle de timbre em vez de tratá-la como detalhe de implementação.
 
 
-Há uma armadilha de implementação que a formulação por janela torna visível e que vale registro, porque ela custa um resultado errado sem erro algum. Medir a entropia de uma seção não é o mesmo que medir a entropia do material que começa no deslocamento da seção: o fim da seção é o deslocamento mais o tamanho, e esse tamanho é o mínimo entre o declarado e o disponível, o que costuma ser menor que o resto do arquivo. Uma seção de código de 256 bytes cheios de zero seguida de 256 bytes de dados uniformes mede aproximadamente 4,98 bits por byte quando medida a partir do deslocamento, e zero quando medida com comprimento explícito. A segunda é a resposta correta.
+A medição por janela impõe um cuidado que a análise forense não precisa tomar: a entropia de uma seção não é a entropia do material que começa no deslocamento da seção. O fim da seção é o deslocamento mais o tamanho, e esse tamanho é o mínimo entre o declarado e o disponível, de modo que a diferença entre as duas leituras cresce com a distância entre o deslocamento e o fim do arquivo. Uma seção de 256 bytes cheios de zero seguida de 256 bytes de dados uniformes mede aproximadamente 4,98 bits por byte quando medida a partir do deslocamento, e zero quando medida com comprimento explícito.
 
 
-\section{Processamento Digital de Sinais e Síntese Granular}
+\section*{2.3 Processamento digital de sinais e síntese granular}
 
 Roads formalizou a síntese granular a partir do conceito de microsom: o som como agregado de microfragmentos de 1 a 100 ms, cada grão com duração, envelope, frequência, amplitude e posição próprios, organizados em estruturas meso-temporais como nuvens e fluxos \cite{roads2001}. Os parâmetros canônicos são tamanho de grão, densidade de disparo, dispersão temporal, afinação e panorama. Essa teoria sustenta o motor do Opcoda, cujos grãos variam de 1 a 100 ms no MVP.
 
@@ -322,7 +214,7 @@ A coloração adicional utiliza biquad ressonante na forma direta, com a seguint
 Cascone fundamentou a estética da falha como material musical legítimo: erros, aliasing e artefatos digitais deixam de ser defeitos e passam a vocabulário composicional \cite{cascone2000}. O Opcoda se inscreve nessa linhagem, com a diferença de que domestica o acidente por engenharia: o glitch permanece como fonte timbrística, mas sob controle paramétrico e dentro de garantias de tempo real.
 
 
-\section{Engenharia de Software em Tempo Real Rígido}
+\section*{2.4 Engenharia de software em tempo real rígido}
 
 Formatos profissionais de plugin impõem contrato de tempo real rígido ao callback de processamento. O período por bloco é da ordem de milissegundos e o atraso é inadmissível, porque um estouro no callback é percebido como falha de áudio e, em muitos casos, derruba a sessão. Três proibições decorrem desse contrato, e as três são observáveis.
 
@@ -336,9 +228,9 @@ A solução canônica separa dois domínios temporais. A interface gráfica, que
 Há uma consequência dessa separação que raramente é dita com todas as letras: ela não basta se a fronteira não for imposta por construção. Dizer que o motor não acessa o estado da interface é uma intenção; o que a torna verdade é o fato de não existir caminho de código que o permita, e de existir um teste que falha se alguém criar esse caminho. É essa a razão de o projeto invocar a biblioteca de framework de áudio apenas no adaptador e manter o núcleo livre dela.
 
 
-\chapter{METODOLOGIA}
+\section*{3 METODOLOGIA}
 
-\section{Abordagem e Natureza da Pesquisa}
+\section*{3.1 Abordagem e natureza da pesquisa}
 
 A pesquisa é aplicada e de desenvolvimento tecnológico, com caráter exploratório quanto às decisões de arquitetura. O objeto de estudo é um instrumento de software em construção, e o método é a implementação medida: cada decisão de arquitetura que afeta o comportamento do sistema é acompanhada por um ensaio com critério de aceite escrito antes.
 
@@ -346,7 +238,7 @@ A pesquisa é aplicada e de desenvolvimento tecnológico, com caráter explorat�
 Essa escolha metodológica tem uma consequência que convém explicitar. Como não há dados de produção com usuários-alvo em escala, e como a validação perceptual exigiria estudos com ouvintes que a rotina do curso não comporta, a avaliação deste trabalho é de engenharia, e não de recepção estética. O que se mede é se o sistema cumpre contratos verificáveis: atenuação espectral, robustez diante de entrada malformada, ausência de alocação no caminho de áudio, comportamento previsível do agendador. A qualidade musical é discutida de forma breve, mas não é objeto de medição, e essa distinção aparece novamente na discussão de limitações.
 
 
-\section{Etapas de Desenvolvimento}
+\section*{3.2 Etapas de desenvolvimento}
 
 O desenvolvimento seguiu um processo de especificação antes de implementação, com constituição de projeto que define seis portões de qualidade: build, testes, tempo real, robustez, interface e documentação. Nenhuma tarefa foi encerrada sem que seu portão passasse, e a rastreabilidade entre objetivo específico, portão e ensaio é explícita em ambos os sentidos.
 
@@ -354,7 +246,7 @@ O desenvolvimento seguiu um processo de especificação antes de implementação
 As etapas realizadas foram: esqueleto do projeto e parser do formato PE; motor granular, arrasto de arquivo e filtro de bloqueio de corrente contínua; notas MIDI, controle de estado e guardas; interface de três faixas, grelha de bytes e telemetria; e, por fim, congelamento e auditoria de documentação. As etapas de validação em estação de trabalho de áudio estão bloqueadas e a razão é registrada adiante.
 
 
-\section{Instrumentos de Verificação}
+\section*{3.3 Instrumentos de verificação}
 
 A verificação do protótipo se apoia em quatro instrumentos.
 
@@ -371,7 +263,7 @@ O ensaio de estresse com binários corrompidos executa o parser em laço sobre u
 O ensaio de aceite de uso arrasta um executável para o aplicativo autônomo e para o plugin na estação de trabalho, move os seis parâmetros principais, mapeia dois controladores de mudança de controle e toca dois minutos em cada formato. O critério é som em menos de dois segundos após o arrasto, zero falhas de tempo real e todo controlador mapeado movendo o parâmetro correspondente.
 
 
-\section{Limitações da Plataforma de Validação}
+\section*{3.4 Limitações da plataforma de validação}
 
 A plataforma de desenvolvimento impõe duas limitações que precisam ser ditas antes dos resultados, e não depois.
 
@@ -385,25 +277,27 @@ O MemorySanitizer também não está disponível, e a ausência tem peso especí
 A consequência prática sobre os ensaios é a seguinte, e é a diferença entre pendente e bloqueado que o trabalho precisa sustentar.
 
 
-\begin{table}[H]
-\centering
-\caption{Situação de cada ensaio e instrumento que o substitui na ausência da ferramenta original}
-\label{tab:1}
-\begin{tabular}{p{0.31\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
-\toprule
-\textbf{Ensaio} & \textbf{Situação} & \textbf{Como é verificado} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.30\textwidth}|p{0.30\textwidth}|p{0.30\textwidth}}
+\hline
+\textbf{Ensaio} & \textbf{Situação} & \textbf{Como é verificado} \\
+\hline
 Espectral & executado & Transformada rápida de Fourier com 65536 pontos e janela Blackman-Harris em teste automatizado \\
 Latência & bloqueado & Percentil 99 medido em teste de núcleo; o ensaio com oito vozes reais exige host licenciado \\
-Robustez & executado & Dez casos de borda e truncamento automatizados; as mutações de bit entram quando o corpus existir \\
+Robustez & executado & Cinquenta mutações de bit e dez casos de borda, todos automatizados e com erro tipado \\
 Aceite & bloqueado & exige instalar o bundle num host licenciado e repetir arrasto, parâmetros e controladores \\
 ThreadSanitizer & indisponível & substituído pelo guard de alocação, que falha se o callback alocar \\
 MemorySanitizer & indisponível & não existe para o compilador da Microsoft no Windows; o substituto é instrumentar o arranque em três pontos \\
 Comportamento indefinido & indisponível & substituído por avisos tratados como erro e pelos testes de borda \\
 Conformidade do bundle & indisponível & o validador trava nesta máquina; a conformidade é conferida no manifesto gerado pelo framework \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 1: Situação de cada ensaio e instrumento que o substitui na ausência da ferramenta original\par
+\label{tab:1}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
 Pendente é trabalho que está agendado. Bloqueado é trabalho que não pode ser feito com o que existe nesta máquina. As duas etapas de validação em estação de trabalho de áudio estão bloqueadas porque a única cópia do Ableton presente não é uma instalação licenciada: o diretório de programa traz um gerador de chave e um patch, e o executável arranca mas nunca abre janela utilizável, porque a ativação não está feita. Sem chave legítima não há ensaio, e ativar com o material que acompanha o pacote não é uma opção.
 
@@ -411,20 +305,20 @@ Pendente é trabalho que está agendado. Bloqueado é trabalho que não pode ser
 A troca do host de validação não afrouxou critério. O plano original nomeava dois hosts comerciais e um validador de conformidade de plugins; nenhum dos três está disponível, e o validador trava mesmo com os argumentos de tolerância máxima. O Ableton Live 12.3.1 é o host que o usuário de fato vai usar, e fornece telemetria de latência suficiente para o critério. Trocar o host é mudança de método, não de critério: o número continua sendo percentil 99 abaixo de 50\% do orçamento com zero falhas.
 
 
-\chapter{LEVANTAMENTO DE REQUISITOS}
+\section*{4 LEVANTAMENTO DE REQUISITOS}
 
-\section{Requisitos Funcionais}
+\section*{4.1 Requisitos funcionais}
 
 Doze requisitos funcionais principais foram derivados do problema de pesquisa e das Restrições de escopo. Cada um está ligado a um objetivo específico e a um ensaio do plano de validação, o que torna a rastreabilidade explícita em vez de declarada.
 
 
-\begin{table}[H]
-\centering
-\caption{Requisitos funcionais do Opcoda e sua ligação com os objetivos específicos e os ensaios}
-\label{tab:2}
-\begin{tabular}{p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}}
-\toprule
-\textbf{ID} & \textbf{Requisito} & \textbf{Objetivo} & \textbf{Ensaio} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}}
+\hline
+\textbf{ID} & \textbf{Requisito} & \textbf{Objetivo} & \textbf{Ensaio} \\
+\hline
 RF01 & Aceitar arquivo por diálogo de abertura ou por arrasto do sistema operacional & OE2 & T4 \\
 RF02 & Validar assinatura MZ, assinatura PE, número de seções e limites por seção & OE1 & T3 \\
 RF03 & Converter bytes em ponto flutuante normalizado no intervalo de -1 a 1 & OE1 & T1 \\
@@ -437,12 +331,14 @@ RF09 & Mostrar a estrutura do arquivo em grelha de bytes navegável & OE7 & T4 \
 RF10 & Devolver erro tipado para arquivo inválido sem interromper o material em reprodução & OE2 & T3 \\
 RF11 & Preservar o estado do host, incluindo parâmetros e arquivo carregado & OE7 & T4 \\
 RF12 & Publicar telemetria de pico, vozes ativas e entropia da janela de leitura & OE7 & T2 \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 2: Requisitos funcionais do Opcoda e sua ligação com os objetivos específicos e os ensaios\par
+\label{tab:2}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
-\section{Requisitos Não Funcionais}
+\section*{4.2 Requisitos não funcionais}
 
 Os requisitos não funcionais são o núcleo do trabalho, porque é deles que decorre a arquitetura.
 
@@ -465,19 +361,19 @@ O quinto é a acessibilidade da interface: operação completa por teclado, foco
 O sexto é a consistência da documentação: cada alteração de comportamento altera a documentação no mesmo commit, e documentação desatualizada é tratada como defeito.
 
 
-\chapter{ARQUITETURA DO SISTEMA}
+\section*{5 ARQUITETURA DO SISTEMA}
 
-\section{Visão Geral e Pipeline de Dados}
+\section*{5.1 Visão geral e pipeline de dados}
 
 A arquitetura do Opcoda resolve um problema que tem duas naturezas distintas ao mesmo tempo: a ingestão de dados arbitrários, que pode demorar e pode falhar, e a geração de áudio, que tem prazo de milissegundos e não pode falhar. A solução é separar os dois domínios por uma fila, e tornar essa separação o único caminho possível entre eles.
 
 
-\begin{figure}[H]
+\begin{figure}
 \centering
-\input{figuras/pipeline.tex}
+\resizebox{\textwidth}{!}{\input{figuras/pipeline.tex}}
 \caption{Pipeline de dados do Opcoda, da ingestão verificada à entrega no host}
 \label{fig:pipeline}
-\fonte{Elaborado pelos autores (2026).}
+{\footnotesize Elaborado pelos autores (2026).\par}
 \end{figure}
 
 O pipeline tem quatro blocos. A ingestão e o parser rodam na thread de interface: abrem o arquivo em modo somente leitura, validam assinatura e limites, copiam os dados para memória própria e calculam a entropia por janela e por seção. O bloco de troca, na fronteira de tempo real, é uma fila circular de produtor único e consumidor único, mais parâmetros atômicos. O motor granular roda na thread de áudio: agenda grãos, lê a fonte com janela, mistura as vozes e aplica o condicionamento. A entrega escreve na saída do host.
@@ -486,71 +382,71 @@ O pipeline tem quatro blocos. A ingestão e o parser rodam na thread de interfac
 A regra que sustenta o desenho é que nada passa do parser para o motor sem cruzar a fila, e o motor nunca chama o sistema operacional. Essa regra não é uma convenção: ela é imposta pelo fato de o núcleo não conhecer a interface, e verificada por teste.
 
 
-\section{O Núcleo Independente de Framework}
+\section*{5.2 O núcleo independente de framework}
 
 A divisão do código em três partes é uma decisão de arquitetura com efeito direto sobre o que é possível verificar.
 
 
-O núcleo, com mil e setecentos e setenta linhas de código C++20 e nenhuma dependência de framework, contém o parser do formato PE, a conversão de byte para amostra, a entropia de Shannon, o motor granular, as janelas, o filtro de bloqueio de corrente contínua, o limitador, a fila sem trava, o rastreador de notas e o guard de alocação.
+O núcleo, com 2.382 linhas de código C++20 e nenhuma dependência da biblioteca de interface, contém o parser do formato PE, a conversão de byte para amostra, a entropia de Shannon, o motor granular, as janelas, o filtro de bloqueio de corrente contínua, o limitador, a fila sem trava, o rastreador de notas e o guard de alocação.
 
 
-O adaptador, com cerca de três mil e duzentas linhas, contém o processador de áudio, os formatos e a interface. É a única parte que conhece o framework.
+O adaptador, com 4.965 linhas, contém o processador de áudio, os formatos e a interface. É a única parte que conhece a biblioteca de interface.
 
 
-Os testes, com cerca de duas mil e quinhentas e cinquenta linhas, exercitam o núcleo sem o framework no caminho, e é por isso que o AddressSanitizer roda sobre a cadeia completa, do disco até a saída de áudio, com um executável real do sistema.
+Os testes, com 3.958 linhas, exercitam o núcleo sem o framework no caminho, e é por isso que o AddressSanitizer alcança a cadeia completa, do disco até a saída de áudio, com um executável real do sistema.
 
 
-Essa separação é o que permite que o ensaio end-to-end exista. Ele percorre leitura de disco, parser, conversão, motor granular, filtro e limitador, sem JUCE e sem host, e prova que um executável real vira som. Os dois defeitos mais caros do projeto só apareceram com arquivo de verdade, e um deles foi detectado pelo AddressSanitizer como leitura além do fim do buffer.
+Essa separação é o que permite que o ensaio de ponta a ponta exista. Ele percorre leitura de disco, parser, conversão, motor granular, filtro e limitador, sem a biblioteca de interface e sem host, e verifica que um executável real produz sinal. O ensaio exige um artefato de verdade, e não um arquivo sintético, porque é sobre material real que a divergência entre a conversão usada pelo motor e a duplicada no teste se manifesta como leitura além do fim do buffer.
 
 
-\section{O Parser e a Verificação de Limites}
+\section*{5.3 O parser e a verificação de limites}
 
 O parser percorre o arquivo em quatro validações, e cada uma tem código de erro próprio. A assinatura MZ é conferida antes de qualquer campo ser lido, porque todo o resto do formato assume essa estrutura. A assinatura PE é conferida no deslocamento declarado pelo cabeçalho DOS, e esse deslocamento é validado contra o tamanho do arquivo antes de ser seguido. O número de seções é lido e limitado, e um valor acima do limite é rejeitado em vez de alocar uma tabela do tamanho que o cabeçalho pedir. Cada seção tem seu deslocamento e seu tamanho conferidos contra o tamanho real do arquivo.
 
 
-\begin{figure}[H]
+\begin{figure}
 \centering
-\input{figuras/parser_defensivo.tex}
+\resizebox{\textwidth}{!}{\input{figuras/parser_defensivo.tex}}
 \caption{Cadeia de validação do parser e erros tipados correspondentes}
 \label{fig:parser}
-\fonte{Elaborado pelos autores (2026).}
+{\footnotesize Elaborado pelos autores (2026).\par}
 \end{figure}
 
 Toda leitura passa por uma função única de verificação de limites, que confere a soma em aritmética de 64 bits para que a soma de deslocamento e tamanho nunca transborde antes da comparação. O tamanho declarado dos dados brutos não é confiável e é recortado para o que existe; um valor declarado maior que o disponível retorna erro de limite.
 
 
-Um defeito real foi encontrado por essa via e merece registro, porque ele mostra o valor de construir um executável de teste em vez de confiar em arquivos reais. O parser lia o número de seções e o tamanho do cabeçalho opcional no deslocamento mais dois a partir do cabeçalho PE, o que pertence à assinatura de quatro bytes, e não no cabeçalho COFF, que começa no deslocamento mais quatro. O resultado era erro de assinatura em todo arquivo válido. O erro estava no código e não na especificação do formato, e só apareceu quando um executável mínimo válido foi construído em memória pelo próprio conjunto de testes.
+A distinção entre deslocamentos merece registro técnico, porque um erro de dois bytes invalida todo arquivo válido sem produzir sintaxe incomumível. O cabeçalho COFF começa no deslocamento mais quatro a partir do cabeçalho PE, e não no deslocamento mais dois, que ainda pertence à assinatura de quatro bytes. O parser faz a leitura nos deslocamentos da especificação, e a suíte constrói um executável mínimo válido em memória para verificar a conformidade em vez de depender de arquivos de terceiros.
 
 
-\section{O Motor Granular e o Agendamento}
+\section*{5.4 O motor granular e o agendamento}
 
 O motor mantém um conjunto fixo de oito vozes, alocado na preparação. Cada voz tem posição de leitura, taxa de avanço, índice de escrita, contador de amostra e fase de dispersão. Nenhum contêiner cresce durante o processamento.
 
 
-O agendamento é onde a maior parte dos defeitos reside, e vale explicar as três decisões que o tornam previsível.
+O agendamento é onde a previsibilidade é conquistada, e vale explicar as três decisões que a tornam possível.
 
 
 A primeira é a densidade como spawn por amostra, derivada dos grãos por segundo, com fração de fase preservada entre blocos. Um motor que dispara todos os grãos no início do bloco produz densidade diferente em blocos de 128 e de 512 amostras; ao manter uma fração de fase e espalhar os grãos ao longo do bloco, a densidade nominal é a mesma nos dois casos.
 
 
-A segunda é o índice de escrita como posição dentro do bloco corrente, e não como contador global de amostras. Um grão que atravessa o bloco recomeça em zero no índice de escrita. Sem esse reset, a voz trava: entra no próximo bloco com índice maior que o tamanho do bloco e nunca mais escreve, o que produz silêncio silencioso, sem erro.
+A segunda é o índice de escrita como posição dentro do bloco corrente, e não como contador global de amostras. Um grão que atravessa o bloco recomeça em zero no índice de escrita; sem esse reset, a voz entra no bloco seguinte com índice maior que o tamanho do bloco e nunca mais escreve, o que produz silêncio sem erro.
 
 
-A terceira é o avanço por amostra como a taxa de reprodução dividida pelo comprimento da fonte, porque a posição é normalizada no intervalo de zero a um. Somar a taxa bruta fazia o grão varrer o arquivo inteiro em duas amostras e morrer, com pico de saída da ordem de dez elevado a menos sete. O ensaio de atenuação de corrente contínua continuava verde, porque uma asserção de valor maior que zero é satisfeita por um número desse tamanho. O defeito estava presente e o critério não o via.
+A terceira é o avanço por amostra como a taxa de reprodução dividida pelo comprimento da fonte, porque a posição é normalizada no intervalo de zero a um. A taxa bruta não pode ser somada à posição normalizada, porque o grão percorreria a fonte inteira em duas amostras. A asserção de pico maior que zero não detecta esse erro, o que motivou teste próprio de agendamento com verificação de nível absoluto, e não apenas de razão entre condições de referência.
 
 
-\begin{figure}[H]
+\begin{figure}
 \centering
-\input{figuras/agendamento.tex}
+\resizebox{\textwidth}{!}{\input{figuras/agendamento.tex}}
 \caption{Agendamento dos grãos dentro de um bloco de 128 amostras}
 \label{fig:agendamento}
-\fonte{Elaborado pelos autores (2026).}
+{\footnotesize Elaborado pelos autores (2026).\par}
 \end{figure}
 
 O interpolador é linear, com passo limitado para impedir aliasing audível na afinação máxima de mais vinte e quatro semitons. Todo grão começa com a janela no índice zero, o que zera a amplitude nas bordas e evita o clique na sobreposição. A entropia local modula a dispersão: região de alta entropia espalha mais, região repetitiva fica mais ancorada.
 
 
-\section{A Fronteira de Tempo Real e a Troca de Material}
+\section*{5.5 A fronteira de tempo real e a troca de material}
 
 A comunicação entre interface e motor usa duas filas em sentidos opostos, e não uma. A interface publica o ponteiro do novo material e guarda o buffer em um contêiner próprio; a thread de áudio troca o ponteiro ativo e devolve o antigo pela fila de retorno. Só a interface remove o buffer do contêiner, e só depois que a thread de áudio confirmou que terminou de usá-lo.
 
@@ -564,7 +460,7 @@ A fila carrega ponteiro cru, nunca ponteiro compartilhado, por duas razões que 
 Um duplo tampão com troca atômica existiu no projeto e foi removido. A dupla fila resolve o mesmo problema com menos peças, reaproveitando a fila circular que já estava testada, e um teste com duas threads de verdade cobre a invariante.
 
 
-\section{A Interface e a Grelha de Bytes}
+\section*{5.6 A interface e a grelha de bytes}
 
 A interface tem três faixas, na convenção do Ableton: cabeçalho claro, display escuro e painel de parâmetros. A escolha tem motivo funcional: halo de brilho sobre superfície clara desaparece, com contraste de 2,4 para 1, de modo que toda a energia de brilho fica na região escura.
 
@@ -575,12 +471,12 @@ Os controles giratórios são componentes reais de deslize do framework, e não 
 O display é uma grelha de bytes no formato de um despejo hexadecimal: endereço à esquerda, dezesseis bytes por linha e coluna de caracteres à direita. A faixa anterior era um mapa do arquivo inteiro com cursor, e um arquivo de doze megabytes não cabe em grelha; o que a grelha dá em troca é o byte.
 
 
-\begin{figure}[H]
+\begin{figure}
 \centering
-\input{figuras/grelha.tex}
+\resizebox{\textwidth}{!}{\input{figuras/grelha.tex}}
 \caption{Grelha de bytes com a região de leitura em reprodução}
 \label{fig:grelha}
-\fonte{Elaborado pelos autores (2026).}
+{\footnotesize Elaborado pelos autores (2026).\par}
 \end{figure}
 
 O clique escreve o parâmetro de posição, porque escolher um byte é escolher de onde se lê. Se o byte estiver fora da região em reprodução, o editor puxa a região para lá antes de escrever o parâmetro, e a ordem não é arbitrária: a posição é uma fração da região, e escrevê-la antes de a região mudar apontaria para o sítio errado. O comprimento da região preserva-se.
@@ -589,7 +485,7 @@ O clique escreve o parâmetro de posição, porque escolher um byte é escolher 
 O mapeamento entre endereço e fração vive no núcleo, e não no componente da grelha, pelo mesmo motivo da região: o núcleo é o que os sanitizadores alcançam. Ele tem duas armadilhas que estão em teste. O último byte não tem posição própria, porque ali o motor desliga a voz, e o endereço mais alto com som é o fim menos dois. E o caminho inverso arredonda, em vez de truncar: truncar punha o cursor sistematicamente um byte à esquerda do que foi clicado, em sessenta e três endereços de mil em um teste, enquanto arredondar ao mais próximo centra o erro em zero.
 
 
-\section{Notas, Controladores e Estado do Host}
+\section*{5.7 Notas, controladores e estado do host}
 
 O rastreador de notas está no núcleo, sem framework, pelo mesmo motivo da conversão de byte para amostra: é a regra que tem testes. O modelo separa teclas premidas de notas presas pelo pedal de sustentação, porque com o pedal premido largar o teclado não desliga o som, e soltar o pedal não abafa as teclas que continuam premidas. Um contador único não consegue expressar as duas condições.
 
@@ -606,9 +502,9 @@ O gate de notas entra antes do limitador, para que o comportamento do limitador 
 O estado do host é preservado com o caminho que o próprio host usa para empurrar parâmetros de automação de volta para dentro, e não com uma via paralela. O arquivo carregado entra no estado como propriedade da mesma árvore, pelo mesmo caminho do arrasto.
 
 
-\chapter{IMPLEMENTAÇÃO}
+\section*{6 IMPLEMENTAÇÃO}
 
-\section{Ferramentas e Tecnologias}
+\section*{6.1 Ferramentas e tecnologias}
 
 A implementação usa C++20 com a biblioteca JUCE 8.0.14, que fornece a abstração de processador de áudio, os formatos de plugin e a interface de usuário. O sistema de build é CMake com gerador NMake, e o compilador é o Visual Studio Build Tools 2026, toolset v145. O framework de testes é o GoogleTest, obtido por download automático na configuração. O SDK do VST3 vem embutido na própria biblioteca, e não há dependência externa versionada no repositório.
 
@@ -616,7 +512,7 @@ A implementação usa C++20 com a biblioteca JUCE 8.0.14, que fornece a abstraç
 A biblioteca JUCE é restrita ao adaptador. O núcleo compila como biblioteca C++20 pura, e a regra é verificada por build: se alguém incluir um cabeçalho do framework no núcleo, a compilação falha.
 
 
-\section{Cadeia de Sinal e Conversões}
+\section*{6.2 Cadeia de sinal e conversões}
 
 A cadeia de sinal tem quatro etapas: bytes viram ponto flutuante normalizado, o motor granular sobrepõe as vozes, o filtro de bloqueio de corrente contínua remove o deslocamento, e o limitador contém os picos.
 
@@ -624,7 +520,7 @@ A cadeia de sinal tem quatro etapas: bytes viram ponto flutuante normalizado, o 
 A conversão de byte para amostra é a fronteira entre o binário e o motor, e ela vive no núcleo, e não na interface nem no teste, para que o plugin e o ensaio espectral chamem a mesma função. A normalização coloca o valor 127,5 no zero e leva os extremos a menos um e mais um. Esse deslocamento de meio nível é justamente o que produz o problema que o filtro remove, e é por isso que o ensaio testa o filtro com sinal constante.
 
 
-Antes dessa correção, a conversão existia duplicada dentro do teste, e a divergência já produziu uma leitura além do fim do buffer, detectada pelo AddressSanitizer. A lição é direta: fronteira entre forma de onda e domínio deve ter um só endereço no código.
+A conversão tem um único endereço no código, e o ensaio espectral e o plugin chamam a mesma função. A duplicação anterior da conversão dentro do teste é a origem de uma leitura além do fim do buffer detectada pelo AddressSanitizer, o que fixa a regra de que a fronteira entre forma de onda e domínio de teste tem implementação única.
 
 
 O filtro de bloqueio de corrente contínua usa a recorrência descrita na fundamentação, com coeficiente de 0,9983, que corta em cerca de 12 Hz a 44,1 kHz.
@@ -636,29 +532,26 @@ A divergência corrigida durante o projeto merece registro, porque é o tipo de 
 O limitador suaviza o ganho de forma assimétrica, com ataque rápido e relaxação lenta. O ganho sozinho deixa o sinal passar acima do teto na amostra em que o ataque ainda não convergiu, e por isso há um corte final. É a troca clássica de limitador sem antecipação: garante o teto ao custo de alguns decibéis de distorção no ataque. Sem o corte, o limitador não limita, e o teto é exatamente o que o ensaio espectral mede.
 
 
-\section{Entropia por Seção}
+\section*{6.3 Entropia por seção}
 
-A medição de entropia por seção encontrou um defeito real no caminho. A sobrecarga de três argumentos, que recebe dados, tamanho e deslocamento, mede do deslocamento até o fim do arquivo. Para uma seção isso está errado: o fim é o deslocamento mais o tamanho, e esse tamanho é o mínimo entre o declarado e o disponível, então costuma ser menor que o resto do arquivo.
-
-
-A correção foi adicionar a sobrecarga de quatro argumentos, com comprimento explícito, e deixar a de três chamá-la com o tamanho menos o deslocamento. O comportamento antigo continua coberto por um teste que compara as duas formas.
+A medição de entropia por seção exige comprimento explícito. A sobrecarga que recebe dados, tamanho e deslocamento mede do deslocamento até o fim do arquivo, o que é incorreto para uma seção: o fim da seção é o deslocamento mais o tamanho, e esse tamanho é o mínimo entre o declarado e o disponível, de modo que costuma ser menor que o resto do arquivo. A implementação mantém as duas formas, e a de quatro argumentos, com comprimento explícito, é a chamada usada pela ingestão.
 
 
-Seção sem dados brutos, que é o caso da seção de dados não inicializados, tem tamanho bruto zero e fica com entropia zero. Medir a partir do deslocamento declarado daria a entropia do material seguinte, que é a resposta errada para a pergunta feita.
+Seção sem dados brutos, que é o caso da seção de dados não inicializados, tem tamanho bruto zero e fica com entropia zero. Medir a partir do deslocamento declarado devolveria a entropia do material seguinte, que não responde à pergunta feita sobre a seção.
 
 
-\section{Guard de Alocação}
+\section*{6.4 Guard de alocação}
 
 A restrição de tempo real é transformada em código por substituição do operador global de alocação por uma versão que conta alocações dentro da janela de áudio. Um teste marca a janela e falha se o processamento de bloco alocar, inclusive em cinco minutos de reprodução sintética.
 
 
-Isso é o critério de tempo real virando código, e não revisão manual. Seis casos de teste cobrem o guard.
+Isso é o critério de tempo real virando código, e não revisão manual. Oito casos de teste cobrem o guard.
 
 
 Há uma lacuna que o guard não cobre e que precisa ser dita: ele roda sobre o núcleo e não vê o processamento de bloco do plugin, onde as mensagens MIDI são lidas. A leitura de notas é uma passagem por um buffer de mensagens já contadas, sem alocação previsível, mas isso é raciocínio e não medição. O que fecha essa lacuna é o ensaio de latência com tráfego MIDI real, que depende de host licenciado.
 
 
-\section{A Interface e os Defeitos de Layout}
+\section*{6.5 A interface e os defeitos de layout}
 
 Cinco arquivos, cada um com uma responsabilidade só, implementam a interface: a paleta com os tokens visuais extraídos do protótipo, o desenho do controle e do botão, o indicador luminoso, o rótulo com fundo, o painel de display e a grelha de bytes. Nenhum deles contém lógica de áudio.
 
@@ -675,7 +568,7 @@ Dois deles têm lição de processo. Uma caixa vazia que parece defeito deve se 
 Houve ainda três decisões de interface que deram errado na primeira tentativa e estão registradas: o método que deveria consumir o retângulo não o consome, e o layout passou a usar uma coordenada explícita; não existe modo de mistura aditivo na biblioteca, e o brilho do indicador passou a ser um gradiente radial com queda de transparência; e quebrar os controles em duas linhas não funciona, porque a altura disponível não comporta dois controles com rótulo e valor.
 
 
-\section{Correções de Documentação Industrial}
+\section*{6.6 Correções de documentação industrial}
 
 O projeto adota a regra de que documentação divergente do código é defeito, e a auditoria encontrou divergências reais. A mais visível foi o coeficiente do filtro, já descrita. Otras foram o biquad de coloração declarado no artigo sem parâmetro correspondente, a transformada rápida de Fourier listada como dependência do plugin quando existe apenas na ferramenta de medição, e a contingência de troca de biblioteca de interface que deixou de ser necessária.
 
@@ -683,39 +576,42 @@ O projeto adota a regra de que documentação divergente do código é defeito, 
 Essas correções são registradas em tabela de decisões no apêndice, e a regra que as produz é a mesma: cada alteração de comportamento altera a documentação no mesmo commit.
 
 
-\chapter{VERIFICAÇÃO E RESULTADOS}
+\section*{7 VERIFICAÇÃO E RESULTADOS}
 
-\section{Suíte de Testes Automatizados}
+\section*{7.1 Suíte de testes automatizados}
 
-A suíte de verificação reúne 153 casos em 21 conjuntos, mais 6 casos do guard de alocação. Todos os casos passam na configuração de release. A distribuição por área é a seguinte.
+A suíte de verificação reúne 196 casos em 24 conjuntos, mais 8 casos do guard de alocação. Todos os casos passam na configuração de release. A distribuição por área, conforme a execução real da suíte, é a seguinte.
 
 
-\begin{table}[H]
-\centering
-\caption{Cobertura da suíte de testes por área funcional}
-\label{tab:3}
-\begin{tabular}{p{0.31\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
-\toprule
-\textbf{Área} & \textbf{Casos} & \textbf{O que cobre} \\ \midrule
-Parser do formato PE & 14 & assinatura, limites, truncamento, número de seções, entropia por seção \\
-Entropia de Shannon & 6 & símbolo repetido, janela com deslocamento, comprimento explícito \\
-Motor granular e janelas & 21 & agendamento, dispersão, gate por nota, interpolação, janelas \\
-Filtro e limitador & 12 & corte na faixa prometida, constante, rampa, teto, reinicialização \\
-Fila e troca de material & 14 & produção e consumo, invariante de liberação, retrocesso \\
-Posição e região & 42 & mapeamento de endereço para fração, fração para endereço, ajuste à seção \\
-Rastreio de notas & 10 & sustain, acordes, nota órfã, controladores, reinicialização \\
-Cadeia completa & 7 & disco, parser, conversão, motor, filtro e limitador \\
-Ensaio espectral & 7 & atenuação de corrente contínua, banda abaixo de 20 Hz, conversão \\
-Guard de alocação & 6 & janela de áudio, liberação, alocação dentro e fora da janela \\
-\bottomrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.30\textwidth}|p{0.30\textwidth}|p{0.30\textwidth}}
+\hline
+\textbf{Área funcional} & \textbf{Casos} & \textbf{O que cobre} \\
+\hline
+Parser do formato PE & 21 & assinatura MZ e PE, limites, truncamento, número de seções, mutações por inversão de bit \\
+Entropia de Shannon & 11 & símbolo repetido, janela com deslocamento, comprimento explícito por seção \\
+Motor granular e janelas & 20 & agendamento, dispersão, gate por nota, interpolação, janelas Hann, Hamming e Blackman \\
+Filtro de corrente contínua e limitador & 14 & corte na faixa prometida, sinal constante, rampa, teto, reinicialização \\
+Fila e troca de material & 15 & produção e consumo, invariante de liberação, parâmetros atômicos, retrocesso \\
+Posição e região & 57 & mapeamento de endereço para fração e o inverso, ajuste à seção, redução a colunas, limites de faixa \\
+Transporte e visualização & 25 & reprodução, seleção de seção, estado de linha e de transporte \\
+Rastreio de notas & 10 & sustentação, acordes, nota órfã, controladores, reinicialização \\
+Cadeia completa & 9 & disco, parser, conversão, motor, filtro e limitador \\
+Ensaio espectral e conversão & 14 & atenuação de corrente contínua, banda abaixo de 20 Hz, faixa de byte normalizada \\
+Guard de alocação & 8 & janela de áudio, liberação, alocação dentro e fora da janela \\
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 3: Distribuição dos casos de teste por área funcional, conforme execução da suíte em configuração de release\par
+\label{tab:3}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026), a partir da execução da suíte de testes em configuração de release.\par}
 
-O ensaio end-to-end percorre a cadeia completa com um executável real do sistema, sem framework e sem host. O executável de teste da máquina tem duzentos quilobytes, sete seções e byte médio de 96 na seção de código, o que corresponde a um deslocamento de menos 0,245 em amostra normalizada: material que o filtro de bloqueio de corrente contínua tem o que remover e que a leitura sintética não reproduzia.
+O ensaio end-to-end percorre a cadeia completa com um executável real do sistema, sem a biblioteca de interface e sem host. O executável de teste da máquina tem duzentos quilobytes, sete seções e byte médio de 96 na seção de código, o que corresponde a um deslocamento de menos 0,245 em amostra normalizada: material que o filtro de bloqueio de corrente contínua tem o que remover e que a leitura sintética não reproduzia.
 
 
-\section{Resultado do Ensaio Espectral}
+\section*{7.2 Resultado do ensaio espectral}
 
 O ensaio de atenuação é executado e cumpre o critério. O primeiro caso compara o bin de corrente contínua da saída tratada com o mesmo bin da leitura bruta, em um executável sintético cujo conteúdo tem média muito distante de zero. A asserção exige atenuação de ao menos 40 dB, e o teste passa. O segundo caso exige que o pico abaixo de 20 Hz fique abaixo de menos 60 dBFS, e o teste passa.
 
@@ -726,21 +622,21 @@ O terceiro caso isola a cadeia: um sinal puramente constante é submetido ao fil
 O quarto a sétimo casos verificam a conversão de byte para amostra: o mapeamento do intervalo de bytes para o intervalo de menos um a mais um, o respeito ao deslocamento, a recusa de entrada degenerada e a energia mínima nas bordas da janela.
 
 
-Vale registrar uma observação de qualidade do próprio ensaio. O critério de atenuação é uma asserção de limite inferior, e um sinal cujo pico é da ordem de dez elevado a menos sete a satisfaz sem que exista som audível. Foi exatamente isso que aconteceu com o defeito do avanço por amostra, que eliminava todo o sinal enquanto o critério continuava verde. O ensaio mede a razão entre duas condições de referência e não o nível absoluto da saída, e a correção foi tornar o agendamento observável por testes próprios, e não reclamar de um critério de razão.
+O critério de atenuação é uma asserção de limite inferior, e um sinal cujo pico seja da ordem de dez elevado a menos sete a satisfaz sem que exista som audível. O ensaio mede a razão entre duas condições de referência e não o nível absoluto da saída, o que o torna insensível à perda total de sinal; a correção foi tornar o agendamento observável por testes próprios com verificação de nível absoluto, e não reformular o critério de razão.
 
 
-\section{Resultado do Ensaio de Robustez}
+\section*{7.3 Resultado do ensaio de robustez}
 
 Os dez casos de borda do plano de validação estão automatizados e passam. Cobrem arquivo vazio, arquivo de um byte, deslocamento apontando fora do arquivo, número de seções acima do limite, tamanho declarado de dados brutos maior que o disponível, seções com deslocamento fora do arquivo, assinatura MZ válida com assinatura PE ausente, tamanho de cabeçalho opcional inconsistente, entropia sobre seção sem dados e truncamento no meio de uma seção.
 
 
-Todos produzem erro tipado, sem exceção e sem falha de segmentação. O corpus de cinquenta mutações por inversão de bit, previsto no plano, entra como casos determinísticos quando o corpus existir; ele não existe ainda, e a afirmação de que a entrada malformada é rejeitada se apoia nos dez casos de borda, não em fuzzing exaustivo.
+Todos produzem erro tipado, sem exceção e sem falha de segmentação. O corpus de cinquenta mutações por inversão de bit previsto no plano foi escrito como casos determinísticos, e cada mutação declara o erro que se espera dela, de modo que uma mudança de comportamento no parser que passasse a devolver outro código quebra o ensaio. A varredura é fixa e não exaustiva: cobre os campos que o leitor consulta e não todo o espaço de entradas, pelo que a rejeição de entrada malformada está demonstrada para o corpus e não para todas as sequências de bytes possíveis.
 
 
 O portão de cobertura de ramo acima de 70\% não tem medição automática, porque a ferramenta de cobertura de ramo não está disponível no toolchain escolhido. Os testes exercitam os caminhos de erro de forma explícita, mas o número não é medido, e o texto diz isso.
 
 
-\section{Resultado do Ensaio de Latência}
+\section*{7.4 Resultado do ensaio de latência}
 
 O ensaio de latência está bloqueado e não executado. O número não existe porque exige uma estação de trabalho de áudio licenciada, e a única cópia presente na máquina de desenvolvimento não é uma instalação válida.
 
@@ -748,12 +644,12 @@ O ensaio de latência está bloqueado e não executado. O número não existe po
 O que se pode afirmar sem host é que o percentil 99 do tempo de processamento é medido em teste de núcleo, e que o guard de alocação passa. Isso cobre a fração estática do contrato de tempo real, e não cobre a fração dinâmica, que é a que o ensaio com host mediria. A distinção é mantida: o que não foi medido não é afirmado.
 
 
-\section{Resultado do Ensaio de Aceite}
+\section*{7.5 Resultado do ensaio de aceite}
 
 O ensaio de aceite está bloqueado pelo mesmo motivo. O que já foi verificado sem estação de trabalho é que o manifesto do bundle declara as categorias de instrumento e sintetizador, e que o carregamento da biblioteca do plugin foi exercitado em host real quando o plugin foi aceite em uma sessão anterior. O que falta é a telemetria de latência com tráfego real e a confirmação de que todo controlador mapeado move o parâmetro correspondente.
 
 
-\section{Defeito Conhecido e Não Corrigido}
+\section*{7.6 Defeito conhecido e não corrigido}
 
 Há um defeito conhecido, visível no aplicativo autônomo e não corrigido, que o trabalho deve reportar com honestidade.
 
@@ -764,19 +660,21 @@ Os seis parâmetros arrancam com valores que não são os padrões declarados no
 A instrumentação por escrita em arquivo de texto em três pontos estabeleceu o seguinte, em valores normalizados, que é o que o método de leitura devolve nesta biblioteca.
 
 
-\begin{table}[H]
-\centering
-\caption{Valores dos parâmetros normalizados em três pontos do arranque do aplicativo autônomo}
-\label{tab:4}
-\begin{tabular}{p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}}
-\toprule
-\textbf{Ponto} & \textbf{Tamanho de grão} & \textbf{Densidade} & \textbf{Posição} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}}
+\hline
+\textbf{Ponto} & \textbf{Tamanho de grão} & \textbf{Densidade} & \textbf{Posição} \\
+\hline
 Fim do construtor do processador & 0,393939 & 0,095477 & 0,500000 \\
 Entrada da ingestão & 1,000000 & 0,060000 & 0,688000 \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 4: Valores dos parâmetros normalizados em três pontos do arranque do aplicativo autônomo\par
+\label{tab:4}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
 Na saída do construtor os valores estão certos, que é o que o mecanismo de parâmetro deve fazer. Já à entrada da ingestão estão errados, e a ingestão não escreve parâmetros. A escrita acontece no arranque do aplicativo autônomo, entre o construtor e a primeira ingestão, sem editor e sem temporizador, o que elimina a aplicação de mudanças de controlador, que é chamada pelo temporizador do editor.
 
@@ -793,9 +691,9 @@ Descartados por leitura, todos protegidos: a fila tem índices limitados; o rast
 O que resta é leitura de memória não inicializada, que o sanetizador de endereços não vê e que o de memória veria. Como o de memória não existe para o compilador da Microsoft no Windows, fechar essa lacuna exige um depurador com pontos de observação no arranque, e não uma correção por leitura de código. O defeito não foi corrigido aqui porque mexer às cegas seria trocar um sintoma por outro.
 
 
-\chapter{DISCUSSÃO}
+\section*{8 DISCUSSÃO}
 
-\section{O Que Foi Confirmado}
+\section*{8.1 O que foi confirmado}
 
 A hipótese do trabalho se confirma nos seus três componentes verificáveis, com uma ressalva importante sobre o segundo.
 
@@ -809,7 +707,7 @@ A robustez diante de entrada malformada é confirmada nos dez casos de borda aut
 A restrição de tempo real é confirmada no núcleo: o guard de alocação passa, inclusive em cinco minutos de reprodução sintética, e a fila sem trava com ponteiro cru cobre a fronteira entre os dois domínios. A ressalva é que o guard não cobre o processamento de bloco do plugin, e a validação dinâmica está bloqueada por ausência de host licenciado.
 
 
-\section{O Que Não Foi Confirmado}
+\section*{8.2 O que não foi confirmado}
 
 A fração dinâmica do contrato de tempo real não foi medida, e o ensaio de aceite com o usuário não foi executado. Ambos estão bloqueados, não atrasados, e a diferença é registrada em todo o texto.
 
@@ -823,7 +721,7 @@ O defeito dos parâmetros que arrancam errados está aberto, com a hipótese de 
 A qualidade musical do instrumento não foi objeto de medição. O trabalho avalia contratos de engenharia, e a audibilidade do material gerado é uma afirmação qualitativa que não substitui o ensaio com ouvintes.
 
 
-\section{Decisões de Arquitetura e Seus Custos}
+\section*{8.3 Decisões de arquitetura e seus custos}
 
 Vale registrar as decisões que foram tomadas com o custo, porque elas definem o caráter do trabalho.
 
@@ -843,7 +741,7 @@ A quarta é o host de validação trocado. O plano original nomeava dois hosts c
 A quinta é o escopo. Oito vozes, seis parâmetros, Windows, dois formatos. Nada disso foi antecipado. Um instrumento com dezesseis vozes e modulação matricial seria mais impressionante e menos verificável, e a escolha foi pela verificabilidade.
 
 
-\section{Limitações}
+\section*{8.4 Limitações}
 
 As limitações do trabalho se dividem em três grupos.
 
@@ -857,7 +755,7 @@ A segunda é do escopo: apenas oito vozes, apenas janelas Hann e gaussiana, apen
 A terceira é da natureza da avaliação: a qualidade musical não foi medida com ouvintes, e a validação de usabilidade com escala SUS está prevista no plano mas não executada.
 
 
-\chapter{CONCLUSÃO}
+\section*{9 CONCLUSÃO}
 
 Este trabalho entregou um instrumento que transforma arquivos executáveis em som dentro de uma estação de trabalho de áudio, e a entrega se sustenta em três afirmações verificadas.
 
@@ -874,10 +772,10 @@ A terceira é que a disciplina de tempo real pode ser imposta por construção e
 As limitações também foram verificadas e são parte do resultado. A validação dinâmica de tempo real e o ensaio de aceite com o usuário estão bloqueados por ausência de estação de trabalho de áudio licenciada, e essa lacuna está escrita em vez de omitida. A ferramenta que detectaria leitura de memória não inicializada não existe para o compilador disponível no Windows, e por isso o defeito dos parâmetros que arrancam com valores errados fica com hipótese registrada e sem confirmação. A cobertura de ramo do parser não é medida por falta de ferramenta.
 
 
-O trabalho também produziu evidência sobre um ponto que costuma ser tratado como preferências de estilo. A separação entre domínio de interface e domínio de processamento, com fila sem trava e ponteiro cru na fronteira, não é uma declaração de intenção: é uma estrutura que os sanitizadores alcançam, e é o que permitiu que o ensaio de ponta a ponta existisse e que os dois defeitos mais caros do projeto fossem encontrados por teste e não por acaso.
+O trabalho também produziu evidência sobre um ponto que costuma ser tratado como preferências de estilo. A separação entre domínio de interface e domínio de processamento, com fila sem trava e ponteiro cru na fronteira, não é uma declaração de intenção: é uma estrutura que os sanitizadores alcançam, e é o que permitiu que o ensaio de ponta a ponta existisse e que os defeitos de maior impacto fossem encontrados por ensaio e não por acaso em sessão de uso.
 
 
-\section{Trabalhos Futuros}
+\section*{9.1 Trabalhos futuros}
 
 O primeiro caminho é o fechamento das etapas bloqueadas, que exige obter uma estação de trabalho de áudio licenciada e executar os ensaios de latência e de aceite com oito vozes reais e tráfego MIDI real. Sem esse passo, a fração dinâmica do contrato de tempo real permanece não medida.
 
@@ -894,51 +792,53 @@ O quarto é a tinta de entropia por linha na grelha, que codifica a entropia da 
 O quinto é fechar o defeito dos parâmetros que arrancam errados, o que exige um depurador com pontos de observação no arranque do aplicativo autônomo, e não nova leitura de código.
 
 
-\section{Considerações Finais}
+\section*{9.2 Considerações finais}
 
 A reflexão que o trabalho sugere é sobre o custo da disciplina. Toda a arquitetura do Opcoda é mais complicada do que o mínimo necessário para ler bytes e tocar som, e cada complicação existe porque uma regra foi escrita antes do código. A fila sem trava em vez de uma chamada direta, o núcleo separado do framework, o parser com quatro validações e erros tipados, o guard de alocação, os seis portões de qualidade: nenhum disso é necessário para produzir som, e todos são necessários para produzir som dentro do processo de outro programa, onde um erro não é um erro, é uma sessão de trabalho perdida.
 
 
-O outro lado dessa disciplina é que ela cobra. O trabalho registrou sete correções de documentação divergente do código, um coeficiente de filtro que prometia uma frequência e produzia outra, um defeito de agendamento que o critério de aceite não via, e um defeito de arranque que a ferramenta disponível não detecta. Cada um desses achados é o custo de não ter a ferramenta certa, e a lição prática é que a lista de ferramentas indisponíveis é parte do método, não uma nota de rodapé.
+O outro lado dessa disciplina é que ela cobra. O trabalho registrou correções de documentação divergente do código, entre elas um coeficiente de filtro incompatível com a frequência de corte declarada, um defeito de agendamento que o critério de aceite não detectava e um defeito de arranque que a ferramenta disponível não alcança. A lição prática é que a lista de ferramentas indisponíveis integra o método e não constitui nota de rodapé.
 
 
 A recomendação que o trabalho deixa é de método, não de ferramenta: em sistemas que precisam falhar de forma previsível, o tratamento de entrada arbitrária não é um detalhe de robustez, é a parte da arquitetura que decide se o sistema pode ser usado por alguém além de quem o escreveu. No Opcoda, essa parte ficou explícita desde o primeiro objetivo específico, e é o que permitiu que o resto do sistema evoluísse sem medo.
 
 
-\apendices
+\section*{APÊNDICES}
 
-\section{APÊNDICE A ,  Códigos de Erro do Parser e Sua Origem}
+\section*{APÊNDICE A ,  Códigos de erro do parser e sua origem}
 
-\begin{table}[H]
-\centering
-\caption{Códigos de erro tipados devolvidos pela ingestão e a condição que os produz}
-\label{tab:5}
-\begin{tabular}{p{0.31\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
-\toprule
-\textbf{Código} & \textbf{Condição detectada} & \textbf{Onde é verificado} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.30\textwidth}|p{0.30\textwidth}|p{0.30\textwidth}}
+\hline
+\textbf{Código} & \textbf{Condição detectada} & \textbf{Onde é verificado} \\
+\hline
 E\_BAD\_MZ & Assinatura MZ ausente nos dois primeiros bytes & Primeiro teste do parser \\
 E\_BAD\_PE & Assinatura PE ausente no deslocamento declarado & Segundo teste do parser \\
 E\_TRUNCATED & Arquivo menor que o deslocamento do cabeçalho PE & Caso de borda \\
 E\_OOB & Deslocamento mais tamanho maior que o tamanho do arquivo & Caso de borda \\
 E\_TOO\_MANY\_SECTIONS & Número de seções acima do limite de 96 & Caso de borda \\
 E\_SOURCE\_MISSING & Arquivo gravado no estado do host não existe mais & Teste de estado \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 5: Códigos de erro tipados devolvidos pela ingestão e a condição que os produz\par
+\label{tab:5}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
 Nenhum desses códigos propaga exceção através da interface binária do plugin. A entrada inválida sempre resulta em retorno de erro, e o material que estava em reprodução antes continua tocando.
 
 
-\section{APÊNDICE B ,  Matriz de Rastreabilidade Entre Objetivo, Portão e Ensaio}
+\section*{APÊNDICE B ,  Matriz de rastreabilidade entre objetivo, portão e ensaio}
 
-\begin{table}[H]
-\centering
-\caption{Rastreabilidade entre objetivos específicos, portões de qualidade e ensaios}
-\label{tab:6}
-\begin{tabular}{p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}p{0.23\textwidth}}
-\toprule
-\textbf{Objetivo} & \textbf{Portão} & \textbf{Ensaio} & \textbf{Situação} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}|p{0.23\textwidth}}
+\hline
+\textbf{Objetivo} & \textbf{Portão} & \textbf{Ensaio} & \textbf{Situação} \\
+\hline
 OE1, parser com verificação de limites & B, D & T1, T3 & executado \\
 OE2, ingestão somente leitura com erros tipados & D & T3 & executado \\
 OE3, fila sem trava entre interface e motor & C & T2 & núcleo verificado, ensaio com host bloqueado \\
@@ -948,20 +848,22 @@ OE6, condicionamento com filtro e limitador & B & T1 & executado \\
 OE7, interface com grelha e parâmetros automatizáveis & E & T4 & bloqueado \\
 OE8, isolamento entre interface e motor & C & T2 & guard de alocação verde, ensaio com host bloqueado \\
 OE9, mapeamento MIDI nativo & B, E & T4 & núcleo verificado, ensaio com host bloqueado \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 6: Rastreabilidade entre objetivos específicos, portões de qualidade e ensaios\par
+\label{tab:6}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
-\section{APÊNDICE C ,  Divergências de Documentação Corrigidas}
+\section*{APÊNDICE C ,  Divergências de documentação corrigidas}
 
-\begin{table}[H]
-\centering
-\caption{Divergências entre documentação e código, com a situação de cada uma}
-\label{tab:7}
-\begin{tabular}{p{0.31\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
-\toprule
-\textbf{Onde} & \textbf{O que estava errado} & \textbf{Situação} \\ \midrule
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.30\textwidth}|p{0.30\textwidth}|p{0.30\textwidth}}
+\hline
+\textbf{Onde} & \textbf{O que estava errado} & \textbf{Situação} \\
+\hline
 Fundamentação, artigo, objetivos e arquitetura & Coeficiente do filtro declarado de forma incompatível com a frequência de corte prometida & corrigido nos quatro lugares, com a relação explícita \\
 Artigo, seção de parâmetros & Biquad de coloração descrito sem parâmetro correspondente & pendente de decisão entre estágio fixo e sétimo parâmetro \\
 Objetivos e arquitetura & Biquad ausente da lista de etapas & dependente da decisão acima \\
@@ -970,32 +872,43 @@ Cronograma & Contingência de troca de biblioteca de interface & desativada, a b
 Manifesto do bundle & Categoria de instrumento incorreta & corrigida, o bundle declara instrumento e sintetizador \\
 Processador de áudio & Barramento de entrada estéreo declarado e nunca usado & removido, instrumento sem entrada \\
 Estrutura da imagem do PE & Campo de entropia por seção declarado e nunca preenchido & corrigido, medido na ingestão \\
-\bottomrule
+\hline
 \end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\end{center}
+\noindent Tabela 7: Divergências entre documentação e código, com a situação de cada uma\par
+\label{tab:7}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
-\section{APÊNDICE D ,  Estrutura do Código e Volume Verificado}
+\section*{APÊNDICE D ,  Estrutura do código e volume verificado}
 
-\begin{table}[H]
-\centering
-\caption{Distribuição do código verificado do projeto}
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.30\textwidth}|p{0.30\textwidth}|p{0.30\textwidth}}
+\hline
+\textbf{Diretório} & \textbf{Linhas} & \textbf{Responsabilidade} \\
+\hline
+Núcleo, código C++20 & 2.382 & parser, conversão, entropia, motor granular, filtro, limitador, fila, rastreador de notas \\
+Adaptador, código com framework & 4.965 & processador de áudio, formatos, interface de três faixas, grelha de bytes \\
+Testes & 3.958 & 196 casos em 24 conjuntos, mais 8 do guard de alocação \\
+\hline
+\end{tabular}
+\end{center}
+\noindent Tabela 8: Distribuição do código verificado do projeto\par
 \label{tab:8}
-\begin{tabular}{p{0.31\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
-\toprule
-\textbf{Diretório} & \textbf{Linhas} & \textbf{Responsabilidade} \\ \midrule
-Núcleo, código C++20 & 1770 & parser, conversão, entropia, motor granular, filtro, limitador, fila, rastreador de notas \\
-Adaptador, código com framework & 3187 & processador de áudio, formatos, interface de três faixas, grelha de bytes \\
-Testes & 2551 & 153 casos em 21 conjuntos, mais 6 do guard de alocação \\
-\bottomrule
-\end{tabular}
-\fonte{Elaborado pelos autores (2026).}
-\end{table}
+\vspace{2pt}{\footnotesize\noindent Elaborado pelos autores (2026).\par}
 
 O volume de teste é maior que o do núcleo, e isso é deliberado: no núcleo, quase toda linha executável decide se um arquivo arbitrário é aceito ou rejeitado, e a verificação correspondente é a parte que não se negocia.
 
 
 
-\postextual
+% ABNT 14724 pede referencias com espaco simples e corpo menor que o texto.
+% O abntex2-alf usa 0.5 baselineskip entre entradas, o que empurra a ultima
+% para uma pagina extra num artigo com limite rigido de paginas.
+\begingroup
+\small
+\setlength{\parskip}{0pt}
+\bibliographystyle{abntex2-alf}
 \bibliography{referencias}
+\endgroup
 \end{document}

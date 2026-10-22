@@ -4,6 +4,10 @@ Este documento registra as decisões de implementação que não estão em
 `06-metodologia-arquitetura.md`, que descreve a arquitetura proposta na fase de
 escrita do TG. Aqui está o que o código faz de fato.
 
+O mapa com a linha exata de cada coisa está em `docs/atlas/`, com os
+diagramas de contexto, contentores e fluxo de dados, e com as tabelas de
+entradas e saídas. Onde este documento e o código divergem, o código manda.
+
 ## Divisão em camadas
 
 ```
@@ -181,25 +185,48 @@ Medir a partir do offset declarado daria a entropia do material seguinte.
 
 ## A interface
 
-Cinco arquivos, cada um com uma responsabilidade só:
+Cada arquivo tem uma responsabilidade só:
 
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `palette.h` | os tokens do `design/DESIGN-SYSTEM.md`, em hex único |
-| `look_and_feel.h` | desenho do knob e do botão |
+| `look_and_feel.h` | desenho do knob e do botão, ambos em `juce::Path` |
+| `animator.h` | meia-vida exponencial, a única forma de interpolação da interface |
 | `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
 | `display_panel.h` | fundo escuro e grade de 24 px |
-| `hex_grid.h/.cpp` | grelha de bytes: endereços, 16 colunas e coluna ASCII |
+| `byte_display.h/.cpp` | as três vistas do material, a caret e a animação |
+| `hex_grid.h/.cpp` | a vista de bytes: endereços, 16 colunas e coluna ASCII |
 | `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
-| `assets.h` | peças físicas do asset harness, embutidas e carregadas uma vez |
-| `plugin_editor.h/.cpp` | as três faixas e o layout |
+| `plugin_editor.h/.cpp` | as faixas, o teclado virtual e o layout |
 
-O editor tem três faixas: header claro, display escuro, painel de parâmetros. É a
+**Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
+`Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
+`knob-md.png` eram 186×192 píxeis para pintar um disco de 62, e `button-large.png`
+obrigava a desenhar a peça quadrada ao lado do texto porque esticar um bisel de 2 px
+o deixava com 1 px de um lado e 4 px do outro. Com `Path` o corpo escala, o bisel
+tem a espessura que se pede e não há descodificador de PNG no arranque.
+
+**O `HexGrid` continua a ser um Component independente, dentro do `ByteDisplay`.**
+A geometria dele tem três capturas atrás e um redesenho seria o caminho de perder as
+três. O `ByteDisplay` é o dono do modo e pinta por cima a cabeça de reprodução, que
+é a única peça que o `HexGrid` não conhece.
+
+O editor tem três faixas de conteúdo — header claro, display escuro, painel de
+parâmetros — mais a fileira de abas de módulo e a faixa do teclado ao fundo. É a
 convenção do Ableton, e é também a resposta ao pedido de brilho: halo laranja
 sobre superfície clara dá 2,4:1 e desaparece, então toda a energia de glow fica na
 região escura.
+
+**O teclado virtual não atravessa o `MidiBuffer`.** O `MidiKeyboardComponent`
+escreve num `MidiKeyboardState` que o editor escuta, e o listener empurra um
+`NoteTracker::Event` para uma `SpscRing` de 64 lugares; o callback drena-a antes
+de ler os parâmetros e entrega os eventos à mesma `NoteTracker` do MIDI do host.
+A alternativa canónica do JUCE — `MidiMessageCollector` + `processNextMidiBuffer`
+— faz lock e pode alocar dentro do callback, que é o que o guard de alocação
+proíbe. Com a fila, o caminho de áudio continua sem trava e sem alocação, e a
+nota do teclado e a do host são indistinguíveis para o motor.
 
 **Os knobs são `juce::Slider` de verdade, não desenho customizado.** Isso não é
 padrão, é decisão: `Slider` entrega foco por teclado, ajuste com setas e
@@ -208,9 +235,16 @@ padrão, é decisão: `Slider` entrega foco por teclado, ajuste com setas e
 `SliderParameterAttachment` cuida do undo por parâmetro, e por isso exige a
 referência do `RangedAudioParameter`, não a da árvore inteira.
 
-O nome accessible de cada knob é a descrição completa em português
-("Tamanho de grao, em milissegundos") e não o rótulo curto do mock ("SIZE"), que
-seria inútil para quem navega por leitor de tela.
+O nome accessible de cada knob é a descrição completa em inglês
+("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
+seria inútil para quem navega por leitor de tela. Os **41 parâmetros** vivem em
+sete módulos (GRAIN, ENVELOPE, FILTER, MOD, CLOUD, OUT, KEYS), com uma faixa
+visível de cada vez e páginas dentro do módulo quando os controles não cabem —
+o mínimo de 480×434 não comporta mais linhas; sete abas de 52 px mais 4 de vão
+dão 388 px e cabem nos 480. Os knobs de choice (window, tipos de filtro,
+inclinação do filtro, alvo, forma e sincronismo do LFO, escala e tônica) usam o
+mesmo `SliderParameterAttachment` — o JUCE entrega intervalo 0..N-1 com passo 1
+para `AudioParameterChoice` — e só o texto do valor muda para o rótulo.
 
 ### Três decisões que deram errado na primeira tentativa
 
@@ -226,10 +260,11 @@ queda de alpha sobre fundo escuro dá o mesmo resultado de uma luz que se dissol
 no fundo.
 
 **Quebrar os knobs em duas linhas não funciona.** A altura disponível depois do
-display e do título do módulo não comporta dois knobs com rótulo e valor, e eles
-despencam para poucos pixels. Os seis ficam sempre em uma linha, como no mock, e
+display e das abas não comporta dois knobs com rótulo e valor, e eles
+despencam para poucos pixels. Cada módulo fica sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
-sem precisar de um segundo layout.
+sem precisar de um segundo layout. Por isso as abas trocam a faixa em vez de
+empilhar: cinco fileiras pediriam ~700 px e o mínimo continua 480x434.
 
 ### O display F008
 
@@ -381,7 +416,7 @@ cabeça de leitura.
 
 ### Defeito observado que não é desta alteração
 
-**Os seis parâmetros arrancam com valores que não são os defaults declarados.**
+**Alguns parâmetros arrancam com valores que não são os defaults declarados.**
 Na captura de ecrã do Standalone, SIZE a 1 ms, DENSITY a 28.756 /s, POSITION a
 6.8 % — e os valores mudam entre execuções. Foi confirmado em `c8006ae`,
 compilado num worktree separado: os mesmos valores, logo não vem da grelha.
@@ -430,6 +465,13 @@ nomeia um *Arturia MiniLab mkII* como entrada MIDI —, ou automação do host.
 Não foi reproduzido numa sessão controlada com material, porque a automação do
 diálogo de ficheiro não é fiável o suficiente para servir de teste.
 
+**A reprodução controlada passou a ser possível em 19/10/2026**, com o host
+licenciado: a sessão pode ter automação real, CCs reais e um projeto guardado e
+reaberto, que é precisamente o que faltava para separar as duas hipóteses. A
+hipótese dos CCs testa-se com o mesmo controlador ligado e o mapeamento ativo; a
+do host, com automação escrita no projeto. Se nenhuma reproduzir, o registo de
+quem escreveu os valores continua aberto e o contorno abaixo continua a valer.
+
 **Contorno prático, e é real:** apagar `%APPDATA%\Opcoda\Opcoda.settings` traz
 os defaults de volta. É o que o passo 2 demonstra e o que qualquer pessoa pode
 fazer semesperar por uma correção.
@@ -455,25 +497,31 @@ casa decimal — PITCH e VOLUME — o `if` entra e o formato já estava certo; e
 dois não se mexeram. O helper existe para a razão ficar escrita uma vez em vez
 de seis.
 
-### Peças físicas do asset harness
+### Peças desenhadas em código
 
-**O harness não gera texto.** Todo o texto — rótulos, valores, escalas — é
-desenhado em código, porque texto gerado por modelo sai com letra errada e não
-há como corrigir sem regenerar.
+**Não há mais harness, nem foto, nem sprite.** Ver a secção "A interface" acima para
+o porquê. Fica escrito o que a regra do harness chegou a ensinar e que continua
+valendo: **o harness não gerava texto**, e todo o texto — rótulos, valores, escalas —
+é desenhado em código, porque texto gerado por modelo sai com letra errada e não há
+como corrigir sem regenerar. A regra passou a aplicar-se a tudo, não só ao texto.
 
-**O corpo do knob não é rodado.** É uma fotografia top-down com a luz de estúdio
-assente; rodar o PNG faria o brilho andar com o knob, e o realce passaria a
-descer de manhã a norte. O `README` do harness diz o mesmo: a rotação é do
-plugin, via filme de imagens, e `createSpriteSheet` está reservado e não
-implementado. O indicador do valor é o arco e o ponteiro, ambos em código.
+**O corpo do knob são três círculos.** Aro serrilhado, face recuada e ponto de
+origem. São eles que separam "disco" de "botão rotativo": o aro lê-se como pega, a
+face mais escura recua, e o ponto no centro marca a origem, que é o que se vê num
+knob real. A luz vem de cima e da esquerda e o gradiente é diagonal, não radial a
+partir do centro — um radial simétrico daria um disco sem direção, e sem direção não
+se lê como superfície redonda.
 
-**O botão é desenhado como peça quadrada mais texto ao lado**, não esticado. A
-peça é um quadrado e o `LOAD` é uma faixa; esticar um PNG deformaria o bisel de
-2 px para 1 px de um lado e 4 px do outro.
+**O serrilhado é um `Path` memorizado por posição**, não 36 chamadas de `drawLine`
+por knob. São seis knobs a 60 Hz, e 216 chamadas de linha por quadro para desenhar
+textura fixa é o trabalho que o `Path` existe para evitar. A comparação do cache é
+dos dois valores e não só do raio: o mesmo raio com o centro noutro sítio é um
+serrilhado na posição errada.
 
-**O PNG não substitui o `juce::Slider`.** O corpo é imagem; quem opera o controle
-continua a ser o `Slider`, e é ele que tem o foco por teclado e o
-`AccessibilityHandler`. Um PNG não tem nenhum dos dois.
+**O estado ligado do botão não é só cor.** `#ff9a00` sobre `#c2c6c9` dá 2,4:1, e
+sem segunda pista o botão de transporte falha o 1.4.3. O ligado ganha uma barra de
+1 px à esquerda, e o `PLAY`/`STOP` troca a palavra — que é a pista que funciona sem
+ver cor.
 
 ### O que não está feito
 
@@ -596,6 +644,98 @@ O custo é a latência do timer, cerca de 50 ms. Em troca o parâmetro continua 
 ser a fonte única da verdade: o host é notificado, o knob segue, e o estado do
 projeto fica certo sem caminho paralelo. Os dois valores fazem parte dos
 `NoteTracker` para poderem ser testados sem JUCE.
+
+### A matriz de modulação não é parâmetro
+
+As oito rotas da F020 vivem no estado (`MODMATRIX`, ao lado dos `PARAM`), e não
+na tabela. A consequência é a que a constitution declara: **o host não as vê,
+não as automatiza, e elas viajam no preset e no `.opcoda`** porque o XML é o
+mesmo. Como parâmetros custariam 24 (8 × fonte/destino/amount) e a tabela
+passaria de 41; o desenho para as tornar automatizáveis está em `docs/19`.
+
+Três caminhos foram considerados para atravessar a fronteira das threads:
+
+1. ler a árvore no callback — proibido: `ValueTree` bloqueia e aloca;
+2. um `SpinLock` com o callback à espera — proibido: o callback pode esperar;
+3. **24 inteiros atómicos mais um contador de geração** — escolhido.
+
+A thread de interface escreve as 24 palavras e só depois sobe a geração
+(`release`). A thread de áudio lê a geração (`acquire`) e, se mudou, copia as
+palavras para um snapshot. Um bloco que apanhe a troca fica com a matriz antiga
+inteira ou a nova inteira, nunca metade de cada, porque a geração só sobe depois
+das palavras. A cópia é de 24 inteiros, sem alocação e sem bloqueio.
+
+`amount` viaja em milésimos, um inteiro. A conversão é `toArray`/`fromArray`, a
+mesma que o ensaio de ida e volta exercita; rota com fonte ou destino inválido é
+lida como rota vazia, e `amount` fora de faixa é recortado — estado corrompido
+abre em silêncio.
+
+A matriz é aplicada a uma **cópia** dos parâmetros por bloco. Sem a cópia, a
+soma das rotas acumulava de bloco para bloco e o corte derivava; com ela, cada
+bloco parte do valor declarado e recebe a soma uma vez.
+
+### O filtro com caráter
+
+O filtro 1 ganhou quatro parâmetros, e cada um tem uma decisão que não é óbvia:
+
+- **slope 24 dB** acrescenta um segundo biquad em série com **estado próprio**.
+  Chamar `process` duas vezes no mesmo biquad não é uma cascata: a segunda
+  chamada reutiliza a memória do estágio e a resposta deixa de ser a de dois
+  filtros idênticos. O `filterA2_` existe por isso.
+- **drive** é `tanh(x·g)/g`, e não `tanh(x·g)/tanh(g)`. A segunda normaliza para
+  escala cheia e levanta 12 dB o material baixo; a primeira garante
+  `|tanh(g·x)/g| ≤ |x|`, e o pico nunca sobe. Em `drive = 0` o caminho é
+  desligado, não saturado: um `tanh` a 0 dB já comprime.
+- **keytrack** e **env** movem o corte em oitavas, antes do `makeBiquadCoeffs`.
+  O envelope é o nível do bloco anterior: o gate fecha no fim do bloco, e usar o
+  valor corrente exigiria recalcular coeficientes por amostra.
+- os coeficientes continuam a ser recalculados **no máximo uma vez por bloco**,
+  e a comparação usa o corte já modulado — comparar o cru recalcularia a cada
+  bloco com o LFO ligado, mesmo parado.
+
+### As curvas do envelope
+
+Com as três curvas a zero, o motor usa o laço antigo, amostra a amostra. Não é
+preguiça: os ensaios do ADSR comparam com `EXPECT_FLOAT_EQ` (4 ULP), e trocar a
+aritmética por `pow` mudaria os últimos bits de todos eles. Com qualquer curva
+não nula, a fase do estágio sobe a `2^(3·curva)`:
+
+| curva | expoente | forma |
+| --- | --- | --- |
+| −1 | 1/8 | sobe depressa, aproxima devagar |
+| 0 | 1 | rampa linear |
+| +1 | 8 | fica baixo, fecha depressa |
+
+O sinal do expoente estava trocado na primeira versão: a frase da spec pedia
+"rápido no início em −1" e a fórmula ao lado dela, `2^(-3·curva)`, dava o
+contrário. Vale a frase, que é a convenção do Serum que a `docs/19` declara, e a
+fórmula passou a `2^(+3·curva)`.
+
+### A nuvem
+
+Três parâmetros, todos aplicados no nascimento do grão, nenhum no caminho
+quente:
+
+- **`cloudsize`** sorteia um atraso uniforme em `[0, 0,5 s]` e o grão ocupa o
+  slot **sem escrever** enquanto espera. O que resta do atraso passa para o
+  bloco seguinte, e o grão começa no meio do bloco quando o atraso acaba ali —
+  não no início do bloco, que seria quantizar a nuvem ao tamanho do bloco.
+- **`pitchspread`** soma um desvio simétrico ao detune antes da razão de
+  semitons.
+- **`grainjit`** sorteia um fator em `[0,5×, 1,5×]` e recorta a 1–100 ms. A
+  janela **não é reconstruída por grão**: a tabela é uma por bloco e os oito
+  slots partilham-na, por isso o índice é escalado por
+  `activeWindowLength / grainLength`. Com jitter 0 esse fator é exatamente 1,0
+  e o índice é o de antes.
+
+**Nenhum dos três sorteia quando está a zero.** Um sorteio a mais mudaria a
+sequência do gerador e a saída com os knobs a zero deixaria de reproduzir a
+anterior — que é o critério de aceite da F021, verificado comparando zeros
+explícitos com os defaults.
+
+A semente continua fixa (`kDefaultSeed`). Semear com o relógio em produção
+daria uma nuvem diferente em cada corrida e quebraria a reprodutibilidade de T1
+e T2; `setSeed()` fica disponível para quem queira variar as tomadas.
 
 ### A lacuna do teste de tempo real
 

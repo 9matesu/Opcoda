@@ -133,3 +133,58 @@ TEST(NoteTracker, ResetClearsEverything) {
     EXPECT_FLOAT_EQ(tracker.controller(1), 0.0f);
     EXPECT_FALSE(tracker.controllersChanged());
 }
+
+TEST(NoteTracker, LastNoteWinsThenFallsBack) {
+    NoteTracker tracker;
+    tracker.handle(noteOn(60));
+    EXPECT_EQ(tracker.activeNote(), 60);
+    tracker.handle(noteOn(64));
+    tracker.handle(noteOn(67));
+    EXPECT_EQ(tracker.activeNote(), 67);
+
+    tracker.handle(noteOff(67));
+    EXPECT_EQ(tracker.activeNote(), 64);
+    tracker.handle(noteOff(64));
+    EXPECT_EQ(tracker.activeNote(), 60);
+    tracker.handle(noteOff(60));
+    EXPECT_FALSE(tracker.sounding());
+}
+
+TEST(NoteTracker, RetriggerDoesNotDuplicateOnTheStack) {
+    NoteTracker tracker;
+    tracker.handle(noteOn(60));
+    tracker.handle(noteOn(64));
+    tracker.handle(noteOn(60));
+    EXPECT_EQ(tracker.activeNote(), 60);
+
+    // Se o retrigger tivesse empilhado 60 duas vezes, largar a ultima tecla
+    // devolveria 60 outra vez em vez de 64.
+    tracker.handle(noteOff(60));
+    EXPECT_EQ(tracker.activeNote(), 64);
+}
+
+TEST(NoteTracker, SustainKeepsTheActiveNote) {
+    NoteTracker tracker;
+    tracker.handle(noteOn(60));
+    tracker.handle(noteOn(67));
+    tracker.handle(sustain(true));
+    tracker.handle(noteOff(67));
+
+    // A tecla saiu, mas o pedal segura a nota: o som continua e a altura fica.
+    EXPECT_TRUE(tracker.sounding());
+    EXPECT_EQ(tracker.activeNote(), 67);
+
+    tracker.handle(sustain(false));
+    EXPECT_TRUE(tracker.sounding());
+    EXPECT_EQ(tracker.activeNote(), 60);
+}
+
+TEST(NoteTracker, AllNotesOffResetsTheStack) {
+    NoteTracker tracker;
+    tracker.handle(noteOn(60));
+    tracker.handle(noteOn(72));
+    tracker.handle(allNotesOff());
+
+    EXPECT_FALSE(tracker.sounding());
+    EXPECT_EQ(tracker.activeNote(), 60);
+}

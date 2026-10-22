@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Têmpera Simulada na Mochila — Opcoda (Apresentação Enxuta)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F4F5F6;
+      --surface: #FFFFFF;
+      --text: #121518;
+      --text-muted: #5A6065;
+      --border: #D8DCDE;
+      --border-dark: #121518;
+      --accent: #FF9A00;
+      --highlight-bg: #FFFDF9;
+      --dark-box: #0E1013;
+      --dark-text: #E5E9EC;
+      --font-sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --font-mono: "JetBrains Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: #1A1D20;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #deck {
+      position: relative;
+      width: 96vw;
+      max-width: 1400px;
+      aspect-ratio: 16 / 9;
+      background-color: var(--bg);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 48px 68px 36px 68px;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      background-color: var(--bg);
+    }
+
+    .slide.active { display: flex; }
+
+    .slide-header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: baseline;
+      border-bottom: 2px solid var(--border-dark);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+      gap: 20px;
+    }
+
+    .slide-number {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .slide-section-tag {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+    }
+
+    .slide-title {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px 24px;
+    }
+
+    .card.highlight {
+      border: 2px solid var(--accent);
+      background-color: var(--highlight-bg);
+    }
+
+    .topics-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .topic-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      font-size: 25px;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .topic-bullet {
+      flex-shrink: 0;
+      width: 10px;
+      height: 10px;
+      background-color: var(--accent);
+      margin-top: 12px;
+    }
+
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .slide-footer-left { font-family: var(--font-mono); }
+
+    #nav-controls {
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+      opacity: 0.3;
+      transition: opacity 0.2s;
+    }
+
+    #deck:hover #nav-controls { opacity: 1; }
+
+    .nav-btn {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+
+    .nav-btn:hover { background-color: var(--accent); color: #000; }
+
+    #kb-hint {
+      position: absolute;
+      bottom: -32px;
+      font-size: 13px;
+      color: #8E98A1;
+      font-family: var(--font-mono);
+    }
+
+    @media print {
+      body { background-color: transparent !important; }
+      #deck { width: 100% !important; max-width: none !important; box-shadow: none !important; }
+      .slide { display: flex !important; page-break-after: always; height: 100vh !important; }
+      #nav-controls, #kb-hint { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="deck">
+
+    <!-- 01 — CAPA -->
+    <div class="slide active" id="slide-1">
+      <div class="slide-header">
+        <span class="slide-number">01</span>
+        <span class="slide-section-tag">FATEC Cruzeiro · Programação Linear</span>
+        <span class="slide-speaker">5º Semestre ADS</span>
+      </div>
+      <div class="slide-body" style="gap: 24px;">
+        <div style="font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent);">
+          Trabalho Acadêmico de Otimização · Projeto Opcoda
+        </div>
+        <h1 class="slide-title" style="font-size: 48px; line-height: 1.1; margin-bottom: 4px;">
+          Aplicação de Têmpera Simulada<br>no Problema da Mochila
+        </h1>
+        <p style="font-size: 26px; color: var(--text-muted);">
+          Uma aplicação experimental no contexto do Opcoda
+        </p>
+        <div style="margin-top: 24px; padding: 20px 24px; background: var(--surface); border-left: 4px solid var(--accent); max-width: 650px;">
+          <div style="font-size: 24px; font-weight: 700;">Mateus Costa · Rafael Elisei</div>
+          <div style="font-size: 16px; color: var(--text-muted); margin-top: 4px;">
+            5º semestre · Análise e Desenvolvimento de Sistemas · FATEC Cruzeiro
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">OPCODA · TÊMPERA SIMULADA NA MOCHILA</span>
+        <span>01 / 13</span>
+      </div>
+    </div>
+
+    <!-- 02 — OPCODA -->
+    <div class="slide" id="slide-2">
+      <div class="slide-header">
+        <span class="slide-number">02</span>
+        <span class="slide-section-tag">Fundamentação · Contexto</span>
+        <span class="slide-speaker">Mateus Costa</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">O que é o Opcoda?</h2>
+        <ul class="topics-list" style="margin-bottom: 40px;">
+          <li class="topic-item"><span class="topic-bullet"></span><span>Instrumento virtual experimental em tempo real</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Converte dados de arquivos executáveis (.exe) em material sonoro</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Utiliza síntese granular como etapa de processamento acústico</span></li>
+        </ul>
+        <div style="display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap;">
+          <div class="card" style="font-weight: 700; font-size: 20px; padding: 18px 28px;">.EXE</div>
+          <span style="color: var(--accent); font-size: 28px; font-weight: 700;">→</span>
+          <div class="card" style="font-weight: 700; font-size: 20px; padding: 18px 28px;">BYTES</div>
+          <span style="color: var(--accent); font-size: 28px; font-weight: 700;">→</span>
+          <div class="card" style="font-weight: 700; font-size: 20px; padding: 18px 28px;">BLOCOS</div>
+          <span style="color: var(--accent); font-size: 28px; font-weight: 700;">→</span>
+          <div class="card" style="font-weight: 700; font-size: 20px; padding: 18px 28px;">GRÃOS</div>
+          <span style="color: var(--accent); font-size: 28px; font-weight: 700;">→</span>
+          <div class="card highlight" style="font-weight: 700; font-size: 20px; padding: 18px 28px; color: var(--accent);">SOM</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">PIPELINE DE PROCESSAMENTO</span>
+        <span>02 / 13</span>
+      </div>
+    </div>
+
+    <!-- 03 — O PROBLEMA -->
+    <div class="slide" id="slide-3">
+      <div class="slide-header">
+        <span class="slide-number">03</span>
+        <span class="slide-section-tag">Motivação · O Problema</span>
+        <span class="slide-speaker">Mateus Costa</span>
+      </div>
+      <div class="slide-body" style="gap: 16px;">
+        <h2 class="slide-title">Onde entra a otimização?</h2>
+        <div class="card" style="border-left: 4px solid var(--accent); padding: 22px 28px; font-size: 26px; font-weight: 500;">
+          O arquivo gera muitos blocos de dados.
+        </div>
+        <div class="card" style="border-left: 4px solid var(--accent); padding: 22px 28px; font-size: 26px; font-weight: 500;">
+          Nem todos são interessantes para a síntese sonora.
+        </div>
+        <div class="card" style="border-left: 4px solid var(--accent); padding: 22px 28px; font-size: 26px; font-weight: 500;">
+          Existe uma capacidade limitada de processamento e tempo.
+        </div>
+        <div class="card highlight" style="border-left: 6px solid var(--accent); padding: 22px 28px; font-size: 28px; font-weight: 700; color: var(--accent);">
+          Precisamos escolher os melhores blocos.
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">RESTRIÇÃO E SELEÇÃO ÓTIMA</span>
+        <span>03 / 13</span>
+      </div>
+    </div>
+
+    <!-- 04 — DO BYTE AO ITEM -->
+    <div class="slide" id="slide-4">
+      <div class="slide-header">
+        <span class="slide-number">04</span>
+        <span class="slide-section-tag">Conexão Intuitiva</span>
+        <span class="slide-speaker">Mateus Costa</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Do byte ao item</h2>
+        <div class="card" style="background: var(--dark-box); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 20px; font-weight: 700; margin-bottom: 16px;">
+          ARQUIVO .EXE   →   [ Bloco A ]  [ Bloco B ]  [ Bloco C ]  [ Bloco D ]  [ Bloco E ]
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-family: var(--font-mono); font-size: 18px;">
+          <div class="card highlight" style="padding: 12px 20px; color: var(--accent); font-weight: 700;">
+            BLOCO A &nbsp;&nbsp; █████████████ &nbsp;&nbsp; → &nbsp; interessante (alto valor)
+          </div>
+          <div class="card" style="padding: 12px 20px; color: var(--text-muted);">
+            BLOCO B &nbsp;&nbsp; ███ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → &nbsp; pouco relevante
+          </div>
+          <div class="card highlight" style="padding: 12px 20px; color: var(--accent); font-weight: 700;">
+            BLOCO C &nbsp;&nbsp; ████████████████ &nbsp; → &nbsp; interessante (alto valor)
+          </div>
+          <div class="card" style="padding: 12px 20px; color: var(--text-muted);">
+            BLOCO D &nbsp;&nbsp; ██ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → &nbsp; pouco relevante
+          </div>
+          <div class="card highlight" style="padding: 12px 20px; color: var(--accent); font-weight: 700;">
+            BLOCO E &nbsp;&nbsp; ███████████ &nbsp;&nbsp;&nbsp;&nbsp; → &nbsp; interessante (alto valor)
+          </div>
+        </div>
+        <div class="card" style="margin-top: 14px; text-align: center; border: 2px solid var(--text); font-size: 22px; font-weight: 700; color: var(--accent);">
+          TÊMPERA SIMULADA SELECIONA: &nbsp; BLOCO A + BLOCO C + BLOCO E
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">RELEVÂNCIA SONORA COMO VALOR</span>
+        <span>04 / 13</span>
+      </div>
+    </div>
+
+    <!-- 05 — PROBLEMA DA MOCHILA -->
+    <div class="slide" id="slide-5">
+      <div class="slide-header">
+        <span class="slide-number">05</span>
+        <span class="slide-section-tag">Modelagem · Analogia</span>
+        <span class="slide-speaker">Mateus Costa</span>
+      </div>
+      <div class="slide-body" style="align-items: center; justify-content: center; text-align: center;">
+        <h2 class="slide-title">Problema da Mochila</h2>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px;">BLOCOS CANDIDATOS:</div>
+        <div style="display: flex; gap: 16px; justify-content: center; margin-bottom: 20px;">
+          <div class="card highlight" style="font-size: 22px; font-weight: 700; width: 140px;">BLOCO A</div>
+          <div class="card" style="font-size: 22px; font-weight: 700; width: 140px;">BLOCO B</div>
+          <div class="card highlight" style="font-size: 22px; font-weight: 700; width: 140px;">BLOCO C</div>
+          <div class="card" style="font-size: 22px; font-weight: 700; width: 140px;">BLOCO D</div>
+          <div class="card highlight" style="font-size: 22px; font-weight: 700; width: 140px;">BLOCO E</div>
+        </div>
+        <div style="font-size: 36px; color: var(--accent); font-weight: 700; margin-bottom: 16px;">↓</div>
+        <div class="card highlight" style="padding: 24px 48px; border: 2px solid var(--accent); max-width: 750px;">
+          <div style="font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">MOCHILA (CAPACIDADE LIMITADA = C)</div>
+          <div style="font-size: 32px; font-weight: 700; color: var(--accent);">[ &nbsp; A &nbsp; · &nbsp; C &nbsp; · &nbsp; E &nbsp; ]</div>
+        </div>
+        <div style="margin-top: 28px; font-size: 26px; font-weight: 700;">
+          “Selecionar blocos de maior relevância dentro de uma capacidade limitada.”
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">KNAPSACK PROBLEM 0-1</span>
+        <span>05 / 13</span>
+      </div>
+    </div>
+
+    <!-- 06 — REPRESENTAÇÃO DA SOLUÇÃO -->
+    <div class="slide" id="slide-6">
+      <div class="slide-header">
+        <span class="slide-number">06</span>
+        <span class="slide-section-tag">Modelagem · Codificação</span>
+        <span class="slide-speaker">Mateus Costa</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Como a solução é representada?</h2>
+        <div class="card" style="border: 2px solid var(--text); padding: 24px; text-align: center; margin-bottom: 28px;">
+          <div style="font-family: var(--font-mono); font-size: 26px; color: var(--text-muted); margin-bottom: 12px;">
+            BLOCOS: &nbsp;&nbsp;&nbsp; [ &nbsp; A , &nbsp; B , &nbsp; C , &nbsp; D , &nbsp; E &nbsp; ]
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 38px; font-weight: 700; color: var(--accent);">
+            SOLUÇÃO: &nbsp; [ &nbsp; 1 , &nbsp; 0 , &nbsp; 1 , &nbsp; 0 , &nbsp; 1 &nbsp; ]
+          </div>
+        </div>
+        <ul class="topics-list">
+          <li class="topic-item"><span class="topic-bullet"></span><span>1  →  bloco selecionado para a síntese</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>0  →  bloco descartado</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span style="font-weight: 700; color: var(--accent);">Restrição: Peso Total ≤ Capacidade (C)</span></li>
+        </ul>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">VETOR BINÁRIO DE DECISÃO</span>
+        <span>06 / 13</span>
+      </div>
+    </div>
+
+    <!-- 07 — TÊMPERA SIMULADA -->
+    <div class="slide" id="slide-7">
+      <div class="slide-header">
+        <span class="slide-number">07</span>
+        <span class="slide-section-tag">Metaheurística · Fundamentação</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">O que é Têmpera Simulada?</h2>
+        <ul class="topics-list" style="margin-bottom: 32px;">
+          <li class="topic-item"><span class="topic-bullet"></span><span>Metaheurística de otimização inspirada no resfriamento de materiais</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Explora diferentes combinações de blocos no espaço de busca</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Pode aceitar soluções piores temporariamente ao longo do processo</span></li>
+        </ul>
+        <div class="card highlight" style="border-left: 6px solid var(--accent); padding: 24px 32px;">
+          <div style="font-size: 28px; font-weight: 700; line-height: 1.35;">
+            “A Têmpera Simulada permite aceitar temporariamente uma solução pior para escapar de ótimos locais.”
+          </div>
+          <div style="font-size: 17px; color: var(--text-muted); margin-top: 10px;">Kirkpatrick, Gelatt e Vecchi (1983)</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">SIMULATED ANNEALING</span>
+        <span>07 / 13</span>
+      </div>
+    </div>
+
+    <!-- 08 — COMO O ALGORITMO PROCURA -->
+    <div class="slide" id="slide-8">
+      <div class="slide-header">
+        <span class="slide-number">08</span>
+        <span class="slide-section-tag">Funcionamento · Vizinhança</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Como o algoritmo procura?</h2>
+        <div class="card" style="text-align: center; padding: 18px; margin-bottom: 12px;">
+          <div style="font-family: var(--font-mono); font-size: 28px; font-weight: 700;">
+            SOLUÇÃO ATUAL: &nbsp;&nbsp;&nbsp; [ 1 ,  0 ,  1 ,  0 ,  1 ]
+          </div>
+        </div>
+        <div style="text-align: center; font-size: 22px; font-weight: 700; color: var(--accent); margin: 6px 0;">
+          ↓ &nbsp; inverte um bloco (bit flip)
+        </div>
+        <div class="card highlight" style="text-align: center; padding: 18px; margin-bottom: 24px;">
+          <div style="font-family: var(--font-mono); font-size: 28px; font-weight: 700; color: var(--accent);">
+            NOVA SOLUÇÃO: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [ 1 ,  1 ,  1 ,  0 ,  1 ]
+          </div>
+        </div>
+        <div class="card" style="border: 2px solid var(--text); padding: 20px; text-align: center;">
+          <div style="font-size: 20px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">A NOVA SOLUÇÃO É MELHOR?</div>
+          <div style="font-size: 24px; font-weight: 700;">
+            SIM &nbsp;→&nbsp; ACEITA IMEDIATAMENTE &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; NÃO &nbsp;→&nbsp; PODE ACEITAR (PROBABILIDADE)
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">MECANISMO DE BUSCA E SUCESSÃO</span>
+        <span>08 / 13</span>
+      </div>
+    </div>
+
+    <!-- 09 — POR QUE ACEITAR SOLUÇÃO PIOR? -->
+    <div class="slide" id="slide-9">
+      <div class="slide-header">
+        <span class="slide-number">09</span>
+        <span class="slide-section-tag">Critério de Aceitação</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Por que aceitar uma solução pior?</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+          <div class="card highlight" style="text-align: center; padding: 24px;">
+            <div style="font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">CRITÉRIO DE METROPOLIS</div>
+            <div style="font-family: var(--font-mono); font-size: 44px; font-weight: 700; color: var(--accent);">
+              P = e^( Δ / T )
+            </div>
+          </div>
+          <div class="card" style="padding: 24px;">
+            <div style="font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">EXEMPLO PRÁTICO:</div>
+            <div style="font-size: 22px; font-weight: 700;">Solução atual = 100 &nbsp;→&nbsp; Nova solução = 90</div>
+            <div style="font-size: 18px; color: var(--accent); font-weight: 600; margin-top: 6px;">É pior (Δ = -10).</div>
+          </div>
+        </div>
+        <div class="card highlight" style="margin-bottom: 12px; padding: 18px 24px;">
+          <strong style="color: var(--accent); font-size: 20px;">Temperatura alta (início):</strong>
+          <span style="font-size: 22px;"> &nbsp;Ainda pode aceitar a solução pior para explorar novas combinações.</span>
+        </div>
+        <div class="card" style="padding: 18px 24px;">
+          <strong style="font-size: 20px;">Temperatura baixa (fim):</strong>
+          <span style="font-size: 22px;"> &nbsp;Provavelmente rejeita a solução pior, tornando a busca estritamente seletiva.</span>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">PROBABILIDADE DE METROPOLIS</span>
+        <span>09 / 13</span>
+      </div>
+    </div>
+
+    <!-- 10 — TEMPERATURA + FATOR DE REDUÇÃO -->
+    <div class="slide" id="slide-10">
+      <div class="slide-header">
+        <span class="slide-number">10</span>
+        <span class="slide-section-tag">Parâmetros Térmicos</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Temperatura e resfriamento</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+          <div class="card" style="background: var(--dark-box); color: #fff; font-family: var(--font-mono); padding: 24px; line-height: 1.8; font-size: 20px;">
+            <div style="color: var(--accent); font-weight: 700; margin-bottom: 8px;">CURVA DE RESFRIAMENTO:</div>
+            100 ───────┐<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;alta exploração<br>
+            &nbsp;50 ───&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+            &nbsp;10 ──&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ &nbsp;alta seleção<br>
+            &nbsp;&nbsp;0 ───────┘
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="card"><strong style="color: var(--accent); font-size: 22px;">T₀</strong> &nbsp;·&nbsp; Começo da busca (temperatura inicial)</div>
+            <div class="card"><strong style="color: var(--accent); font-size: 22px;">Tmin</strong> &nbsp;·&nbsp; Fim da busca (critério de parada)</div>
+            <div class="card"><strong style="color: var(--accent); font-size: 22px;">α</strong> &nbsp;·&nbsp; Velocidade do resfriamento (Tnovo = α · Tatual)</div>
+          </div>
+        </div>
+        <div class="card highlight" style="text-align: center; font-size: 22px; font-weight: 700;">
+          Alta temperatura → mais liberdade para explorar &nbsp;&nbsp;|&nbsp;&nbsp; Baixa temperatura → busca mais seletiva
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">ESCALONAMENTO GEOMÉTRICO (α)</span>
+        <span>10 / 13</span>
+      </div>
+    </div>
+
+    <!-- 11 — FLUXO COMPLETO -->
+    <div class="slide" id="slide-11">
+      <div class="slide-header">
+        <span class="slide-number">11</span>
+        <span class="slide-section-tag">Arquitetura Integrada</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Fluxo completo</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px;">
+          <div class="card"><strong>1. .EXE</strong><div style="font-size: 15px; color: var(--text-muted);">Arquivo executável</div></div>
+          <div class="card"><strong>2. BLOCOS</strong><div style="font-size: 15px; color: var(--text-muted);">Dados particionados</div></div>
+          <div class="card"><strong>3. CARACTERÍSTICAS</strong><div style="font-size: 15px; color: var(--text-muted);">Relevância / peso</div></div>
+          <div class="card"><strong>4. MOCHILA</strong><div style="font-size: 15px; color: var(--text-muted);">Restrição de capacidade</div></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px;">
+          <div class="card highlight" style="border: 2px solid var(--accent);"><strong style="color: var(--accent);">5. TÊMPERA SIMULADA</strong><div style="font-size: 15px;">Otimização metaheurística</div></div>
+          <div class="card"><strong>6. SELECIONADOS</strong><div style="font-size: 15px; color: var(--text-muted);">Melhor combinação</div></div>
+          <div class="card"><strong>7. SÍNTESE GRANULAR</strong><div style="font-size: 15px; color: var(--text-muted);">Geração sonora final</div></div>
+        </div>
+        <div class="card" style="text-align: center; border: 2px solid var(--text); font-size: 22px; font-weight: 700;">
+          A Têmpera Simulada atua como filtro seletivo ótimo antes da síntese granular.
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">PIPELINE END-TO-END</span>
+        <span>11 / 13</span>
+      </div>
+    </div>
+
+    <!-- 12 — COMO AVALIAR -->
+    <div class="slide" id="slide-12">
+      <div class="slide-header">
+        <span class="slide-number">12</span>
+        <span class="slide-section-tag">Metodologia Experimental</span>
+        <span class="slide-speaker">Rafael Elisei</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Como avaliar?</h2>
+        <ul class="topics-list" style="margin-bottom: 32px;">
+          <li class="topic-item"><span class="topic-bullet"></span><span>Comparar o valor da solução inicial com a solução otimizada</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Verificar o aproveitamento da capacidade disponível da mochila</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Acompanhar o número de iterações até a estabilização do valor</span></li>
+          <li class="topic-item"><span class="topic-bullet"></span><span>Avaliar a sensibilidade a diferentes velocidades de resfriamento (α)</span></li>
+        </ul>
+        <div class="card" style="border-left: 4px solid var(--border-dark); padding: 20px 28px;">
+          <div style="font-size: 22px; font-weight: 700;">Etapa experimental a ser realizada.</div>
+          <div style="font-size: 17px; color: var(--text-muted); margin-top: 4px;">
+            Apresentamos a modelagem e a arquitetura; os dados numéricos serão medidos em ensaios com o Opcoda.
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">MÉTRICAS DO EXPERIMENTO</span>
+        <span>12 / 13</span>
+      </div>
+    </div>
+
+    <!-- 13 — CONCLUSÃO -->
+    <div class="slide" id="slide-13">
+      <div class="slide-header">
+        <span class="slide-number">13</span>
+        <span class="slide-section-tag">Conclusão · Agradecimentos</span>
+        <span class="slide-speaker">Opcoda</span>
+      </div>
+      <div class="slide-body" style="align-items: center; justify-content: center; text-align: center;">
+        <h2 class="slide-title" style="font-size: 46px; margin-bottom: 24px;">
+          Opcoda + Têmpera Simulada
+        </h2>
+        <div style="display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 36px; font-weight: 700; font-size: 20px;">
+          <div class="card">DADOS</div>
+          <span style="color: var(--accent); font-size: 28px;">+</span>
+          <div class="card">MOCHILA</div>
+          <span style="color: var(--accent); font-size: 28px;">+</span>
+          <div class="card">OTIMIZAÇÃO</div>
+          <span style="color: var(--accent); font-size: 28px;">+</span>
+          <div class="card">SÍNTESE</div>
+          <span style="color: var(--accent); font-size: 28px;">=</span>
+          <div class="card highlight" style="color: var(--accent);">OPCODA</div>
+        </div>
+        <div class="card" style="display: inline-block; padding: 20px 48px; border: 2px solid var(--border-dark);">
+          <div style="font-size: 26px; font-weight: 700;">Mateus Costa · Rafael Elisei</div>
+          <div style="font-size: 17px; color: var(--text-muted); margin-top: 4px;">
+            5º semestre · ADS · FATEC Cruzeiro · Programação Linear / Otimização
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">FATEC CRUZEIRO · 2026</span>
+        <span>13 / 13</span>
+      </div>
+    </div>
+
+    <!-- SLIDES RESERVAS / BACKUP -->
+    <!-- A1 — FORMULAÇÃO COMPLETA -->
+    <div class="slide" id="slide-14">
+      <div class="slide-header">
+        <span class="slide-number">A1</span>
+        <span class="slide-section-tag">Slide Reserva · Formulação Matemática</span>
+        <span class="slide-speaker">Backup</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Formulação matemática formal</h2>
+        <div class="card" style="border: 2px solid var(--text); padding: 28px; font-family: var(--font-mono); font-size: 32px; line-height: 1.8;">
+          <div style="color: var(--accent); font-weight: 700;">max &nbsp; ∑ (vᵢ · xᵢ)</div>
+          <div>sujeito a: &nbsp; ∑ (wᵢ · xᵢ) &nbsp;≤ &nbsp;C</div>
+          <div style="color: var(--text-muted); font-size: 24px;">xᵢ &nbsp;∈ &nbsp;{ 0, 1 } &nbsp;&nbsp;&nbsp; para todo i = 1, ..., n</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">MATERIAL COMPLEMENTAR</span>
+        <span>BACKUP 01</span>
+      </div>
+    </div>
+
+    <!-- A2 — PSEUDOCÓDIGO COMPLETO -->
+    <div class="slide" id="slide-15">
+      <div class="slide-header">
+        <span class="slide-number">A2</span>
+        <span class="slide-section-tag">Slide Reserva · Pseudocódigo</span>
+        <span class="slide-speaker">Backup</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Pseudocódigo completo do algoritmo</h2>
+        <div class="card" style="background: var(--dark-box); color: #fff; font-family: var(--font-mono); font-size: 18px; line-height: 1.6; padding: 24px;">
+          <span style="color: var(--accent); font-weight: 700;">GERAR</span> solução inicial viável S (peso ≤ C)<br>
+          <span style="color: var(--accent); font-weight: 700;">AVALIAR</span> solução inicial: V(S)<br>
+          T = T₀<br>
+          <span style="color: var(--accent); font-weight: 700;">ENQUANTO</span> T &gt; Tmin:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--accent); font-weight: 700;">GERAR</span> vizinha S' por mutação (bit flip)<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--accent); font-weight: 700;">SE</span> S' viável (peso ≤ C):<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Δ = V(S') − V(S)<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--accent); font-weight: 700;">SE</span> Δ &gt; 0: S = S' &nbsp;&nbsp;// aceita melhoria<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--accent); font-weight: 700;">SENÃO SE</span> random(0, 1) &lt; exp(Δ / T): S = S' &nbsp;&nbsp;// aceita piora<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span style="color: var(--accent); font-weight: 700;">REDUZIR</span> temperatura: T = α · T<br>
+          <span style="color: var(--accent); font-weight: 700;">RETORNAR</span> melhor solução encontrada
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">MATERIAL COMPLEMENTAR</span>
+        <span>BACKUP 02</span>
+      </div>
+    </div>
+
+    <!-- A3 — REFERÊNCIAS -->
+    <div class="slide" id="slide-16">
+      <div class="slide-header">
+        <span class="slide-number">A3</span>
+        <span class="slide-section-tag">Slide Reserva · Referências Acadêmicas</span>
+        <span class="slide-speaker">Backup</span>
+      </div>
+      <div class="slide-body">
+        <h2 class="slide-title">Referências bibliográficas</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 18px;">
+          <div class="card"><strong>KIRKPATRICK, S.; GELATT, C. D.; VECCHI, M. P.</strong> Optimization by Simulated Annealing. Science, 1983.</div>
+          <div class="card"><strong>AARTS, E. H. L.; VAN LAARHOVEN, P. J. M.</strong> Simulated Annealing: An Introduction. 1989.</div>
+          <div class="card"><strong>TRIKI, E.; COLLETTE, Y.; SIARRY, P.</strong> A Theoretical Study on the Behavior of Simulated Annealing. 2005.</div>
+          <div class="card"><strong>ROADS, Curtis.</strong> Microsound. MIT Press, 2004.</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span class="slide-footer-left">MATERIAL COMPLEMENTAR</span>
+        <span>BACKUP 03</span>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div id="nav-controls">
+      <button class="nav-btn" onclick="prevSlide()">← Anterior</button>
+      <button class="nav-btn" onclick="nextSlide()">Próximo →</button>
+      <button class="nav-btn" onclick="toggleFullscreen()">Tela Cheia [F]</button>
+    </div>
+
+  </div>
+
+  <div id="kb-hint">
+    Use as setas ← → do teclado ou espaço para navegar · Pressione F para tela cheia · Ctrl+P para gerar PDF
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let currentIndex = 0;
+
+    function showSlide(index) {
+      if (index < 0 || index >= slides.length) return;
+      slides[currentIndex].classList.remove('active');
+      currentIndex = index;
+      slides[currentIndex].classList.add('active');
+    }
+
+    function nextSlide() {
+      if (currentIndex < slides.length - 1) showSlide(currentIndex + 1);
+    }
+
+    function prevSlide() {
+      if (currentIndex > 0) showSlide(currentIndex - 1);
+    }
+
+    function toggleFullscreen() {
+      const deck = document.getElementById('deck');
+      if (!document.fullscreenElement) {
+        deck.requestFullscreen().catch(err => alert(err.message));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+        case ' ':
+        case 'PageDown':
+          e.preventDefault();
+          nextSlide();
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+        case 'PageUp':
+          e.preventDefault();
+          prevSlide();
+          break;
+        case 'Home':
+          e.preventDefault();
+          showSlide(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          showSlide(slides.length - 1);
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+      }
+    });
+  </script>
+</body>
+</html>

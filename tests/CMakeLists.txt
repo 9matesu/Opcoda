@@ -26,7 +26,21 @@ add_executable(opcoda_tests
     sample_exchange_test.cpp
     byte_range_test.cpp
     byte_position_test.cpp
-    note_tracker_test.cpp)
+    column_reduction_test.cpp
+    note_tracker_test.cpp
+    transport_test.cpp
+    transport_rate_test.cpp
+    grain_params_test.cpp
+    adsr_test.cpp
+    filter_test.cpp
+    lfo_test.cpp
+    scale_test.cpp
+    character_test.cpp
+    mod_matrix_test.cpp
+    cloud_test.cpp
+    factory_presets_test.cpp
+    grain_trail_test.cpp
+    pe_mutation_test.cpp)
 
 target_link_libraries(opcoda_tests PRIVATE opcoda_core GTest::gtest_main)
 add_test(NAME opcoda_tests COMMAND opcoda_tests)

@@ -36,7 +36,7 @@ HexGrid::HexGrid() {
     setInterceptsMouseClicks(true, false);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 
-    monoFont_ = BoxedLabel::monoFont(11.0f);
+    font_ = fonts().sans(11.0f);
 
     // 4.1.2 Nome, funcao e valor. A grelha e' operada so com o rato, mas nao
     // pode ser um buraco sem nome para quem navega por leitor de tela: o nome
@@ -141,6 +141,26 @@ std::uint64_t HexGrid::rowAddress(int row) const {
     return topByte_ + static_cast<std::uint64_t>(row) * kBytesPerRow;
 }
 
+bool HexGrid::isAddressVisible(std::uint64_t address) const noexcept {
+    if (metrics_.rows < 1) {
+        return false;
+    }
+
+    const auto wantedRow = static_cast<int64_t>(address / kBytesPerRow);
+    const auto firstRow = static_cast<int64_t>(topByte_ / kBytesPerRow);
+    return wantedRow >= firstRow && wantedRow < firstRow + metrics_.rows;
+}
+
+juce::Rectangle<float> HexGrid::cellRectForAddress(std::uint64_t address) const {
+    if (!isAddressVisible(address)) {
+        return {};
+    }
+
+    const auto row = static_cast<int>(static_cast<int64_t>(address / kBytesPerRow) -
+                                       static_cast<int64_t>(topByte_ / kBytesPerRow));
+    return cellRect(address % kBytesPerRow, row);
+}
+
 // As medidas sao derivadas da fonte: uma celula mais estreita do que dois
 // digitos corta o segundo, e o display perde-se sem dar erro nenhum.
 void HexGrid::rebuildMetrics() {
@@ -161,7 +181,7 @@ void HexGrid::rebuildMetrics() {
     }
 
     const auto widthOf = [this](const juce::String& text) {
-        return juce::GlyphArrangement::getStringWidth(monoFont_, text);
+        return juce::GlyphArrangement::getStringWidth(font_, text);
     };
 
     metrics_.gutterWidth = widthOf("0x" + juce::String::repeatedString(
@@ -245,6 +265,12 @@ void HexGrid::resized() {
 }
 
 void HexGrid::mouseDown(const juce::MouseEvent& event) {
+    // Mesmo corte que na roda: um clique e' o utilizador a dizer que a janela e'
+    // dele.
+    if (onUserScrolled != nullptr) {
+        onUserScrolled();
+    }
+
     const auto address = addressAt(event.position);
     if (address != std::numeric_limits<std::uint64_t>::max() && onCellActivated != nullptr) {
         onCellActivated(address);
@@ -266,6 +292,14 @@ void HexGrid::mouseDoubleClick(const juce::MouseEvent& event) {
 void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
                              const juce::MouseWheelDetails& wheel) {
     static_cast<void>(event);
+
+    // **Rolar e' o utilizador a dizer que manda ele.** A janela do hex segue os
+    // graos enquanto ninguem mexe, e o primeiro entalhe corta isso: quem esta' a
+    // ler bytes nao aceita que o ecra se mexa. Sem este corte, ler uma linha e a
+    // tela saltar para o material seria um ciclo sem fim.
+    if (onUserScrolled != nullptr) {
+        onUserScrolled();
+    }
 
     // Uma linha por entalhe, com acumulador. Um entalhe chega como 1.0, mas
     // uma roda de alta resolucao e um trackpad mandam fraccoes, e sem
@@ -292,7 +326,7 @@ void HexGrid::paint(juce::Graphics& g) {
 
     g.setColour(palette::displayPanel);
     g.fillRect(bounds);
-    g.setFont(monoFont_);
+    g.setFont(font_);
 
     if (fileSize_ == 0 || bytes_ == nullptr || bytes_->empty()) {
         // Sem ficheiro, um rectangulo vazio com moldura le-se como defeito. E' o
@@ -317,7 +351,7 @@ void HexGrid::paintColumnHeader(juce::Graphics& g) {
     const auto top = getLocalBounds().toFloat().reduced(kPadding).getY();
 
     g.setColour(palette::textOnDarkSub);
-    g.setFont(monoFont_);
+    g.setFont(font_);
 
     // 00 01 02 ... 0F em cima das colunas. Sem este cabecalho a coluna
     // hexadecimal e' uma parede de digitos sem referencia, e a coluna 0xe nao se
@@ -369,14 +403,14 @@ void HexGrid::paintGutter(juce::Graphics& g, int row) {
         // a mesma coisa em menos sitio.
         g.setColour(palette::accent);
         g.fillRect(juce::Rectangle<float> {band.getX(), band.getY(), 2.0f, kRowHeight});
-        g.setFont(monoFont_);
+        g.setFont(font_);
         g.drawText(section->name, band.reduced(5.0f, 0.0f), juce::Justification::centredRight,
                    false);
         return;
     }
 
     g.setColour(palette::textOnDarkSub);
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.drawText(formatAddress(address), band.reduced(4.0f, 0.0f), juce::Justification::centredRight,
                false);
 }
@@ -461,7 +495,7 @@ void HexGrid::paintAscii(juce::Graphics& g, int row) {
                              .empty();
     g.setColour(inRegionRow ? palette::textOnDark
                             : palette::alpha(palette::textOnDark, 0.42f));
-    g.setFont(monoFont_);
+    g.setFont(font_);
     g.drawText(juce::String {line},
                metrics_.ascii.withY(metrics_.ascii.getY() + static_cast<float>(row) * kRowHeight)
                    .withHeight(kRowHeight),

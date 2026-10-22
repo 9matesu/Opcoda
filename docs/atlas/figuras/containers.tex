@@ -1,0 +1,43 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/containers.mmd. Nao editar a mao.
+% git blob da fonte: f8f2babdb80b31f4cd0b818794c352e0a17f4ee2
+\definecolor{atlasyellow}{HTML}{FFD400}
+\definecolor{atlasamber}{HTML}{FFB000}
+\definecolor{atlasblack}{HTML}{000000}
+\begin{tikzpicture}[
+  font=\sffamily\bfseries\small,
+  atlasgroup/.style={draw=atlasblack, fill=atlasamber, line width=0.9pt, rounded corners=4pt, inner xsep=14pt, inner ysep=26pt},
+  atlasgrouptext/.style={font=\sffamily\bfseries\small, text=atlasblack, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasamber},
+  atlasflow/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasasync/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlaslabel/.style={font=\sffamily\bfseries\tiny, fill=white, inner sep=1.2pt, text=atlasblack},
+  atlasclass/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=6pt, font=\sffamily\bfseries\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasamber},
+  atlasuml/.style={-{Triangle[length=2.4mm,width=2.9mm]}, draw=atlasblack, line width=0.9pt},
+  atlascomp/.style={-{Diamond[length=2.6mm]}, draw=atlasblack, line width=0.9pt},
+  atlaslife/.style={draw=atlasblack, dashed, line width=0.6pt},
+  atlasmsg/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasmsgback/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlasmsglabel/.style={font=\sffamily\bfseries\scriptsize, fill=white, inner sep=1.5pt, text=atlasblack},
+  atlasparticipant/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+]
+  \node[atlasclassabstract, text width=2.34cm] (opcoda_core) at (-1.75,0.00) {opcoda\_core};
+  \node[atlasclassabstract, text width=2.34cm] (opcoda_plugin) at (1.75,0.00) {opcoda\_plugin};
+  \node[atlasclass, text width=1.62cm] (pe) at (-8.34,-3.40) {pe};
+  \node[atlasclass, text width=1.62cm] (entropy) at (-5.56,-3.40) {entropy};
+  \node[atlasclass, text width=1.62cm] (dsp) at (-2.78,-3.40) {dsp};
+  \node[atlasclass, text width=1.62cm] (rt) at (0.00,-3.40) {rt};
+  \node[atlasclass, text width=1.62cm] (view) at (2.78,-3.40) {view};
+  \node[atlasclass, text width=1.62cm] (processor) at (5.56,-3.40) {processor};
+  \node[atlasclass, text width=1.62cm] (editor) at (8.34,-3.40) {editor};
+  \draw[atlasuml] (opcoda_core.south) -- (pe.north);
+  \draw[atlasuml] (opcoda_core.south) -- (entropy.north);
+  \draw[atlasuml] (opcoda_core.south) -- (dsp.north);
+  \draw[atlasuml] (opcoda_core.south) -- (rt.north);
+  \draw[atlasuml] (opcoda_core.south) -- (view.north);
+  \draw[atlascomp] (opcoda_plugin.south) -- (opcoda_core.north);
+  \draw[atlasuml] (opcoda_plugin.south) -- (processor.north);
+  \draw[atlasuml] (opcoda_plugin.south) -- (editor.north);
+  \draw[atlascomp] (processor.south) -- node[atlaslabel, above, pos=0.35] {fila SPSC} (dsp.north);
+\end{tikzpicture}

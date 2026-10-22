@@ -1,0 +1,25 @@
+%% Fluxo de nivel 1: o ingest, do ficheiro ate a fila.
+%% direction TB: de cima para baixo, na ordem das chamadas.
+%% Cada passo e' uma funcao, e a segunda linha diz o ficheiro onde vive.
+flowchart TB
+  direction TB
+  ING[Ingest<br/>processor]
+  RD[Leitura<br/>processor]
+  PS[Validar PE<br/>pe_parser]
+  SEC[Secoes<br/>pe_parser]
+  ENT[Entropia<br/>shannon_entropy]
+  TS[Amostras<br/>byte_to_sample]
+  RG[Colunas<br/>reduction]
+  PB[Publica<br/>processor]
+  PUSH[incoming_.push<br/>spsc_ring]
+  ERR[lastError_<br/>processor]
+  ING -->|caminho| RD
+  RD -->|bytes| PS
+  RD -->|bytes| TS
+  RD -->|bytes| RG
+  PS -->|secoes| SEC
+  SEC -->|entropia| ENT
+  TS -->|amostras| PB
+  RG -->|curva| PB
+  PB -->|material| PUSH
+  PS -->|erro| ERR

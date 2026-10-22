@@ -2,14 +2,18 @@
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/rt/alloc_guard.h"
+#include "opcoda_core/rt/transport.h"
 
 #include <cmath>
 #include <thread>
 #include <vector>
 
 using opcoda::dsp::GranularEngine;
+using opcoda::dsp::ModDest;
+using opcoda::dsp::ModSource;
 using opcoda::dsp::GranularParams;
 using opcoda::rt::ScopedAudioThread;
+using opcoda::rt::Transport;
 
 namespace {
 
@@ -76,6 +80,23 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     GranularParams params;
     params.densityGrainsPerSec = 120.0f;
     params.grainSizeMs = 20.0f;
+    // F020 ligado: drive, 24 dB, as tres curvas e tres rotas. Sem isto o guard
+    // media o motor de antes da matriz e nao provava o caminho novo.
+    params.f1DriveDb = 18.0f;
+    params.f1Slope = 1;
+    params.f1Keytrack = 1.0f;
+    params.f1Env = 0.5f;
+    params.noteNumber = 72;
+    params.attackCurve = -1.0f;
+    params.decayCurve = 0.5f;
+    params.releaseCurve = 1.0f;
+    // F021: a nuvem no maximo — atraso, dispersao e jitter — pela mesma razao.
+    params.cloudSize = 1.0f;
+    params.pitchSpreadSemitones = 12.0f;
+    params.grainJitter = 1.0f;
+    params.modMatrix.routes[0] = {ModSource::kLfo, ModDest::kCutoff1, 0.5f};
+    params.modMatrix.routes[1] = {ModSource::kEnvelope, ModDest::kPitch, 0.25f};
+    params.modMatrix.routes[2] = {ModSource::kVelocity, ModDest::kDensity, 0.5f};
 
     const auto violations = allocationsInsideAudioWindow([&] {
         for (int block = 0; block < 50; ++block) {
@@ -121,6 +142,110 @@ TEST(AllocGuard, SustainedPlaybackStaysClean) {
 
     EXPECT_EQ(violations, 0u)
         << "tempo real violado em " << kBlocks << " blocos de " << kBlock;
+}
+
+TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
+    // O caminho novo: transporte em reproducao, com o gate aberto por ele e nao
+    // por nota nenhuma.
+    //
+    // Este teste e' a razao de o transporte estar no nucleo e nao no editor. Se
+    // estivesse na thread de interface, esta asercao nao teria nada que verificar
+    // e o portao C passaria a falar de um caminho de audio que nunca foi medido.
+    constexpr double kSampleRate = 44100.0;
+    constexpr int kBlock = 256;
+
+    Transport transport;
+    transport.prepare(kSampleRate);
+    transport.setRegionLength(16384);
+    transport.play();
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    std::vector<float> source(16384);
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        source[i] = std::sin(static_cast<float>(i) * 0.01f);
+    }
+    engine.setSource(source.data(), source.size());
+
+    std::vector<float> left(kBlock);
+    std::vector<float> right(kBlock);
+
+    GranularParams params;
+    params.densityGrainsPerSec = 120.0f;
+    params.grainSizeMs = 40.0f;
+
+    const auto violations = allocationsInsideAudioWindow([&] {
+        for (int block = 0; block < 200; ++block) {
+            // A ordem e' a de PluginProcessor::processBlock: advance primeiro,
+            // depois o gate — e o gate usa o MESMO booleano que decidiu o advance.
+            //
+            // Rele o atómico duas vezes, como a primeira versao fazia, seria uma
+            // segunda leitura entre o advance e o setSounding. Se o utilizador
+            // carregasse STOP nesse intervalo, a posicao seria de um estado e o
+            // gate de outro, e o sintoma seria ate' um bloco de audio parado.
+            const auto playing = transport.isPlaying();
+            if (playing) {
+                params.position = transport.advance(kBlock, playing);
+            }
+            engine.setSounding(playing);
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+
+        // A fase de release tambem corre dentro da janela: parar a meio e
+        // processar mais 20 blocos exercita o braco release do switch, que os
+        // 200 blocos acima nunca tocam porque o gate so abre.
+        transport.stop();
+        for (int block = 0; block < 20; ++block) {
+            engine.setSounding(transport.isPlaying());
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+    });
+
+    EXPECT_EQ(violations, 0u)
+        << "transporte alocou " << violations << " vez(es) dentro da janela de audio";
+
+    // E a prova de que o teste acima mediu alguma coisa: a posicao andou.
+    EXPECT_GT(transport.positionFraction(), 0.0f);
+}
+
+// **O setSource de quatro argumentos e' o caminho de audio, e nao aloca nem mede.**
+//
+// O guard de alocacao e' cego ao custo de CPU: o setSource antigo media a entropia
+// de toda a regiao dentro de processBlock, e nao alocava nada — o histograma era de
+// pilha — pelo que este teste passava com 12 milhoes de operacoes dentro da janela
+// de audio. E' o mesmo caminho que o TSan nao veria.
+TEST(AllocGuard, PublishingAPrecomputedCurveAllocatesNothing) {
+    constexpr double kSampleRate = 44100.0;
+    constexpr int kBlock = 256;
+
+    GranularEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+
+    std::vector<float> source(1u << 20);
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        source[i] = std::sin(static_cast<float>(i) * 0.001f);
+    }
+
+    std::vector<float> curve(GranularEngine::kMaxEntropyPoints);
+    for (std::size_t i = 0; i < curve.size(); ++i) {
+        curve[i] = 5.5f + 0.01f * static_cast<float>(i);
+    }
+
+    std::vector<float> left(kBlock);
+    std::vector<float> right(kBlock);
+    GranularParams params;
+    params.densityGrainsPerSec = 120.0f;
+
+    const auto violations = allocationsInsideAudioWindow([&] {
+        engine.setSource(source.data(), source.size(), curve.data(), curve.size());
+        engine.setSounding(true);
+        for (int block = 0; block < 50; ++block) {
+            engine.processBlock(left.data(), right.data(), kBlock, params);
+        }
+    });
+
+    EXPECT_EQ(violations, 0u);
 }
 
 TEST(AllocGuard, WindowIsReleasedAfterScope) {

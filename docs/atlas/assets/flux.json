@@ -1,0 +1,309 @@
+{
+  "scope": {
+    "root": "I:/TG_I/Opcoda",
+    "commit": "4cac7a5",
+    "code_base": "o codigo do produto e' o mesmo do commit c6409bb",
+    "date": "2026-10-19",
+    "folders_covered": [
+      "src/opcoda_core",
+      "src/opcoda_plugin",
+      "tests",
+      "tools"
+    ],
+    "folders_skipped": [
+      ".specify e .claude: guias de processo, sem codigo do produto",
+      "docs: documentacao, o que este atlas mapeia",
+      "specs: especificacoes de funcionalidade ja escritas"
+    ]
+  },
+  "records": [
+    {
+      "id": "pe-file-dialog",
+      "kind": "file-read",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 145,
+      "data": "std::vector<std::uint8_t>",
+      "to": "pe::parse"
+    },
+    {
+      "id": "pe-file-drag",
+      "kind": "file-read",
+      "path": "src/opcoda_plugin/source/plugin_editor.h",
+      "line": 66,
+      "data": "juce::StringArray",
+      "to": "PluginProcessor::ingest"
+    },
+    {
+      "id": "preset-file-in",
+      "kind": "file-read",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 601,
+      "data": "juce::XmlElement",
+      "to": "PluginProcessor::ingest"
+    },
+    {
+      "id": "pe-file-standalone",
+      "kind": "file-read",
+      "path": "src/opcoda_core/pe/pe_parser.cpp",
+      "line": 166,
+      "data": "std::vector<std::uint8_t>",
+      "to": "pe::parse"
+    },
+    {
+      "id": "host-state",
+      "kind": "callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 637,
+      "data": "juce::MemoryBlock",
+      "to": "PluginProcessor::loadStateXml"
+    },
+    {
+      "id": "host-midi",
+      "kind": "callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 471,
+      "data": "juce::MidiBuffer",
+      "to": "rt::NoteTracker"
+    },
+    {
+      "id": "host-parameters",
+      "kind": "callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 83,
+      "data": "float",
+      "to": "dsp::GranularParams"
+    },
+    {
+      "id": "host-sample-rate",
+      "kind": "callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 120,
+      "data": "double",
+      "to": "dsp::GranularEngine::prepare"
+    },
+    {
+      "id": "queue-incoming",
+      "kind": "queue",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 356,
+      "data": "PublishedMaterial, dois ponteiros crus",
+      "to": "dsp::GranularEngine::setSource"
+    },
+    {
+      "id": "queue-returned",
+      "kind": "queue",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 380,
+      "data": "PublishedMaterial, dois ponteiros crus",
+      "to": "PluginProcessor::owned_"
+    },
+    {
+      "id": "bytes-to-parse",
+      "kind": "logic",
+      "path": "src/opcoda_core/pe/pe_parser.cpp",
+      "line": 65,
+      "data": "PeParseResult",
+      "to": "pe::Section"
+    },
+    {
+      "id": "section-entropy",
+      "kind": "logic",
+      "path": "src/opcoda_core/pe/pe_parser.cpp",
+      "line": 149,
+      "data": "double, bits por byte",
+      "to": "entropy::shannonBitsPerByte"
+    },
+    {
+      "id": "section-entropy-impl",
+      "kind": "logic",
+      "path": "src/opcoda_core/entropy/shannon_entropy.cpp",
+      "line": 21,
+      "data": "double, bits por byte",
+      "to": "pe::Section"
+    },
+    {
+      "id": "bytes-to-samples",
+      "kind": "logic",
+      "path": "src/opcoda_core/pe/byte_to_sample.cpp",
+      "line": 14,
+      "data": "std::vector<float>",
+      "to": "PluginProcessor::publishByteRange"
+    },
+    {
+      "id": "bytes-to-columns",
+      "kind": "logic",
+      "path": "src/opcoda_core/pe/column_reduction.cpp",
+      "line": 54,
+      "data": "std::vector<pe::Column>",
+      "to": "PluginProcessor::publishByteRange"
+    },
+    {
+      "id": "column-entropy",
+      "kind": "logic",
+      "path": "src/opcoda_core/pe/column_reduction.cpp",
+      "line": 163,
+      "data": "float, bits por byte",
+      "to": "curva de entropia"
+    },
+    {
+      "id": "curve-publish",
+      "kind": "logic",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 353,
+      "data": "std::vector<float>",
+      "to": "PluginProcessor::incoming_"
+    },
+    {
+      "id": "note-sounding",
+      "kind": "logic",
+      "path": "src/opcoda_core/rt/note_tracker.cpp",
+      "line": 48,
+      "data": "bool",
+      "to": "dsp::GranularEngine::setSounding"
+    },
+    {
+      "id": "transport-position",
+      "kind": "logic",
+      "path": "src/opcoda_core/rt/transport.cpp",
+      "line": 122,
+      "data": "float, fracao da regiao",
+      "to": "dsp::GranularParams::position"
+    },
+    {
+      "id": "grain-render",
+      "kind": "logic",
+      "path": "src/opcoda_core/dsp/granular_engine.cpp",
+      "line": 392,
+      "data": "float, amostra interpolada",
+      "to": "mistura do bloco"
+    },
+    {
+      "id": "gate-apply",
+      "kind": "logic",
+      "path": "src/opcoda_core/dsp/granular_engine.cpp",
+      "line": 495,
+      "data": "float, nivel do envelope",
+      "to": "dsp::Limiter"
+    },
+    {
+      "id": "limiter-out",
+      "kind": "logic",
+      "path": "src/opcoda_core/dsp/limiter.cpp",
+      "line": 62,
+      "data": "float",
+      "to": "barramento do host"
+    },
+    {
+      "id": "audio-out",
+      "kind": "host-callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 499,
+      "data": "float, dois canais",
+      "to": "host DAW"
+    },
+    {
+      "id": "state-out",
+      "kind": "host-callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 595,
+      "data": "juce::MemoryBlock",
+      "to": "host DAW"
+    },
+    {
+      "id": "param-out",
+      "kind": "host-callback",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 457,
+      "data": "float normalizado",
+      "to": "host DAW"
+    },
+    {
+      "id": "preset-file-out",
+      "kind": "file-write",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 658,
+      "data": "texto XML",
+      "to": "ficheiro .opcoda"
+    },
+    {
+      "id": "telemetry-out",
+      "kind": "ui",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 522,
+      "data": "std::atomic<float>",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "grain-telemetry-out",
+      "kind": "ui",
+      "path": "src/opcoda_core/dsp/granular_engine.cpp",
+      "line": 492,
+      "data": "dsp::GrainTelemetry",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "error-parse",
+      "kind": "error",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 167,
+      "data": "const char*, E_BAD_PE e companhia",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "error-open",
+      "kind": "error",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 147,
+      "data": "const char*, E_OPEN",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "error-busy",
+      "kind": "error",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 359,
+      "data": "const char*, E_BUSY",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "error-source-missing",
+      "kind": "error",
+      "path": "src/opcoda_plugin/source/plugin_processor.cpp",
+      "line": 632,
+      "data": "const char*, E_SOURCE_MISSING",
+      "to": "PluginEditor"
+    },
+    {
+      "id": "editor-timer",
+      "kind": "ui",
+      "path": "src/opcoda_plugin/source/plugin_editor.cpp",
+      "line": 1063,
+      "data": "void, sem argumento",
+      "to": "PluginEditor::refresh"
+    },
+    {
+      "id": "editor-frees-buffer",
+      "kind": "logic",
+      "path": "src/opcoda_plugin/source/plugin_editor.cpp",
+      "line": 1144,
+      "data": "void",
+      "to": "PluginProcessor::releaseReturnedBuffers"
+    },
+    {
+      "id": "editor-reads-telemetry",
+      "kind": "ui",
+      "path": "src/opcoda_plugin/source/plugin_editor.cpp",
+      "line": 1250,
+      "data": "const Telemetry&",
+      "to": "PluginEditor::paint"
+    },
+    {
+      "id": "editor-reads-grains",
+      "kind": "ui",
+      "path": "src/opcoda_plugin/source/plugin_editor.cpp",
+      "line": 1346,
+      "data": "std::array<GrainView, 8>",
+      "to": "PluginEditor::paint"
+    }
+  ]
+}

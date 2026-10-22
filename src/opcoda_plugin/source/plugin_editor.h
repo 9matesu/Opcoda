@@ -1,9 +1,8 @@
 #pragma once
 
-#include "boxed_label.h"
+#include "byte_display.h"
 #include "byte_address_field.h"
 #include "display_panel.h"
-#include "hex_grid.h"
 #include "knob.h"
 #include "led.h"
 #include "look_and_feel.h"
@@ -11,6 +10,7 @@
 #include "plugin_processor.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -19,21 +19,34 @@
 
 namespace opcoda {
 
-// Editor em tres faixas: header claro, display escuro, painel de parametros.
+// Editor em cinco faixas: header claro, display escuro, abas de modulo, faixa de
+// parametros e teclado.
 //
-// Os seis parametros sao os documentados na Tabela 8 do artigo. Os modulos
-// STATE FILTER e MOD & OUTPUT que aparecem no mock do Stitch ficaram de fora de
-// proposito: o biquad, o envelope e o dry/wet nao existem no nucleo, e desenhar
-// controle que nao controla nada seria pior que a ausencia dele.
+// Os 31 parametros ja no codigo em seis modulos — GRAIN, ENVELOPE, FILTER, MOD,
+// OUT e KEYS — com os nomes exibidos em ingles e os IDs dos seis originais
+// intactos. Uma aba mostra a sua faixa; empilhar as seis pedia 700 px de janela
+// e a promessa e' 480x434.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
+                     private juce::ValueTree::Listener,
+                     private juce::MidiKeyboardState::Listener,
                      public juce::FileDragAndDropTarget {
 public:
     explicit PluginEditor(PluginProcessor& processor);
-    ~PluginEditor() override = default;
+    ~PluginEditor() override;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+
+    // Transporte e vista, quando nenhuma tecla mais focada as consumiu.
+    //
+    // **A divisao com o display e' a que o JUCE ja impõe.** Uma tecla chega primeiro
+    // ao componente com o foco e so depois sobe para os ancestrais. O display trata
+    // a navegacao e o editor trata o transporte, e cada um devolve `true` quando
+    // consome. Uma unica funcao no editor seria mais curta e errada: as setas
+    // chegariam aqui por cima do display sempre que o display nao as consumisse, e
+    // o display nao as consome para nao as roubar ao campo de endereco.
+    bool keyPressed(const juce::KeyPress& key) override;
 
     // isInterestedInFileDrag decide se os demais callbacks chegam, e e' chamado
     // varias vezes enquanto o mouse se move. Precisa ser barato: so testa
@@ -61,6 +74,15 @@ public:
 private:
     void buildHeader();
     void buildParameterPanel();
+    void buildKeyboard();
+
+    // O teclado virtual toca pela mesma NoteTracker do MIDI do host. O listener
+    // so empurra para a fila do processador; nada aqui toca no motor.
+    void handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
+                      float velocity) override;
+    void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
+                       float velocity) override;
+
     void timerCallback() override;
     void refresh();
     void refreshTelemetry(const PluginProcessor::SourceInfo& info);
@@ -73,15 +95,36 @@ private:
     // independentes para uma peca nao estar la, e nenhum dos dois pode prevailecer
     // sobre o outro: e' por isso que a visibilidade se combine num sitio so, em vez
     // de cada um dos dois lados escrever setVisible por sua conta.
-    bool headerFitsHint_ {false};
     bool headerFitsSize_ {false};
     bool headerFitsFormat_ {false};
-    bool footerFitsRate_ {false};
     bool footerFitsPeak_ {false};
     bool footerFitsEntropy_ {false};
+    bool footerFitsTransport_ {false};
+
+    // Mesma regra para a linha de estado, que agora tem dois controlos e nao um:
+    // o campo de endereco cai primeiro porque o POSITION e o clique na grelha
+    // escrevem o mesmo sitio. O alinhar saiu da linha — tecla A e duplo-clique
+    // cobrem, e o terceiro controle empurrava o texto para debaixo do campo.
+    // **O botao de reproducao e' o ultimo a sair**, porque e' a unica forma de
+    // ouvir o material sem teclado MIDI, e uma feature que desaparece quando a
+    // janela encolhe e' uma feature que ninguem encontra.
+    bool statusFitsAddress_ {false};
 
     void updateHeaderVisibility();
     void updateFooterVisibility();
+    void updateStatusVisibility();
+
+// O transporte de audicao no editor. Sao tres operacoes diferentes e nao
+    // podem ser um so: o botao e' um comando, a ancora e' uma escrita do parametro
+    // e a seek so' acontece quando o utilizador mexeu no knob.
+    //
+    // A guarda `positionChangedSinceLastAnchor_` e' o que impede o editor de
+    // reancorar sessenta vezes por segundo. O nucleo conta geracoes para nao
+    // reaplicar a mesma ancora, mas se o editor a escrevesse a cada quadro a
+    // geracao subiria a cada quadro e a cabeca nunca passaria do ponto de
+    // ancoragem.
+    void pushTransportAnchor();
+    void refreshPlayButton();
 
     // Clique numa celula: puxa a regiao para la se o byte estiver fora, e escreve
     // o POSITION. A ordem e' a do else: primeiro move-se o material, depois a
@@ -142,50 +185,143 @@ private:
     PluginProcessor& owner_;
     OpcodaLookAndFeel lookAndFeel_;
 
+    // Teclado virtual. O estado vive no editor e o componente desenha-o; o som
+    // sai pela fila do processador, porque o caminho de audio nao pode consultar
+    // um objeto de interface.
+    //
+    // A ordem dos dois membros e' a da construcao: o componente guarda referencia
+    // ao estado, por isso nao pode nascer primeiro.
+    juce::MidiKeyboardState keyboardState_;
+    juce::MidiKeyboardComponent keyboard_;
+
     Led powerLed_ {Led::State::off};
     Led statusLed_ {Led::State::off};
     Led voicesLed_ {Led::State::off};
     DisplayPanel display_;
 
-    // A grelha de bytes ocupa o display todo. Nao ha barra de posicao nem curva
-    // ao lado: a grelha mostra os bytes e cada linha traz o seu endereco, que e'
-    // mais informacao do que a barra dava.
-    HexGrid grid_;
+    // O display ocupa a area toda. Sao tres vistas dentro dele, porque sao tres
+    // perguntas sobre a mesma regiao e porque o OE7 pede duas delas.
+    ByteDisplay grid_;
 
-    // Os dois caminhos de teclado para o que o rato faz na grelha. O campo
-    // escreve o endereco da regiao; o botao substitui o Enter que o seletor
-    // antigo usava para alinhar a secao.
+    // O campo escreve o endereco da regiao. O alinhar nao tem botao: tecla A e
+    // duplo-clique na grelha sao os dois caminhos, e o help text do display diz.
     ByteAddressField address_;
-    juce::TextButton snapButton_;
 
-    BoxedLabel title_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel subtitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel dropHint_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voices_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel status_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel engineTitle_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // Transporte de audicao. Fica na linha de estado ao lado do campo e do
+    // alinhamento porque e' a zona do display que ja tem moldura: um botao dentro
+    // do rodape de leituras seria indistinguivel de uma leitura.
+    juce::TextButton playButton_;
 
-    // Rodape de telemetria: leituras em mono, alinhadas a direita, como no
-    // mock. Todas em texto, nunca so por cor.
-    BoxedLabel entropyReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel positionReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel offsetReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel peakReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel rateReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
-    BoxedLabel voicesReadout_ {juce::Colours::transparentBlack, palette::chassisBorder};
+    // Selector de vista. Tres botoes em vez de um seletor: sao tres estados e
+    // cabem tres palavras, e um popup para mudar de vista seria dois cliques para
+    // uma coisa que se faz a cada minuto.
+    //
+    // Nao e' juce::ComboBox porque um popup esconde o display no momento em que se
+    // quer comparar as tres vistas.
+    juce::TextButton viewWaveButton_;
+    juce::TextButton viewHexButton_;
+    juce::TextButton viewEntropyButton_;
 
-    BoxedLabel fileName_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel formatTag_ {palette::subPanel, palette::chassisBorder};
-    BoxedLabel fileSize_ {palette::subPanel, palette::chassisBorder};
+    // Zoom do viewport da forma de onda: - / + / FIT, a direita da fileira de
+    // vistas. Texto curto sem cromo, a mesma lingua das abas; o display tambem
+    // responde a roda, +/- e 0, e estes botoes sao o caminho clicavel e o que
+    // o leitor de tela anuncia.
+    juce::TextButton zoomOutButton_;
+    juce::TextButton zoomInButton_;
+    juce::TextButton zoomFitButton_;
+
+    void buildViewButtons();
+    void updateViewButtons();
+
+    // Texto puro, sem caixa nem moldura. As BoxedLabel morreram aqui: o contorno
+    // de 1 px em cada leitura era o que dava a cara de painel de 2006, e a
+    // informacao nao precisa dele. O contraste vem da cor do texto, que continua
+    // textDark no claro e textOnDark no escuro.
+    juce::Label title_;
+    juce::Label status_;
+
+    // Rodape de telemetria: leituras em Inter, como no resto. Todas em texto,
+    // nunca so por cor. A taxa saiu: e' constante na sessao e morava na faixa
+    // mais disputada do ecra; foi para o tooltip do titulo, que e' onde quem
+    // procura um numero fixo vai ler sem pressa.
+    juce::Label entropyReadout_;
+    juce::Label positionReadout_;
+    juce::Label offsetReadout_;
+    juce::Label transportReadout_;
+    juce::Label peakReadout_;
+    juce::Label voicesReadout_;
+
+    juce::Label fileName_;
+    juce::Label formatTag_;
+    juce::Label fileSize_;
 
     juce::TextButton loadButton_;
+
+    // Seletor de preset no header: anterior, nome (abre o menu), seguinte. O
+    // nome mostra "*" quando um parametro saiu do preset — sem isso o menu
+    // mente, porque diz "Cloud" sobre um som que ja nao e' Cloud. A sujeira
+    // vem do Listener da APVTS e nao de comparacao de valores: comparar 25
+    // floats a 60 Hz para desenhar um asterisco e' o contrario de barato.
+    juce::TextButton presetPrevButton_;
+    juce::TextButton presetNameButton_;
+    juce::TextButton presetNextButton_;
+    std::unique_ptr<juce::FileChooser> presetChooser_;
+    juce::String currentPresetName_ {"Init"};
+    int currentFactoryIndex_ {0};
+    bool presetDirty_ {false};
+    bool applyingPreset_ {false};
+
+    void buildPresetSelector();
+    void showPresetMenu();
+    void applyFactoryPresetAndTrack(int index);
+    void stepFactoryPreset(int direction);
+    void refreshPresetName();
+    void valueTreePropertyChanged(juce::ValueTree& changed,
+                                    const juce::Identifier& property) override;
+    void loadPresetFromFile();
+    void savePresetToFile();
+
+    // Sete modulos, uma faixa visivel de cada vez. Todos os 41 knobs existem
+    // desde a construcao — os attachments vivem neles — e a aba so decide quem
+    // aparece. Recriar knobs por aba recriaria attachments e largaria o undo.
+    //
+    // A ordem do enum e' a ordem de construcao em buildParameterPanel: os dois
+    // arrays de fatias sao indexados por static_cast<size_t>(module).
+    enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys };
+    ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
+    std::vector<std::size_t> moduleFirstKnob_ {};
+    std::vector<std::size_t> moduleKnobCount_ {};
+    juce::TextButton moduleGrainButton_;
+    juce::TextButton moduleEnvelopeButton_;
+    juce::TextButton moduleFilterButton_;
+    juce::TextButton moduleModButton_;
+    juce::TextButton moduleCloudButton_;
+    juce::TextButton moduleOutButton_;
+    juce::TextButton moduleKeysButton_;
+
+    void buildModuleTabs();
+    void updateModuleTabs();
+    void showModule(ParamModule module);
     std::unique_ptr<juce::FileChooser> chooser_;
     bool dragHovered_ {false};
 
     // Identidade do material carregado. A grelha so e' reenviada quando isto
     // muda, e nao a cada tique do timer.
     juce::String loadedSignature_;
+
+    // Instante do ultimo tique, em milissegundos de alta resolucao. Medido e nao
+    // assumido: uma animacao que pressupoe 1/60 muda de velocidade conforme o monitor.
+    double lastTick_ {0.0};
+
+    // Ultima ancora de busca escrita no transporte, e a posicao que a produziu.
+    //
+    // E' o par e nao o valor so, porque o que interessa e' "o utilizador mexeu",
+    // e isso so se sabe comparando com o valor anterior. Guardar so a fracao
+    // permitiria detetar uma mudanca de 0,001 que o host fez e reancorar a cabeca
+    // por causa dela.
+    float lastAnchoredPosition_ {-1.0f};
+    bool positionChangedSinceLastAnchor_ {false};
 };
 
 } // namespace opcoda

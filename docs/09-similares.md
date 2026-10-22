@@ -35,13 +35,13 @@ Limites para este TG: importação offline, sem tempo real e sem polifonia. Não
 | Critério | Granulator II | Quanta 2 | Audacity raw | Opcoda (este TG) |
 | --- | --- | --- | --- | --- |
 | Fonte sonora | sample WAV/AIFF | sample importado | qualquer arquivo bruto | .exe, PE e binários arbitrários |
-| Granular em tempo real | sim, até 32 vozes | sim, polifônico | não | sim, 8 vozes (MVP) |
+| Granular em tempo real | sim, até 32 vozes | sim, polifônico | não | sim, 8 grãos simultâneos (MVP) |
 | Janelamento de grãos | sim, 4 formas | sim | não | sim, Hann e Gaussiana |
 | Parser estrutural PE | não | não | não | sim, com bounds checking |
 | Modulação por entropia | não | não | não | sim, Shannon por janela e seção |
 | Condicionamento DC/limiter | não se aplica | parcial | não | sim, DC-blocker e limiter |
 | Segurança contra corrompidos | não se aplica | não se aplica | não | sim, sandbox READONLY e fuzzing |
-| Formatos | Max for Live | VST3, AU, AAX, CLAP | editor offline | VST3 e CLAP |
+| Formatos | Max for Live | VST3, AU, AAX, CLAP | editor offline | VST3 (CLAP pós-entrega) |
 | Custo | gratuito | comercial | gratuito | protótipo acadêmico |
 
 ## Síntese

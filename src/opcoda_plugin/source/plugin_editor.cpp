@@ -1,12 +1,17 @@
 #include "plugin_editor.h"
 
+#include "factory_presets.h"
+
 #include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_position.h"
 
 namespace opcoda {
 namespace {
 
-constexpr int kHeaderHeight {54};
+// 44 px e nao 54: sem caixa no nome do ficheiro nem palavra nos botoes, a
+// faixa nao precisa de ar. O LOAD de 28 px entra a y+10 com 6 de respiro, e o
+// nome a y+14 com 24 — tudo com folga de 6 px em baixo.
+constexpr int kHeaderHeight {44};
 
 // O display passou de 130-210 px para 200-320 px. Uma grelha com endereco,
 // dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis linhas de
@@ -16,10 +21,10 @@ constexpr int kHeaderHeight {54};
 constexpr int kMinDisplayHeight {200};
 constexpr int kMaxDisplayHeight {320};
 
-// Janela minima e' 560x420. A altura subiu de 380 porque uma grelha com
-// endereco, dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis
-// linhas de 24 px, e o painel de parametros precisa de 124 px para o titulo e os
-// seis knobs.
+// Janela minima e' 480x434. A altura subiu de 410 com a fileira de abas de
+// modulo (22 + 2): grelha com endereco, dezasseis colunas e ASCII precisa de 14
+// px de cabecalho mais seis linhas de 24 px, e o painel de parametros precisa de
+// espaco para o titulo e os knobs do modulo ativo.
 //
 // A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
 // para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
@@ -28,12 +33,15 @@ constexpr int kMaxDisplayHeight {320};
 // ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
 // vozes, e nada mais.
 constexpr int kMinWidth {480};
-constexpr int kMinHeight {420};
-
+constexpr int kMinHeight {434};
 constexpr int kAddressFieldWidth {132};
-constexpr int kSnapButtonWidth {72};
+constexpr int kPlayButtonWidth {60};
 constexpr int kStatusHeight {14};
 constexpr int kFooterHeight {16};
+// Altura da faixa do teclado virtual. 56 px dao uma tecla branca legivel e
+// deixam o painel de knobs com o mesmo espaco: o valor sai da metade do display
+// e nao da faixa de parametros, que a 434 de altura ja esta' no osso.
+constexpr int kKeyboardHeight {56};
 
 // Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
 // MOD & OUTPUT do mock ficaram de fora porque biquad, envelope e dry/wet nao
@@ -53,24 +61,138 @@ juce::String asInteger(float value) {
     return juce::String {juce::roundToInt(value)};
 }
 
-const std::array<Knob::Spec, 6> kSpecs {
-    Knob::Spec {"grain", "SIZE", "Tamanho de grao, em milissegundos", 40.0f,
+const auto percent = [](float v) { return asInteger(v * 100.0f) + " %"; };
+const auto seconds = [](float v) { return asInteger(v * 1000.0f) + " ms"; };
+const auto cutoffText = [](float v) {
+    return v >= 1000.0f ? juce::String {v / 1000.0f, 1} + " kHz" : asInteger(v) + " Hz";
+};
+
+// Os 28 parametros ja no codigo em seis modulos: os 25 da Tabela 8 e os tres da
+// F018. Os IDs dos seis originais nao mudam — sessoes salvas referenciam por ID
+// — so o titulo e o nome falado passam a ingles. As abas trocam a faixa visivel
+// em vez de empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e
+// seis fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao
+// promete.
+const std::array<Knob::Spec, 10> kGrainSpecs {
+    Knob::Spec {"grain", "SIZE", "Grain size, in milliseconds", 40.0f,
                 [](float v) { return asInteger(v) + " ms"; }},
-    Knob::Spec {"density", "DENSITY", "Densidade, em graos por segundo", 20.0f,
+    Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
                 [](float v) { return asInteger(v) + " /s"; }},
-    Knob::Spec {"position", "POSITION", "Posicao de leitura no material", 0.5f,
-                [](float v) { return asInteger(v * 100.0f) + " %"; }},
-    Knob::Spec {"spray", "SPRAY", "Spray, dispersao da posicao de inicio", 0.0f,
-                [](float v) { return asInteger(v * 100.0f) + " %"; }},
+    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
+    Knob::Spec {"spray", "SPRAY", "Spray, start position spread", 0.0f, percent},
     // Estas duas ja estavam certas: com uma casa decimal o writeDouble entra no
     // if e formata em fixo. Ficam como estava para nao mexer no que funciona.
-    Knob::Spec {"pitch", "PITCH", "Afinacao, em semitons", 0.0f,
+    Knob::Spec {"pitch", "PITCH", "Tuning, in semitones", 0.0f,
                 [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"volume", "VOLUME", "Volume, em decibels", 0.0f,
+    Knob::Spec {"window", "WINDOW", "Grain window shape", 0.0f, {},
+                {"Hann", "Gaussian", "Hamming", "Blackman"}},
+    Knob::Spec {"pan", "PAN", "Stereo pan, left to right", 0.0f,
+                [](float v) {
+                    return v == 0.0f ? juce::String {"C"}
+                         : v < 0.0f  ? asInteger(-v * 100.0f) + " L"
+                                     : asInteger(v * 100.0f) + " R";
+                }},
+    Knob::Spec {"grainlevel", "LEVEL", "Per-grain level", 1.0f, percent},
+    Knob::Spec {"pitchrand", "P.RAND", "Random detune per grain, in semitones", 0.0f,
+                [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {"scanspeed", "SCAN", "Playhead scan speed, times realtime", 1.0f,
+                [](float v) { return juce::String {v, 2} + "x"; }},
+};
+
+// F020: as tres curvas ficam ao lado dos tempos que moldam. O valor diz a forma
+// e nao um numero: -100 % e' exponencial, 0 linear, +100 % logaritmica.
+const auto curveText = [](float v) {
+    const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
+    return (pct == 0) ? juce::String {"LIN"} : juce::String {pct} + " %";
+};
+
+const std::array<Knob::Spec, 7> kEnvelopeSpecs {
+    Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds},
+    Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds},
+    Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent},
+    Knob::Spec {"release", "REL", "Release time", 0.05f, seconds},
+    Knob::Spec {"atkcurve", "ATK CRV", "Attack curve, exponential to logarithmic", 0.0f,
+                curveText},
+    Knob::Spec {"deccurve", "DEC CRV", "Decay curve, exponential to logarithmic", 0.0f,
+                curveText},
+    Knob::Spec {"relcurve", "REL CRV", "Release curve, exponential to logarithmic", 0.0f,
+                curveText},
+};
+
+const std::array<Knob::Spec, 10> kFilterSpecs {
+    Knob::Spec {"f1type", "F1 TYPE", "Filter 1 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
+    Knob::Spec {"f1cutoff", "F1 CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText},
+    Knob::Spec {"f1q", "F1 Q", "Filter 1 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }},
+    // F020: caracter analogico. O slope e' a inclinacao; o drive satura antes
+    // do filtro; o keytrack segue a nota e o env abre com o envelope.
+    Knob::Spec {"f1slope", "F1 SLOPE", "Filter 1 slope", 0.0f, {}, {"12 dB", "24 dB"}},
+    Knob::Spec {"f1drive", "F1 DRIVE", "Filter 1 drive, in decibels", 0.0f,
+                [](float v) { return juce::String {v, 1} + " dB"; }},
+    Knob::Spec {"f1keytrack", "F1 KEY", "Filter 1 key tracking", 0.0f, percent},
+    Knob::Spec {"f1env", "F1 ENV", "Filter 1 envelope amount", 0.0f,
+                [](float v) {
+                    const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
+                    return juce::String {pct} + " %";
+                }},
+    Knob::Spec {"f2type", "F2 TYPE", "Filter 2 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
+    Knob::Spec {"f2cutoff", "F2 CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText},
+    Knob::Spec {"f2q", "F2 Q", "Filter 2 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }},
+};
+
+const std::array<Knob::Spec, 7> kModSpecs {
+    Knob::Spec {"lforate", "RATE", "LFO rate, in hertz", 1.0f,
+                [](float v) { return juce::String {v, 2} + " Hz"; }},
+    Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent},
+    Knob::Spec {"lfotarget", "TARGET", "LFO target parameter", 0.0f, {},
+                {"Pitch", "Density", "Cutoff", "Position"}},
+    Knob::Spec {"lfowave", "WAVE", "LFO waveform", 0.0f, {},
+                {"Sine", "Tri", "Saw", "Square", "S&H"}},
+    // F019: em Sync o RATE deixa de mandar e a divisao passa a mandar. Os dois
+    // ficam visiveis no mesmo modulo porque sao a mesma pergunta ("a que
+    // velocidade"), respondida em duas unidades.
+    Knob::Spec {"lfosync", "SYNC", "LFO follows the host tempo", 0.0f, {},
+                {"Free", "Sync"}},
+    Knob::Spec {"lfodiv", "DIV", "LFO division when synced", 0.0f, {},
+                {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4.", "1/8.",
+                 "1/4T", "1/8T", "1/16T"}},
+    Knob::Spec {"lfosteps", "STEPS", "LFO steps per cycle", 16.0f,
+                [](float v) { return juce::String {static_cast<int>(v + 0.5f)}; }},
+};
+
+// F021: a nuvem e' o mesmo motor com tres graus de liberdade no nascimento do
+// grao. Ficam num modulo proprio para o GRAIN nao passar de dez celulas a 480
+// px — a partir dai o knob encolhe abaixo do que o dedo acerta.
+const std::array<Knob::Spec, 3> kCloudSpecs {
+    Knob::Spec {"cloudsize", "WIDTH", "Temporal width of the grain cloud", 0.0f,
+                [](float v) { return asInteger(v * 500.0f) + " ms"; }},
+    Knob::Spec {"pitchspread", "SPREAD", "Pitch spread across the cloud, in semitones", 0.0f,
+                [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {"grainjit", "JITTER", "Grain duration jitter", 0.0f, percent},
+};
+
+const std::array<Knob::Spec, 1> kOutSpecs {
+    Knob::Spec {"volume", "VOLUME", "Output volume, in decibels", 0.0f,
                 [](float v) {
                     return v <= -60.0f ? juce::String {"-inf"}
                                        : juce::String {v, 1} + " dB";
                 }},
+};
+
+// F018: teclado e afinacao. A nota MIDI vira transposicao ja quantizada pela
+// escala; o glide interpola entre notas. Sao tres parametros novos e nenhum
+// dos 25 antigos mudou de sitio.
+const std::array<Knob::Spec, 3> kKeysSpecs {
+    Knob::Spec {"scale", "SCALE", "Scale applied to incoming notes", 0.0f, {},
+                {"Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Dorian",
+                 "Phrygian", "Lydian", "Mixolydian", "Pentatonic Major",
+                 "Pentatonic Minor", "Blues", "Whole Tone"}},
+    Knob::Spec {"root", "ROOT", "Scale root note", 0.0f, {},
+                {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}},
+    Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
 };
 
 } // namespace
@@ -87,35 +209,190 @@ void setIfChanged(juce::Label& label, const juce::String& text) {
 PluginEditor::PluginEditor(PluginProcessor& processor)
     : juce::AudioProcessorEditor(&processor),
       owner_(processor),
-      fileName_(palette::subPanel, palette::chassisBorder),
-      formatTag_(palette::subPanel, palette::chassisBorder),
-      fileSize_(palette::subPanel, palette::chassisBorder) {
+      keyboard_(keyboardState_, juce::MidiKeyboardComponent::horizontalKeyboard) {
     setLookAndFeel(&lookAndFeel_);
 
-    makePlainLabel(title_, "Opcoda", palette::textDark, BoxedLabel::sansFont(14.0f, true));
-    makePlainLabel(subtitle_, "Granular Synthesizer", palette::textSub,
-                   BoxedLabel::sansFont(10.0f));
-    makePlainLabel(dropHint_, "DRAG & DROP BINARY", palette::textField,
-                   BoxedLabel::monoFont(9.0f));
-    makePlainLabel(voices_, "VOICES  8", palette::textSub, BoxedLabel::monoFont(10.0f));
-    makePlainLabel(status_, "", palette::textOnDark, BoxedLabel::monoFont(10.0f));
-    makePlainLabel(engineTitle_, "1 - GRANULAR ENGINE", palette::textDark,
-                   BoxedLabel::sansFont(10.0f, true));
-
-    fileName_.setText("-", juce::dontSendNotification);
+    makePlainLabel(title_, "Opcoda", palette::textDark, fonts().sans(13.0f, true));
+    // **O subtítulo, o contador de vozes do cabeçalho, a dica de arrasto e o título do
+    // módulo saíram todos, e cada um tinha um duplo algures no ecrã.**
+    //
+    //   - "Granular Synthesizer" dizia o que o título "Opcoda" ja diz ao lado;
+    //   - "VOICES 8" no cabeçalho duplicava o rodapé, que escreve VOICES a cada
+    //     tique com o número real e não o máximo;
+    //   - "DRAG & DROP BINARY" duplicava a linha de estado, que escreve a mesma
+    //     instrução por extenso enquanto não há material;
+    //   - "1 - GRANULAR ENGINE" nomeava um módulo que é o único, e o "1" prometia
+    //     um segundo que nunca existiu.
+    //
+    // Nenhum deles levava informacao que nao estivesse escrita noutro sitio. O que
+    // fica no cabeçalho é o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
+    // tamanho.
+    makePlainLabel(status_, "", palette::textOnDark, fonts().sans(10.0f));
 
     buildHeader();
+    buildViewButtons();
+    buildPresetSelector();
     buildParameterPanel();
+    buildKeyboard();
+
+    // A sujeira do preset chega por Listener da arvore: qualquer PARAM que mexa
+    // fora de uma aplicacao de preset marca. O desenho do "*" mora no refresh,
+    // onde a comparacao evita o evento de acessibilidade a 60 Hz.
+    owner_.parameters().state.addListener(this);
 
     // A thread de interface e' a dona da memoria de amostra, entao e' ela que
-    // libera o que a thread de audio ja devolveu. 20 Hz nao competem com a
-    // audio e bastam para a leitura parecer viva.
-    startTimerHz(20);
+    // libera o que a thread de audio ja devolveu.
+    //
+    // **60 Hz e nao 20 Hz, e a razao e' a animacao.** A 20 Hz cada quadro dura
+    // 50 ms, e uma meia-vida de 60 ms da menos de dois quadros por meia-vida: isso
+    // e' degrau e nao suavizacao. O custo da subida e' um repaint do display a mais
+    // por segundo, e o desenho custa O(colunas) e nao O(bytes), porque a reducao
+    // esta' memorizada.
+    //
+    // O texto nao vira ruido a 60 Hz porque setIfChanged so escreve quando o texto
+    // muda, e trocar o texto de um Label dispara um evento de acessibilidade.
+    startTimerHz(60);
 
     setResizable(true, true);
     setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
     setSize(900, 540);
     refresh();
+}
+
+PluginEditor::~PluginEditor() {
+    // Primeiro os note-off, com o listener ainda ligado, senao fechar a janela
+    // com uma tecla premida deixava a nota presa no motor ate ao proximo pânico.
+    // allNotesOff corre na thread de interface e o listener empurra para a fila.
+    keyboardState_.allNotesOff(1);
+    keyboardState_.removeListener(this);
+    owner_.parameters().state.removeListener(this);
+}
+
+void PluginEditor::buildPresetSelector() {
+    // Setas sem cromo e nome como aba: a mesma lingua das abas de modulo, num
+    // tamanho que cabe entre o wordmark e o LOAD. O nome e' o botao do menu —
+    // um botao separado "MENU" seria o quarto controle para uma so funcao.
+    const auto setupArrow = [this](juce::TextButton& button, const char* glyph,
+                                   const char* spokenName, int direction) {
+        button.setButtonText(glyph);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName});
+        button.getProperties().set("uiIcon", "tab");
+        button.onClick = [this, direction] { stepFactoryPreset(direction); };
+        addAndMakeVisible(button);
+    };
+    setupArrow(presetPrevButton_, "<", "Previous factory preset", -1);
+    setupArrow(presetNextButton_, ">", "Next factory preset", +1);
+
+    presetNameButton_.setButtonText(currentPresetName_);
+    presetNameButton_.setName("Preset menu");
+    presetNameButton_.setTooltip("Factory presets, load and save .opcoda");
+    presetNameButton_.getProperties().set("uiIcon", "tab");
+    presetNameButton_.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible(presetNameButton_);
+}
+
+void PluginEditor::showPresetMenu() {
+    juce::PopupMenu menu;
+    const auto& presets = factoryPresets();
+    for (std::size_t i = 0; i < presets.size(); ++i) {
+        menu.addItem(static_cast<int>(i) + 1, presets[i].name, true,
+                     static_cast<int>(i) == currentFactoryIndex_ && !presetDirty_);
+    }
+    menu.addSeparator();
+    menu.addItem(101, "Load .opcoda...");
+    menu.addItem(102, "Save .opcoda...");
+
+    // Assincrono como o FileChooser: menu modal trava a message thread e o
+    // host nao perdoa. O tick marca o preset ativo so quando limpo — com "*"
+    // nenhum item e' o som atual.
+    menu.showMenuAsync(juce::PopupMenu::Options().withParentComponent(this),
+                       [this](int result) {
+                           if (result >= 1 && result <= 6) {
+                               applyFactoryPresetAndTrack(result - 1);
+                           } else if (result == 101) {
+                               loadPresetFromFile();
+                           } else if (result == 102) {
+                               savePresetToFile();
+                           }
+                       });
+}
+
+void PluginEditor::applyFactoryPresetAndTrack(int index) {
+    // A guarda impede os 25 parameterChanged de sujarem o preset que acabaram
+    // de aplicar: sem ela, todo preset nascia com "*".
+    applyingPreset_ = true;
+    owner_.applyFactoryPreset(index);
+    applyingPreset_ = false;
+    currentFactoryIndex_ = index;
+    currentPresetName_ = factoryPresets()[static_cast<std::size_t>(index)].name;
+    presetDirty_ = false;
+    refreshPresetName();
+}
+
+void PluginEditor::stepFactoryPreset(int direction) {
+    const auto count = static_cast<int>(factoryPresets().size());
+    applyFactoryPresetAndTrack((currentFactoryIndex_ + direction + count) % count);
+}
+
+void PluginEditor::refreshPresetName() {
+    const auto text =
+        presetDirty_ ? currentPresetName_ + " *" : currentPresetName_;
+    if (presetNameButton_.getButtonText() != text) {
+        presetNameButton_.setButtonText(text);
+        presetNameButton_.setName("Preset: " + text);
+    }
+}
+
+void PluginEditor::valueTreePropertyChanged(juce::ValueTree& changed,
+                                               const juce::Identifier&) {
+    // So PARAM suja: sourcePath e a regiao mudam no ingest e nao dizem nada
+    // sobre o som em relacao ao preset.
+    if (changed.hasType("PARAM") && !applyingPreset_) {
+        presetDirty_ = true;
+    }
+}
+
+void PluginEditor::loadPresetFromFile() {
+    presetChooser_ = std::make_unique<juce::FileChooser>(
+        "Load .opcoda preset", juce::File {}, "*.opcoda");
+    presetChooser_->launchAsync(
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser) {
+            const auto file = chooser.getResult();
+            // Nome primeiro, som depois: se o ficheiro falhar, o nome antigo
+            // continua verdadeiro. O som so troca dentro do if.
+            if (file.existsAsFile() && owner_.loadPresetFromFile(file)) {
+                currentPresetName_ = file.getFileNameWithoutExtension();
+                currentFactoryIndex_ = -1;
+                presetDirty_ = false;
+                refreshPresetName();
+            }
+        });
+}
+
+void PluginEditor::savePresetToFile() {
+    presetChooser_ = std::make_unique<juce::FileChooser>(
+        "Save .opcoda preset", juce::File {}, "*.opcoda");
+    presetChooser_->launchAsync(
+        juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser) {
+            auto file = chooser.getResult();
+            if (file.getFullPathName().isEmpty()) {
+                return;
+            }
+            // Extensao forcada: o dialogo de save nao a poe sozinho e um preset
+            // sem .opcoda nao abre por duplo-clique nem pelo filtro de load.
+            if (file.getFileExtension().isEmpty()) {
+                file = file.withFileExtension(".opcoda");
+            }
+            if (owner_.savePresetToFile(file)) {
+                currentPresetName_ = file.getFileNameWithoutExtension();
+                currentFactoryIndex_ = -1;
+                presetDirty_ = false;
+                refreshPresetName();
+            }
+        });
 }
 
 void PluginEditor::makePlainLabel(juce::Label& label,
@@ -132,9 +409,6 @@ void PluginEditor::makePlainLabel(juce::Label& label,
 void PluginEditor::buildHeader() {
     for (auto* component : {static_cast<juce::Component*>(&powerLed_),
                             static_cast<juce::Component*>(&title_),
-                            static_cast<juce::Component*>(&subtitle_),
-                            static_cast<juce::Component*>(&dropHint_),
-                            static_cast<juce::Component*>(&voices_),
                             static_cast<juce::Component*>(&loadButton_),
                             static_cast<juce::Component*>(&fileName_),
                             static_cast<juce::Component*>(&formatTag_),
@@ -147,39 +421,81 @@ void PluginEditor::buildHeader() {
 
     for (auto* component : {static_cast<juce::Component*>(&grid_),
                             static_cast<juce::Component*>(&address_),
-                            static_cast<juce::Component*>(&snapButton_),
+                            static_cast<juce::Component*>(&playButton_),
                             static_cast<juce::Component*>(&voicesLed_)}) {
         addAndMakeVisible(*component);
     }
 
-    // A grelha escreve o POSITION. O duplo clique e o botao alternam entre a
+    // A grelha escreve o POSITION. O duplo clique e a tecla A alternam entre a
     // regiao exacta e a secao PE mais proxima; o metodo do Processor e' quem
     // decide o sentido da alternancia, porque e' ele quem guarda a regiao
     // exacta anterior.
-    grid_.onCellActivated = [this](std::uint64_t address) { activateByte(address); };
+    grid_.onAddressActivated = [this](std::uint64_t address) { activateByte(address); };
     grid_.onSnapRequested = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
     address_.onAddressEntered = [this](std::uint64_t address) { moveRegionTo(address); };
 
-    snapButton_.setButtonText("ALINHAR");
-    snapButton_.setTooltip(
-        "Alterna entre a regiao exacta e a secao PE mais proxima. Substitui a "
-        "tecla Enter que o seletor de bytes usava para o mesmo.");
-    snapButton_.setName("Alinhar a regiao a uma secao PE");
-    snapButton_.onClick = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
+    // O display e' o componente que fica com o foco quando nao ha campo de endereco
+    // com foco, e por isso e' ele que responde ao espaco e ao A. O editor responde
+    // tambem, para o caso de o foco estar noutro sitio — um botao, por exemplo.
+    grid_.onToggleTransport = [this] {
+        owner_.toggleTransport();
+        refreshPlayButton();
+    };
+    grid_.onSnapRequestedFromKey = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
 
-    for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_, &peakReadout_,
-                          &rateReadout_, &voicesReadout_}) {
+    // Tecla A e duplo-clique na grelha alinham a regiao; nao ha botao porque o
+    // terceiro controle na linha de estado empurrava o texto para debaixo do
+    // campo. A dica vive no help text do display e em docs/10 — setHelpText e
+    // nao setTooltip, pelo mesmo motivo do HexGrid: o Component so expoe ajuda
+    // pelo AccessibilityHandler.
+    grid_.setHelpText("Duplo-clique ou tecla A: alinha a regiao a secao PE mais proxima.");
+
+    // Botao de transporte. E' um toggle, e a forma troca com o estado (▶/■): e'
+    // a segunda pista de estado, e a que funciona para quem nao distingue cores.
+    // Sem texto e sem cromo — so o glifo, desenhado pelo LookAndFeel.
+    playButton_.getProperties().set("uiIcon", "transport");
+    // Na linha de estado, sobre o display escuro: tinta clara. O chassis tambem
+    // e' escuro agora, por isso a distincao uiOnDark e' redundante — fica porque
+    // o LookAndFeel ainda a le para o wash do hover.
+    playButton_.getProperties().set("uiOnDark", true);
+    playButton_.setButtonText("");
+    playButton_.setClickingTogglesState(true);
+    playButton_.setTooltip(
+        "Percorre a regiao seleccionada de inicio a fim, sem nota MIDI. Tambem na "
+        "barra de espaco.");
+    playButton_.setName("Reproduzir a regiao");
+    playButton_.onClick = [this] {
+        owner_.toggleTransport();
+        refreshPlayButton();
+    };
+
+    for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_,
+                           &transportReadout_, &peakReadout_, &voicesReadout_}) {
         addAndMakeVisible(*readout);
+        makePlainLabel(*readout, "", palette::textOnDark, fonts().sans(10.0f));
+        // Centrado como antes, quando havia caixa: a posicao do texto na faixa
+        // nao muda, so some a moldura. Mudar o alinhamento junto seria duas
+        // mudancas visuais numa.
+        readout->setJustificationType(juce::Justification::centred);
         readout->setInterceptsMouseClicks(false, false);
         // A cor de texto por omissao do Label e' quase preta e desaparece sobre
         // o display escuro. textOnDark mantem a leitura acima de 4,5:1, que e'
         // o que o criterio 1.4.3 exige. O rodape vive no display, nao no chassis
         // claro, e por isso nao pode usar os tokens de superficie clara.
-        readout->setColour(juce::Label::textColourId, palette::textOnDark);
     }
 
-    loadButton_.setButtonText("LOAD");
-    loadButton_.setTooltip("Escolher um binario para sintetizar");
+    makePlainLabel(fileName_, "-", palette::textDark, fonts().sans(10.0f));
+    // Formato e tamanho sao metadado tecnico: texto secundario, para o nome da
+    // fonte (o que importa) carregar a hierarquia sozinho.
+    makePlainLabel(formatTag_, "", palette::textSub, fonts().sans(10.0f));
+    makePlainLabel(fileSize_, "", palette::textSub, fonts().sans(10.0f));
+    fileName_.setJustificationType(juce::Justification::centred);
+    formatTag_.setJustificationType(juce::Justification::centred);
+    fileSize_.setJustificationType(juce::Justification::centred);
+
+    loadButton_.getProperties().set("uiIcon", "folder");
+    loadButton_.setButtonText("");
+    loadButton_.setTooltip("Escolher um binario para sintetizar (tecla L)");
     loadButton_.setName("Carregar binario");
     loadButton_.onClick = [this] { chooseFile(); };
 }
@@ -191,13 +507,101 @@ void PluginEditor::buildHeader() {
 // resized() sabe a largura, refresh() sabe o conteudo, e cada um escreve a sua
 // metade. Se cada um chamasse setVisible por si, o timer de 20 Hz do refresh()
 // voltava a mostrar um chip que nao cabe, e a sobreposicao voltava a aparecer.
+void PluginEditor::buildViewButtons() {
+    // Os rotulos sao curtos de proposito. O nome accessivel de cada um e' a
+    // descricao completa, e o texto de ajuda explica a tecla: um rotulo de 15
+    // caracteres num botao de 60 px sairia cortado, e um rotulo cortado e' pior do
+    // que um rotulo curto com um nome accessivel por tras.
+    struct Spec {
+        juce::TextButton* button;
+        const char* shortLabel;
+        const char* spokenName;
+        const char* hint;
+        ByteDisplay::ViewMode mode;
+    };
+
+    const Spec specs[] = {
+        {&viewWaveButton_, "WAV", "Forma de onda do material", "Tecla 1", ByteDisplay::ViewMode::waveform},
+        {&viewHexButton_, "HEX", "Grelha de bytes do material", "Tecla 2", ByteDisplay::ViewMode::hex},
+        {&viewEntropyButton_, "ENT", "Curva de entropia do material", "Tecla 3", ByteDisplay::ViewMode::entropy},
+    };
+
+    for (auto* button : {static_cast<juce::Component*>(&viewWaveButton_),
+                         static_cast<juce::Component*>(&viewHexButton_),
+                         static_cast<juce::Component*>(&viewEntropyButton_),
+                         static_cast<juce::Component*>(&zoomOutButton_),
+                         static_cast<juce::Component*>(&zoomInButton_),
+                         static_cast<juce::Component*>(&zoomFitButton_)}) {
+        addAndMakeVisible(*button);
+    }
+
+    for (const auto& spec : specs) {
+        spec.button->setButtonText(spec.shortLabel);
+        spec.button->setClickingTogglesState(true);
+        spec.button->setTooltip(juce::String {spec.spokenName} + ". " + spec.hint);
+        spec.button->setName(spec.spokenName);
+        // Aba sem cromo: so a palavra e o filete do estado. O desenho e' do
+        // LookAndFeel, que trata "tab" sem fundo nem bisel.
+        spec.button->getProperties().set("uiIcon", "tab");
+    }
+
+    // Os tres botoes nao estao em grupo: cada um e' independente e e' o LookAndFeel
+    // que desenha o estado ligado. Um juce::ButtonGroup daria exclusao mutua de
+    // graca, mas traria um listener que so serve para reescrever o que
+    // updateViewButtons ja escreve a partir do modo.
+    viewWaveButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::waveform);
+        updateViewButtons();
+    };
+    viewHexButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::hex);
+        updateViewButtons();
+    };
+    viewEntropyButton_.onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::entropy);
+        updateViewButtons();
+    };
+
+    // Zoom clicavel do viewport. Nomes falados completos: "-" sozinho num
+    // leitor de tela nao diz nada.
+    const auto setupZoom = [this](juce::TextButton& button, const char* glyph,
+                                 const char* spokenName, const char* hint) {
+        button.setButtonText(glyph);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName} + ". " + hint);
+        button.getProperties().set("uiIcon", "tab");
+    };
+    setupZoom(zoomOutButton_, "-", "Zoom out of the waveform", "Tecla -");
+    setupZoom(zoomInButton_, "+", "Zoom into the waveform", "Tecla +");
+    setupZoom(zoomFitButton_, "FIT", "Fit the region to the view", "Tecla 0");
+    zoomOutButton_.onClick = [this] { grid_.zoomOut(); };
+    zoomInButton_.onClick = [this] { grid_.zoomIn(); };
+    zoomFitButton_.onClick = [this] { grid_.fitView(); };
+
+    updateViewButtons();
+}
+
+void PluginEditor::updateViewButtons() {
+    const auto mode = grid_.mode();
+
+    const auto mark = [&mode](juce::TextButton& button, ByteDisplay::ViewMode candidate) {
+        const auto on = mode == candidate;
+        if (button.getToggleState() != on) {
+            button.setToggleState(on, juce::dontSendNotification);
+        }
+    };
+
+    mark(viewWaveButton_, ByteDisplay::ViewMode::waveform);
+    mark(viewHexButton_, ByteDisplay::ViewMode::hex);
+    mark(viewEntropyButton_, ByteDisplay::ViewMode::entropy);
+}
+
 void PluginEditor::updateHeaderVisibility() {
     const auto& info = owner_.sourceInfo();
 
     // Duas condicoes, e ambas tem de ser verdade. A peca e' escondida quando nao
     // ha espaco OU quando nao ha conteudo — e nunca se desenha uma moldura vazia,
-    // que e' o mesmo motivo pelo qual os chips ja se escondiam por vazio.
-    dropHint_.setVisible(headerFitsHint_);
+    // que e' o mesmo motivo pelo qual os chips se escondem por vazio.
     fileSize_.setVisible(headerFitsSize_ && info.sizeBytes > 0);
     formatTag_.setVisible(headerFitsFormat_ && info.formatTag.isNotEmpty());
 }
@@ -206,18 +610,177 @@ void PluginEditor::updateFooterVisibility() {
     // Mesma regra do header: a largura decide se a caixa existe, e o conteudo
     // decide se ha algo para escrever. Uma caixa a mais pequena e' pior do que
     // nenhuma, porque o texto sai cortado e nao se percebe o que e'.
-    rateReadout_.setVisible(footerFitsRate_);
     peakReadout_.setVisible(footerFitsPeak_);
     entropyReadout_.setVisible(footerFitsEntropy_ && entropyReadout_.getText().isNotEmpty());
+
+    // A leitura de transporte so aparece a tocar, pela mesma razao que os chips
+    // vazios do header se escondem: uma moldura vazia le-se como defeito. Durante
+    // a reproducao e' a unica pista textual da cabeca, e sem ela a barra animada
+    // seria a unica forma de saber o que se ouve — o que o criterio 1.4.1 nao
+    // permite.
+    transportReadout_.setVisible(footerFitsTransport_ &&
+                                 transportReadout_.getText().isNotEmpty());
+}
+
+void PluginEditor::updateStatusVisibility() {
+    // O botao de reproducao nunca desaparece por falta de espaco: e' a unica
+    // forma de ouvir o material sem teclado MIDI. O que se sacrifica e' o campo
+    // de endereco, que escreve um sitio que o POSITION e o clique na grelha
+    // escrevem tambem.
+    playButton_.setVisible(owner_.hasSource());
+    address_.setVisible(owner_.hasSource() && statusFitsAddress_);
+}
+
+void PluginEditor::refreshPlayButton() {
+    const bool playing = owner_.isTransportPlaying();
+
+    // A forma e' a pista de estado que sobrevive a quem nao ve cor: ▶ parado,
+    // ■ a tocar. O nome accessivel troca junto para o leitor de tela dizer o
+    // que o glifo mostra.
+    if ((playButton_.getName() == "Parar a reproducao") != playing) {
+        playButton_.setName(playing ? "Parar a reproducao" : "Reproduzir a regiao");
+    }
+
+    if (playButton_.getToggleState() != playing) {
+        playButton_.setToggleState(playing, juce::dontSendNotification);
+    }
+
+    // **Desativado e nao invisivel, e nao activo-a-fingir.** Sem material nao ha
+    // regiao para percorrer; com uma regiao de um ou dois bytes nao ha posicao que
+    // produza som, porque o motor precisa de `index + 1` e `hasRegion()` e' `>= 3`;
+    // e com o host parado nao ha callback que produza o som. Um botao que aceita o
+    // toque e nao faz nada e' pior do que um botao que recusa, porque o primeiro faz
+    // o utilizador achar que o plugin avariou.
+    const auto canPlay = owner_.hasSource() && owner_.hasPlayableRegion() &&
+                         !owner_.hostTransportIsKnownToBeStopped();
+    playButton_.setEnabled(canPlay);
+}
+
+void PluginEditor::pushTransportAnchor() {
+    // A ancora so e' escrita quando o utilizador mexeu em POSITION. Escrever a cada
+    // quadro faria a geracao do nucleo subir a cada quadro, e a cabeca nunca
+    // passaria do ponto de ancoragem — que e' o modo de falha que o teste
+    // Transport.SeekIsAppliedOnceAndThenTheHeadAdvanced cobre do outro lado.
+    if (!positionChangedSinceLastAnchor_) {
+        return;
+    }
+    positionChangedSinceLastAnchor_ = false;
+    lastAnchoredPosition_ = readPosition();
+    owner_.seekTransportTo(lastAnchoredPosition_);
 }
 
 void PluginEditor::buildParameterPanel() {
-    addAndMakeVisible(engineTitle_);
+    // Ordem de construcao e' ordem de modulo: GRAIN, ENVELOPE, FILTER, MOD,
+    // OUT, KEYS. moduleFirstKnob_/moduleKnobCount_ guardam as fatias para a aba
+    // mostrar sem procurar por ID.
+    const auto addSpecs = [this](const auto& specs) {
+        moduleFirstKnob_.push_back(knobs_.size());
+        for (const auto& spec : specs) {
+            knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
+            addAndMakeVisible(*knobs_.back());
+        }
+        moduleKnobCount_.push_back(knobs_.size() - moduleFirstKnob_.back());
+    };
+    addSpecs(kGrainSpecs);
+    addSpecs(kEnvelopeSpecs);
+    addSpecs(kFilterSpecs);
+    addSpecs(kModSpecs);
+    addSpecs(kCloudSpecs);
+    addSpecs(kOutSpecs);
+    addSpecs(kKeysSpecs);
 
-    for (const auto& spec : kSpecs) {
-        knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
-        addAndMakeVisible(*knobs_.back());
+    buildModuleTabs();
+    showModule(activeModule_);
+}
+
+void PluginEditor::buildModuleTabs() {
+    // Mesma lingua das abas de vista: palavra sem cromo, ativa em peso forte
+    // com filete. Seis abas curtas cabem a 480 (52 px cada mais 4 de vao dao
+    // 332 px); GRAIN continua a ser a mais larga.
+    const auto setup = [this](juce::TextButton& button, const char* title,
+                              const char* spokenName, ParamModule module) {
+        button.setButtonText(title);
+        button.setName(spokenName);
+        button.setTooltip(juce::String {spokenName});
+        button.setClickingTogglesState(true);
+        // Aba sem cromo, como as de vista: o mesmo "tab" do LookAndFeel, que
+        // desenha a palavra e o filete do estado sem fundo nem bisel.
+        button.getProperties().set("uiIcon", "tab");
+        button.onClick = [this, module] { showModule(module); };
+        addAndMakeVisible(button);
+    };
+    setup(moduleGrainButton_, "GRAIN", "Grain module", ParamModule::grain);
+    setup(moduleEnvelopeButton_, "ENV", "Envelope module", ParamModule::envelope);
+    setup(moduleFilterButton_, "FILTER", "Filter module", ParamModule::filter);
+    setup(moduleModButton_, "MOD", "Modulation module", ParamModule::mod);
+    setup(moduleCloudButton_, "CLOUD", "Grain cloud module", ParamModule::cloud);
+    setup(moduleOutButton_, "OUT", "Output module", ParamModule::out);
+    setup(moduleKeysButton_, "KEYS", "Keyboard and tuning module", ParamModule::keys);
+}
+
+void PluginEditor::updateModuleTabs() {
+    const auto mark = [this](juce::TextButton& button, ParamModule candidate) {
+        const auto on = activeModule_ == candidate;
+        if (button.getToggleState() != on) {
+            button.setToggleState(on, juce::dontSendNotification);
+        }
+    };
+    mark(moduleGrainButton_, ParamModule::grain);
+    mark(moduleEnvelopeButton_, ParamModule::envelope);
+    mark(moduleFilterButton_, ParamModule::filter);
+    mark(moduleModButton_, ParamModule::mod);
+    mark(moduleCloudButton_, ParamModule::cloud);
+    mark(moduleOutButton_, ParamModule::out);
+    mark(moduleKeysButton_, ParamModule::keys);
+}
+
+void PluginEditor::showModule(ParamModule module) {
+    activeModule_ = module;
+    const auto index = static_cast<std::size_t>(module);
+    const auto first = moduleFirstKnob_[index];
+    for (std::size_t i = 0; i < knobs_.size(); ++i) {
+        knobs_[i]->setVisible(i >= first && i < first + moduleKnobCount_[index]);
     }
+    updateModuleTabs();
+    resized();
+}
+
+void PluginEditor::buildKeyboard() {
+    // Teclado horizontal com o mapa de teclas do JUCE por omissao
+    // (A W S E D F T G Y H U J K ...), que e' exatamente o que o spec da F018
+    // pede. O componente ja trata do rato, do foco por Tab e do desenho da tecla
+    // premida; o que falta e' alguem escutar o estado e mandar a nota ao motor.
+    keyboard_.setAvailableRange(36, 96);
+    keyboard_.setLowestVisibleKey(48);
+    keyboard_.setKeyWidth(24.0f);
+    keyboard_.setName("Virtual keyboard: play with the mouse or the computer keys "
+                      "A W S E D F T G Y H U J K");
+    keyboard_.setWantsKeyboardFocus(true);
+
+    keyboard_.setColour(juce::MidiKeyboardComponent::whiteNoteColourId,
+                        palette::textDark.withAlpha(0.92f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::blackNoteColourId, palette::chassisDark);
+    keyboard_.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId, palette::chassisBorder);
+    keyboard_.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId,
+                        palette::accent.withAlpha(0.22f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId,
+                        palette::accent.withAlpha(0.72f));
+    keyboard_.setColour(juce::MidiKeyboardComponent::textLabelColourId, palette::chassisDark);
+    keyboard_.setColour(juce::MidiKeyboardComponent::shadowColourId,
+                        juce::Colours::black.withAlpha(0.35f));
+
+    addAndMakeVisible(keyboard_);
+    keyboardState_.addListener(this);
+}
+
+// Duas linhas e nao uma tabela: o listener do JUCE tem duas entradas, e passar
+// um booleano por dentro obrigaria a uma terceira funcao so para isso.
+void PluginEditor::handleNoteOn(juce::MidiKeyboardState*, int, int midiNoteNumber, float velocity) {
+    owner_.pushKeyboardNote(midiNoteNumber, velocity, true);
+}
+
+void PluginEditor::handleNoteOff(juce::MidiKeyboardState*, int, int midiNoteNumber, float velocity) {
+    owner_.pushKeyboardNote(midiNoteNumber, velocity, false);
 }
 
 void PluginEditor::paint(juce::Graphics& g) {
@@ -230,14 +793,26 @@ void PluginEditor::paint(juce::Graphics& g) {
     g.setColour(palette::chassisBorder);
     g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(getWidth()));
 
+    // Sombra de 1 px sob a costura do header: a faixa de cima assenta sobre o
+    // resto do chassi em vez de estar pintada nele. Preta a 0,15 — sombra e nao
+    // linha, porque linha seria mais um divisor e a costura ja divide.
+    g.setColour(juce::Colours::black.withAlpha(0.15f));
+    g.drawHorizontalLine(kHeaderHeight + 1, 0.0f, static_cast<float>(getWidth()));
+
     // Realce de 1 px no topo: e' o que da sensacao de superficie em vez de
-    // retangulo liso.
-    g.setColour(juce::Colours::white.withAlpha(0.35f));
+    // retangulo liso. Contido (0,08) porque o fundo e' escuro.
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
     g.drawHorizontalLine(0, 0.0f, static_cast<float>(getWidth()));
 }
 
 void PluginEditor::resized() {
     auto area = getLocalBounds();
+
+    // A faixa do teclado e' retirada da base antes de tudo o resto: a partir
+    // daqui nenhuma outra peca pode crescer para cima dela. O que ela custa sai
+    // da metade do display, e nao do painel de knobs — a 540 de altura o painel
+    // fica igual e so no minimo de 434 o mostrador encolhe uns pixels.
+    keyboard_.setBounds(area.removeFromBottom(kKeyboardHeight).reduced(10, 4));
 
     // ---- header ----
     // Cursor explicito em vez de encadear removeFromLeft: aquele metodo devolve
@@ -250,36 +825,47 @@ void PluginEditor::resized() {
     // larguras que tem de fechar, e numeros soltos nao se somam a olho.
     constexpr int kLedWidth {16};
     constexpr int kGap {6};
-    constexpr int kIdentityWidth {180};
+    // O wordmark e' a unica coisa com largura propria que nao e' uma cadeia: o nome
+    // do plugin nao cresce com a janela, e 180 px era a largura que o subtitulo
+    // "Granular Synthesizer" exigia. Com ele fora, o titulo precisa de metade.
+    constexpr int kIdentityWidth {96};
     constexpr int kIdentityGap {12};
-    constexpr int kLoadWidth {76};
+    // 40 px porque e' um icone de pasta, nao a palavra LOAD: os 36 px que
+    // sobram vao para o nome do ficheiro, que e' quem precisa deles.
+    constexpr int kLoadWidth {40};
     constexpr int kNameGap {6};
     constexpr int kMinNameWidth {40};
     constexpr int kChipGap {4};
     constexpr int kFormatWidth {78};
     constexpr int kSizeWidth {58};
-    constexpr int kStripGap {10};
-    constexpr int kHintGap {8};
-    constexpr int kHintWidth {140};
-    constexpr int kVoicesWidth {78};
 
     powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth, header.getHeight()}
                              .withSizeKeepingCentre(14, 14));
     x += kLedWidth + kGap;
 
-    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 19});
-    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 29, kIdentityWidth, 13});
+    // O titulo centrado na altura do cabeçalho. Estava a 10 px do topo porque
+    // tinha um subtitulo por baixo; sem ele, centrar vertical e' o que evita o
+    // wordmark parecer colado ao topo da faixa.
+    title_.setBounds(juce::Rectangle<int> {x, header.getY(), kIdentityWidth, header.getHeight()}
+                         .withSizeKeepingCentre(kIdentityWidth, 19));
     x += kIdentityWidth + kIdentityGap;
 
-    // Lado direito: VOICES colado a borda e sempre visivel. E' leitura de estado,
-    // e leitura de estado nao se esconde por falta de espaco.
-    voices_.setBounds(juce::Rectangle<int> {header.getRight() - kVoicesWidth, header.getY(),
-                                             kVoicesWidth, 16}
-                          .withSizeKeepingCentre(kVoicesWidth, 16));
+    // Seletor de preset entre o wordmark e o LOAD: identidade do som antes da
+    // origem do som. Setas de 22 com nome de 84 no meio; a 480 o nome do
+    // ficheiro encolhe mas o preset nunca e' sacrificado — e' feature, nao chip.
+    constexpr int kPresetArrow {22};
+    constexpr int kPresetName {84};
+    constexpr int kPresetGap {2};
+    presetPrevButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    x += kPresetArrow + kPresetGap;
+    presetNameButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetName, 22});
+    x += kPresetName + kPresetGap;
+    presetNextButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    x += kPresetArrow + kIdentityGap;
 
-    // Tudo o que fica a esquerda de VOICES tem de caber a serio. `leftLimit` e' o
-    // fim do bloco fixo: LED, wordmark, botao LOAD e o nome do ficheiro no
-    // minimo. E' contra ele que cada peca decide se cabe.
+    // Tudo o que fica a partir daqui tem de caber a serio. `leftLimit` e' o fim do
+    // bloco fixo: LED, wordmark, preset, botao LOAD e o nome do ficheiro no minimo.
+    // E' contra ele que cada peca decide se cabe.
     const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
 
     // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
@@ -287,30 +873,21 @@ void PluginEditor::resized() {
     // ocultacao como erro, e `edge` ja e' o cursor do rodape mais abaixo, na
     // mesma funcao. O /W4 ja apanhou este mesmo tropeco duas vezes neste
     // ficheiro.
-    int stripEdge = header.getRight() - kVoicesWidth;
-
-    // A ordem em que se sacrifica e' a ordem de importancia invertida.
     //
-    // 1. A dica de arrasto primeiro, porque so interessa enquanto nao ha ficheiro
-    //    carregado: depois de carregar, o nome do ficheiro diz o essencial e a
-    //    dica e' redundante.
-    // 2. O formato a seguir, e o tamanho em ultimo: ambos sao informacao sobre o
-    //    material, mas menos importante do que o nome.
+    // **A borda direita e' a borda do cabecalho.** Antes havia um bloco VOICES de 78
+    // px a que a cadeia se encostava, e ele saiu por repetir o rodapé.
+    int stripEdge = header.getRight();
+
+    // A ordem em que se sacrifica e' a ordem de importancia invertida: primeiro o
+    // formato, e o tamanho em ultimo. Ambos sao informacao sobre o material, mas
+    // menos importante do que o nome.
     //
     // Sem esta regra o chip de formato comeca em 174 px numa janela de 560 e o
     // botao LOAD acaba em 300 — 126 px de sobreposicao que so nao se via porque
     // os chips vazios ja se escondem, e por isso so aparecia depois de carregar
     // um ficheiro.
-    headerFitsHint_ = !owner_.hasSource() && stripEdge - kHintGap - kHintWidth >= leftLimit;
-    dropHint_.setVisible(headerFitsHint_);
-    if (headerFitsHint_) {
-        stripEdge -= kHintGap;
-        dropHint_.setBounds(juce::Rectangle<int> {stripEdge - kHintWidth, header.getY(),
-                                                  kHintWidth, 14});
-        stripEdge -= kHintWidth + kStripGap;
-    }
 
-    // 2. O tamanho, na ponta direita da faixa.
+    // 1. O tamanho, na ponta direita da faixa.
     headerFitsSize_ = stripEdge - kSizeWidth >= leftLimit;
     if (headerFitsSize_) {
         fileSize_.setBounds(juce::Rectangle<int> {stripEdge - kSizeWidth, header.getY() + 17,
@@ -318,7 +895,7 @@ void PluginEditor::resized() {
         stripEdge -= kSizeWidth + kChipGap;
     }
 
-    // 3. O formato, a seguir.
+    // 2. O formato, a seguir.
     headerFitsFormat_ = stripEdge - kFormatWidth >= leftLimit;
     if (headerFitsFormat_) {
         formatTag_.setBounds(juce::Rectangle<int> {stripEdge - kFormatWidth, header.getY() + 17,
@@ -326,7 +903,7 @@ void PluginEditor::resized() {
         stripEdge -= kFormatWidth + kChipGap;
     }
 
-    // 4. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
+    // 3. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
     loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kLoadWidth, 28});
     fileName_.setBounds(juce::Rectangle<int> {x + kLoadWidth + kNameGap, header.getY() + 14,
                                               juce::jmax(kMinNameWidth,
@@ -337,7 +914,7 @@ void PluginEditor::resized() {
 
 // ---- display ----
     const auto displayHeight =
-        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2);
+        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2 - kKeyboardHeight);
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
@@ -352,8 +929,6 @@ void PluginEditor::resized() {
     const auto statusY = displayBounds.getY();
     statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
                              .withSizeKeepingCentre(14, kStatusHeight));
-    status_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12 + 16 + 8, statusY,
-                                            displayBounds.getWidth() - 36 - 12, kStatusHeight});
 
     const auto footerY = displayBounds.getBottom() - kFooterHeight - 2;
 
@@ -365,15 +940,44 @@ void PluginEditor::resized() {
     grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
                                           displayBounds.getWidth(), footerY - gridTop});
 
-    // O campo de endereco e o botao de alinhar ficam na linha do estado, a
+    // O campo de endereco e o botao de reproducao ficam na linha do estado, a
     // direita. Ao lado do texto e nao no rodape porque sao controles: e' a zona
     // do display que ja tem moldura, e um campo de texto dentro do rodape de
     // leituras seria indistinguivel de uma leitura.
+    //
+    // A cadeia desce da direita para a esquerda em largura fixa e degrada em vez
+    // de espremer, com o botao de reproducao a ser o ultimo a cair. Sem o
+    // alinhar, a 480 px de janela sobra espaco para o texto de estado e para o
+    // campo — o que se sacrifica primeiro continua a ser o campo, e nao a dica.
     const int controlY = displayBounds.getY() + 2;
-    snapButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kSnapButtonWidth,
-                                                controlY, kSnapButtonWidth, kStatusHeight + 2});
-    address_.setBounds(juce::Rectangle<int> {snapButton_.getX() - 6 - kAddressFieldWidth,
-                                             controlY, kAddressFieldWidth, kStatusHeight + 2});
+    const int controlHeight = kStatusHeight + 2;
+    const int controlGap = 6;
+
+    playButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kPlayButtonWidth,
+                                                controlY, kPlayButtonWidth, controlHeight});
+    const int afterPlay = playButton_.getX() - controlGap;
+
+    statusFitsAddress_ = afterPlay - kAddressFieldWidth >= displayBounds.getX() + 150;
+    address_.setBounds(juce::Rectangle<int> {afterPlay - kAddressFieldWidth, controlY,
+                                             kAddressFieldWidth, controlHeight});
+
+    // O texto de estado e' medido depois dos controlos e nao antes, porque e' a
+    // largura deles que diz onde o texto acaba. Com uma largura fixa, o texto
+    // escrevia por baixo do campo de endereco e do botao — e o fundo opaco do
+    // campo tapava o "PRONTO", que e' o que o criterio 3.3.1 exige que se veja.
+    //
+    // A decisao vem das flags que acabaram de ser calculadas e nao de isVisible():
+    // nesta passagem do layout a visibilidade ainda e' a da janela anterior, e o
+    // texto saltava uma largura para a esquerda e para a direita enquanto a
+    // janela era redimensionada.
+    const int statusLeft = displayBounds.getX() + 12 + 16 + 8;
+    const auto hasSource = owner_.hasSource();
+    const int statusRight =
+        juce::jmax(statusLeft + 40,
+                   (hasSource && statusFitsAddress_) ? address_.getX() - controlGap
+                                                    : afterPlay);
+    status_.setBounds(juce::Rectangle<int> {statusLeft, statusY, statusRight - statusLeft,
+                                            kStatusHeight});
 
     // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
     // por caixa. A versao anterior media cada caixa a partir da margem esquerda
@@ -384,19 +988,19 @@ void PluginEditor::resized() {
     // E pela mesma razao que o header, o rodape degrada em vez de espremer: as
     // caixas tem largura fixa, e a 480 nao cabem todas. Sem isso a entropia fica
     // com zero de largura e o REG sai cortado a meio, que e' pior do que nao
-    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro a taxa, que e'
-    // constante durante a sessao e por isso a menos informativa; depois o pico;
-    // a entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
-    // que o painel existe para mostrar.
+    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro o pico, a
+    // entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
+    // que o painel existe para mostrar. A taxa nem entra na ordem: saiu para o
+    // tooltip do titulo.
     constexpr int footerHeight {16};
     const int margin = displayBounds.getX() + 12;
     const int footerRight = displayBounds.getRight() - 12;
 
-    constexpr int kLedBoxWidth {12};
+constexpr int kLedBoxWidth {12};
     constexpr int kBoxGap {8};
     constexpr int kVoicesBoxWidth {74};
-    constexpr int kRateWidth {78};
     constexpr int kPeakWidth {86};
+    constexpr int kTransportWidth {128};
     constexpr int kPositionWidth {116};
     constexpr int kRegionWidth {116};
     constexpr int kMinEntropyWidth {96};
@@ -408,19 +1012,19 @@ void PluginEditor::resized() {
     const auto room = footerRight - margin - essential;
 
     // A partir daqui decide-se por ordem de prioridade, e a ordem esta' escrita
-    // na cadeia e nao numa frase ao lado: se a entropia fosse decidida primeiro e
-    // a taxa por ultimo, cada uma veria o que sobra depois das outras e a taxa
-    // sobrevivia a expense da entropia — que e' o inverso do que se quer.
+    // na cadeia e nao numa frase ao lado. A taxa ja saiu daqui — constante na
+    // sessao, foi para o tooltip do titulo — por isso a cadeia agora e' curta:
+    // entropia, transporte, pico.
     //
-    // A entropia da janela da cabeca de leitura e' o dado que justifica o rodape,
-    // por isso tem prioridade absoluta. O pico e' util e sai a seguir. A taxa de
-    // amostragem e' constante durante a sessao e e' a leitura menos informativa de
-    // todas, por isso e' a primeira a cair.
+    // A ordem e' a do valor: **a leitura de transporte vem antes do pico.** E' a
+    // unica caixa que muda durante a sessao para alem do pico, e sem ela o
+    // display mostra uma barra a andar sem nenhum numero que a confirme.
     footerFitsEntropy_ = room >= kMinEntropyWidth;
-    footerFitsPeak_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) >= kPeakWidth;
-    footerFitsRate_ = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0) -
-                          (footerFitsPeak_ ? kPeakWidth + kBoxGap : 0) >=
-                      kRateWidth;
+    const auto afterEntropy = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0);
+    footerFitsTransport_ = afterEntropy >= kTransportWidth;
+    const auto afterTransport =
+        afterEntropy - (footerFitsTransport_ ? kTransportWidth + kBoxGap : 0);
+    footerFitsPeak_ = afterTransport >= kPeakWidth;
 
     // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
     // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
@@ -438,7 +1042,7 @@ void PluginEditor::resized() {
     put(voicesReadout_, kVoicesBoxWidth, true);
     put(positionReadout_, kPositionWidth, true);
     put(offsetReadout_, kRegionWidth, true);
-    put(rateReadout_, kRateWidth, footerFitsRate_);
+    put(transportReadout_, kTransportWidth, footerFitsTransport_);
     put(peakReadout_, kPeakWidth, footerFitsPeak_);
 
     // A entropia ocupa o que sobra a esquerda, e por isso fica colada ao
@@ -450,36 +1054,216 @@ void PluginEditor::resized() {
 
     updateFooterVisibility();
 
-    area.removeFromTop(10);
+    area.removeFromTop(6);
+
+    // ---- selector de vista ----
+    //
+    // Fica em cima do painel de parametros e nao dentro do display: e' um
+    // instrumento de navegacao, e um instrumento que fica dentro da coisa que ele
+    // instrumenta desaparece quando a coisa muda. Tres palavras sem cromo a'
+    // esquerda, zoom (-/+/FIT) a' direita; a 480 de janela as vistas colapsam
+    // para a activa e o zoom cai primeiro, porque a roda e as teclas cobrem.
+    //
+    // A altura e' 22 px e nao 16: alvo de toque perto dos 24 do 2.5.8, com as
+    // teclas 1, 2 e 3 como caminho garantido. A aba activa leva peso forte e o
+    // filete — o texto carrega o estado, o filete e' redundancia.
+    {
+        constexpr int kViewButtonWidth {46};
+        constexpr int kViewButtonHeight {22};
+        constexpr int kViewGap {4};
+        const auto viewRow = area.removeFromTop(kViewButtonHeight + 2);
+
+        struct View {
+            juce::TextButton* button;
+            ByteDisplay::ViewMode mode;
+        };
+        const View views[] = {
+            {&viewWaveButton_, ByteDisplay::ViewMode::waveform},
+            {&viewHexButton_, ByteDisplay::ViewMode::hex},
+            {&viewEntropyButton_, ByteDisplay::ViewMode::entropy},
+        };
+
+        const int stripWidth = (kViewButtonWidth + kViewGap) * 3 - kViewGap;
+        const auto active = grid_.mode();
+        const bool fitsAll = viewRow.getWidth() >= stripWidth;
+
+        // **Quando nao cabem os tres, mostra so o da vista activa.** Um conjunto
+        // parcial e' pior que um botao unico: com dois dos tres no ecra, o que
+        // falta e' uma vista que o utilizador nao sabe que existe, e o botao que
+        // sobra e' um comando que muda de vista sem explicar para que. Com um so,
+        // o selector continua verdadeiro — diz em que vista se esta — e a troca
+        // continua a fazer-se pelas teclas 1, 2 e 3, que nao dependem de largura.
+        int viewX = viewRow.getX();
+        for (const auto& view : views) {
+            const auto isActive = view.mode == active;
+            view.button->setVisible(fitsAll || isActive);
+            if (!fitsAll && !isActive) {
+                continue;
+            }
+            view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 1,
+                                                         kViewButtonWidth, kViewButtonHeight});
+            viewX += kViewButtonWidth + kViewGap;
+        }
+
+        // Zoom a' direita: - e + de 30, FIT de 40. So quando ha folga para la'
+        // das vistas — a 480 nao ha, e a roda com as teclas cobrem o gesto.
+        constexpr int kZoomSmall {30};
+        constexpr int kZoomFit {40};
+        const int zoomWidth = kZoomSmall + kViewGap + kZoomSmall + kViewGap + kZoomFit;
+        const bool fitsZoom =
+            fitsAll && viewRow.getWidth() >= stripWidth + kViewGap * 2 + zoomWidth;
+        zoomOutButton_.setVisible(fitsZoom);
+        zoomInButton_.setVisible(fitsZoom);
+        zoomFitButton_.setVisible(fitsZoom);
+        if (fitsZoom) {
+            int zoomX = viewRow.getRight() - zoomWidth;
+            zoomOutButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                           kZoomSmall, kViewButtonHeight});
+            zoomX += kZoomSmall + kViewGap;
+            zoomInButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                          kZoomSmall, kViewButtonHeight});
+            zoomX += kZoomSmall + kViewGap;
+            zoomFitButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
+                                                           kZoomFit, kViewButtonHeight});
+        }
+    }
+
+    // ---- abas de modulo ----
+    //
+    // Uma fileira propria entre a vista e os knobs, e nao titulo de modulo: o
+    // titulo antigo ("1 - GRANULAR ENGINE") nomeava uma seccao unica, e agora
+    // sao sete. Mesma altura e lingua das abas de vista; sete palavras curtas
+    // cabem a 480 sem colapso (7 x 52 + 6 x 4 = 388 px).
+    {
+        constexpr int kModuleButtonWidth {52};
+        constexpr int kModuleButtonHeight {22};
+        constexpr int kModuleGap {4};
+        const auto moduleRow = area.removeFromTop(kModuleButtonHeight + 2);
+
+        juce::TextButton* buttons[] = {
+            &moduleGrainButton_, &moduleEnvelopeButton_, &moduleFilterButton_,
+            &moduleModButton_, &moduleCloudButton_, &moduleOutButton_,
+            &moduleKeysButton_,
+        };
+        int tabX = moduleRow.getX();
+        for (auto* button : buttons) {
+            button->setBounds(juce::Rectangle<int> {tabX, moduleRow.getY() + 1,
+                                                    kModuleButtonWidth, kModuleButtonHeight});
+            tabX += kModuleButtonWidth + kModuleGap;
+        }
+    }
 
     // ---- painel de parametros ----
-    engineTitle_.setBounds(area.removeFromTop(16).reduced(2, 0));
-
-    // Os seis knobs ficam sempre em uma linha, como no mock. Quebrar em duas
-    // linhas foi tentado e e' pior: a altura que sobra nao comporta um knob com
-    // titulo e valor, e os knobs despencam para poucos pixels. O diametro do
-    // knob e' limitado dentro do componente, entao encolhe com a janela sem
-    // precisar de um segundo layout.
+    //
+    // So os knobs do modulo ativo ocupam celulas: os escondidos ficam com
+    // largura zero na aritmetica porque nao entram na contagem. A regra de uma
+    // linha continua — quebrar em duas foi tentado e e' pior — e o diametro do
+    // knob encolhe com a janela sem segundo layout.
     const auto knobArea = area.reduced(8, 2);
-    const int cellWidth = knobArea.getWidth() / static_cast<int>(knobs_.size());
+    const auto moduleIndex = static_cast<std::size_t>(activeModule_);
+    const auto first = moduleFirstKnob_[moduleIndex];
+    const auto count = moduleKnobCount_[moduleIndex];
+    const int cellWidth = knobArea.getWidth() / static_cast<int>(count);
 
     // O painel fecha o conteudo (titulo, knob, valor) e fica centrado na
     // vertical da area. Preencher a celula inteira deixaria um monte de caixa
     // cinza vazia embaixo do knob.
     constexpr int knobContentHeight {13 + 1 + 62 + 4 + 18};
-    for (std::size_t i = 0; i < knobs_.size(); ++i) {
+    for (std::size_t k = 0; k < count; ++k) {
         const auto cell = juce::Rectangle<int> {knobArea.getX()
-                                                     + (static_cast<int>(i) * cellWidth),
+                                                     + (static_cast<int>(k) * cellWidth),
                                                  knobArea.getY(),
                                                  cellWidth,
                                                  knobArea.getHeight()};
-        knobs_[i]->setBounds(cell.reduced(4).withHeight(
+        knobs_[first + k]->setBounds(cell.reduced(4).withHeight(
             juce::jmin(knobContentHeight, cell.getHeight() - 8)));
     }
 }
 
 void PluginEditor::timerCallback() {
+    // O delta e' medido e nao assumido. Assumir 1/60 numa animacao que depende do
+    // tempo deixa a velocidade depender da taxa de quadros real, que no Windows
+    // varia entre 60 e 144 Hz conforme a ligacao do monitor.
+    //
+    // `getMillisecondCounterHiRes` e nao `getMillisecondCounter`: o contador
+    // inteiro tem 15 ms de resolucao a 144 Hz, e um quadro de 144 Hz dura 7 ms. Com
+    // o contador inteiro o delta seria 0 ou 15 ms alternadamente, e a animacao
+    // dava um soluço a cada dois quadros.
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    const auto delta = lastTick_ > 0.0 ? static_cast<float>((now - lastTick_) / 1000.0)
+                                        : 1.0f / 60.0f;
+    lastTick_ = now;
+
+    grid_.tickAnimation(delta);
+
     refresh();
+}
+
+bool PluginEditor::keyPressed(const juce::KeyPress& key) {
+    // O display ja consumiu o que lhe competia. Aqui so chegam as teclas de
+    // transporte, e so quando o foco nao estava no display.
+    if (key.getKeyCode() == juce::KeyPress::spaceKey) {
+        owner_.toggleTransport();
+        refreshPlayButton();
+        return true;
+    }
+
+    // Letras e digitos nao tem codigo no JUCE; ver isTypedCharacter em
+    // byte_display.h.
+    if (isTypedCharacter(key, 'K')) {
+        // Atalho para o foco do teclado. Com o foco no teclado quem consome o 'K'
+        // e' o proprio componente, que o toca como nota — por isso o atalho nunca
+        // rouba a nota a quem esta' a tocar.
+        keyboard_.grabKeyboardFocus();
+        return true;
+    }
+
+    if (isTypedCharacter(key, 'A')) {
+        static_cast<void>(owner_.snapByteRangeToSection());
+        return true;
+    }
+
+    if (isTypedCharacter(key, 'L')) {
+        chooseFile();
+        return true;
+    }
+
+    if (isDigitKey(key, '1')) {
+        grid_.setMode(ByteDisplay::ViewMode::waveform);
+        updateViewButtons();
+        return true;
+    }
+
+    if (isDigitKey(key, '2')) {
+        grid_.setMode(ByteDisplay::ViewMode::hex);
+        updateViewButtons();
+        return true;
+    }
+
+if (isDigitKey(key, '3')) {
+        grid_.setMode(ByteDisplay::ViewMode::entropy);
+        updateViewButtons();
+        return true;
+    }
+
+    // Zoom quando o foco nao esta no display (num knob, por exemplo). No
+    // display e' ele que consome; aqui so chegam as que sobraram.
+    if (isTypedCharacter(key, '+') || isTypedCharacter(key, '=')) {
+        grid_.zoomIn();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '-')) {
+        grid_.zoomOut();
+        return true;
+    }
+
+    if (isTypedCharacter(key, '0')) {
+        grid_.fitView();
+        return true;
+    }
+
+    return false;
 }
 
 void PluginEditor::refresh() {
@@ -510,8 +1294,8 @@ void PluginEditor::refresh() {
     // de estado nao muda de sitio com o material a carregar: um alvo que salta
     // quando se carrega um binario e' pior do que um espaco constante.
     grid_.setVisible(owner_.hasSource());
-    address_.setVisible(owner_.hasSource());
-    snapButton_.setVisible(owner_.hasSource());
+
+    const auto hostStopped = owner_.hostTransportIsKnownToBeStopped();
 
     Led::State ledState = Led::State::off;
     juce::String message;
@@ -519,11 +1303,17 @@ void PluginEditor::refresh() {
     if (owner_.lastError().isNotEmpty()) {
         ledState = Led::State::fault;
         message = "RECUSADO / " + owner_.lastError();
-    } else if (owner_.hasSource()) {
+    } else if (!owner_.hasSource()) {
+        message = "ARRASTE UM .EXE, .DLL OU .BIN PARA DENTRO DA JANELA";
+    } else if (hostStopped) {
+        // O botao esta' desativado, e dizer porquê e' o que evita que o utilizador
+        // ache que o plugin avariou. Sem host nenhum esta' desligado nao se sabe,
+        // e nao se diz nada — ver hostTransportIsKnownToBeStopped.
+        ledState = Led::State::ready;
+        message = "PRONTO / " + info.name + " / TRANSPORTE DO HOST PARADO";
+    } else {
         ledState = Led::State::ready;
         message = "PRONTO / " + info.name;
-    } else {
-        message = "ARRASTE UM .EXE, .DLL OU .BIN PARA DENTRO DA JANELA";
     }
 
     setIfChanged(status_, message);
@@ -532,6 +1322,14 @@ void PluginEditor::refresh() {
 
     statusLed_.setState(ledState);
     powerLed_.setState(ledState == Led::State::off ? Led::State::off : Led::State::ready);
+
+    // O botao e' atualizado depois da mensagem porque a mensagem e' que depende do
+    // estado que ele produz.
+    updateStatusVisibility();
+    refreshPlayButton();
+    // O "*" de preset sujo chega por Listener e o desenho mora aqui, onde a
+    // comparacao evita o evento de acessibilidade a 60 Hz.
+    refreshPresetName();
 
     refreshTelemetry(info);
 }
@@ -566,6 +1364,17 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     const auto readHead = pe::byteForPosition(static_cast<double>(position), range);
     grid_.setReadHead(readHead);
 
+    // A ancora de busca do transporte so e' escrita quando o POSITION mudou. E' o
+    // que impede o editor de reancorar a cada quadro, o que prenderia a cabeca de
+    // reproducao no ponto onde o knob estava.
+    if (std::abs(position - lastAnchoredPosition_) > 1.0e-4f) {
+        positionChangedSinceLastAnchor_ = true;
+    }
+    pushTransportAnchor();
+
+    // A telemetria de reproducao e' lida do que a thread de audio ja publicou, e
+    // nao do transporte: o display mostra onde a cabeca de audio esta', e ler o
+    // nucleo de lado mostraria o ultimo bloco, nao este.
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
     const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
@@ -601,9 +1410,45 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     setIfChanged(peakReadout_,
                  peak < -0.5f ? juce::String {"PK -inf dB"}
                               : juce::String {"PK "} + juce::String {peak, 1} + " dB");
-    setIfChanged(rateReadout_,
-                 juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
-                     + " kHz");
+
+    // A leitura de transporte: posicao da cabeca de reproducao em endereco, o
+    // instante da volta e a duracao de uma volta. E' a confirmacao textual da barra
+    // que a forma de onda vai mostrar.
+    const auto transportPlaying = telemetry.playing.load(std::memory_order_relaxed);
+    if (transportPlaying) {
+        const auto transportFraction =
+            telemetry.playheadFraction.load(std::memory_order_relaxed);
+        const auto duration =
+            telemetry.playDurationSeconds.load(std::memory_order_relaxed);
+        const auto transportHead =
+            pe::byteForPosition(static_cast<double>(transportFraction), range);
+        const auto elapsed = duration * static_cast<double>(transportFraction);
+
+// A leitura de transporte so e' lida do que a thread de audio ja publicou, e
+    // nao do transporte: o display mostra onde a cabeca de audio esta', e ler o
+    // nucleo de lado mostraria o ultimo bloco, nao este.
+    grid_.setPlayhead(telemetry.playheadFraction.load(std::memory_order_relaxed),
+                      transportPlaying);
+    grid_.setOutputLevel(peak);
+
+    setIfChanged(transportReadout_,
+                     juce::String::formatted("TP 0x%08X  %.1f/%.1fs",
+                                             static_cast<unsigned long long>(transportHead),
+                                             elapsed, duration));
+    } else {
+        setIfChanged(transportReadout_, juce::String {});
+    }
+
+    // A taxa mora no tooltip do titulo: e' constante na sessao e nao precisa de
+    // faixa propria. Quem procura um numero fixo le sem pressa, e a faixa do
+    // rodape fica para o que muda. So escreve quando muda, pela mesma razao do
+    // setIfChanged nos Labels.
+    const auto rateText =
+        juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
+        + " kHz";
+    if (title_.getTooltip() != rateText) {
+        title_.setTooltip(rateText);
+    }
     setIfChanged(voicesReadout_,
                  juce::String {"VOICES "} + juce::String {activeVoices});
 
@@ -621,6 +1466,13 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     // O LED de vozes nunca e' a unica pista: o numero ao lado e' o mesmo dado
     // em texto, que e' o que o criterio 1.4.1 do WCAG pede.
     voicesLed_.setState(sounding && activeVoices > 0 ? Led::State::ready : Led::State::off);
+
+    // Os graos, na mesma leitura de 60 Hz. E' leitura de lado, tal como o resto da
+    // telemetria: quem publica e' a thread de audio, uma vez por bloco, e o
+    // display mostra o ultimo bloco publicado e nao um estado inventado aqui.
+    std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices> grains {};
+    const auto grainCount = owner_.grainTelemetry().read(grains);
+    grid_.setGrains(grains, grainCount);
 }
 
 float PluginEditor::readPosition() const {

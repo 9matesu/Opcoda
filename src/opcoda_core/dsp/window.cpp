@@ -8,11 +8,11 @@ namespace opcoda::dsp {
 const char* windowName(WindowType type) noexcept {
     switch (type) {
         case WindowType::kHann: return "Hann";
-        case WindowType::kGaussian: return "Gaussiana";
+        case WindowType::kGaussian: return "Gaussian";
         case WindowType::kHamming: return "Hamming";
         case WindowType::kBlackman: return "Blackman";
     }
-    return "desconhecida";
+    return "unknown";
 }
 
 void fillWindow(WindowType type, float* out, int length) noexcept {

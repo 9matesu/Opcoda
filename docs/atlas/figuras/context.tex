@@ -1,0 +1,40 @@
+% Gerado por tools/mmd2tikz.py a partir de docs/atlas/diagrams/context.mmd. Nao editar a mao.
+% git blob da fonte: 19bb708e21bac6f76219ab8c05c81a30d94894c7
+\definecolor{atlasyellow}{HTML}{FFD400}
+\definecolor{atlasamber}{HTML}{FFB000}
+\definecolor{atlasblack}{HTML}{000000}
+\begin{tikzpicture}[
+  font=\sffamily\bfseries\small,
+  atlasgroup/.style={draw=atlasblack, fill=atlasamber, line width=0.9pt, rounded corners=4pt, inner xsep=14pt, inner ysep=26pt},
+  atlasgrouptext/.style={font=\sffamily\bfseries\small, text=atlasblack, anchor=north west, inner sep=1pt},
+  atlasleaf/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+  atlasleafabstract/.style={atlasleaf, fill=atlasamber},
+  atlasflow/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasasync/.style={-{Stealth[length=2.3mm,width=2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlaslabel/.style={font=\sffamily\bfseries\tiny, fill=white, inner sep=1.2pt, text=atlasblack},
+  atlasclass/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=6pt, font=\sffamily\bfseries\small},
+  atlasclassabstract/.style={atlasclass, fill=atlasamber},
+  atlasuml/.style={-{Triangle[length=2.4mm,width=2.9mm]}, draw=atlasblack, line width=0.9pt},
+  atlascomp/.style={-{Diamond[length=2.6mm]}, draw=atlasblack, line width=0.9pt},
+  atlaslife/.style={draw=atlasblack, dashed, line width=0.6pt},
+  atlasmsg/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, line width=0.8pt},
+  atlasmsgback/.style={-{Stealth[length=2.2mm]}, draw=atlasblack, dashed, line width=0.8pt},
+  atlasmsglabel/.style={font=\sffamily\bfseries\scriptsize, fill=white, inner sep=1.5pt, text=atlasblack},
+  atlasparticipant/.style={draw=atlasblack, fill=atlasyellow, text=atlasblack, line width=0.9pt, rounded corners=4pt, align=center, inner sep=5pt, font=\sffamily\bfseries\small},
+]
+  \node[atlasleaf, text width=2.03cm] (USER) at (1.20,-1.55) {Utilizador};
+  \node[atlasleaf, text width=2.03cm] (DISK) at (1.20,0.00) {Ficheiro PE};
+  \node[atlasleaf, text width=2.35cm] (HOST) at (9.55,0.00) {Host DAW};
+  \node[atlasleaf, text width=2.35cm] (PRESET) at (9.55,-1.55) {Preset .opcoda};
+  \node[atlasleaf, text width=1.65cm] (PROC) at (5.29,0.00) {Processor\\processor};
+  \draw[atlasflow] (DISK) -- node[atlaslabel, above, pos=0.32] {caminho} (PROC);
+  \draw[atlasflow] (USER) -- node[atlaslabel, above, pos=0.46] {arrasto} (PROC);
+  \draw[atlasflow] (HOST) -- node[atlaslabel, above, pos=0.60] {midi e params} (PROC);
+  \draw[atlasflow] (PROC) -- node[atlaslabel, below, pos=0.46] {audio e estado} (HOST);
+  \draw[atlasflow] (PROC) -- node[atlaslabel, above, pos=0.32] {preset} (PRESET);
+  \draw[atlasflow] (PRESET) -- node[atlaslabel, below, pos=0.74] {preset} (PROC);
+  \begin{scope}[on background layer]
+    \node[atlasgroup, fit=(PROC)] (grp_repo) {};
+  \end{scope}
+  \node[atlasgrouptext] at ([xshift=7pt,yshift=-5pt]grp_repo.north west) {Opcoda};
+\end{tikzpicture}

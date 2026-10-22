@@ -51,6 +51,6 @@ Crie uma apresentação simples de 8 slides, sem imagens, só título e até 4 t
 
 ## Slide 8: MVP e próximos passos
 
-- MVP em 03/11: arrastar .exe, 6 parâmetros, MIDI, sem xruns
+- MVP em 03/11: arrastar .exe, 41 parâmetros, MIDI, sem xruns
 - Depois: CLAP, bateria completa de testes e monografia
 - Pergunta da banca: o tratamento granular reduz o DC em 40 dB?

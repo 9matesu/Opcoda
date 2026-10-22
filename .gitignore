@@ -38,6 +38,7 @@ leaks.out
 # JUCE / módulos externos
 JUCE/
 modules/
+deps/
 
 # Compilados e objetos
 *.obj
@@ -80,3 +81,25 @@ src/OpcodaOtimizacao.Tests/bin/
 src/OpcodaOtimizacao.Tests/obj/
 *.nupkg
 TestResults/
+
+# Intermedios de LaTeX (o .tex, o .bib e o .pdf final ficam versionados)
+*.aux
+*.bbl
+*.blg
+*.lof
+*.lot
+*.out
+*.toc
+
+# *.log fica restrito a docs/ de proposito: e' uma extensao generica, e um
+# *.log global esconderia logs de build ou de teste que sao uteis ver.
+docs/*.log
+docs/atlas/*.log
+
+# Atlas: o mermaid.min.js e' de 2,5 MB e a skill do Catlas mantem-no de fora
+# do repositorio de proposito. A versao e' fixada no script de render, e o
+# ficheiro .sha256 ao lado dele e' o registo do pin.
+.opencode/skills/catlas/third_party/mermaid.min.js
+
+# Paginas de render intermedias. O SVG e o PNG ficam versionados.
+docs/atlas/assets/render/*.html

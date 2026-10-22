@@ -1,14 +1,20 @@
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 
-# Pecas fisicas vindas do asset harness, embutidas no binario. Ficam em
-# resources/assets e nao em src: sao arte, nao codigo, e o harness nunca escreve
-# dentro do plugin.
-juce_add_binary_data(OpcodaAssets
-    HEADER_NAME OpcodaAssets.h
+# Tipografia embebida. Os ficheiros ja vem reduzidos pelo tools/vendor_fonts.py, que
+# os corta aos caracteres que a interface escreve e mantem a hinting: 183 KB no
+# lugar dos TTF originais.
+#
+# **Sao binarios no repositorio de proposito.** A alternativa era a fonte do sistema,
+# que e' o que a interface usava ate aqui e o que a fazia parecer de 2010. Inter
+# Display e' o corte,opticamente desenhado para texto pequeno, e esta interface vive
+# entre 9 e 11 px. E' a unica familia: numeros e texto usam a mesma letra, e as
+# leituras vao alinhadas a direita para nao respirarem.
+juce_add_binary_data(OpcodaFonts
+    HEADER_NAME OpcodaFonts.h
     NAMESPACE BinaryData
     SOURCES
-        ${CMAKE_SOURCE_DIR}/resources/assets/knob-md.png
-        ${CMAKE_SOURCE_DIR}/resources/assets/button-large.png)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
@@ -59,18 +65,20 @@ target_sources(Opcoda
         source/look_and_feel.h
         source/knob.h
         source/led.h
-        source/boxed_label.h
+        source/animator.h
         source/display_panel.h
         source/hex_grid.cpp
         source/hex_grid.h
+        source/byte_display.cpp
+        source/byte_display.h
         source/byte_address_field.cpp
         source/byte_address_field.h
-        source/assets.h
+        source/fonts.h
         source/palette.h)
 
 target_link_libraries(Opcoda
     PRIVATE
-        OpcodaAssets
+        OpcodaFonts
         opcoda_core
         juce::juce_audio_processors
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois

@@ -12,11 +12,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
-$cmake = 'C:\Program Files\CMake\bin\cmake.exe'
-$ctest = 'C:\Program Files\CMake\bin\ctest.exe'
+$vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
+$cmakeCandidates = @(
+    'C:\Program Files\CMake\bin\cmake.exe',
+    'C:\Program Files (x86)\CMake\bin\cmake.exe'
+) + (Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter "cmake.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+$cmake = $cmakeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $cmake) { throw "cmake.exe nao encontrado" }
+$ctest = Join-Path (Split-Path $cmake) 'ctest.exe'
 
 if ($Release) { $Preset = 'release' }
+
+if ($Preset -eq 'dev') { $Config = 'Debug' } else { $Config = 'Release' }
 
 foreach ($exe in @($vcvars, $cmake, $ctest)) {
     if (-not (Test-Path $exe)) { throw "nao encontrado: $exe" }
@@ -31,7 +38,7 @@ foreach ($exe in @($vcvars, $cmake, $ctest)) {
 & $cmake --preset $Preset
 if ($LASTEXITCODE -ne 0) { throw "configure falhou" }
 
-& $cmake --build --preset $Preset
+& $cmake --build --preset $Preset --config $Config
 if ($LASTEXITCODE -ne 0) { throw "build falhou" }
 
 if ($Preset -eq 'release') {
@@ -49,7 +56,7 @@ if ($Preset -eq 'release') {
     $debugRuntime = & dumpbin.exe /dependents $binary |
         Select-String -Pattern '\.dll' |
         ForEach-Object { $_.Line.Trim() } |
-        Where-Object { $_ -match 'D\.dll$|^ucrtbased\.dll$|^dbghelp\.dll$' }
+        Where-Object { $_ -match 'D\.dll$|^ucrtbased\.dll$' }
 
     if ($debugRuntime) {
         throw ("o VST3 linka contra o CRT de debug e nao vai carregar em um host comum:`n  " +
@@ -59,6 +66,6 @@ if ($Preset -eq 'release') {
 }
 
 if ($Preset -eq 'dev') {
-    & $ctest --preset $Preset
+    & $ctest --preset $Preset -C Debug
     if ($LASTEXITCODE -ne 0) { throw "testes falharam" }
 }
