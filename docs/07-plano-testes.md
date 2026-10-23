@@ -20,7 +20,7 @@ Critério: zero segfaults, zero leaks, 100% das entradas inválidas rejeitadas c
 
 ## T4. Aceite de uso (arrasto, parâmetros e MIDI)
 
-Método: arrastar um .exe para o Standalone e para o VST3 no Ableton Live 12.3.1, mover os 41 parâmetros da Tabela 8, mapear 2 CCs e tocar 2 minutos em cada formato. A ida e volta do estado — mover um knob, guardar o projeto, fechar e reabrir — faz parte do ensaio, porque `getStateInformation` não tem teste automatizado.
+Método: arrastar um .exe para o Standalone e para o VST3 no Ableton Live 12.3.1, mover os 41 parâmetros da Tabela 8, mapear 2 CCs, percorrer a aba OPT com os três métodos e tocar 2 minutos em cada formato. A ida e volta do estado — mover um knob, guardar o projeto, fechar e reabrir — faz parte do ensaio, porque `getStateInformation` não tem teste automatizado.
 
 Critério: som sai em menos de 2 s após o arrasto, zero xruns e todo CC mapeado move o parâmetro correspondente.
 
@@ -47,8 +47,8 @@ Consequência sobre os ensaios acima:
 | T1 (espectral) | executado | FFT N 65536 com Blackman-Harris em teste automatizado, critério de 40 dB e de -60 dBFS |
 | T2 (latência) | **a executar** | o host licenciado existe desde 19/10/2026; o método e o critério estão acima, agora por grão × densidade, e não por vozes |
 | T3 (robustez) | executado | 50 mutações determinísticas por bit-flip, truncamento e cabeçalhos forjados, mais 10 casos de borda, todos com erro tipado |
-| T4 (aceite) | **a executar** | instalar o bundle e repetir arrasto, os 41 parâmetros, os 2 CCs e a ida e volta do estado, 2 minutos por formato |
-| portão B | executado | 289 casos na suíte principal mais 8 do guard de alocação, contados no binário em 19/10/2026, incluindo o critério de 40 dB do T1 |
+| T4 (aceite) | **a executar** | instalar o bundle e repetir arrasto, os 41 parâmetros, os 2 CCs, a aba OPT e a ida e volta do estado, 2 minutos por formato |
+| portão B | executado | 344 casos na suíte principal mais 8 do guard de alocação, contados no binário em 22/10/2026, incluindo o critério de 40 dB do T1 |
 | portão C | executado, com o T2 a correr | guard de alocação verde, e desde 06/10/2026 também sobre o caminho do transporte; a fração dinâmica passa a ser medida no Ableton, que é a lacuna que o guard não alcança |
 | TSan | indisponível | substituído pelo guard de alocação, que falha se o callback alocar |
 | publicação/leitura concorrente dos grãos | verificado por construção, não por teste | enquanto a thread de áudio publica a cada bloco, a leitura vem da thread de interface. Um `std::atomic<float>` por campo e `release`/`acquire` no `count` tornam cada campo atomicamente legível e escrito; um seqlock sobre uma struct simples seria uma corrida de dados pelo padrão do C++. **O que fica coberto:** o guard de alocação passa por `publish` dentro da janela de áudio, o que prova que não há alocação, store bloqueante nem chamada ao sistema — a disassembly em release não tem instrução de `call` nem `lock`. **O que fica por cobrir:** só a ordem de memória, e isso não é verificável aqui. Um teste com duas threads durante N iterações não prova nada quando passa e é instável quando falha, e a corrida não é reproduzível a pedido; a plataforma também não tem runtime de TSan. Exceção declarada, na linha do TSan acima |

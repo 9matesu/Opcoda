@@ -75,6 +75,38 @@ void HexGrid::setRegion(std::uint64_t start, std::uint64_t end) {
     repaint();
 }
 
+void HexGrid::setOptimizedBlocks(std::vector<pe::ByteRange> blocks) {
+    std::sort(blocks.begin(), blocks.end(), [](const pe::ByteRange& a, const pe::ByteRange& b) {
+        return a.start < b.start;
+    });
+
+    highlights_.clear();
+    for (const auto& block : blocks) {
+        if (block.empty()) {
+            continue;
+        }
+        if (!highlights_.empty() && block.start <= highlights_.back().end) {
+            highlights_.back().end = juce::jmax(highlights_.back().end, block.end);
+        } else {
+            highlights_.push_back(block);
+        }
+    }
+    repaint();
+}
+
+bool HexGrid::isOptimized(std::uint64_t address) const noexcept {
+    const auto it = std::upper_bound(
+        highlights_.begin(), highlights_.end(), address,
+        [](std::uint64_t value, const pe::ByteRange& range) {
+            return value < range.start;
+        });
+    if (it == highlights_.begin()) {
+        return false;
+    }
+    const auto& range = *(it - 1);
+    return address >= range.start && address < range.end;
+}
+
 void HexGrid::setReadHead(std::uint64_t address) {
     readHead_ = address;
 
@@ -452,6 +484,15 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
 
         const auto cell = cellRect(column, row);
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
+
+        // Bloco escolhido pela mochila. Fica por baixo da cabeca de leitura
+        // para o cursor continuar a ser o sinal mais forte.
+        if (isOptimized(byteAddress)) {
+            g.setColour(palette::alpha(palette::accent, 0.30f));
+            g.fillRect(cell);
+            g.setColour(palette::alpha(palette::accent, 0.95f));
+            g.fillRect(cell.withHeight(1.5f));
+        }
 
         // A cabeca de leitura e' uma barra branca de 2 px na margem esquerda da
         // celula, mais um fundo claro por baixo do texto. O fundo sem a barra

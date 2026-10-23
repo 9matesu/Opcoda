@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opcoda_core/dsp/granular_engine.h"
+#include "opcoda_core/optimization/knapsack.h"
 #include "opcoda_core/pe/byte_range.h"
 #include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
@@ -348,6 +349,27 @@ bool snapByteRangeToSection();
         return live_.load(std::memory_order_acquire) != nullptr;
     }
 
+    // --- F025: selecao por mochila ---
+    //
+    // Corre o metodo escolhido sobre a regiao actual, concatena os blocos que a
+    // solucao marcou e publica o resultado pela mesma fila do ingest. Roda na
+    // thread de interface: a busca local aloca e pode demorar, e nada disso pode
+    // acontecer dentro de processBlock.
+    bool optimizeSelection(optimization::Method method,
+                           const optimization::Params& params = {},
+                           std::uint64_t blockBytes = 1024,
+                           double capacityFraction = 0.5);
+
+    // Verdadeiro enquanto o material publicado veio da ultima otimizacao. Um
+    // setByteRange ou um ingest novo desliga-o e volta a publicar a regiao crua.
+    [[nodiscard]] bool optimizationActive() const noexcept { return optimizationActive_; }
+    [[nodiscard]] const optimization::Result& lastOptimization() const noexcept {
+        return lastOptimizationResult_;
+    }
+    [[nodiscard]] const optimization::Problem& lastOptimizationProblem() const noexcept {
+        return lastOptimizationProblem_;
+    }
+
     // Os seis parametros do MVP (Tabela 8 do artigo), expostos ao host para
     // automacao. O estado e' lido uma vez por bloco e copiado para a estrutura
     // do motor, que nao guarda referencia: e o que mantem o caminho de audio
@@ -393,6 +415,18 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // nada se a janela nao produz audio.
     bool publishByteRange();
 
+    // Publica um buffer ja convertido. E' a parte comum entre a regiao crua e a
+    // concatenacao da mochila; a fila, a posse da memoria e a duracao do
+    // transporte sao as mesmas nos dois caminhos.
+    bool publishMaterial(std::shared_ptr<const std::vector<float>> buffer,
+                         std::vector<float> entropyCurve,
+                         std::uint64_t regionLength);
+
+    // Curva de entropia reduzida para o motor. Calculada fora do callback.
+    [[nodiscard]] static std::vector<float> makeEntropyCurve(
+        const std::uint8_t* data, std::size_t size,
+        std::uint64_t start, std::uint64_t end);
+
     opcoda::dsp::GranularEngine engine_;
 
     // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
@@ -425,6 +459,13 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     juce::String sourceName_;
     SourceInfo sourceInfo_;
     ByteRange byteRange_;
+
+    // Resultado da ultima otimizacao. A thread de interface escreve e le; a de
+    // audio so conhece o buffer ja publicado pela fila. O problema fica guardado
+    // para o editor desenhar os blocos escolhidos sem recalcular entropias.
+    optimization::Problem lastOptimizationProblem_;
+    optimization::Result lastOptimizationResult_;
+    bool optimizationActive_ {false};
 
     // Inicio exato, sem alinhamento, da ultima regiao escolhida pelo utilizador.
     // E' o destino do duplo clique quando a regiao esta' alinhada numa secao, e

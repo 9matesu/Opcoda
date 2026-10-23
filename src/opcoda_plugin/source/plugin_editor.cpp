@@ -195,6 +195,31 @@ const std::array<Knob::Spec, 3> kKeysSpecs {
     Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
 };
 
+int readIntField(const juce::TextEditor& field, int fallback, int low, int high) {
+    const auto text = field.getText().trim();
+    if (text.isEmpty()) {
+        return fallback;
+    }
+    const auto value = text.getIntValue();
+    if (value == 0 && text != "0") {
+        return fallback;
+    }
+    return juce::jlimit(low, high, value);
+}
+
+double readDoubleField(const juce::TextEditor& field, double fallback,
+                       double low, double high) {
+    const auto text = field.getText().trim();
+    if (text.isEmpty()) {
+        return fallback;
+    }
+    const auto value = text.getDoubleValue();
+    if (value == 0.0 && text != "0" && text != "0.0" && text != "0,0") {
+        return fallback;
+    }
+    return juce::jlimit(low, high, value);
+}
+
 } // namespace
 
 // Trocar o texto de um Label dispara um evento de acessibilidade. A 20 Hz isso
@@ -689,6 +714,13 @@ void PluginEditor::buildParameterPanel() {
     addSpecs(kOutSpecs);
     addSpecs(kKeysSpecs);
 
+    // A aba OPT nao tem knobs: os campos de texto e o seletor vivem no painel
+    // proprio. A fatia fica vazia para os arrays continuarem indexados pelo
+    // enum, e showModule esconde todos os knobs quando ela esta ativa.
+    moduleFirstKnob_.push_back(knobs_.size());
+    moduleKnobCount_.push_back(0);
+
+    buildOptimizationPanel();
     buildModuleTabs();
     showModule(activeModule_);
 }
@@ -716,6 +748,7 @@ void PluginEditor::buildModuleTabs() {
     setup(moduleCloudButton_, "CLOUD", "Grain cloud module", ParamModule::cloud);
     setup(moduleOutButton_, "OUT", "Output module", ParamModule::out);
     setup(moduleKeysButton_, "KEYS", "Keyboard and tuning module", ParamModule::keys);
+    setup(moduleOptimizationButton_, "OPT", "Knapsack optimization", ParamModule::optimization);
 }
 
 void PluginEditor::updateModuleTabs() {
@@ -732,6 +765,7 @@ void PluginEditor::updateModuleTabs() {
     mark(moduleCloudButton_, ParamModule::cloud);
     mark(moduleOutButton_, ParamModule::out);
     mark(moduleKeysButton_, ParamModule::keys);
+    mark(moduleOptimizationButton_, ParamModule::optimization);
 }
 
 void PluginEditor::showModule(ParamModule module) {
@@ -741,8 +775,216 @@ void PluginEditor::showModule(ParamModule module) {
     for (std::size_t i = 0; i < knobs_.size(); ++i) {
         knobs_[i]->setVisible(i >= first && i < first + moduleKnobCount_[index]);
     }
+    optimizationPanel_.setVisible(module == ParamModule::optimization);
+    if (module == ParamModule::optimization) {
+        refreshOptimizationPanel();
+    }
     updateModuleTabs();
     resized();
+}
+
+void PluginEditor::buildOptimizationPanel() {
+    optimizationPanel_.setOpaque(false);
+    addAndMakeVisible(optimizationPanel_);
+    optimizationPanel_.setVisible(false);
+
+    optimizationMethod_.addItem("Subida de encosta", 1);
+    optimizationMethod_.addItem("Multi-tentativas", 2);
+    optimizationMethod_.addItem("Tempera simulada", 3);
+    optimizationMethod_.setSelectedId(1, juce::dontSendNotification);
+    optimizationMethod_.setName("Metodo de otimizacao");
+    optimizationMethod_.setTooltip("Metodo de busca local aplicado a mochila");
+    optimizationMethod_.setColour(juce::ComboBox::backgroundColourId, palette::chassisDark);
+    optimizationMethod_.setColour(juce::ComboBox::textColourId, palette::textOnDark);
+    optimizationMethod_.setColour(juce::ComboBox::outlineColourId, palette::chassisBorder);
+    optimizationMethod_.setColour(juce::ComboBox::arrowColourId, palette::textSub);
+    optimizationPanel_.addAndMakeVisible(optimizationMethod_);
+
+    optimizeButton_.setButtonText("OTIMIZAR");
+    optimizeButton_.setName("Otimizar a regiao");
+    optimizeButton_.setTooltip("Seleciona os blocos e publica o material concatenado");
+    optimizeButton_.setColour(juce::TextButton::buttonColourId, palette::accent);
+    optimizeButton_.setColour(juce::TextButton::textColourOffId, palette::chassisDark);
+    optimizeButton_.onClick = [this] { runOptimization(); };
+    optimizationPanel_.addAndMakeVisible(optimizeButton_);
+
+    makePlainLabel(optimizationStatus_, "PRONTO", palette::textOnDarkSub,
+                   fonts().sans(9.0f));
+    makePlainLabel(optimizationMetrics_, "", palette::textOnDarkSub,
+                   fonts().sans(9.0f));
+    optimizationPanel_.addAndMakeVisible(optimizationStatus_);
+    optimizationPanel_.addAndMakeVisible(optimizationMetrics_);
+
+    const auto setupLabel = [this](juce::Label& label, const char* text,
+                                   const char* tooltip) {
+        makePlainLabel(label, text, palette::textOnDarkSub, fonts().sans(9.0f));
+        label.setName(tooltip);
+        label.setTooltip(tooltip);
+        optimizationPanel_.addAndMakeVisible(label);
+    };
+    const auto setupField = [this](juce::TextEditor& field, const char* value,
+                                   const char* tooltip) {
+        field.setText(value, false);
+        field.setJustification(juce::Justification::centred);
+        field.setFont(fonts().sans(10.0f));
+        field.setSelectAllWhenFocused(true);
+        field.setName(tooltip);
+        field.setTooltip(tooltip);
+        field.setColour(juce::TextEditor::backgroundColourId, palette::chassisDark);
+        field.setColour(juce::TextEditor::textColourId, palette::textOnDark);
+        field.setColour(juce::TextEditor::outlineColourId, palette::chassisBorder);
+        field.setColour(juce::TextEditor::focusedOutlineColourId, palette::accent);
+        field.setColour(juce::TextEditor::highlightColourId,
+                        palette::alpha(palette::accent, 0.35f));
+        optimizationPanel_.addAndMakeVisible(field);
+    };
+
+    setupLabel(blockLabel_, "BLK", "Tamanho do bloco em bytes");
+    setupLabel(capacityLabel_, "CAP", "Capacidade da mochila em percentagem do peso total");
+    setupLabel(restartsLabel_, "TMAX", "Numero de tentativas do multi-arranque");
+    setupLabel(seedLabel_, "SEED", "Semente do gerador aleatorio");
+    setupLabel(initialLabel_, "TI", "Temperatura inicial da tempera simulada");
+    setupLabel(finalLabel_, "TF", "Temperatura final da tempera simulada");
+    setupLabel(coolingLabel_, "ALFA", "Fator de arrefecimento geometrico");
+
+    setupField(blockField_, "1024", "Tamanho do bloco em bytes");
+    setupField(capacityField_, "50", "Capacidade da mochila em percentagem");
+    setupField(restartsField_, "10", "Numero de tentativas do multi-arranque");
+    setupField(seedField_, "42", "Semente do gerador aleatorio");
+    setupField(initialField_, "100", "Temperatura inicial");
+    setupField(finalField_, "1", "Temperatura final");
+    setupField(coolingField_, "0.95", "Fator de arrefecimento");
+}
+
+void PluginEditor::layoutOptimizationPanel() {
+    auto area = optimizationPanel_.getLocalBounds();
+    constexpr int rowHeight {20};
+    constexpr int gap {4};
+
+    auto row = area.removeFromTop(rowHeight);
+    optimizationMethod_.setBounds(
+        row.removeFromLeft(juce::jmax(100, juce::jmin(170, row.getWidth() / 2))));
+    optimizeButton_.setBounds(row.removeFromRight(86));
+    row.removeFromRight(6);
+    optimizationStatus_.setBounds(row);
+
+    area.removeFromTop(gap);
+    const auto row2 = area.removeFromTop(rowHeight);
+    const int pairWidth2 = row2.getWidth() / 4;
+    const auto place2 = [&row2, pairWidth2](juce::Label& label,
+                                            juce::TextEditor& field, int index) {
+        auto cell = row2.withX(row2.getX() + index * pairWidth2).withWidth(pairWidth2);
+        label.setBounds(cell.removeFromLeft(32));
+        field.setBounds(cell.reduced(2, 0));
+    };
+    place2(blockLabel_, blockField_, 0);
+    place2(capacityLabel_, capacityField_, 1);
+    place2(restartsLabel_, restartsField_, 2);
+    place2(seedLabel_, seedField_, 3);
+
+    area.removeFromTop(gap);
+    const auto row3 = area.removeFromTop(rowHeight);
+    const int pairWidth3 = juce::jmin(110, row3.getWidth() / 3);
+    const auto place3 = [&row3, pairWidth3](juce::Label& label,
+                                            juce::TextEditor& field, int index) {
+        auto cell = row3.withX(row3.getX() + index * pairWidth3).withWidth(pairWidth3);
+        label.setBounds(cell.removeFromLeft(32));
+        field.setBounds(cell.reduced(2, 0));
+    };
+    place3(initialLabel_, initialField_, 0);
+    place3(finalLabel_, finalField_, 1);
+    place3(coolingLabel_, coolingField_, 2);
+
+    const int metricsX = row3.getX() + 3 * pairWidth3;
+    optimizationMetrics_.setBounds(
+        juce::Rectangle<int> {metricsX, row3.getY(), juce::jmax(0, row3.getRight() - metricsX),
+                              rowHeight});
+}
+
+optimization::Method PluginEditor::selectedMethod() const {
+    switch (optimizationMethod_.getSelectedId()) {
+        case 2:
+            return optimization::Method::multiRestart;
+        case 3:
+            return optimization::Method::simulatedAnnealing;
+        default:
+            return optimization::Method::hillClimb;
+    }
+}
+
+optimization::Params PluginEditor::readOptimizationParams() const {
+    optimization::Params params;
+    params.restarts = readIntField(restartsField_, 10, 1, 100);
+    params.seed = static_cast<std::uint32_t>(readIntField(seedField_, 42, 0, 1000000));
+    params.initialTemperature = readDoubleField(initialField_, 100.0, 0.001, 1.0e6);
+    params.finalTemperature = readDoubleField(finalField_, 1.0, 0.001, 1.0e6);
+    params.coolingFactor = readDoubleField(coolingField_, 0.95, 0.01, 0.999);
+    params.maxIterations = 200000;
+    return params;
+}
+
+void PluginEditor::runOptimization() {
+    const auto blockBytes = static_cast<std::uint64_t>(
+        readIntField(blockField_, 1024, 64, 65536));
+    const auto capacity = readDoubleField(capacityField_, 50.0, 1.0, 100.0) / 100.0;
+
+    const auto ok = owner_.optimizeSelection(selectedMethod(), readOptimizationParams(),
+                                             blockBytes, capacity);
+    if (ok) {
+        lastOptimizationActive_ = true;
+        refreshOptimizationHighlights();
+    }
+    refreshOptimizationPanel();
+    refresh();
+}
+
+void PluginEditor::refreshOptimizationPanel() {
+    if (!owner_.hasSource()) {
+        setIfChanged(optimizationStatus_, "SEM MATERIAL");
+        setIfChanged(optimizationMetrics_, "");
+        return;
+    }
+
+    if (owner_.optimizationActive()) {
+        const auto& result = owner_.lastOptimization();
+        const auto& problem = owner_.lastOptimizationProblem();
+        setIfChanged(optimizationStatus_, "MOCHILA ATIVA");
+        setIfChanged(
+            optimizationMetrics_,
+            juce::String::formatted("v %.2f | p %.1f/%.1f KiB | %d b | %llu i | %.0f ms",
+                                    result.value, result.weightKb, problem.capacityKb,
+                                    result.count,
+                                    static_cast<unsigned long long>(result.iterations),
+                                    result.elapsedMs));
+        return;
+    }
+
+    if (owner_.lastError().isNotEmpty()) {
+        setIfChanged(optimizationStatus_, owner_.lastError());
+        setIfChanged(optimizationMetrics_, "");
+    } else {
+        setIfChanged(optimizationStatus_, "PRONTO");
+        setIfChanged(optimizationMetrics_, "");
+    }
+}
+
+void PluginEditor::refreshOptimizationHighlights() {
+    std::vector<pe::ByteRange> ranges;
+    if (owner_.optimizationActive()) {
+        const auto& problem = owner_.lastOptimizationProblem();
+        const auto& result = owner_.lastOptimization();
+        if (result.selected.size() == problem.blocks.size()) {
+            ranges.reserve(result.selected.size());
+            for (std::size_t i = 0; i < problem.blocks.size(); ++i) {
+                if (result.selected[i] == 0) {
+                    continue;
+                }
+                const auto& block = problem.blocks[i];
+                ranges.push_back({block.offset, block.offset + block.length});
+            }
+        }
+    }
+    grid_.setOptimizedBlocks(ranges);
 }
 
 void PluginEditor::buildKeyboard() {
@@ -1143,7 +1385,7 @@ constexpr int kLedBoxWidth {12};
         juce::TextButton* buttons[] = {
             &moduleGrainButton_, &moduleEnvelopeButton_, &moduleFilterButton_,
             &moduleModButton_, &moduleCloudButton_, &moduleOutButton_,
-            &moduleKeysButton_,
+            &moduleKeysButton_, &moduleOptimizationButton_,
         };
         int tabX = moduleRow.getX();
         for (auto* button : buttons) {
@@ -1160,6 +1402,12 @@ constexpr int kLedBoxWidth {12};
     // linha continua — quebrar em duas foi tentado e e' pior — e o diametro do
     // knob encolhe com a janela sem segundo layout.
     const auto knobArea = area.reduced(8, 2);
+    if (activeModule_ == ParamModule::optimization) {
+        optimizationPanel_.setBounds(knobArea);
+        layoutOptimizationPanel();
+        return;
+    }
+
     const auto moduleIndex = static_cast<std::size_t>(activeModule_);
     const auto first = moduleFirstKnob_[moduleIndex];
     const auto count = moduleKnobCount_[moduleIndex];
@@ -1330,6 +1578,13 @@ void PluginEditor::refresh() {
     // O "*" de preset sujo chega por Listener e o desenho mora aqui, onde a
     // comparacao evita o evento de acessibilidade a 60 Hz.
     refreshPresetName();
+
+    const auto optimizationActive = owner_.optimizationActive();
+    if (optimizationActive != lastOptimizationActive_) {
+        lastOptimizationActive_ = optimizationActive;
+        refreshOptimizationHighlights();
+        refreshOptimizationPanel();
+    }
 
     refreshTelemetry(info);
 }

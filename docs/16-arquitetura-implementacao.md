@@ -117,6 +117,40 @@ foi removido na S2 junto com seus cinco testes. A dupla fila resolve com menos
 peças reaproveitando o `SpscRing` que já estava testado, e `sample_exchange_test.cpp`
 cobre a invariante com duas threads de verdade.
 
+## Seleção por mochila (F025)
+
+A escolha de blocos vive em `src/opcoda_core/optimization/knapsack.{h,cpp}`,
+sem JUCE. O problema é montado a partir da região atual (`byteRange_`): cada
+bloco de 1 KiB vira um item, o peso é `tamanhoBytes / 1024` e o valor é
+`entropiaShannon × (1 − proporçãoDeZeros)`. A capacidade é uma fração do peso
+total, presa a `[0, 1]`; a região é dividida em no máximo 512 blocos, e o bloco
+efetivo cresce quando a região não cabe nesse limite.
+
+Os três métodos são busca local, como na referência C#: subida de encosta,
+multi-tentativas e têmpera simulada. A subida avalia os vizinhos por delta de
+valor e peso em vez de copiar e reparar cada um, porque 512 blocos tornam a
+versão ingênua lenta demais para a interface. A reparação gulosa continua no
+arranque aleatório e nos vizinhos da têmpera. Todos são determinísticos dada a
+mesma semente.
+
+A otimização corre na message thread, quando o botão `OTIMIZAR` é premido. O
+resultado é concatenado na ordem da região e publicado por `publishMaterial`,
+o mesmo caminho da ingestão: ponteiro novo na fila SPSC, buffer antigo
+devolvido pela fila de retorno, e `optimizationActive_` marca que o material
+em reprodução já é a seleção. O callback de áudio não sabe que houve
+otimização; continua a consumir a fila e a ler o buffer ativo. O guard de
+alocação permanece verde.
+
+O painel `OPT` não acrescenta parâmetros à APVTS: método, `BLK`, `CAP`, `TMAX`,
+`SEED`, `TI`, `TF` e `ALFA` são lidos dos campos no momento da execução. A
+tabela continua fechada em 41. A grelha de bytes destaca os blocos escolhidos,
+e um novo carregamento ou uma nova região limpa o destaque.
+
+**Limitação declarada.** Com a otimização ativa, o transporte percorre o
+material concatenado, mas o display continua a mostrar a região original. O
+destaque identifica os blocos escolhidos; o mapeamento do playhead para o
+bloco concatenado fica para uma iteração de UI.
+
 ## Guard de alocação
 
 O `operator new` global é substituído por uma versão que conta alocações

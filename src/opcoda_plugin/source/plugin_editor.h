@@ -287,7 +287,7 @@ private:
     //
     // A ordem do enum e' a ordem de construcao em buildParameterPanel: os dois
     // arrays de fatias sao indexados por static_cast<size_t>(module).
-    enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys };
+    enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys, optimization };
     ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::vector<std::size_t> moduleFirstKnob_ {};
@@ -299,10 +299,47 @@ private:
     juce::TextButton moduleCloudButton_;
     juce::TextButton moduleOutButton_;
     juce::TextButton moduleKeysButton_;
+    juce::TextButton moduleOptimizationButton_;
 
     void buildModuleTabs();
     void updateModuleTabs();
     void showModule(ParamModule module);
+
+    // --- F025: painel de otimizacao ---
+    //
+    // O painel nao e' uma faixa de knobs: sao campos de texto, um seletor de
+    // metodo e um botao. Por isso vive num Component proprio e ocupa a area dos
+    // knobs quando a aba OPT esta ativa, em vez de entrar na contagem de celulas.
+    void buildOptimizationPanel();
+    void layoutOptimizationPanel();
+    void runOptimization();
+    void refreshOptimizationPanel();
+    void refreshOptimizationHighlights();
+    [[nodiscard]] optimization::Method selectedMethod() const;
+    [[nodiscard]] optimization::Params readOptimizationParams() const;
+
+    juce::Component optimizationPanel_;
+    juce::ComboBox optimizationMethod_;
+    juce::TextButton optimizeButton_;
+    juce::Label optimizationStatus_;
+    juce::Label optimizationMetrics_;
+
+    juce::Label blockLabel_;
+    juce::Label capacityLabel_;
+    juce::Label restartsLabel_;
+    juce::Label seedLabel_;
+    juce::Label initialLabel_;
+    juce::Label finalLabel_;
+    juce::Label coolingLabel_;
+    juce::TextEditor blockField_;
+    juce::TextEditor capacityField_;
+    juce::TextEditor restartsField_;
+    juce::TextEditor seedField_;
+    juce::TextEditor initialField_;
+    juce::TextEditor finalField_;
+    juce::TextEditor coolingField_;
+    bool lastOptimizationActive_ {false};
+
     std::unique_ptr<juce::FileChooser> chooser_;
     bool dragHovered_ {false};
 

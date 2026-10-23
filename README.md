@@ -7,7 +7,7 @@ Trabalho de Graduação em Análise e Desenvolvimento de Sistemas, 5º semestre.
 
 ## Build
 
-Requer Visual Studio Build Tools 2026, CMake 3.28+ e JUCE 8.0.14 clonado em
+Requer Visual Studio Build Tools 2022, CMake 3.28+ e JUCE 8.0.14 clonado em
 `I:\deps\JUCE`. O `cl.exe` depende do vcvars64, então o build passa pelo script:
 
 ```powershell
@@ -24,7 +24,7 @@ src/opcoda_core/    núcleo C++20 puro, sem JUCE
   dsp/              motor granular, janelas, DC-blocker, limiter
   rt/               fila SPSC, troca de amostra, guard de alocação
 src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
-tests/              GoogleTest, 289 casos mais 8 do guard de alocação
+tests/              GoogleTest, 344 casos mais 8 do guard de alocação
 docs/               documentação acadêmica e técnica
 docs/atlas/         atlas da arquitetura, com diagramas e tabelas de rastreio
 specs/              especificações por feature, do spec-kit
@@ -68,6 +68,15 @@ o endereço da região, e a tecla `A` (ou o duplo-clique) alterna entre a regiã
 exata e a seção PE mais próxima. A região entra no estado do projeto, pelo mesmo
 caminho do ficheiro carregado.
 
+A aba `OPT` escolhe blocos por mochila 0/1. O método (subida de encosta,
+multi-tentativas ou têmpera simulada) e os campos `BLK`, `CAP`, `TMAX`, `SEED`,
+`TI`, `TF` e `ALFA` ficam na interface, não na APVTS: os 41 parâmetros
+automatizáveis continuam fechados. `OTIMIZAR` mede entropia e proporção de zeros
+da região atual, concatena os blocos escolhidos e publica o material pela mesma
+fila da ingestão. A grelha destaca os blocos selecionados; com a mochila ativa o
+transporte percorre o material concatenado, mas o display continua a mostrar a
+região original.
+
 A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
 o knob `POSITION` e escreve o endereço no campo, e ambos têm foco e nome
 acessível. O 2.5.8 do WCAG 2.2 fica com exceção declarada, porque uma célula de
@@ -106,12 +115,14 @@ interface, documentação) que nenhuma tarefa fecha sem cumprir.
 - `specs/008-transporte-e-vistas/spec.md`: transporte de audição e as três leituras
   do material, com a regra da posição 1,0 ser silêncio e as duas armadilhas do
   display
+- `specs/025-selecao-por-mochila/spec.md`: os três métodos de busca local, a
+  fórmula de valor e a publicação do material concatenado
 
 ## Estado
 
 Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
-faixas, MIDI por nota e CC, teclado virtual, e estado do host. 303 casos de teste
-e o guard de alocação verdes, contados no binário em 19/10/2026.
+faixas, MIDI por nota e CC, teclado virtual, e estado do host. 344 casos de teste
+e o guard de alocação verdes, contados no binário em 22/10/2026.
 
 O display tem **três vistas** do material carregado, porque são três perguntas
 diferentes sobre a mesma região:

@@ -289,7 +289,12 @@ transport_.reset();
     incoming_.clear();
     returned_.clear();
     owned_.clear();
+    entropyCurves_.clear();
     live_.store(nullptr, std::memory_order_release);
+    optimizationActive_ = false;
+    lastOptimizationProblem_ = {};
+    lastOptimizationResult_ = {};
+    lastError_.clear();
 }
 
 bool PluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
@@ -377,6 +382,11 @@ sourceName_ = juce::File(path).getFileName();
     }
 
     lastError_.clear();
+    // Um ficheiro novo nao herda o destaque nem as metricas da mochila do
+    // ficheiro anterior, mesmo que a publicacao falhe por a fila estar cheia.
+    optimizationActive_ = false;
+    lastOptimizationProblem_ = {};
+    lastOptimizationResult_ = {};
 
     // A curva e as secoes estao publicadas acima; falta o audio. Se a primeira
     // janela nao produzir audio, o ingest e' um sucesso sem som, que e' o mesmo
@@ -469,6 +479,53 @@ bool PluginProcessor::byteRangeIsSectionAligned() const noexcept {
     return pe::isSectionAligned(byteRange_, offsets.data(), sizes.data(), offsets.size());
 }
 
+std::vector<float> PluginProcessor::makeEntropyCurve(const std::uint8_t* data,
+                                                    std::size_t size,
+                                                    std::uint64_t start,
+                                                    std::uint64_t end) {
+    std::vector<float> curve(dsp::GranularEngine::kMaxEntropyPoints, 0.0f);
+    std::vector<pe::Column> columns;
+    constexpr std::uint32_t kCurveColumns {256};
+    if (pe::reduceToColumns(data, size, start, end, kCurveColumns, columns)) {
+        for (std::size_t i = 0; i < curve.size(); ++i) {
+            const auto index = (i * columns.size()) / curve.size();
+            curve[i] = index < columns.size() ? columns[index].entropyBits : 0.0f;
+        }
+    }
+    return curve;
+}
+
+bool PluginProcessor::publishMaterial(std::shared_ptr<const std::vector<float>> buffer,
+                                      std::vector<float> entropyCurve,
+                                      std::uint64_t regionLength) {
+    if (!buffer || buffer->empty()) {
+        return false;
+    }
+
+    // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
+    // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
+    // produtor, e uma alocacao ali custaria o contrato de tempo real.
+    owned_.push_back(std::move(buffer));
+    entropyCurves_.push_back(std::move(entropyCurve));
+
+    const PublishedMaterial material {owned_.back().get(), entropyCurves_.back().data()};
+    if (!incoming_.push(material)) {
+        owned_.pop_back();
+        entropyCurves_.pop_back();
+        lastError_ = "E_BUSY";
+        return false;
+    }
+
+    // O transporte so sabe o comprimento da regiao quando lha dizemos. Sem
+    // esta linha a duracao de uma volta seria a do material anterior, e o
+    // primeiro transporte depois de carregar um ficheiro arrastaria a duracao do
+    // ficheiro que estava la antes.
+    transport_.setRegionLength(regionLength);
+    telemetry_.playDurationSeconds.store(transport_.durationSeconds(),
+                                          std::memory_order_relaxed);
+    return true;
+}
+
 bool PluginProcessor::publishByteRange() {
     const auto range = byteRange_;
     const auto size = static_cast<std::uint64_t>(sourceBytes_.size());
@@ -486,42 +543,71 @@ bool PluginProcessor::publishByteRange() {
     // A curva de entropia e' calculada AQUI, na thread de interface, e nao no
     // motor. Sao 256 pontos da regiao, e o custo e' irrelevante fora do callback —
     // enquanto dentro do callback era uma passagem completa por troca de material.
-    std::vector<float> curve(dsp::GranularEngine::kMaxEntropyPoints, 0.0f);
-    {
-        std::vector<pe::Column> columns;
-        constexpr std::uint32_t kCurveColumns {256};
-        if (pe::reduceToColumns(sourceBytes_.data(), size, range.start, range.end,
-                                kCurveColumns, columns)) {
-            for (std::size_t i = 0; i < curve.size(); ++i) {
-                const auto index = (i * columns.size()) / curve.size();
-                curve[i] = index < columns.size() ? columns[index].entropyBits : 0.0f;
-            }
-        }
-        // Sem colunas a curva fica a zeros e o motor usa o valor medio, que e' o
-        // mesmo que a curva desativada daria.
-    }
+    auto curve = makeEntropyCurve(sourceBytes_.data(), sourceBytes_.size(),
+                                  range.start, range.end);
 
-    // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
-    // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
-    // produtor, e uma alocacao ali custaria o contrato de tempo real.
-    owned_.push_back(std::move(buffer));
-    entropyCurves_.push_back(std::move(curve));
-
-    const PublishedMaterial material {owned_.back().get(), entropyCurves_.back().data()};
-    if (!incoming_.push(material)) {
-        owned_.pop_back();
-        entropyCurves_.pop_back();
-        lastError_ = "E_BUSY";
+    if (!publishMaterial(std::move(buffer), std::move(curve), range.length())) {
         return false;
     }
 
-    // O transporte so sabe o comprimento da regiao quando lha dizemos. Sem
-    // esta linha a duracao de uma volta seria a do material anterior, e o
-    // primeiro transporte depois de carregar um ficheiro arrastaria a duracao do
-    // ficheiro que estava la antes.
-    transport_.setRegionLength(range.length());
-    telemetry_.playDurationSeconds.store(transport_.durationSeconds(),
-                                          std::memory_order_relaxed);
+    // A regiao crua voltou a soar: os destaques da mochila deixaram de valer.
+    optimizationActive_ = false;
+    lastOptimizationProblem_ = {};
+    lastOptimizationResult_ = {};
+    lastError_.clear();
+    return true;
+}
+
+bool PluginProcessor::optimizeSelection(optimization::Method method,
+                                        const optimization::Params& params,
+                                        std::uint64_t blockBytes,
+                                        double capacityFraction) {
+    if (sourceBytes_.empty() || byteRange_.empty()) {
+        lastError_ = "E_NO_SOURCE";
+        return false;
+    }
+
+    auto problem = optimization::buildProblem(
+        sourceBytes_.data(), sourceBytes_.size(), byteRange_.start, byteRange_.end,
+        blockBytes, capacityFraction);
+    if (!problem.valid) {
+        lastError_ = "E_RANGE";
+        return false;
+    }
+    if (problem.blocks.empty()) {
+        lastError_ = "E_EMPTY";
+        return false;
+    }
+
+    auto result = optimization::optimize(problem, method, params);
+    if (!result.valid || result.count == 0) {
+        lastError_ = "E_EMPTY";
+        return false;
+    }
+
+    auto bytes = optimization::concatenate(sourceBytes_.data(), sourceBytes_.size(),
+                                           problem, result);
+    if (bytes.empty()) {
+        lastError_ = "E_EMPTY";
+        return false;
+    }
+
+    auto buffer = std::make_shared<const std::vector<float>>(
+        pe::toSamples(bytes.data(), 0, bytes.size()));
+    if (buffer->empty()) {
+        lastError_ = "E_EMPTY";
+        return false;
+    }
+
+    auto curve = makeEntropyCurve(bytes.data(), bytes.size(), 0, bytes.size());
+    if (!publishMaterial(std::move(buffer), std::move(curve), bytes.size())) {
+        return false;
+    }
+
+    lastOptimizationProblem_ = std::move(problem);
+    lastOptimizationResult_ = std::move(result);
+    optimizationActive_ = true;
+    lastError_.clear();
     return true;
 }
 

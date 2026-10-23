@@ -3,6 +3,7 @@
 #include "fonts.h"
 #include "palette.h"
 
+#include "opcoda_core/pe/byte_range.h"
 #include "plugin_processor.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -69,6 +70,11 @@ public:
 
     void setRegion(std::uint64_t start, std::uint64_t end);
 
+    // Blocos escolhidos pela mochila. Sao desenhados por cima da regiao, e nao
+    // em vez dela: a regiao continua a ser o que soa, e os blocos dizem de onde
+    // veio cada pedaco do material concatenado.
+    void setOptimizedBlocks(std::vector<pe::ByteRange> blocks);
+
     // Endereco da cabeca de leitura. Move-se para a vista se sair do ecrã: um
     // cursor que o utilizador nao ve nao diz nada.
     void setReadHead(std::uint64_t address);
@@ -130,6 +136,8 @@ private:
     // minimo, para um PE com mais de 4 GB de endereco nao ser cortado.
     [[nodiscard]] juce::String formatAddress(std::uint64_t address) const;
 
+    [[nodiscard]] bool isOptimized(std::uint64_t address) const noexcept;
+
     // Endereco sob um ponto, ou std::numeric_limits<std::uint64_t>::max() se o
     // ponto nao for uma celula. O max e' um endereco que nenhum ficheiro tem.
     [[nodiscard]] std::uint64_t addressAt(juce::Point<float> position) const;
@@ -158,6 +166,7 @@ private:
     std::uint64_t regionStart_ {0};
     std::uint64_t regionEnd_ {0};
     std::uint64_t readHead_ {0};
+    std::vector<pe::ByteRange> highlights_;
 
     // Sempre multiplo de kBytesPerRow: e' o que mantem o endereco de cada
     // linha em round numbers, que e' como se le um hex dump.

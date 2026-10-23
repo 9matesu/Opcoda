@@ -36,7 +36,7 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 289 casos na suíte principal mais 8 do guard de alocação, incluindo o critério de 40 dB do T1. Contagem medida no binário em 19/10/2026 |
+| B · Testes | 344 casos na suíte principal mais 8 do guard de alocação, incluindo o critério de 40 dB do T1. Contagem medida no binário em 22/10/2026 |
 | C · Tempo real | zero alocação no callback e na troca de material, com duas threads, e também durante a reprodução do transporte. **Desde 19/10/2026 o T2 mede também a fração dinâmica no Ableton**: p99 abaixo de metade do orçamento e zero xruns em 5 minutos, com buffers de 128, 256 e 512 a 44,1 e 48 kHz |
 | D · Robustez | 50 mutações de bit-flip e 10 casos de borda, todas com erro tipado |
 | E · Interface | contraste, teclado e nome acessível. **O 2.5.8 fechou em 06/10/2026** com a caret de teclado do `ByteDisplay`, e a exceção declarada foi retirada. A F023 reabre a verificação para os módulos novos |
@@ -53,6 +53,7 @@ Cada objetivo específico de `docs/04-objetivos.md` tem uma feature:
 | OE3 · fila lock-free | F003 | pronto: dupla fila SPSC com devolução, portão C verificado com duas threads |
 | OE4 · motor granular | F005 | pronto: 8 grãos simultâneos, instrumento mono, janelas, sobreposição |
 | OE5 · entropia de Shannon | F004, F008 | pronto: curva por janela, testada, e **mostrada no display** desde 06/10/2026 |
+| OE5 (seleção) | F025 | pronto: mochila 0/1 sobre a região atual, três métodos de busca local e 15 testes; o painel OPT publica o material concatenado |
 | OE6 · condicionamento | F006 | pronto: DC-blocker e limiter |
 | OE7 · interface | F008 | **fechado em 06/10/2026**: três vistas do material (forma de onda, hex, curva de entropia), transporte de audição, operação completa por teclado, peças vetoriais sem PNG. O display de entropia que esta linha afirmava estar pronto em 09/10 tinha sido apagado por `e99d089`; a linha estava errada e a feature corrigiu o código e a afirmação |
 | OE8 · isolamento | F003, F008 | pronto: guard de alocação e troca sem alocação verificados, agora também sobre o caminho do transporte; TSan indisponível no Windows |
@@ -166,3 +167,39 @@ criou e nunca foi implementada, passa a ser pré-requisito declarado da F022.
 **O que esta emenda retira.** A palavra "polifónico" em toda a documentação. O
 estado "bloqueado" do T2 e do T4. E as três linhas de `docs/07` e `docs/08` que
 declaravam a máquina sem host licenciado, que passaram a estar erradas.
+
+## Emenda 1.3.0 (2026-10-22) — seleção por mochila no painel OPT
+
+**Motivo.** O Princípio V declarava a seleção inteligente de blocos (§8) como
+adiada, e a F025 a traz para a entrega. A escolha não vira parâmetro: ela é uma
+operação de interface, executada na message thread, que mede a região atual,
+resolve a mochila 0/1 e concatena os blocos escolhidos antes de publicar o
+material pela fila SPSC existente. A tabela continua fechada em 41.
+
+**Impacto nos portões.**
+
+- **A** não muda: o núcleo novo é C++20 puro e o build de release continua sem
+  warnings sob `/W4 /WX`.
+- **B** sobe para 344 casos medidos, mais os 8 do guard. A F025 acrescenta 15
+  testes em `tests/knapsack_test.cpp`, incluindo capacidade, fórmula de valor,
+  ordem da concatenação e erro tipado.
+- **C** não muda de critério: a otimização corre fora do callback e publica
+  pelo mesmo caminho da ingestão; o guard de alocação continua verde. O
+  playhead do material concatenado fica declarado como limitação de UI.
+- **D** cresce com os erros tipados de região, capacidade e solução inválida;
+  nenhuma exceção cruza a fronteira do plugin.
+- **E** reabre para a aba OPT: método e campos têm nome acessível, o estado e
+  as métricas são texto, e o erro não depende de cor.
+- **F** absorve `README`, `docs/07`, `docs/16`, `docs/19`, a spec
+  `025-selecao-por-mochila` e a contagem de testes.
+
+**Migração.** Nenhum ID de parâmetro muda e nenhum parâmetro novo entra na
+APVTS. As configurações do painel OPT vivem na sessão da interface, não no
+preset `.opcoda`. O aplicativo C# `src/OpcodaOtimizacao/` permanece como
+referência e não é distribuído.
+
+**Features novas.** F025 no mapa do fluxo de trabalho.
+
+**O que esta emenda retira.** A frase "seleção inteligente de blocos continua
+adiada" da constitution e de `docs/19`. A entropia continua a modular o spray;
+a mochila acrescenta a escolha do material, não a substitui.

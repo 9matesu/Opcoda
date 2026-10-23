@@ -103,6 +103,12 @@ public:
 
     void setRegion(std::uint64_t start, std::uint64_t end);
 
+    // Repassa os blocos escolhidos pela mochila para a grelha. As vistas de
+    // forma de onda e entropia continuam a mostrar a regiao inteira: o que a
+    // mochila muda e' o material concatenado que soa, e a grelha e' a unica que
+    // tem resolucao para apontar de onde veio cada bloco.
+    void setOptimizedBlocks(const std::vector<pe::ByteRange>& blocks);
+
     void setReadHead(std::uint64_t address);
 
     // Cabeca de reproducao, em fracao da regiao, tal como a publicada pela thread

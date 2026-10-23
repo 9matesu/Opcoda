@@ -127,6 +127,10 @@ void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
     repaint();
 }
 
+void ByteDisplay::setOptimizedBlocks(const std::vector<pe::ByteRange>& blocks) {
+    hex_.setOptimizedBlocks(blocks);
+}
+
 void ByteDisplay::setOutputLevel(float decibels) {
     // O piso e' -60 dB e nao -inf. Um medidor que desaparece quando o sinal e'
     // pequeno deixa de dizer "ha sinal fraco" e passa a dizer "nao ha sinal", que

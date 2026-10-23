@@ -47,8 +47,10 @@ não procura assinaturas de empacotador, não faz análise de malware.
 
 - **FM**: o grão é reprodução amostrada, não oscilador. FM real exigiria
   portadora por grão.
-- **Seleção inteligente de blocos**: adiada pela própria especificação; a
-  entropia já modula a dispersão.
+- **Seleção inteligente de blocos**: entra na F025 como painel `OPT`, fora da
+  tabela de parâmetros. A escolha usa entropia e proporção de zeros, e o
+  material escolhido é concatenado antes de chegar ao motor; não há parâmetro
+  automatizável novo.
 - **CLAP**: previsto na arquitetura, fora da entrega. A entrega é VST3 x64 e
   Standalone para Windows.
 - **Polifonia**: nunca existiu. O motor tem um gate e um envelope global.
@@ -190,11 +192,11 @@ reescrita do motor.
 ## Parte 3 — O que está medido e o que não está
 
 Esta é a secção que impede o artigo de herdar números falsos. Os valores abaixo
-foram lidos do binário e do repositório em 19/10/2026.
+foram lidos do binário e do repositório em 22/10/2026.
 
 | Afirmação | Estado | Evidência |
 | --- | --- | --- |
-| 289 casos na suíte principal | medido | contagem no binário de `build\tests\opcoda_tests.exe` |
+| 344 casos na suíte principal | medido | contagem no binário de `build\tests\opcoda_tests.exe` |
 | 8 casos do guard de alocação | medido | binário separado, por desenho |
 | Atenuação de DC ≥ 40 dB | medido | T1, FFT N = 65536, janela Blackman-Harris |
 | Energia < 20 Hz abaixo de −60 dBFS | medido | T1, contra controle negativo |
@@ -491,7 +493,7 @@ O que **não** pode aparecer no texto, e por quê:
 
 O que **pode** ser afirmado, com o número certo:
 
-- 289 casos automatizados mais 8 do guard de alocação, medidos em 19/10/2026;
+- 344 casos automatizados mais 8 do guard de alocação, medidos em 22/10/2026;
 - atenuação de DC ≥ 40 dB e energia abaixo de 20 Hz < −60 dBFS no ensaio
   espectral;
 - 50 mutações por bit-flip e 10 casos de borda, todos com erro tipado, sem
@@ -537,7 +539,7 @@ argumento, não uma lacuna a disfarçar.
 | 08/10/2026 | presets de fábrica e formato `.opcoda` |
 | 19/10/2026 | emenda 1.2.0: mono, 41 parâmetros, matriz no estado, OpenGL; host licenciado confirmado |
 | 19–21/10/2026 | T4, ida e volta do estado, baseline do T2 |
-| 21–31/10/2026 | F018 a F024 |
+| 22–31/10/2026 | F018 a F025; emenda 1.3.0 com a seleção por mochila no painel OPT |
 | 01–02/11/2026 | congelamento, docs sincronizados, artigo e monografia |
 | 03/11/2026 | entrega |
 
