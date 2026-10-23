@@ -12,7 +12,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$vcvars = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
+$vcvarsCandidates = @(
+    'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
+)
+$vcvars = $vcvarsCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $vcvars) { throw "vcvars64.bat nao encontrado" }
 $cmakeCandidates = @(
     'C:\Program Files\CMake\bin\cmake.exe',
     'C:\Program Files (x86)\CMake\bin\cmake.exe'
