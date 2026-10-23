@@ -68,6 +68,7 @@ de dados e entradas e saidas. A skill do Catlas vive em
 
 ## Process
 
+- Prosa em português: carregue a skill `estilo-autoral` antes de escrever ou revisar qualquer texto corrido. Ela define a voz do autor e prevalece sobre o estilo padrão do assistente.
 - Spec-kit + constitution (`.specify/memory/constitution.md`) prevails over README/comments. Six quality gates (build, tests, realtime, robustness, UI, docs); behavior change must update `docs/` + `specs/` + `README` in the same commit.
 - Mandatory reviewer agents before closing a task: `.opencode/agent/pe-parser-reviewer.md` (parser), `rt-dsp-auditor.md` (DSP), `test-engineer.md` (tests).
 - `build/`, `build-release/`, `Opcoda_artefacts/`, `*.vst3/` are gitignored build output — never version them.
