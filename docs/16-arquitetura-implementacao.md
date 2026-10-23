@@ -194,30 +194,37 @@ Cada arquivo tem uma responsabilidade só:
 | `animator.h` | meia-vida exponencial, a única forma de interpolação da interface |
 | `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
-| `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
+| `assets.h` | carrega as fontes embebidas (Chakra Petch e JetBrains Mono) |
+| `knob.h` | rótulo, `juce::Slider` rotativo e valor em mono |
 | `display_panel.h` | fundo escuro e grade de 24 px |
+| `vu_meter.h` | medidor de saída de oito segmentos e faixa de fundo |
 | `byte_display.h/.cpp` | as três vistas do material, a caret e a animação |
 | `hex_grid.h/.cpp` | a vista de bytes: endereços, 16 colunas e coluna ASCII |
 | `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
-| `plugin_editor.h/.cpp` | as faixas, o teclado virtual e o layout |
+| `plugin_editor.h/.cpp` | as faixas, as abas, o rack de macros, o teclado e o `OpenGLContext` |
 
-**Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
-`Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
-`knob-md.png` eram 186×192 píxeis para pintar um disco de 62, e `button-large.png`
-obrigava a desenhar a peça quadrada ao lado do texto porque esticar um bisel de 2 px
-o deixava com 1 px de um lado e 4 px do outro. Com `Path` o corpo escala, o bisel
-tem a espessura que se pede e não há descodificador de PNG no arranque.
+**`assets.h` carrega só fontes.** O knob e o botão continuam a ser `Path`
+desenhados em código; não há PNG de peça nem descodificador de imagem no arranque.
+O que entrou no binário foram os cinco TTF reduzidos: Inter Display nos rótulos,
+Chakra Petch no wordmark e JetBrains Mono nos números e nas leituras. A fonte do
+sistema mudava a largura das colunas do dump e fazia o painel parecer de 2010.
 
 **O `HexGrid` continua a ser um Component independente, dentro do `ByteDisplay`.**
 A geometria dele tem três capturas atrás e um redesenho seria o caminho de perder as
 três. O `ByteDisplay` é o dono do modo e pinta por cima a cabeça de reprodução, que
 é a única peça que o `HexGrid` não conhece.
 
-O editor tem três faixas de conteúdo — header claro, display escuro, painel de
-parâmetros — mais a fileira de abas de módulo e a faixa do teclado ao fundo. É a
-convenção do Ableton, e é também a resposta ao pedido de brilho: halo laranja
-sobre superfície clara dá 2,4:1 e desaparece, então toda a energia de glow fica na
-região escura.
+O editor passou a ter seis faixas: header de metal com o wordmark, o preset e o
+medidor de saída; display escuro; linha de controlo com as vistas, o zoom e as
+abas; rack de seis macros; painel do módulo ativo; teclado; e o rodapé de estado.
+A ordem é a do mock do Stitch e mantém a regra de contraste: o metal é claro, o
+display é escuro, e o laranja só aparece onde tem contraste para se ler.
+
+O desenho é acelerado por `juce::OpenGLContext`. O `attachTo(*this)` é opcional:
+quando a placa ou o contexto recusam, o JUCE continua a pintar por software e a
+interface não muda. O contexto é largado no destrutor antes de os filhos
+morrerem, porque um contexto ligado a um componente destruído é uma referência
+pendurada.
 
 **O teclado virtual não atravessa o `MidiBuffer`.** O `MidiKeyboardComponent`
 escreve num `MidiKeyboardState` que o editor escuta, e o listener empurra um
@@ -238,13 +245,23 @@ referência do `RangedAudioParameter`, não a da árvore inteira.
 O nome accessible de cada knob é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
 seria inútil para quem navega por leitor de tela. Os **41 parâmetros** vivem em
-sete módulos (GRAIN, ENVELOPE, FILTER, MOD, CLOUD, OUT, KEYS), com uma faixa
-visível de cada vez e páginas dentro do módulo quando os controles não cabem —
-o mínimo de 480×434 não comporta mais linhas; sete abas de 52 px mais 4 de vão
-dão 388 px e cabem nos 480. Os knobs de choice (window, tipos de filtro,
-inclinação do filtro, alvo, forma e sincronismo do LFO, escala e tônica) usam o
-mesmo `SliderParameterAttachment` — o JUCE entrega intervalo 0..N-1 com passo 1
-para `AudioParameterChoice` — e só o texto do valor muda para o rótulo.
+sete módulos (GRAIN, ENVELOPE, FILTER, MOD, CLOUD, OUT, KEYS), mas as abas são
+seis: OUT e KEYS partilham a última, porque quatro parâmetros cabem juntos e sete
+abas a 720 px ficavam abaixo do alvo de toque. Cada aba mostra a sua faixa; os
+knobs de choice (window, tipos de filtro, inclinação do filtro, alvo, forma e
+sincronismo do LFO, escala e tônica) usam o mesmo `SliderParameterAttachment` —
+o JUCE entrega intervalo 0..N-1 com passo 1 para `AudioParameterChoice` — e só o
+texto do valor muda para o rótulo.
+
+O rack de macros é uma segunda vista dos mesmos parâmetros, não um segundo
+estado: BYTES, DENSITY, POSITION, CRUSH, SPACE e CORRUPT são `Knob` ligados aos
+seis parâmetros que o mock destaca. Cada um tem o seu `SliderParameterAttachment`,
+e o undo continua a ser por parâmetro, por isso os dois controles não divergem.
+
+O mínimo passou a **720×640** e o tamanho inicial a **1040×820**. A largura
+antiga de 480 obrigava a esconder metade das vistas e cortava a coluna ASCII;
+com seis abas, seis macros e dez knobs numa linha, 720 é o ponto em que tudo
+continua legível sem um segundo layout.
 
 ### Três decisões que deram errado na primeira tentativa
 
@@ -264,7 +281,8 @@ display e das abas não comporta dois knobs com rótulo e valor, e eles
 despencam para poucos pixels. Cada módulo fica sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
 sem precisar de um segundo layout. Por isso as abas trocam a faixa em vez de
-empilhar: cinco fileiras pediriam ~700 px e o mínimo continua 480x434.
+empilhar: cinco fileiras pediriam ~700 px e o mínimo de 720×640 já reserva
+altura para o display, o rack de macros e uma linha de knobs.
 
 ### O display F008
 

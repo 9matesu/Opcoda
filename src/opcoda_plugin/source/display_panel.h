@@ -22,7 +22,7 @@ public:
     void paint(juce::Graphics& g) override {
         const auto bounds = getLocalBounds().toFloat().reduced(0.5f);
 
-        g.setColour(palette::display);
+        g.setColour(palette::displayPanel);
         g.fillRect(bounds);
 
         // Grade de 24 px do mock. A linha vertical e' a mais presente, para
@@ -53,6 +53,18 @@ public:
 
         g.setColour(palette::displayBorder);
         g.drawRect(bounds, 1.0f);
+    }
+
+    // Scanlines do CRT (o overlay .crt-lines do mock). Ficam por cima dos
+    // filhos, e nao no paint: a grelha e' opaca e cobria as linhas. O passo de
+    // 3 px a alpha 0.08 e' discreto a 1x e ainda se ve num ecra de alta
+    // densidade; mais forte, o texto de 10 px fica sujo.
+    void paintOverChildren(juce::Graphics& g) override {
+        const auto bounds = getLocalBounds().toFloat();
+        g.setColour(juce::Colours::black.withAlpha(0.08f));
+        for (float y = 1.0f; y < bounds.getHeight(); y += 3.0f) {
+            g.drawHorizontalLine(juce::roundToInt(y), bounds.getX(), bounds.getRight());
+        }
     }
 
 private:

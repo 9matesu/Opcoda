@@ -5,42 +5,39 @@
 #include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_position.h"
 
+#include <array>
+#include <iterator>
+
 namespace opcoda {
 namespace {
 
-// 44 px e nao 54: sem caixa no nome do ficheiro nem palavra nos botoes, a
-// faixa nao precisa de ar. O LOAD de 28 px entra a y+10 com 6 de respiro, e o
-// nome a y+14 com 24 — tudo com folga de 6 px em baixo.
-constexpr int kHeaderHeight {44};
+// Header do mock: 64 px para o wordmark de 20 px, o subtitulo de 8 px e o
+// medidor de saida caberem sem se encostarem.
+constexpr int kHeaderHeight {64};
 
-// O display passou de 130-210 px para 200-320 px. Uma grelha com endereco,
-// dezasseis colunas e ASCII precisa de 14 px de cabecalho mais seis linhas de
-// 24 px, e a faixa de 14 px do estado e os 16 px do rodape. Com a altura de
-// antes a grelha ficava com tres linhas e meia, e o endianco do ficheiro ficava
-// fora do ecra quase sempre.
+// O display cresce com a janela ate' 420 px. Abaixo de 200 a grelha perde as
+// seis linhas de bytes e o ASCII; acima de 420 o painel de parametros fica
+// esmagado sem ganho de leitura.
 constexpr int kMinDisplayHeight {200};
-constexpr int kMaxDisplayHeight {320};
+constexpr int kMaxDisplayHeight {420};
 
-// Janela minima e' 480x434. A altura subiu de 410 com a fileira de abas de
-// modulo (22 + 2): grelha com endereco, dezasseis colunas e ASCII precisa de 14
-// px de cabecalho mais seis linhas de 24 px, e o painel de parametros precisa de
-// espaco para o titulo e os knobs do modulo ativo.
-//
-// A largura desce a 480 por causa do header: a cadeia de pecas sobe da direita
-// para a esquerda e, a 820, o chip de formato comecava antes de o botao LOAD
-// acabar. E a 480 a grelha deixa de ter espaco para a coluna ASCII e passa a
-// omite-la, o que torna o comportamento do criterio 1.4.10 um caso real e nao um
-// ramo morto. Com ficheiro carregado a 480 ficam o LOAD, o nome e o contador de
-// vozes, e nada mais.
-constexpr int kMinWidth {480};
-constexpr int kMinHeight {434};
+// 720x640 e' o tamanho em que seis tabs e dez knobs ainda cabem numa linha.
+// A largura antiga de 480 obrigava a esconder metade das vistas e cortava a
+// coluna ASCII; o mock foi desenhado para 1040x820.
+constexpr int kMinWidth {720};
+constexpr int kMinHeight {640};
 constexpr int kAddressFieldWidth {132};
 constexpr int kPlayButtonWidth {60};
-constexpr int kStatusHeight {14};
+constexpr int kStatusHeight {16};
 constexpr int kFooterHeight {16};
-// Altura da faixa do teclado virtual. 56 px dao uma tecla branca legivel e
-// deixam o painel de knobs com o mesmo espaco: o valor sai da metade do display
-// e nao da faixa de parametros, que a 434 de altura ja esta' no osso.
+
+// Faixas novas do mock: linha de controlo (vistas + tabs), rack de macros e
+// rodape de estado.
+constexpr int kControlStripHeight {28};
+constexpr int kMacroHeight {120};
+constexpr int kFooterBandHeight {30};
+
+// Teclado curto: 56 px dao uma tecla branca legivel sem roubar altura ao rack.
 constexpr int kKeyboardHeight {56};
 
 // Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
@@ -68,8 +65,8 @@ const auto cutoffText = [](float v) {
 };
 
 // Os 28 parametros ja no codigo em seis modulos: os 25 da Tabela 8 e os tres da
-// F018. Os IDs dos seis originais nao mudam — sessoes salvas referenciam por ID
-// — so o titulo e o nome falado passam a ingles. As abas trocam a faixa visivel
+// F018. Os IDs dos seis originais nao mudam ÔÇö sessoes salvas referenciam por ID
+// ÔÇö so o titulo e o nome falado passam a ingles. As abas trocam a faixa visivel
 // em vez de empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e
 // seis fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao
 // promete.
@@ -165,7 +162,7 @@ const std::array<Knob::Spec, 7> kModSpecs {
 
 // F021: a nuvem e' o mesmo motor com tres graus de liberdade no nascimento do
 // grao. Ficam num modulo proprio para o GRAIN nao passar de dez celulas a 480
-// px — a partir dai o knob encolhe abaixo do que o dedo acerta.
+// px ÔÇö a partir dai o knob encolhe abaixo do que o dedo acerta.
 const std::array<Knob::Spec, 3> kCloudSpecs {
     Knob::Spec {"cloudsize", "WIDTH", "Temporal width of the grain cloud", 0.0f,
                 [](float v) { return asInteger(v * 500.0f) + " ms"; }},
@@ -195,6 +192,22 @@ const std::array<Knob::Spec, 3> kKeysSpecs {
     Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
 };
 
+// Rack de macros do mock. Os seis nomes sao os do painel visual, mas cada um
+// aponta para um parametro real: nao ha parametro de fachada.
+const std::array<Knob::Spec, 6> kMacroSpecs {
+    Knob::Spec {"grain", "BYTES", "Grain size, in milliseconds", 40.0f,
+                [](float v) { return asInteger(v) + " ms"; }},
+    Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
+                [](float v) { return asInteger(v) + " /s"; }},
+    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
+    Knob::Spec {"f1drive", "CRUSH", "Filter 1 drive, in decibels", 0.0f,
+                [](float v) { return juce::String {v, 1} + " dB"; }},
+    Knob::Spec {"cloudsize", "SPACE", "Temporal width of the grain cloud", 0.0f,
+                [](float v) { return asInteger(v * 500.0f) + " ms"; }},
+    Knob::Spec {"pitchrand", "CORRUPT", "Random detune per grain, in semitones", 0.0f,
+                [](float v) { return juce::String {v, 1} + " st"; }},
+};
+
 } // namespace
 
 // Trocar o texto de um Label dispara um evento de acessibilidade. A 20 Hz isso
@@ -212,27 +225,33 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
       keyboard_(keyboardState_, juce::MidiKeyboardComponent::horizontalKeyboard) {
     setLookAndFeel(&lookAndFeel_);
 
-    makePlainLabel(title_, "Opcoda", palette::textDark, fonts().sans(13.0f, true));
-    // **O subtítulo, o contador de vozes do cabeçalho, a dica de arrasto e o título do
-    // módulo saíram todos, e cada um tinha um duplo algures no ecrã.**
+    makePlainLabel(title_, "OPCODA", palette::amberText, assets::fonts::tech(22.0f));
+    title_.setJustificationType(juce::Justification::centredLeft);
+    makePlainLabel(subtitle_, "GRANULAR PE SYNTHESIZER", palette::textSub,
+                   assets::fonts::mono(8.0f));
+    subtitle_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(subtitle_);
+    // **O subt├¡tulo, o contador de vozes do cabe├ºalho, a dica de arrasto e o t├¡tulo do
+    // m├│dulo sa├¡ram todos, e cada um tinha um duplo algures no ecr├ú.**
     //
-    //   - "Granular Synthesizer" dizia o que o título "Opcoda" ja diz ao lado;
-    //   - "VOICES 8" no cabeçalho duplicava o rodapé, que escreve VOICES a cada
-    //     tique com o número real e não o máximo;
+    //   - "Granular Synthesizer" dizia o que o t├¡tulo "Opcoda" ja diz ao lado;
+    //   - "VOICES 8" no cabe├ºalho duplicava o rodap├®, que escreve VOICES a cada
+    //     tique com o n├║mero real e n├úo o m├íximo;
     //   - "DRAG & DROP BINARY" duplicava a linha de estado, que escreve a mesma
-    //     instrução por extenso enquanto não há material;
-    //   - "1 - GRANULAR ENGINE" nomeava um módulo que é o único, e o "1" prometia
+    //     instru├º├úo por extenso enquanto n├úo h├í material;
+    //   - "1 - GRANULAR ENGINE" nomeava um m├│dulo que ├® o ├║nico, e o "1" prometia
     //     um segundo que nunca existiu.
     //
     // Nenhum deles levava informacao que nao estivesse escrita noutro sitio. O que
-    // fica no cabeçalho é o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
+    // fica no cabe├ºalho ├® o LED, o nome, o LOAD, o nome do ficheiro, o formato e o
     // tamanho.
-    makePlainLabel(status_, "", palette::textOnDark, fonts().sans(10.0f));
+    makePlainLabel(status_, "", palette::textOnDark, assets::fonts::mono(9.0f));
 
     buildHeader();
     buildViewButtons();
     buildPresetSelector();
     buildParameterPanel();
+    buildMacroBand();
     buildKeyboard();
 
     // A sujeira do preset chega por Listener da arvore: qualquer PARAM que mexa
@@ -255,13 +274,22 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
 
     setResizable(true, true);
     setResizeLimits(kMinWidth, kMinHeight, 4096, 4096);
-    setSize(900, 540);
+    setSize(1040, 820);
+
+    // OpenGL primeiro, software como rede. attachTo devolve false quando a
+    // placa ou o contexto recusam; nesse caso o JUCE pinta pelo caminho normal
+    // e nao ha nada a fazer senao seguir.
+    static_cast<void>(openGLContext_.attachTo(*this));
+
     refresh();
 }
 
 PluginEditor::~PluginEditor() {
+    // O contexto GL tem de largar o componente antes de o componente morrer.
+    openGLContext_.detach();
+
     // Primeiro os note-off, com o listener ainda ligado, senao fechar a janela
-    // com uma tecla premida deixava a nota presa no motor ate ao proximo pânico.
+    // com uma tecla premida deixava a nota presa no motor ate ao proximo p├ónico.
     // allNotesOff corre na thread de interface e o listener empurra para a fila.
     keyboardState_.allNotesOff(1);
     keyboardState_.removeListener(this);
@@ -270,7 +298,7 @@ PluginEditor::~PluginEditor() {
 
 void PluginEditor::buildPresetSelector() {
     // Setas sem cromo e nome como aba: a mesma lingua das abas de modulo, num
-    // tamanho que cabe entre o wordmark e o LOAD. O nome e' o botao do menu —
+    // tamanho que cabe entre o wordmark e o LOAD. O nome e' o botao do menu ÔÇö
     // um botao separado "MENU" seria o quarto controle para uma so funcao.
     const auto setupArrow = [this](juce::TextButton& button, const char* glyph,
                                    const char* spokenName, int direction) {
@@ -304,7 +332,7 @@ void PluginEditor::showPresetMenu() {
     menu.addItem(102, "Save .opcoda...");
 
     // Assincrono como o FileChooser: menu modal trava a message thread e o
-    // host nao perdoa. O tick marca o preset ativo so quando limpo — com "*"
+    // host nao perdoa. O tick marca o preset ativo so quando limpo ÔÇö com "*"
     // nenhum item e' o som atual.
     menu.showMenuAsync(juce::PopupMenu::Options().withParentComponent(this),
                        [this](int result) {
@@ -409,6 +437,8 @@ void PluginEditor::makePlainLabel(juce::Label& label,
 void PluginEditor::buildHeader() {
     for (auto* component : {static_cast<juce::Component*>(&powerLed_),
                             static_cast<juce::Component*>(&title_),
+                            static_cast<juce::Component*>(&subtitle_),
+                            static_cast<juce::Component*>(&vuMeter_),
                             static_cast<juce::Component*>(&loadButton_),
                             static_cast<juce::Component*>(&fileName_),
                             static_cast<juce::Component*>(&formatTag_),
@@ -436,7 +466,7 @@ void PluginEditor::buildHeader() {
 
     // O display e' o componente que fica com o foco quando nao ha campo de endereco
     // com foco, e por isso e' ele que responde ao espaco e ao A. O editor responde
-    // tambem, para o caso de o foco estar noutro sitio — um botao, por exemplo.
+    // tambem, para o caso de o foco estar noutro sitio ÔÇö um botao, por exemplo.
     grid_.onToggleTransport = [this] {
         owner_.toggleTransport();
         refreshPlayButton();
@@ -445,17 +475,17 @@ void PluginEditor::buildHeader() {
 
     // Tecla A e duplo-clique na grelha alinham a regiao; nao ha botao porque o
     // terceiro controle na linha de estado empurrava o texto para debaixo do
-    // campo. A dica vive no help text do display e em docs/10 — setHelpText e
+    // campo. A dica vive no help text do display e em docs/10 ÔÇö setHelpText e
     // nao setTooltip, pelo mesmo motivo do HexGrid: o Component so expoe ajuda
     // pelo AccessibilityHandler.
     grid_.setHelpText("Duplo-clique ou tecla A: alinha a regiao a secao PE mais proxima.");
 
-    // Botao de transporte. E' um toggle, e a forma troca com o estado (▶/■): e'
+    // Botao de transporte. E' um toggle, e a forma troca com o estado (ÔûÂ/Ôûá): e'
     // a segunda pista de estado, e a que funciona para quem nao distingue cores.
-    // Sem texto e sem cromo — so o glifo, desenhado pelo LookAndFeel.
+    // Sem texto e sem cromo ÔÇö so o glifo, desenhado pelo LookAndFeel.
     playButton_.getProperties().set("uiIcon", "transport");
     // Na linha de estado, sobre o display escuro: tinta clara. O chassis tambem
-    // e' escuro agora, por isso a distincao uiOnDark e' redundante — fica porque
+    // e' escuro agora, por isso a distincao uiOnDark e' redundante ÔÇö fica porque
     // o LookAndFeel ainda a le para o wash do hover.
     playButton_.getProperties().set("uiOnDark", true);
     playButton_.setButtonText("");
@@ -472,7 +502,7 @@ void PluginEditor::buildHeader() {
     for (auto* readout : {&entropyReadout_, &positionReadout_, &offsetReadout_,
                            &transportReadout_, &peakReadout_, &voicesReadout_}) {
         addAndMakeVisible(*readout);
-        makePlainLabel(*readout, "", palette::textOnDark, fonts().sans(10.0f));
+        makePlainLabel(*readout, "", palette::textOnDark, assets::fonts::mono(9.0f));
         // Centrado como antes, quando havia caixa: a posicao do texto na faixa
         // nao muda, so some a moldura. Mudar o alinhamento junto seria duas
         // mudancas visuais numa.
@@ -484,11 +514,11 @@ void PluginEditor::buildHeader() {
         // claro, e por isso nao pode usar os tokens de superficie clara.
     }
 
-    makePlainLabel(fileName_, "-", palette::textDark, fonts().sans(10.0f));
+    makePlainLabel(fileName_, "-", palette::textDark, assets::fonts::mono(9.5f));
     // Formato e tamanho sao metadado tecnico: texto secundario, para o nome da
     // fonte (o que importa) carregar a hierarquia sozinho.
-    makePlainLabel(formatTag_, "", palette::textSub, fonts().sans(10.0f));
-    makePlainLabel(fileSize_, "", palette::textSub, fonts().sans(10.0f));
+    makePlainLabel(formatTag_, "", palette::textSub, assets::fonts::mono(8.5f));
+    makePlainLabel(fileSize_, "", palette::textSub, assets::fonts::mono(8.5f));
     fileName_.setJustificationType(juce::Justification::centred);
     formatTag_.setJustificationType(juce::Justification::centred);
     fileSize_.setJustificationType(juce::Justification::centred);
@@ -600,7 +630,7 @@ void PluginEditor::updateHeaderVisibility() {
     const auto& info = owner_.sourceInfo();
 
     // Duas condicoes, e ambas tem de ser verdade. A peca e' escondida quando nao
-    // ha espaco OU quando nao ha conteudo — e nunca se desenha uma moldura vazia,
+    // ha espaco OU quando nao ha conteudo ÔÇö e nunca se desenha uma moldura vazia,
     // que e' o mesmo motivo pelo qual os chips se escondem por vazio.
     fileSize_.setVisible(headerFitsSize_ && info.sizeBytes > 0);
     formatTag_.setVisible(headerFitsFormat_ && info.formatTag.isNotEmpty());
@@ -616,7 +646,7 @@ void PluginEditor::updateFooterVisibility() {
     // A leitura de transporte so aparece a tocar, pela mesma razao que os chips
     // vazios do header se escondem: uma moldura vazia le-se como defeito. Durante
     // a reproducao e' a unica pista textual da cabeca, e sem ela a barra animada
-    // seria a unica forma de saber o que se ouve — o que o criterio 1.4.1 nao
+    // seria a unica forma de saber o que se ouve ÔÇö o que o criterio 1.4.1 nao
     // permite.
     transportReadout_.setVisible(footerFitsTransport_ &&
                                  transportReadout_.getText().isNotEmpty());
@@ -634,8 +664,8 @@ void PluginEditor::updateStatusVisibility() {
 void PluginEditor::refreshPlayButton() {
     const bool playing = owner_.isTransportPlaying();
 
-    // A forma e' a pista de estado que sobrevive a quem nao ve cor: ▶ parado,
-    // ■ a tocar. O nome accessivel troca junto para o leitor de tela dizer o
+    // A forma e' a pista de estado que sobrevive a quem nao ve cor: ÔûÂ parado,
+    // Ôûá a tocar. O nome accessivel troca junto para o leitor de tela dizer o
     // que o glifo mostra.
     if ((playButton_.getName() == "Parar a reproducao") != playing) {
         playButton_.setName(playing ? "Parar a reproducao" : "Reproduzir a regiao");
@@ -659,7 +689,7 @@ void PluginEditor::refreshPlayButton() {
 void PluginEditor::pushTransportAnchor() {
     // A ancora so e' escrita quando o utilizador mexeu em POSITION. Escrever a cada
     // quadro faria a geracao do nucleo subir a cada quadro, e a cabeca nunca
-    // passaria do ponto de ancoragem — que e' o modo de falha que o teste
+    // passaria do ponto de ancoragem ÔÇö que e' o modo de falha que o teste
     // Transport.SeekIsAppliedOnceAndThenTheHeadAdvanced cobre do outro lado.
     if (!positionChangedSinceLastAnchor_) {
         return;
@@ -693,6 +723,18 @@ void PluginEditor::buildParameterPanel() {
     showModule(activeModule_);
 }
 
+void PluginEditor::buildMacroBand() {
+    const std::array<juce::Colour, 6> swatches {
+        palette::accent, palette::ok, palette::focusRing,
+        palette::accentWarn, palette::accent, palette::error};
+
+    for (std::size_t i = 0; i < kMacroSpecs.size(); ++i) {
+        macroKnobs_.push_back(std::make_unique<Knob>(owner_.parameters(), kMacroSpecs[i]));
+        macroKnobs_.back()->setSwatch(swatches[i]);
+        addAndMakeVisible(*macroKnobs_.back());
+    }
+}
+
 void PluginEditor::buildModuleTabs() {
     // Mesma lingua das abas de vista: palavra sem cromo, ativa em peso forte
     // com filete. Seis abas curtas cabem a 480 (52 px cada mais 4 de vao dao
@@ -714,8 +756,8 @@ void PluginEditor::buildModuleTabs() {
     setup(moduleFilterButton_, "FILTER", "Filter module", ParamModule::filter);
     setup(moduleModButton_, "MOD", "Modulation module", ParamModule::mod);
     setup(moduleCloudButton_, "CLOUD", "Grain cloud module", ParamModule::cloud);
-    setup(moduleOutButton_, "OUT", "Output module", ParamModule::out);
-    setup(moduleKeysButton_, "KEYS", "Keyboard and tuning module", ParamModule::keys);
+    setup(moduleOutButton_, "OUT/KEYS", "Output, keyboard and tuning module",
+          ParamModule::out);
 }
 
 void PluginEditor::updateModuleTabs() {
@@ -731,15 +773,22 @@ void PluginEditor::updateModuleTabs() {
     mark(moduleModButton_, ParamModule::mod);
     mark(moduleCloudButton_, ParamModule::cloud);
     mark(moduleOutButton_, ParamModule::out);
-    mark(moduleKeysButton_, ParamModule::keys);
 }
 
 void PluginEditor::showModule(ParamModule module) {
     activeModule_ = module;
     const auto index = static_cast<std::size_t>(module);
     const auto first = moduleFirstKnob_[index];
+
+    // OUT e KEYS partilham a ultima aba: a fatia e' a soma das duas, e a ordem
+    // de construcao (OUT depois KEYS) garante que sao contiguas.
+    auto count = moduleKnobCount_[index];
+    if (module == ParamModule::out) {
+        count += moduleKnobCount_[static_cast<std::size_t>(ParamModule::keys)];
+    }
+
     for (std::size_t i = 0; i < knobs_.size(); ++i) {
-        knobs_[i]->setVisible(i >= first && i < first + moduleKnobCount_[index]);
+        knobs_[i]->setVisible(i >= first && i < first + count);
     }
     updateModuleTabs();
     resized();
@@ -784,220 +833,225 @@ void PluginEditor::handleNoteOff(juce::MidiKeyboardState*, int, int midiNoteNumb
 }
 
 void PluginEditor::paint(juce::Graphics& g) {
-    g.fillAll(palette::chassis);
+    auto bounds = getLocalBounds().toFloat();
 
-    // Faixa do header: um tom acima do chassis, com a borda de 1 px que separa
-    // as tres faixas.
-    g.setColour(palette::header);
-    g.fillRect(getLocalBounds().withHeight(kHeaderHeight));
-    g.setColour(palette::chassisBorder);
-    g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(getWidth()));
+    // Metal escovado: gradiente vertical curto e linhas de 1 px quase
+    // invisiveis. E' o que separa a superficie de um retangulo cinzento.
+    g.setGradientFill(juce::ColourGradient {
+        palette::metalTop, bounds.getTopLeft(),
+        palette::metalBottom, bounds.getBottomLeft(), false});
+    g.fillRect(bounds);
 
-    // Sombra de 1 px sob a costura do header: a faixa de cima assenta sobre o
-    // resto do chassi em vez de estar pintada nele. Preta a 0,15 — sombra e nao
-    // linha, porque linha seria mais um divisor e a costura ja divide.
-    g.setColour(juce::Colours::black.withAlpha(0.15f));
-    g.drawHorizontalLine(kHeaderHeight + 1, 0.0f, static_cast<float>(getWidth()));
+    g.setColour(juce::Colours::black.withAlpha(0.025f));
+    for (float y = 2.0f; y < bounds.getHeight(); y += 4.0f) {
+        g.drawHorizontalLine(juce::roundToInt(y), 0.0f, bounds.getWidth());
+    }
 
-    // Realce de 1 px no topo: e' o que da sensacao de superficie em vez de
-    // retangulo liso. Contido (0,08) porque o fundo e' escuro.
-    g.setColour(juce::Colours::white.withAlpha(0.08f));
-    g.drawHorizontalLine(0, 0.0f, static_cast<float>(getWidth()));
+    // Header: metal mais claro que o corpo, com costura e sombra.
+    const auto header = bounds.withHeight(static_cast<float>(kHeaderHeight));
+    g.setGradientFill(juce::ColourGradient {
+        palette::metalTop, header.getTopLeft(),
+        palette::header, header.getBottomLeft(), false});
+    g.fillRect(header);
+    g.setColour(palette::metalBorder);
+    g.drawHorizontalLine(kHeaderHeight, 0.0f, bounds.getWidth());
+    g.setColour(juce::Colours::black.withAlpha(0.18f));
+    g.drawHorizontalLine(kHeaderHeight + 1, 0.0f, bounds.getWidth());
+    g.setColour(juce::Colours::white.withAlpha(0.55f));
+    g.drawHorizontalLine(0, 0.0f, bounds.getWidth());
+
+    // Moldura do display: o painel escuro assenta numa caixa de chassi, com
+    // bisel de metal. Sem isto o ecra parece um buraco colado ao painel.
+    if (display_.getBounds().getWidth() > 0) {
+        const auto bezel = display_.getBounds().toFloat().expanded(3.0f);
+        g.setColour(palette::chassis);
+        g.fillRoundedRectangle(bezel, 4.0f);
+        g.setColour(palette::metalBorder);
+        g.drawRoundedRectangle(bezel, 4.0f, 1.0f);
+        g.setColour(juce::Colours::white.withAlpha(0.35f));
+        g.drawHorizontalLine(juce::roundToInt(bezel.getY() + 1.0f),
+                             bezel.getX() + 4.0f, bezel.getRight() - 4.0f);
+    }
+
+    // Faixa do rack de macros: metal ligeiramente mais escuro, para os seis
+    // knobs se lerem como um grupo e nao como parte do painel de parametros.
+    auto content = getLocalBounds();
+    content.removeFromBottom(kFooterBandHeight);
+    content.removeFromBottom(kKeyboardHeight);
+    content.removeFromTop(kHeaderHeight);
+    const auto displayHeight = display_.getHeight();
+    if (displayHeight > 0) {
+        content.removeFromTop(displayHeight);
+    }
+    content.removeFromTop(kControlStripHeight);
+    if (content.getHeight() >= kMacroHeight) {
+        const auto macro = content.removeFromTop(kMacroHeight).toFloat();
+        g.setColour(palette::metalMiddle);
+        g.fillRect(macro);
+        g.setColour(palette::metalBorder);
+        g.drawHorizontalLine(juce::roundToInt(macro.getY()), macro.getX(),
+                             macro.getRight());
+        g.drawHorizontalLine(juce::roundToInt(macro.getBottom()) - 1,
+                             macro.getX(), macro.getRight());
+    }
+
+    // Painel de parametros: rebaixo no metal, com borda fina. Os knobs do
+    // modulo ativo vivem aqui e nao no rack de macros.
+    if (content.getHeight() > 0) {
+        const auto panel = content.toFloat().reduced(10.0f, 6.0f);
+        g.setColour(palette::metalBase.darker(0.025f));
+        g.fillRoundedRectangle(panel, 4.0f);
+        g.setColour(palette::metalBorder);
+        g.drawRoundedRectangle(panel, 4.0f, 1.0f);
+    }
+
+    // Rodape: faixa escura de estado, a mesma lingua do display.
+    const auto footer = bounds.removeFromBottom(static_cast<float>(kFooterBandHeight));
+    g.setColour(palette::footerSurface);
+    g.fillRect(footer);
+    g.setColour(palette::metalBorder);
+    g.drawHorizontalLine(juce::roundToInt(footer.getY()), 0.0f, bounds.getWidth());
+
+    g.setColour(palette::textOnDarkSub);
+    g.setFont(assets::fonts::mono(8.0f));
+    g.drawText("PE / GRAIN ENGINE", footer.reduced(14.0f, 0.0f),
+               juce::Justification::centredRight, false);
+
+    g.setColour(palette::amberText);
+    g.setFont(assets::fonts::tech(10.0f));
+    g.drawText("OPCODA", footer.reduced(14.0f, 0.0f),
+               juce::Justification::centredLeft, false);
+
+    // "OUT" ao lado do medidor. E' rotulo de unidade, nao um segundo medidor:
+    // o nucleo e' mono e as duas barras mostram o mesmo pico.
+    if (vuMeter_.isVisible()) {
+        g.setColour(palette::textSub);
+        g.setFont(assets::fonts::mono(8.0f));
+        g.drawText("OUT", vuMeter_.getBounds().withX(vuMeter_.getX() - 28).withWidth(24),
+                   juce::Justification::centredRight, false);
+    }
 }
 
 void PluginEditor::resized() {
     auto area = getLocalBounds();
 
-    // A faixa do teclado e' retirada da base antes de tudo o resto: a partir
-    // daqui nenhuma outra peca pode crescer para cima dela. O que ela custa sai
-    // da metade do display, e nao do painel de knobs — a 540 de altura o painel
-    // fica igual e so no minimo de 434 o mostrador encolhe uns pixels.
-    keyboard_.setBounds(area.removeFromBottom(kKeyboardHeight).reduced(10, 4));
+    // Rodape e teclado sao retirados primeiro. O resto do layout nunca cresce
+    // para cima deles, e a altura que sobra e' a que o display e o rack podem
+    // dividir.
+    const auto footer = area.removeFromBottom(kFooterBandHeight);
+    static_cast<void>(footer);
+    keyboard_.setBounds(area.removeFromBottom(kKeyboardHeight).reduced(14, 4));
 
     // ---- header ----
-    // Cursor explicito em vez de encadear removeFromLeft: aquele metodo devolve
-    // um retangulo novo e NAO consome o original, entao encadear sobrepoe as
-// pecas em vez de avanca-las.
-    const auto header = area.removeFromTop(kHeaderHeight).reduced(10, 0);
+    const auto header = area.removeFromTop(kHeaderHeight).reduced(14, 0);
     int x = header.getX();
 
-    // As medidas do header em constantes com nome. O layout e' uma cadeia de
-    // larguras que tem de fechar, e numeros soltos nao se somam a olho.
     constexpr int kLedWidth {16};
-    constexpr int kGap {6};
-    // O wordmark e' a unica coisa com largura propria que nao e' uma cadeia: o nome
-    // do plugin nao cresce com a janela, e 180 px era a largura que o subtitulo
-    // "Granular Synthesizer" exigia. Com ele fora, o titulo precisa de metade.
-    constexpr int kIdentityWidth {96};
-    constexpr int kIdentityGap {12};
-    // 40 px porque e' um icone de pasta, nao a palavra LOAD: os 36 px que
-    // sobram vao para o nome do ficheiro, que e' quem precisa deles.
+    constexpr int kIdentityWidth {156};
+    constexpr int kIdentityGap {14};
+    constexpr int kPresetArrow {22};
+    constexpr int kPresetName {96};
+    constexpr int kPresetGap {2};
     constexpr int kLoadWidth {40};
-    constexpr int kNameGap {6};
-    constexpr int kMinNameWidth {40};
-    constexpr int kChipGap {4};
-    constexpr int kFormatWidth {78};
-    constexpr int kSizeWidth {58};
+    constexpr int kNameGap {8};
+    constexpr int kMinNameWidth {96};
 
-    powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth, header.getHeight()}
-                             .withSizeKeepingCentre(14, 14));
-    x += kLedWidth + kGap;
+    powerLed_.setBounds(juce::Rectangle<int> {x, header.getY(), kLedWidth,
+                                               header.getHeight()}
+                            .withSizeKeepingCentre(14, 14));
+    x += kLedWidth + 8;
 
-    // O titulo centrado na altura do cabeçalho. Estava a 10 px do topo porque
-    // tinha um subtitulo por baixo; sem ele, centrar vertical e' o que evita o
-    // wordmark parecer colado ao topo da faixa.
-    title_.setBounds(juce::Rectangle<int> {x, header.getY(), kIdentityWidth, header.getHeight()}
-                         .withSizeKeepingCentre(kIdentityWidth, 19));
+    title_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kIdentityWidth, 26});
+    subtitle_.setBounds(juce::Rectangle<int> {x, header.getY() + 36, kIdentityWidth, 14});
     x += kIdentityWidth + kIdentityGap;
 
-    // Seletor de preset entre o wordmark e o LOAD: identidade do som antes da
-    // origem do som. Setas de 22 com nome de 84 no meio; a 480 o nome do
-    // ficheiro encolhe mas o preset nunca e' sacrificado — e' feature, nao chip.
-    constexpr int kPresetArrow {22};
-    constexpr int kPresetName {84};
-    constexpr int kPresetGap {2};
-    presetPrevButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    presetPrevButton_.setBounds(
+        juce::Rectangle<int> {x, header.getY() + 19, kPresetArrow, 26});
     x += kPresetArrow + kPresetGap;
-    presetNameButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetName, 22});
+    presetNameButton_.setBounds(
+        juce::Rectangle<int> {x, header.getY() + 19, kPresetName, 26});
     x += kPresetName + kPresetGap;
-    presetNextButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 11, kPresetArrow, 22});
+    presetNextButton_.setBounds(
+        juce::Rectangle<int> {x, header.getY() + 19, kPresetArrow, 26});
     x += kPresetArrow + kIdentityGap;
 
-    // Tudo o que fica a partir daqui tem de caber a serio. `leftLimit` e' o fim do
-    // bloco fixo: LED, wordmark, preset, botao LOAD e o nome do ficheiro no minimo.
-    // E' contra ele que cada peca decide se cabe.
-    const int leftLimit = x + kLoadWidth + kNameGap + kMinNameWidth;
+    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 18, kLoadWidth, 28});
+    x += kLoadWidth + kNameGap;
 
-    // `stripEdge` e' o cursor que desce da direita para a esquerda. Nem `cursor`
-    // nem `edge`: `cursor` e' um membro de juce::Component e o /W4 trata a
-    // ocultacao como erro, e `edge` ja e' o cursor do rodape mais abaixo, na
-    // mesma funcao. O /W4 ja apanhou este mesmo tropeco duas vezes neste
-    // ficheiro.
-    //
-    // **A borda direita e' a borda do cabecalho.** Antes havia um bloco VOICES de 78
-    // px a que a cadeia se encostava, e ele saiu por repetir o rodapé.
-    int stripEdge = header.getRight();
+    const int leftLimit = x + kMinNameWidth;
+    int rightEdge = header.getRight();
 
-    // A ordem em que se sacrifica e' a ordem de importancia invertida: primeiro o
-    // formato, e o tamanho em ultimo. Ambos sao informacao sobre o material, mas
-    // menos importante do que o nome.
-    //
-    // Sem esta regra o chip de formato comeca em 174 px numa janela de 560 e o
-    // botao LOAD acaba em 300 — 126 px de sobreposicao que so nao se via porque
-    // os chips vazios ja se escondem, e por isso so aparecia depois de carregar
-    // um ficheiro.
+    // Medidor de saida no canto direito. O "OUT" e' pintado no paint().
+    constexpr int kMeterWidth {74};
+    vuMeter_.setBounds(juce::Rectangle<int> {rightEdge - kMeterWidth,
+                                              header.getY() + 18, kMeterWidth, 28});
+    rightEdge -= kMeterWidth + 16;
 
-    // 1. O tamanho, na ponta direita da faixa.
-    headerFitsSize_ = stripEdge - kSizeWidth >= leftLimit;
+    constexpr int kFormatWidth {74};
+    constexpr int kSizeWidth {58};
+    constexpr int kChipGap {6};
+
+    headerFitsSize_ = rightEdge - kSizeWidth >= leftLimit;
     if (headerFitsSize_) {
-        fileSize_.setBounds(juce::Rectangle<int> {stripEdge - kSizeWidth, header.getY() + 17,
-                                                  kSizeWidth, 16});
-        stripEdge -= kSizeWidth + kChipGap;
+        fileSize_.setBounds(juce::Rectangle<int> {rightEdge - kSizeWidth,
+                                                   header.getY() + 22, kSizeWidth, 20});
+        rightEdge -= kSizeWidth + kChipGap;
     }
 
-    // 2. O formato, a seguir.
-    headerFitsFormat_ = stripEdge - kFormatWidth >= leftLimit;
+    headerFitsFormat_ = rightEdge - kFormatWidth >= leftLimit;
     if (headerFitsFormat_) {
-        formatTag_.setBounds(juce::Rectangle<int> {stripEdge - kFormatWidth, header.getY() + 17,
-                                                   kFormatWidth, 16});
-        stripEdge -= kFormatWidth + kChipGap;
+        formatTag_.setBounds(juce::Rectangle<int> {rightEdge - kFormatWidth,
+                                                    header.getY() + 22, kFormatWidth, 20});
+        rightEdge -= kFormatWidth + kChipGap;
     }
 
-    // 3. O nome cresce com o que sobrou, e nunca fica abaixo do minimo.
-    loadButton_.setBounds(juce::Rectangle<int> {x, header.getY() + 10, kLoadWidth, 28});
-    fileName_.setBounds(juce::Rectangle<int> {x + kLoadWidth + kNameGap, header.getY() + 14,
-                                              juce::jmax(kMinNameWidth,
-                                                         stripEdge - (x + kLoadWidth + kNameGap)),
-                                              24});
-
+    fileName_.setBounds(juce::Rectangle<int> {x, header.getY() + 20,
+                                              juce::jmax(kMinNameWidth, rightEdge - x), 24});
     updateHeaderVisibility();
 
-// ---- display ----
-    const auto displayHeight =
-        juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight, getHeight() / 2 - kKeyboardHeight);
+    // ---- display ----
+    const auto displayHeight = juce::jlimit(kMinDisplayHeight, kMaxDisplayHeight,
+                                             area.getHeight() * 2 / 5);
     const auto displayBounds = area.removeFromTop(displayHeight);
     display_.setBounds(displayBounds);
 
-    // A linha de estado ocupa uma faixa propria no topo do display, e a grelha
-    // comeca abaixo dela. Fica no topo porque e' onde o erro tem de aparecer: o
-    // criterio 3.3.1 pede identificacao de erro, e um E_BAD_PE no rodape, em mono
-    // de 10 px, ao lado do pico e das vozes, e' uma coisa que passa sem ser lida.
-    //
-    // A faixa e' reservada, e nao sobreposta a texto solto: com o texto a 7 px do
-    // topo do display ele ficava dentro da area da grelha, e o fundo opaco da
-    // grelha tapava o "PRONTO" e o "RECUSADO". Tambem so uma captura mostra.
-    const auto statusY = displayBounds.getY();
-    statusLed_.setBounds(juce::Rectangle<int> {displayBounds.getX() + 12, statusY, 16, 20}
+    const auto inner = displayBounds.reduced(8, 5);
+    const auto statusY = inner.getY();
+    statusLed_.setBounds(juce::Rectangle<int> {inner.getX(), statusY, 16, kStatusHeight}
                              .withSizeKeepingCentre(14, kStatusHeight));
 
-    const auto footerY = displayBounds.getBottom() - kFooterHeight - 2;
-
-    // A altura da grelha e' a diferenca entre o fim da faixa de estado e o
-    // inicio do rodape. Passar footerY como altura — que e' uma coordenada
-    // absoluta e nao um tamanho — esticava a grelha 54 px para baixo, e a ultima
-    // linha de bytes ficava por cima das leituras.
-    const auto gridTop = statusY + kStatusHeight + 1;
-    grid_.setBounds(juce::Rectangle<int> {displayBounds.getX(), gridTop,
-                                          displayBounds.getWidth(), footerY - gridTop});
-
-    // O campo de endereco e o botao de reproducao ficam na linha do estado, a
-    // direita. Ao lado do texto e nao no rodape porque sao controles: e' a zona
-    // do display que ja tem moldura, e um campo de texto dentro do rodape de
-    // leituras seria indistinguivel de uma leitura.
-    //
-    // A cadeia desce da direita para a esquerda em largura fixa e degrada em vez
-    // de espremer, com o botao de reproducao a ser o ultimo a cair. Sem o
-    // alinhar, a 480 px de janela sobra espaco para o texto de estado e para o
-    // campo — o que se sacrifica primeiro continua a ser o campo, e nao a dica.
-    const int controlY = displayBounds.getY() + 2;
-    const int controlHeight = kStatusHeight + 2;
+    const int controlY = statusY;
+    const int controlHeight = kStatusHeight;
     const int controlGap = 6;
 
-    playButton_.setBounds(juce::Rectangle<int> {displayBounds.getRight() - 12 - kPlayButtonWidth,
+    playButton_.setBounds(juce::Rectangle<int> {inner.getRight() - kPlayButtonWidth,
                                                 controlY, kPlayButtonWidth, controlHeight});
     const int afterPlay = playButton_.getX() - controlGap;
+    const int statusLeft = inner.getX() + 22;
 
-    statusFitsAddress_ = afterPlay - kAddressFieldWidth >= displayBounds.getX() + 150;
-    address_.setBounds(juce::Rectangle<int> {afterPlay - kAddressFieldWidth, controlY,
-                                             kAddressFieldWidth, controlHeight});
+    statusFitsAddress_ = afterPlay - kAddressFieldWidth >= statusLeft + 140;
+    if (statusFitsAddress_) {
+        address_.setBounds(juce::Rectangle<int> {afterPlay - kAddressFieldWidth,
+                                                 controlY, kAddressFieldWidth,
+                                                 controlHeight});
+    }
 
-    // O texto de estado e' medido depois dos controlos e nao antes, porque e' a
-    // largura deles que diz onde o texto acaba. Com uma largura fixa, o texto
-    // escrevia por baixo do campo de endereco e do botao — e o fundo opaco do
-    // campo tapava o "PRONTO", que e' o que o criterio 3.3.1 exige que se veja.
-    //
-    // A decisao vem das flags que acabaram de ser calculadas e nao de isVisible():
-    // nesta passagem do layout a visibilidade ainda e' a da janela anterior, e o
-    // texto saltava uma largura para a esquerda e para a direita enquanto a
-    // janela era redimensionada.
-    const int statusLeft = displayBounds.getX() + 12 + 16 + 8;
     const auto hasSource = owner_.hasSource();
-    const int statusRight =
-        juce::jmax(statusLeft + 40,
-                   (hasSource && statusFitsAddress_) ? address_.getX() - controlGap
-                                                    : afterPlay);
-    status_.setBounds(juce::Rectangle<int> {statusLeft, statusY, statusRight - statusLeft,
+    const int statusRight = (hasSource && statusFitsAddress_)
+                                ? address_.getX() - controlGap
+                                : afterPlay;
+    status_.setBounds(juce::Rectangle<int> {statusLeft, statusY,
+                                            juce::jmax(40, statusRight - statusLeft),
                                             kStatusHeight});
 
-    // Rodape de telemetria, empilhado da direita para a esquerda com largura fixa
-    // por caixa. A versao anterior media cada caixa a partir da margem esquerda
-    // a cada passo, o que fazia todas ocuparem o mesmo intervalo e se
-    // sobreporem: so a ultima pintada aparecia, e o pico, a entropia e o offset
-    // ficavam escondidos debaixo das outras.
-    //
-    // E pela mesma razao que o header, o rodape degrada em vez de espremer: as
-    // caixas tem largura fixa, e a 480 nao cabem todas. Sem isso a entropia fica
-    // com zero de largura e o REG sai cortado a meio, que e' pior do que nao
-    // mostrar nada. A ordem de sacrificio e' a do valor: primeiro o pico, a
-    // entropia e' a ultima a cair. POS, REG e VOICES nunca saem, porque sao o
-    // que o painel existe para mostrar. A taxa nem entra na ordem: saiu para o
-    // tooltip do titulo.
-    constexpr int footerHeight {16};
-    const int margin = displayBounds.getX() + 12;
-    const int footerRight = displayBounds.getRight() - 12;
+    const auto footerY = inner.getBottom() - kFooterHeight;
+    const auto gridTop = statusY + kStatusHeight + 2;
+    grid_.setBounds(juce::Rectangle<int> {inner.getX(), gridTop, inner.getWidth(),
+                                          juce::jmax(0, footerY - gridTop)});
 
-constexpr int kLedBoxWidth {12};
+    // ---- leituras do display ----
     constexpr int kBoxGap {8};
+    constexpr int kLedBoxWidth {12};
     constexpr int kVoicesBoxWidth {74};
     constexpr int kPeakWidth {86};
     constexpr int kTransportWidth {128};
@@ -1005,20 +1059,12 @@ constexpr int kLedBoxWidth {12};
     constexpr int kRegionWidth {116};
     constexpr int kMinEntropyWidth {96};
 
-    // O que nunca sai: o LED e o numero de vozes, o endereco da cabeca de leitura
-    // e o intervalo da regiao. E' o que o painel existe para mostrar, e sao as
-    // tres leituras que respondem a pergunta "o que estou a ouvir".
-    const int essential = kLedBoxWidth + kBoxGap + kVoicesBoxWidth + kPositionWidth + kRegionWidth;
+    const int margin = inner.getX();
+    const int footerRight = inner.getRight();
+    const int essential =
+        kLedBoxWidth + kBoxGap + kVoicesBoxWidth + kPositionWidth + kRegionWidth;
     const auto room = footerRight - margin - essential;
 
-    // A partir daqui decide-se por ordem de prioridade, e a ordem esta' escrita
-    // na cadeia e nao numa frase ao lado. A taxa ja saiu daqui — constante na
-    // sessao, foi para o tooltip do titulo — por isso a cadeia agora e' curta:
-    // entropia, transporte, pico.
-    //
-    // A ordem e' a do valor: **a leitura de transporte vem antes do pico.** E' a
-    // unica caixa que muda durante a sessao para alem do pico, e sem ela o
-    // display mostra uma barra a andar sem nenhum numero que a confirme.
     footerFitsEntropy_ = room >= kMinEntropyWidth;
     const auto afterEntropy = room - (footerFitsEntropy_ ? kMinEntropyWidth + kBoxGap : 0);
     footerFitsTransport_ = afterEntropy >= kTransportWidth;
@@ -1026,158 +1072,119 @@ constexpr int kLedBoxWidth {12};
         afterEntropy - (footerFitsTransport_ ? kTransportWidth + kBoxGap : 0);
     footerFitsPeak_ = afterTransport >= kPeakWidth;
 
-    // A partir da direita, so com o que cabe. Um salto de kBoxGap entre cada
-    // grupo: quando uma caixa e' omitida, nao ha um intervalo vazio onde
-    // poutineira estar.
     int edge = footerRight;
     const auto put = [&edge, footerY](juce::Component& target, int width, bool visible) {
         if (!visible) {
             return;
         }
-        target.setBounds(juce::Rectangle<int> {edge - width, footerY + 2, width, footerHeight});
+        target.setBounds(juce::Rectangle<int> {edge - width, footerY, width, kFooterHeight});
         edge -= width + kBoxGap;
     };
 
-    voicesLed_.setBounds(juce::Rectangle<int> {edge - kLedBoxWidth, footerY + 3, kLedBoxWidth, 12});
+    voicesLed_.setBounds(juce::Rectangle<int> {edge - kLedBoxWidth, footerY + 2,
+                                               kLedBoxWidth, 12});
     put(voicesReadout_, kVoicesBoxWidth, true);
     put(positionReadout_, kPositionWidth, true);
     put(offsetReadout_, kRegionWidth, true);
     put(transportReadout_, kTransportWidth, footerFitsTransport_);
     put(peakReadout_, kPeakWidth, footerFitsPeak_);
 
-    // A entropia ocupa o que sobra a esquerda, e por isso fica colada ao
-    // indicador de vozes: e' a unica das tres que cresce em vez de ter largura
-    // fixa, porque o numero que escreve — de 0 a 8 bits por byte — e' o mais
-    // variavel das leituras.
-    entropyReadout_.setBounds(juce::Rectangle<int> {margin, footerY + 2,
-                                                     juce::jmax(0, edge - margin), footerHeight});
-
+    entropyReadout_.setBounds(juce::Rectangle<int> {margin, footerY,
+                                                     juce::jmax(0, edge - margin),
+                                                     kFooterHeight});
     updateFooterVisibility();
 
-    area.removeFromTop(6);
+    // ---- linha de controlo: vistas, zoom e abas ----
+    const auto controlRow = area.removeFromTop(kControlStripHeight).reduced(12, 3);
 
-    // ---- selector de vista ----
-    //
-    // Fica em cima do painel de parametros e nao dentro do display: e' um
-    // instrumento de navegacao, e um instrumento que fica dentro da coisa que ele
-    // instrumenta desaparece quando a coisa muda. Tres palavras sem cromo a'
-    // esquerda, zoom (-/+/FIT) a' direita; a 480 de janela as vistas colapsam
-    // para a activa e o zoom cai primeiro, porque a roda e as teclas cobrem.
-    //
-    // A altura e' 22 px e nao 16: alvo de toque perto dos 24 do 2.5.8, com as
-    // teclas 1, 2 e 3 como caminho garantido. A aba activa leva peso forte e o
-    // filete — o texto carrega o estado, o filete e' redundancia.
-    {
-        constexpr int kViewButtonWidth {46};
-        constexpr int kViewButtonHeight {22};
-        constexpr int kViewGap {4};
-        const auto viewRow = area.removeFromTop(kViewButtonHeight + 2);
-
-        struct View {
-            juce::TextButton* button;
-            ByteDisplay::ViewMode mode;
-        };
-        const View views[] = {
-            {&viewWaveButton_, ByteDisplay::ViewMode::waveform},
-            {&viewHexButton_, ByteDisplay::ViewMode::hex},
-            {&viewEntropyButton_, ByteDisplay::ViewMode::entropy},
-        };
-
-        const int stripWidth = (kViewButtonWidth + kViewGap) * 3 - kViewGap;
-        const auto active = grid_.mode();
-        const bool fitsAll = viewRow.getWidth() >= stripWidth;
-
-        // **Quando nao cabem os tres, mostra so o da vista activa.** Um conjunto
-        // parcial e' pior que um botao unico: com dois dos tres no ecra, o que
-        // falta e' uma vista que o utilizador nao sabe que existe, e o botao que
-        // sobra e' um comando que muda de vista sem explicar para que. Com um so,
-        // o selector continua verdadeiro — diz em que vista se esta — e a troca
-        // continua a fazer-se pelas teclas 1, 2 e 3, que nao dependem de largura.
-        int viewX = viewRow.getX();
-        for (const auto& view : views) {
-            const auto isActive = view.mode == active;
-            view.button->setVisible(fitsAll || isActive);
-            if (!fitsAll && !isActive) {
-                continue;
-            }
-            view.button->setBounds(juce::Rectangle<int> {viewX, viewRow.getY() + 1,
-                                                         kViewButtonWidth, kViewButtonHeight});
-            viewX += kViewButtonWidth + kViewGap;
-        }
-
-        // Zoom a' direita: - e + de 30, FIT de 40. So quando ha folga para la'
-        // das vistas — a 480 nao ha, e a roda com as teclas cobrem o gesto.
-        constexpr int kZoomSmall {30};
-        constexpr int kZoomFit {40};
-        const int zoomWidth = kZoomSmall + kViewGap + kZoomSmall + kViewGap + kZoomFit;
-        const bool fitsZoom =
-            fitsAll && viewRow.getWidth() >= stripWidth + kViewGap * 2 + zoomWidth;
-        zoomOutButton_.setVisible(fitsZoom);
-        zoomInButton_.setVisible(fitsZoom);
-        zoomFitButton_.setVisible(fitsZoom);
-        if (fitsZoom) {
-            int zoomX = viewRow.getRight() - zoomWidth;
-            zoomOutButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
-                                                           kZoomSmall, kViewButtonHeight});
-            zoomX += kZoomSmall + kViewGap;
-            zoomInButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
-                                                          kZoomSmall, kViewButtonHeight});
-            zoomX += kZoomSmall + kViewGap;
-            zoomFitButton_.setBounds(juce::Rectangle<int> {zoomX, viewRow.getY() + 1,
-                                                           kZoomFit, kViewButtonHeight});
-        }
+    constexpr int kViewButtonWidth {46};
+    constexpr int kViewGap {4};
+    int viewX = controlRow.getX();
+    for (auto* button : {&viewWaveButton_, &viewHexButton_, &viewEntropyButton_}) {
+        button->setBounds(juce::Rectangle<int> {viewX, controlRow.getY(),
+                                                kViewButtonWidth, controlRow.getHeight()});
+        viewX += kViewButtonWidth + kViewGap;
     }
 
-    // ---- abas de modulo ----
-    //
-    // Uma fileira propria entre a vista e os knobs, e nao titulo de modulo: o
-    // titulo antigo ("1 - GRANULAR ENGINE") nomeava uma seccao unica, e agora
-    // sao sete. Mesma altura e lingua das abas de vista; sete palavras curtas
-    // cabem a 480 sem colapso (7 x 52 + 6 x 4 = 388 px).
-    {
-        constexpr int kModuleButtonWidth {52};
-        constexpr int kModuleButtonHeight {22};
-        constexpr int kModuleGap {4};
-        const auto moduleRow = area.removeFromTop(kModuleButtonHeight + 2);
+    constexpr int kZoomSmall {30};
+    constexpr int kZoomFit {40};
+    const int zoomWidth = kZoomSmall + kViewGap + kZoomSmall + kViewGap + kZoomFit;
+    const auto tabWidths = std::array<int, 6> {56, 44, 58, 44, 56, 84};
+    const int tabsWidth =
+        tabWidths[0] + tabWidths[1] + tabWidths[2] + tabWidths[3] +
+        tabWidths[4] + tabWidths[5] + kViewGap * 5;
+    const int tabsX = controlRow.getRight() - tabsWidth;
+    const bool fitsZoom = viewX + kViewGap * 2 + zoomWidth <= tabsX - 12;
 
-        juce::TextButton* buttons[] = {
-            &moduleGrainButton_, &moduleEnvelopeButton_, &moduleFilterButton_,
-            &moduleModButton_, &moduleCloudButton_, &moduleOutButton_,
-            &moduleKeysButton_,
-        };
-        int tabX = moduleRow.getX();
-        for (auto* button : buttons) {
-            button->setBounds(juce::Rectangle<int> {tabX, moduleRow.getY() + 1,
-                                                    kModuleButtonWidth, kModuleButtonHeight});
-            tabX += kModuleButtonWidth + kModuleGap;
-        }
+    zoomOutButton_.setVisible(fitsZoom);
+    zoomInButton_.setVisible(fitsZoom);
+    zoomFitButton_.setVisible(fitsZoom);
+    if (fitsZoom) {
+        int zoomX = viewX + kViewGap * 2;
+        zoomOutButton_.setBounds(juce::Rectangle<int> {zoomX, controlRow.getY(),
+                                                       kZoomSmall, controlRow.getHeight()});
+        zoomX += kZoomSmall + kViewGap;
+        zoomInButton_.setBounds(juce::Rectangle<int> {zoomX, controlRow.getY(),
+                                                      kZoomSmall, controlRow.getHeight()});
+        zoomX += kZoomSmall + kViewGap;
+        zoomFitButton_.setBounds(juce::Rectangle<int> {zoomX, controlRow.getY(),
+                                                       kZoomFit, controlRow.getHeight()});
     }
 
-    // ---- painel de parametros ----
-    //
-    // So os knobs do modulo ativo ocupam celulas: os escondidos ficam com
-    // largura zero na aritmetica porque nao entram na contagem. A regra de uma
-    // linha continua — quebrar em duas foi tentado e e' pior — e o diametro do
-    // knob encolhe com a janela sem segundo layout.
-    const auto knobArea = area.reduced(8, 2);
+    juce::TextButton* tabs[] = {&moduleGrainButton_, &moduleEnvelopeButton_,
+                                &moduleFilterButton_, &moduleModButton_,
+                                &moduleCloudButton_, &moduleOutButton_};
+    int tabX = tabsX;
+    for (std::size_t i = 0; i < std::size(tabs); ++i) {
+        tabs[i]->setBounds(juce::Rectangle<int> {tabX, controlRow.getY(),
+                                                 tabWidths[i], controlRow.getHeight()});
+        tabX += tabWidths[i] + kViewGap;
+    }
+
+    // ---- rack de macros ----
+    // showModule() chama resized() durante a construcao, antes de o rack
+    // existir; sem a guarda a divisao por zero matava o standalone no arranque.
+    const auto macroArea = area.removeFromTop(kMacroHeight).reduced(14, 6);
+    if (macroKnobs_.empty() || macroArea.getWidth() <= 0) {
+        updateStatusVisibility();
+        return;
+    }
+    const int macroWidth = macroArea.getWidth() / static_cast<int>(macroKnobs_.size());
+    for (std::size_t i = 0; i < macroKnobs_.size(); ++i) {
+        const auto cell = juce::Rectangle<int> {
+            macroArea.getX() + static_cast<int>(i) * macroWidth, macroArea.getY(),
+            macroWidth, macroArea.getHeight()};
+        macroKnobs_[i]->setBounds(cell.reduced(4, 0).withHeight(
+            juce::jmin(108, cell.getHeight())));
+    }
+
+    // ---- painel de parametros do modulo ativo ----
+    const auto knobArea = area.reduced(18, 8);
     const auto moduleIndex = static_cast<std::size_t>(activeModule_);
     const auto first = moduleFirstKnob_[moduleIndex];
-    const auto count = moduleKnobCount_[moduleIndex];
-    const int cellWidth = knobArea.getWidth() / static_cast<int>(count);
-
-    // O painel fecha o conteudo (titulo, knob, valor) e fica centrado na
-    // vertical da area. Preencher a celula inteira deixaria um monte de caixa
-    // cinza vazia embaixo do knob.
-    constexpr int knobContentHeight {13 + 1 + 62 + 4 + 18};
-    for (std::size_t k = 0; k < count; ++k) {
-        const auto cell = juce::Rectangle<int> {knobArea.getX()
-                                                     + (static_cast<int>(k) * cellWidth),
-                                                 knobArea.getY(),
-                                                 cellWidth,
-                                                 knobArea.getHeight()};
-        knobs_[first + k]->setBounds(cell.reduced(4).withHeight(
-            juce::jmin(knobContentHeight, cell.getHeight() - 8)));
+    auto count = moduleKnobCount_[moduleIndex];
+    if (activeModule_ == ParamModule::out) {
+        count += moduleKnobCount_[static_cast<std::size_t>(ParamModule::keys)];
     }
+
+    if (count == 0 || knobArea.getWidth() <= 0) {
+        updateStatusVisibility();
+        return;
+    }
+
+    const int cellWidth = knobArea.getWidth() / static_cast<int>(count);
+    constexpr int knobContentHeight {98};
+    for (std::size_t k = 0; k < count; ++k) {
+        const auto cell = juce::Rectangle<int> {
+            knobArea.getX() + static_cast<int>(k) * cellWidth, knobArea.getY(),
+            cellWidth, knobArea.getHeight()};
+        auto content = cell.reduced(3, 0).withHeight(
+            juce::jmin(knobContentHeight, juce::jmax(0, cell.getHeight())));
+        content.setY(cell.getCentreY() - content.getHeight() / 2);
+        knobs_[first + k]->setBounds(content);
+    }
+
+    updateStatusVisibility();
 }
 
 void PluginEditor::timerCallback() {
@@ -1188,7 +1195,7 @@ void PluginEditor::timerCallback() {
     // `getMillisecondCounterHiRes` e nao `getMillisecondCounter`: o contador
     // inteiro tem 15 ms de resolucao a 144 Hz, e um quadro de 144 Hz dura 7 ms. Com
     // o contador inteiro o delta seria 0 ou 15 ms alternadamente, e a animacao
-    // dava um soluço a cada dois quadros.
+    // dava um solu├ºo a cada dois quadros.
     const auto now = juce::Time::getMillisecondCounterHiRes();
     const auto delta = lastTick_ > 0.0 ? static_cast<float>((now - lastTick_) / 1000.0)
                                         : 1.0f / 60.0f;
@@ -1212,7 +1219,7 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
     // byte_display.h.
     if (isTypedCharacter(key, 'K')) {
         // Atalho para o foco do teclado. Com o foco no teclado quem consome o 'K'
-        // e' o proprio componente, que o toca como nota — por isso o atalho nunca
+        // e' o proprio componente, que o toca como nota ÔÇö por isso o atalho nunca
         // rouba a nota a quem esta' a tocar.
         keyboard_.grabKeyboardFocus();
         return true;
@@ -1306,9 +1313,9 @@ void PluginEditor::refresh() {
     } else if (!owner_.hasSource()) {
         message = "ARRASTE UM .EXE, .DLL OU .BIN PARA DENTRO DA JANELA";
     } else if (hostStopped) {
-        // O botao esta' desativado, e dizer porquê e' o que evita que o utilizador
+        // O botao esta' desativado, e dizer porqu├¬ e' o que evita que o utilizador
         // ache que o plugin avariou. Sem host nenhum esta' desligado nao se sabe,
-        // e nao se diz nada — ver hostTransportIsKnownToBeStopped.
+        // e nao se diz nada ÔÇö ver hostTransportIsKnownToBeStopped.
         ledState = Led::State::ready;
         message = "PRONTO / " + info.name + " / TRANSPORTE DO HOST PARADO";
     } else {
@@ -1341,7 +1348,7 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     if (loadedSignature_ != signature) {
         loadedSignature_ = signature;
 
-        // O endereco do topo a zero e' decisão do proprio componente: um
+        // O endereco do topo a zero e' decis├úo do proprio componente: um
         // ficheiro novo recomeca no inicio, senao o segundo abria a meio do
         // primeiro porque a viewport so e' nossa.
         grid_.setSource(&owner_.sourceBytes(), static_cast<std::uint64_t>(info.sizeBytes));
@@ -1377,6 +1384,7 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     // nucleo de lado mostraria o ultimo bloco, nao este.
     const auto& telemetry = owner_.telemetry();
     const auto peak = telemetry.peakDb.load(std::memory_order_relaxed);
+    vuMeter_.setLevelDb(peak);
     const auto activeVoices = telemetry.activeVoices.load(std::memory_order_relaxed);
     const auto sounding = telemetry.sounding.load(std::memory_order_relaxed);
 
@@ -1482,7 +1490,7 @@ float PluginEditor::readPosition() const {
     //
     // Neste JUCE, getValue() devolve a fracao normalizada. POSITION tem faixa
     // 0 a 1, em que normalizado e' o valor, por isso a distincao nao aparece
-    // aqui — mas nao se pode estender a leitura aos outros cinco parametros sem
+    // aqui ÔÇö mas nao se pode estender a leitura aos outros cinco parametros sem
     // converter, e por isso a conversao fica escrita.
     if (const auto* parameter = owner_.parameters().getParameter("position")) {
         return parameter->getNormalisableRange().convertFrom0to1(parameter->getValue());
@@ -1529,7 +1537,7 @@ void PluginEditor::activateByte(std::uint64_t address) {
     //
     // Neste JUCE o valor e' normalizado. POSITION tem faixa 0 a 1, e
     // positionForByte devolve uma fracao de 0 a 1, entao os dois espacos
-    // coincidem — e nao coincidir era um erro silencioso em vez de um visivel.
+    // coincidem ÔÇö e nao coincidir era um erro silencioso em vez de um visivel.
     if (auto* parameter = owner_.parameters().getParameter("position")) {
         parameter->setValueNotifyingHost(
             static_cast<float>(pe::positionForByte(address, updated)));

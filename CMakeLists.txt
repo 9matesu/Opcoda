@@ -40,8 +40,11 @@ target_compile_options(opcoda_core PUBLIC /W4 /permissive- /Zc:__cplusplus /utf-
 target_compile_definitions(opcoda_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 
 if(OPCODA_WERROR)
-    # PRIVATE: o /WX propagado vai parar no codigo C do JUCE (opus), que gera
-    # C4005 inofensivo e derruba o build release inteiro.
+    # PRIVATE e nao PUBLIC: o /WX do nucleo nao pode vazar para o resto do
+    # grafico de alvos. O juce_audio_formats carrega o opus do JUCE, e o stream.c
+    # dele redefine WIN32_LEAN_AND_MEAN, um C4005 que e' do terceiro e nao do
+    # projeto. O /W4 e o /permissive- continuam PUBLIC porque sao exigencia
+    # iso/acessibilidade, nao propriedade de aviso.
     target_compile_options(opcoda_core PRIVATE /WX)
 endif()
 

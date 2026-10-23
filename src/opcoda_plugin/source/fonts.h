@@ -4,7 +4,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-#include "OpcodaFonts.h"
+#include "OpcodaAssets.h"
 
 namespace opcoda {
 

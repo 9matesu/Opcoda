@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 
+#include "assets.h"
 #include "byte_display.h"
 #include "byte_address_field.h"
 #include "display_panel.h"
@@ -8,11 +9,13 @@
 #include "look_and_feel.h"
 #include "palette.h"
 #include "plugin_processor.h"
+#include "vu_meter.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_opengl/juce_opengl.h>
 
 #include <memory>
 #include <vector>
@@ -22,8 +25,8 @@ namespace opcoda {
 // Editor em cinco faixas: header claro, display escuro, abas de modulo, faixa de
 // parametros e teclado.
 //
-// Os 31 parametros ja no codigo em seis modulos — GRAIN, ENVELOPE, FILTER, MOD,
-// OUT e KEYS — com os nomes exibidos em ingles e os IDs dos seis originais
+// Os 31 parametros ja no codigo em seis modulos ÔÇö GRAIN, ENVELOPE, FILTER, MOD,
+// OUT e KEYS ÔÇö com os nomes exibidos em ingles e os IDs dos seis originais
 // intactos. Uma aba mostra a sua faixa; empilhar as seis pedia 700 px de janela
 // e a promessa e' 480x434.
 class PluginEditor : public juce::AudioProcessorEditor,
@@ -40,7 +43,7 @@ public:
 
     // Transporte e vista, quando nenhuma tecla mais focada as consumiu.
     //
-    // **A divisao com o display e' a que o JUCE ja impõe.** Uma tecla chega primeiro
+    // **A divisao com o display e' a que o JUCE ja imp├Áe.** Uma tecla chega primeiro
     // ao componente com o foco e so depois sobe para os ancestrais. O display trata
     // a navegacao e o editor trata o transporte, e cada um devolve `true` quando
     // consome. Uma unica funcao no editor seria mais curta e errada: as setas
@@ -103,7 +106,7 @@ private:
 
     // Mesma regra para a linha de estado, que agora tem dois controlos e nao um:
     // o campo de endereco cai primeiro porque o POSITION e o clique na grelha
-    // escrevem o mesmo sitio. O alinhar saiu da linha — tecla A e duplo-clique
+    // escrevem o mesmo sitio. O alinhar saiu da linha ÔÇö tecla A e duplo-clique
     // cobrem, e o terceiro controle empurrava o texto para debaixo do campo.
     // **O botao de reproducao e' o ultimo a sair**, porque e' a unica forma de
     // ouvir o material sem teclado MIDI, e uma feature que desaparece quando a
@@ -185,6 +188,10 @@ private:
     PluginProcessor& owner_;
     OpcodaLookAndFeel lookAndFeel_;
 
+    // Aceleracao do desenho. O attach e' opcional: sem contexto GL o editor
+    // continua a pintar por software, e por isso o membro nao e' indispensavel.
+    juce::OpenGLContext openGLContext_;
+
     // Teclado virtual. O estado vive no editor e o componente desenha-o; o som
     // sai pela fila do processador, porque o caminho de audio nao pode consultar
     // um objeto de interface.
@@ -238,7 +245,12 @@ private:
     // informacao nao precisa dele. O contraste vem da cor do texto, que continua
     // textDark no claro e textOnDark no escuro.
     juce::Label title_;
+    juce::Label subtitle_;
     juce::Label status_;
+
+    // Medidor de saida do header. Le o mesmo peakDb da telemetria, por isso as
+    // duas barras mostram o mesmo sinal — o nucleo e' mono.
+    VuMeter vuMeter_;
 
     // Rodape de telemetria: leituras em Inter, como no resto. Todas em texto,
     // nunca so por cor. A taxa saiu: e' constante na sessao e morava na faixa
@@ -258,7 +270,7 @@ private:
     juce::TextButton loadButton_;
 
     // Seletor de preset no header: anterior, nome (abre o menu), seguinte. O
-    // nome mostra "*" quando um parametro saiu do preset — sem isso o menu
+    // nome mostra "*" quando um parametro saiu do preset ÔÇö sem isso o menu
     // mente, porque diz "Cloud" sobre um som que ja nao e' Cloud. A sujeira
     // vem do Listener da APVTS e nao de comparacao de valores: comparar 25
     // floats a 60 Hz para desenhar um asterisco e' o contrario de barato.
@@ -282,7 +294,7 @@ private:
     void savePresetToFile();
 
     // Sete modulos, uma faixa visivel de cada vez. Todos os 41 knobs existem
-    // desde a construcao — os attachments vivem neles — e a aba so decide quem
+    // desde a construcao ÔÇö os attachments vivem neles ÔÇö e a aba so decide quem
     // aparece. Recriar knobs por aba recriaria attachments e largaria o undo.
     //
     // A ordem do enum e' a ordem de construcao em buildParameterPanel: os dois
@@ -292,15 +304,23 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::vector<std::size_t> moduleFirstKnob_ {};
     std::vector<std::size_t> moduleKnobCount_ {};
+
+    // Rack de seis macros sempre visivel. Sao Knobs de verdade, ligados aos
+    // mesmos parametros dos modulos; o attachment duplicado e' intencional e
+    // nao cria estado paralelo.
+    std::vector<std::unique_ptr<Knob>> macroKnobs_;
+
+    // Seis abas: OUT e KEYS partilham uma, porque quatro parametros de saida e
+    // afinacao cabem juntos e sete abas a 480 px ficavam abaixo do alvo de toque.
     juce::TextButton moduleGrainButton_;
     juce::TextButton moduleEnvelopeButton_;
     juce::TextButton moduleFilterButton_;
     juce::TextButton moduleModButton_;
     juce::TextButton moduleCloudButton_;
     juce::TextButton moduleOutButton_;
-    juce::TextButton moduleKeysButton_;
 
     void buildModuleTabs();
+    void buildMacroBand();
     void updateModuleTabs();
     void showModule(ParamModule module);
     std::unique_ptr<juce::FileChooser> chooser_;

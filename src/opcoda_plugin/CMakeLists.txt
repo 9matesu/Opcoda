@@ -9,12 +9,15 @@ add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 # Display e' o corte,opticamente desenhado para texto pequeno, e esta interface vive
 # entre 9 e 11 px. E' a unica familia: numeros e texto usam a mesma letra, e as
 # leituras vao alinhadas a direita para nao respirarem.
-juce_add_binary_data(OpcodaFonts
-    HEADER_NAME OpcodaFonts.h
+juce_add_binary_data(OpcodaAssets
+    HEADER_NAME OpcodaAssets.h
     NAMESPACE BinaryData
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf
+        ${CMAKE_SOURCE_DIR}/resources/assets/ChakraPetch-Bold.ttf
+        ${CMAKE_SOURCE_DIR}/resources/assets/JetBrainsMono-Regular.ttf
+        ${CMAKE_SOURCE_DIR}/resources/assets/JetBrainsMono-Bold.ttf)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
@@ -74,17 +77,22 @@ target_sources(Opcoda
         source/byte_address_field.cpp
         source/byte_address_field.h
         source/fonts.h
+        source/vu_meter.h
+        source/assets.h
+        source/boxed_label.h
         source/palette.h)
 
 target_link_libraries(Opcoda
     PRIVATE
-        OpcodaFonts
+        OpcodaAssets
         opcoda_core
         juce::juce_audio_processors
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois
-        # formatos sao do mesmo alvo. O gui_extra traz o FileChooser do editor.
+        # formatos sao do mesmo alvo. O gui_extra traz o FileChooser do editor e
+        # o opengl acelera o desenho sem mudar o caminho de software.
         juce::juce_audio_utils
         juce::juce_gui_extra
+        juce::juce_opengl
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
