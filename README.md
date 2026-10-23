@@ -21,6 +21,24 @@ the region being played.
 - CMake 3.28+.
 - JUCE 8.0.14 cloned at `I:\deps\JUCE` (override with `-DJUCE_DIR=`).
 
+## Fluxo de sinal
+
+```mermaid
+flowchart LR
+  A[Arquivo PE] --> B[Bytes para amostra]
+  B --> C[Buffer de audio]
+  C --> D[Motor granular 8 vozes]
+  D --> E[Filtros x2]
+  E --> F[DC blocker]
+  F --> G[Limiter]
+  G --> H[Saida]
+```
+
+## Capturas de tela
+
+Capture a interface do Standalone com `tools/capture-ui.ps1` e coloque as
+imagens em `docs/assets/screenshots/`. Ainda nao ha capturas versionadas.
+
 ## Build
 
 ```powershell
