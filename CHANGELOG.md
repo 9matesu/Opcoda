@@ -1,7 +1,12 @@
-# Changelog
+# Histórico
 
 ## 0.1.0
 
-- Granular engine with 8 voices, PE ingestion, entropy curve, modulation matrix,
-  filters, LFO, ADSR, transport and three display views.
-- Spray decoupled from entropy (pure grain dispersion).
+- Motor granular com oito vozes e janelas Hann, Gaussian, Hamming e Blackman.
+- Ingestão de PE com erros tipados.
+- Curva de entropia e fonte de modulação.
+- Filtros biquad em série, LFO, envelope ADSR e matriz de oito rotas.
+- Presets de fábrica e arquivos `.opcoda`.
+- Transporte, teclado virtual e três vistas.
+- Spray separado da entropia.
+- Documentação de usuário, motor, parâmetros, desenvolvimento e roadmap.
