@@ -11,20 +11,16 @@
 namespace opcoda {
 namespace {
 
-// Os bytes nulos com um tom a parte. E' o que um hex dump mostra e serve para
-// ver o preenchimento de uma secao sem ler as duas colunas.
+// bytes nulos com um tom a parte: mostra o preenchimento da secao sem ler as
+// duas colunas.
 constexpr std::uint8_t kZeroByte {0};
 
 juce::String toHex2(std::uint8_t byte) {
     return juce::String::formatted("%02X", static_cast<unsigned>(byte));
 }
 
-// Caractere visivel do byte, ou ponto. O Ghidra imprime o que da para imprimir
-// e ponto no resto: um byte 0x00 dentro de texto legivel e' ruido, e um byte
-// 0xE4 e' um acento que nao se ve.
-//
-// Devolve char e nao juce_wchar porque a linha e' montada num std::string e
-// entregue de uma vez, caractere a caractere.
+// caractere visivel do byte, ou ponto -- como o Ghidra. char e nao juce_wchar
+// porque a linha e' montada num std::string.
 char toAscii(std::uint8_t byte) {
     return (byte >= 0x20 && byte < 0x7F) ? static_cast<char>(byte) : '.';
 }
@@ -38,16 +34,11 @@ HexGrid::HexGrid() {
 
     font_ = fonts().sans(11.0f);
 
-    // 4.1.2 Nome, funcao e valor. A grelha e' operada so com o rato, mas nao
-    // pode ser um buraco sem nome para quem navega por leitor de tela: o nome
-    // diz o que e' e o texto de ajuda diz que os dois caminhos de teclado estao
-    // noutro sitio.
+    // 4.1.2 nome, funcao e valor. a grelha so se opera com o rato, mas nao pode
+    // ser um buraco sem nome para quem usa leitor de tela.
     //
-    // setHelpText e nao setTooltip: o Component expoe a ajuda pelo
-    // AccessibilityHandler, que e' o que um leitor de tela le. A dica de rato
-    // vinha de um TooltipClient que so chegava aqui porHEADER transitivo do
-    // Slider, e numa grelha que so se opera com o rato a dica nao servia para
-    // nada.
+    // setHelpText e nao setTooltip: o AccessibilityHandler le a ajuda. a dica de
+    // rato vinha de um TooltipClient por header transitivo e aqui nao servia.
     setName("Grelha de bytes do binario");
     setHelpText(
         "Cada celula e' um byte do ficheiro, com o endereco a esquerda e o "
@@ -61,8 +52,8 @@ void HexGrid::setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fi
     bytes_ = bytes;
     fileSize_ = fileSize;
 
-    // Um ficheiro novo recomeca no inicio. Sem isto, o ficheiro seguinte abria
-    // a meio do anterior, porque o offset da viewport e' apenas nosso.
+    // ficheiro novo recomeca no inicio. o offset da viewport e' apenas nosso:
+    // sem isto, o ficheiro seguinte abria a meio do anterior.
     topByte_ = 0;
     rebuildMetrics();
     clampViewport();
@@ -78,8 +69,8 @@ void HexGrid::setRegion(std::uint64_t start, std::uint64_t end) {
 void HexGrid::setReadHead(std::uint64_t address) {
     readHead_ = address;
 
-    // O cursor tem de estar visivel. Um cursor fora do ecra e' pior do que
-    // nenhum: o knob mexe-se, o som mexe-se, e o display nao mostra nada.
+    // cursor fora do ecra e' pior que nenhum: o knob mexe-se, o som mexe-se, e o
+    // display nao mostra nada.
     const auto bottom = topByte_ +
                         static_cast<std::uint64_t>(metrics_.rows) * kBytesPerRow;
     if (address < topByte_ || address >= bottom) {
@@ -92,9 +83,8 @@ void HexGrid::scrollToAddress(std::uint64_t address) {
     const auto rows = static_cast<int>(metrics_.rows);
     const auto lastTop = static_cast<int64_t>(highestTop());
 
-    // A linha que contem o endereco tem de ficar visivel, e a viewport ancorada
-    // nela e nao nela menos meia ecra. Ancorar na linha punha o byte na ultima
-    // linha do ecra, a um pixel de cair fora.
+    // a linha do endereco fica visivel e centrada na viewport. ancorar na linha
+    // punha o byte na ultima linha do ecra, a um pixel de cair fora.
     const auto wantedRow = static_cast<int64_t>(address / kBytesPerRow);
     const auto target = juce::jlimit<int64_t>(
         0, lastTop, (wantedRow - rows / 2) * static_cast<int64_t>(kBytesPerRow));
@@ -126,9 +116,8 @@ std::uint64_t HexGrid::highestTop() const noexcept {
     if (fileSize_ == 0) {
         return 0;
     }
-    // A ultima linha que existe comeca em floor((size - 1) / 16) * 16, e e' essa
-    // que pode ficar no topo. Sem este piso, rolar para o fim abria uma linha
-    // inteira vazia.
+    // a ultima linha que existe pode ficar no topo. sem este piso, rolar ate ao
+    // fim abria uma linha inteira vazia.
     return ((fileSize_ - 1) / kBytesPerRow) * kBytesPerRow;
 }
 
@@ -161,8 +150,8 @@ juce::Rectangle<float> HexGrid::cellRectForAddress(std::uint64_t address) const 
     return cellRect(address % kBytesPerRow, row);
 }
 
-// As medidas sao derivadas da fonte: uma celula mais estreita do que dois
-// digitos corta o segundo, e o display perde-se sem dar erro nenhum.
+// medidas derivadas da fonte: celula mais estreita que dois digitos corta o
+// segundo e o display perde-se sem dar erro.
 void HexGrid::rebuildMetrics() {
     const auto area = getLocalBounds().toFloat().reduced(kPadding);
     const auto bodyHeight = juce::jmax(0.0f, area.getHeight() - kHeaderHeight);
@@ -170,9 +159,8 @@ void HexGrid::rebuildMetrics() {
     metrics_.rows = juce::jmax(1, static_cast<int>(std::floor(bodyHeight / kRowHeight)));
     metrics_.gutterDigits = 8;
     if (fileSize_ > 0) {
-        // Um PE acima de 4 GB tem enderecos com mais de oito digitos. A coluna do
-        // endereco e' medida pelo ficheiro carregado e nao fixa, para o numero
-        // caber em vez de ser cortado a meio.
+        // a coluna do endereco cresce com o ficheiro: um PE acima de 4 GB tem
+        // mais de oito digitos e nao pode ser cortado a meio.
         auto remaining = fileSize_ - 1;
         while (remaining > 0) {
             ++metrics_.gutterDigits;
@@ -193,10 +181,8 @@ void HexGrid::rebuildMetrics() {
 
     const auto bytesWidth = static_cast<float>(kBytesPerRow) * metrics_.cellAdvance + kGroupGap;
 
-    // A coluna ASCII e' a primeira a cair. Perder os caracteres e' perder
-    // contexto; perder colunas de hexadecimal parte os enderecos ao meio, e um
-    // endereco ao meio e' pior do que nenhum. E' o que faz o criterio 1.4.10
-    // de refluxo: a janela estreita perde informacao em vez de a truncar.
+    // a coluna ASCII e' a primeira a cair: perder os caracteres e' perder
+    // contexto; partir os enderecos ao meio e' pior. e' o refluxo do 1.4.10.
     const auto neededWithAscii =
         metrics_.gutterWidth + bytesWidth + kInnerGap + metrics_.asciiWidth;
     metrics_.showAscii = area.getWidth() >= neededWithAscii;
@@ -227,10 +213,8 @@ std::uint64_t HexGrid::addressAt(juce::Point<float> position) const {
         return none;
     }
 
-    // As dezasseis celulas sao testadas uma a uma em vez de fazer a divisao
-    // pela largura da coluna. A divisao tem de desfazer o vao do separador de
-    // grupo e erra o indice ao longo de toda a segunda metade; testar dezasseis
-    // rectangulos e' uma fracao de microsegundo e nao tem casosyen.
+    // as dezasseis celulas sao testadas uma a uma: a divisao pela largura da
+    // coluna tem de desfazer o vao do grupo e erra o indice na segunda metade.
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
         const auto cell = cellRect(column, row);
         if (position.x < cell.getX() || position.x >= cell.getRight()) {
@@ -241,8 +225,8 @@ std::uint64_t HexGrid::addressAt(juce::Point<float> position) const {
         return address < fileSize_ ? address : none;
     }
 
-    // Um clique no vao entre duas colunas nao escolhe nenhuma. Deixar cair na
-    // coluna vizinha seria um caracter trocado sem o rato se ter mexido.
+    // clique no vao entre duas colunas nao escolhe nenhuma: cair na vizinha
+    // seria um byte trocado sem o rato se ter mexido.
     return none;
 }
 
@@ -265,8 +249,7 @@ void HexGrid::resized() {
 }
 
 void HexGrid::mouseDown(const juce::MouseEvent& event) {
-    // Mesmo corte que na roda: um clique e' o utilizador a dizer que a janela e'
-    // dele.
+    // mesmo corte que a roda: o clique diz que a janela e' do utilizador.
     if (onUserScrolled != nullptr) {
         onUserScrolled();
     }
@@ -278,9 +261,8 @@ void HexGrid::mouseDown(const juce::MouseEvent& event) {
 }
 
 void HexGrid::mouseDoubleClick(const juce::MouseEvent& event) {
-    // O duplo clique passa pelo mesmo addressAt. Um segundo clique no vao entre
-    // colunas nao alinha nada, em vez de alinhar a secao a partir de um byte
-    // vizinho.
+    // o duplo clique passa pelo mesmo addressAt: no vao entre colunas nao alinha
+    // nada, em vez de alinhar a partir de um byte vizinho.
     if (addressAt(event.position) == std::numeric_limits<std::uint64_t>::max()) {
         return;
     }
@@ -293,17 +275,15 @@ void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
                              const juce::MouseWheelDetails& wheel) {
     static_cast<void>(event);
 
-    // **Rolar e' o utilizador a dizer que manda ele.** A janela do hex segue os
-    // graos enquanto ninguem mexe, e o primeiro entalhe corta isso: quem esta' a
-    // ler bytes nao aceita que o ecra se mexa. Sem este corte, ler uma linha e a
-    // tela saltar para o material seria um ciclo sem fim.
+    // rolar e' o utilizador a dizer que manda ele. a janela segue os graos
+    // enquanto ninguem mexe, e o primeiro entalhe corta isso -- quem esta' a ler
+    // bytes nao aceita que o ecra se mexa sozinho.
     if (onUserScrolled != nullptr) {
         onUserScrolled();
     }
 
-    // Uma linha por entalhe, com acumulador. Um entalhe chega como 1.0, mas
-    // uma roda de alta resolucao e um trackpad mandam fraccoes, e sem
-    // acumulador a leitura saltava a meio do gesto.
+    // uma linha por entalhe, com acumulador: trackpad e roda de alta resolucao
+    // mandam fraccoes, e sem ele a leitura saltava a meio do gesto.
     wheelAccumulator_ += wheel.deltaY;
     if (std::abs(wheelAccumulator_) < 1.0) {
         return;
@@ -312,12 +292,9 @@ void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
     const auto lines = static_cast<int>(wheelAccumulator_);
     wheelAccumulator_ -= static_cast<double>(lines);
 
-    // O sinal e' invertido de proposito. Medido no Standalone em 03/10/2026:
-    // vinte entalhes para baixo do rato levaram o topo de 0x1C0 para 0x180, ou
-    // seja, para conteudo mais antigo. Descer a roda tem de mostrar conteudo
-    // mais adiante no ficheiro, entao e' scrollByLines que recebe o sinal
-    // trocado. A primeira versao fazia ao contrario e foi a captura de ecra que
-    //apanhou.
+    // sinal invertido de proposito: descer a roda tem de mostrar conteudo mais
+    // adiante no ficheiro. nota: medido no standalone em 03/10/2026, o deltaY
+    // vinha ao contrario e a captura de ecra apanhou.
     scrollByLines(-lines);
 }
 
@@ -329,8 +306,7 @@ void HexGrid::paint(juce::Graphics& g) {
     g.setFont(font_);
 
     if (fileSize_ == 0 || bytes_ == nullptr || bytes_->empty()) {
-        // Sem ficheiro, um rectangulo vazio com moldura le-se como defeito. E' o
-        // mesmo motivo que escondeu as leituras vazias do rodape.
+        // sem ficheiro, um rectangulo com moldura le-se como defeito.
         g.setColour(palette::textOnDarkSub);
         g.drawText("SEM BINARIO", bounds.reduced(kPadding, 0.0f), juce::Justification::centred,
                    false);
@@ -353,9 +329,8 @@ void HexGrid::paintColumnHeader(juce::Graphics& g) {
     g.setColour(palette::textOnDarkSub);
     g.setFont(font_);
 
-    // 00 01 02 ... 0F em cima das colunas. Sem este cabecalho a coluna
-    // hexadecimal e' uma parede de digitos sem referencia, e a coluna 0xe nao se
-    // distingue da 0x0.
+    // cabecalho 00..0F em cima das colunas: sem ele a coluna hex e' uma parede
+    // de digitos e a coluna 0xe nao se distingue da 0x0.
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
         g.drawText(toHex2(static_cast<std::uint8_t>(column)),
                    cellRect(column, 0).withY(top).withHeight(kHeaderHeight),
@@ -372,9 +347,8 @@ void HexGrid::paintRow(juce::Graphics& g, int row) {
     const auto top = metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight;
     const auto area = getLocalBounds().toFloat().reduced(kPadding);
 
-    // Filete de 1 px entre linhas. Sem ele o endereco de uma linha pode ser
-    // lido como pertencer a outra, e o endereco e' a unica coisa que se le sem
-    // contar.
+    // filete de 1 px entre linhas, para o endereco de uma nao ser lido como de
+    // outra.
     g.setColour(palette::alpha(palette::displayBorder, 0.7f));
     g.drawHorizontalLine(juce::roundToInt(top), area.getX(), area.getRight());
 
@@ -389,18 +363,16 @@ void HexGrid::paintGutter(juce::Graphics& g, int row) {
                                             static_cast<float>(row) * kRowHeight)
                           .withHeight(kRowHeight);
 
-    // Uma secao que comeca dentro desta linha merece mais do que um endereco: e'
-    // onde o nome tem de estar. E so a linha onde comeca escreve o nome, senao
-    // ".text" aparecia repetido em milhares de linhas.
+    // o nome da secao so se escreve na linha onde ela comeca, senao ".text"
+    // aparecia repetido em milhares de linhas.
     const auto section = sectionAt(address);
     const bool startsHere =
         section != nullptr && static_cast<std::uint64_t>(section->rawOffset) >= address &&
         static_cast<std::uint64_t>(section->rawOffset) < address + kBytesPerRow;
 
     if (startsHere) {
-        // Barra de 2 px a toda a altura da linha: um sinal que nao depende de
-        // cor. E' o que substitui as abas de secao, que ocupavam 18 px para dizer
-        // a mesma coisa em menos sitio.
+        // barra de 2 px a toda a altura: um sinal que nao depende de cor, no
+        // lugar das abas de secao, que ocupavam 18 px para dizer o mesmo.
         g.setColour(palette::accent);
         g.fillRect(juce::Rectangle<float> {band.getX(), band.getY(), 2.0f, kRowHeight});
         g.setFont(font_);
@@ -418,16 +390,14 @@ void HexGrid::paintGutter(juce::Graphics& g, int row) {
 void HexGrid::paintBytes(juce::Graphics& g, int row) {
     const auto address = rowAddress(row);
 
-    // As colunas da regiao nesta linha sao decididas no nucleo, em
-    // pe::regionColumnsInRow, e nao aqui dentro do paint. A aritmetica tem casos
-    // de bordo — a regiao a comecar em 0x308 corta a linha ao meio — e dentro de
-    // um paint() nao ha onde a testar.
+    // as colunas da regiao vem de pe::regionColumnsInRow, nao do paint. a
+    // aritmetica tem casos de bordo -- a regiao a comecar a meio da linha -- e
+    // dentro de um paint() nao ha onde os testar.
     const auto span = pe::regionColumnsInRow(address, kBytesPerRow,
                                              {regionStart_, regionEnd_});
 
-    // A regiao ativa tem fundo e, em cima e em baixo, um filete de 1 px. Sao
-    // dois sinais em vez de um: o fundo diz a quem ve cor, o filete diz a quem
-    // nao ve, que e' o que o criterio 1.4.1 do WCAG 2.2 pede.
+    // regiao ativa: fundo e filete de 1 px em cima e em baixo. dois sinais -- o
+    // fundo para quem ve cor, o filete para quem nao ve (1.4.1).
     if (!span.empty()) {
         const auto left = cellRect(span.firstColumn, row).getX();
         const auto right = cellRect(span.lastColumn - 1, row).getRight();
@@ -453,10 +423,9 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
         const auto cell = cellRect(column, row);
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
 
-        // A cabeca de leitura e' uma barra branca de 2 px na margem esquerda da
-        // celula, mais um fundo claro por baixo do texto. O fundo sem a barra
-        // seria uma celula a tremer; a barra sem o fundo sumia sobre os bytes
-        // claros.
+        // cabeca de leitura: barra branca de 2 px na margem esquerda da celula e
+        // fundo claro por baixo do texto. a barra sozinha some nos bytes claros;
+        // o fundo sozinho parece uma celula a tremer.
         if (byteAddress == readHead_) {
             g.setColour(palette::alpha(juce::Colours::white, 0.16f));
             g.fillRect(cell);

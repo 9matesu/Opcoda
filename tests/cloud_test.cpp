@@ -37,9 +37,9 @@ struct Sample {
     int length {0};
 };
 
-// Corre `blocks` blocos e recolhe o que cada grao recebeu da nuvem. O gancho
-// devolve o ultimo grao do bloco; com densidade 40/s e blocos de 5,3 ms ha
-// varios blocos por grao, e a amostragem cobre o suficiente.
+// corre `blocks` blocos e recolhe o que cada grao recebeu da nuvem. o gancho
+// devolve o ultimo grao do bloco; com 40/s e blocos de 5,3 ms ha varios blocos por
+// grao, e a amostragem cobre o suficiente.
 std::vector<Sample> run(GranularParams params, int blocks, std::uint64_t seed = 0,
                         std::vector<float>* rendered = nullptr) {
     const auto material = source();
@@ -69,10 +69,9 @@ std::vector<Sample> run(GranularParams params, int blocks, std::uint64_t seed = 
 } // namespace
 
 TEST(Cloud, ZeroIsByteIdenticalToPrevious) {
-    // Com os tres a zero o motor nao pode ter mudado. Compara-se contra o
-    // mesmo material com os parametros explicitamente a zero: se o codigo novo
-    // consumisse um sorteio a mais, a sequencia do gerador mudava e a saida
-    // divergia aqui.
+    // com os tres a zero o motor nao pode ter mudado. compara contra o mesmo
+    // material com os parametros explicitos a zero: um sorteio a mais mudava a
+    // sequencia do gerador e a saida divergia aqui.
     std::vector<float> zeros;
     std::vector<float> defaults;
     auto explicitZeros = baseParams();
@@ -87,7 +86,7 @@ TEST(Cloud, ZeroIsByteIdenticalToPrevious) {
         ASSERT_EQ(zeros[i], defaults[i]) << "amostra " << i;
     }
 
-    // E os ganchos confirmam que nada foi sorteado.
+    // e os ganchos confirmam que nada foi sorteado.
     for (const auto& s : run(explicitZeros, 60)) {
         EXPECT_EQ(s.delay, 0);
         EXPECT_FLOAT_EQ(s.spread, 0.0f);
@@ -108,8 +107,8 @@ TEST(Cloud, SizeSpreadsOnsetsWithinWindow) {
         nonZero += (s.delay > 0) ? 1 : 0;
     }
 
-    // A janela cheia e' 500 ms, e o sorteio tem de a usar: um atraso maximo
-    // abaixo de 100 ms significaria que a janela nao chegou ao motor.
+    // a janela cheia e' 500 ms e o sorteio tem de a usar: um atraso maximo abaixo
+    // de 100 ms significaria que a janela nao chegou ao motor.
     EXPECT_GT(maxDelay, static_cast<int>(0.1 * kSampleRate));
     EXPECT_GT(nonZero, 0);
 
@@ -139,14 +138,14 @@ TEST(Cloud, PitchSpreadStaysWithinRange) {
     }
 
     ASSERT_GT(counted, 0);
-    // Simetrica e a usar a faixa: os dois extremos aparecem e a media fica
-    // perto de zero. Com poucos graos a media oscila; 200 blocos a 40/s dao
-    // centenas de amostras.
+    // simetrica e a usar a faixa: os dois extremos aparecem e a media fica perto
+    // de zero. com poucos graos a media oscila; 200 blocos a 40/s dao centenas de
+    // amostras.
     EXPECT_LT(minSpread, -4.0f);
     EXPECT_GT(maxSpread, 4.0f);
     EXPECT_NEAR(sum / static_cast<double>(counted), 0.0, 1.5);
 
-    // Fora do intervalo: com spread 4 nenhum grao passa de 4.
+    // fora do intervalo: com spread 4 nenhum grao passa de 4.
     auto narrow = params;
     narrow.pitchSpreadSemitones = 4.0f;
     for (const auto& s : run(narrow, 200)) {
@@ -162,8 +161,8 @@ TEST(Cloud, GrainJitterVariesDuration) {
     const int baseLength = static_cast<int>(40.0f * 0.001f * static_cast<float>(kSampleRate));
     std::vector<int> lengths;
     for (const auto& s : run(params, 400)) {
-        // Metade a uma vez e meia de 40 ms, com piso de 1 ms e teto de 100 ms.
-        // Blocos sem grao novo reportam zero — nao sao amostras.
+        // metade a uma vez e meia de 40 ms, com piso de 1 ms e tecto de 100 ms.
+        // blocos sem grao novo reportam zero, e nao sao amostras.
         if (s.length == 0) {
             continue;
         }
@@ -209,7 +208,7 @@ TEST(Cloud, SameSeedSameCloud) {
 
     ASSERT_EQ(first.size(), second.size());
     EXPECT_EQ(first, second);
-    // Sementes diferentes poem outra nuvem: os atrasos nao podem ser os mesmos
-    // em todas as amostras.
+    // sementes diferentes poem outra nuvem: os atrasos nao podem ser os mesmos em
+    // todas as amostras.
     EXPECT_NE(first, other);
 }

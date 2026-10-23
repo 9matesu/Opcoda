@@ -17,6 +17,7 @@
 
 namespace opcoda::dsp {
 
+// -- parametros --
 struct GranularParams {
     float grainSizeMs {40.0f};
     float densityGrainsPerSec {20.0f};
@@ -26,30 +27,23 @@ struct GranularParams {
     float volumeDb {0.0f};
     float pan {0.0f};
     WindowType window {WindowType::kHann};
-    // Envelope por nota, em segundos e nivel, sobre o mix — nao por grao. O
-    // attack abre do nivel corrente (retrigger no meio do release nao da
-    // degrau); o decay cai do 1.0 ao sustain em tempo exato; o release fecha
-    // do nivel corrente a zero tambem em tempo exato, qualquer que seja ele.
+    // envelope no mix, nao por grao. ataque e release partem do nivel atual
+    // para nao criar degrau.
     float attackSeconds {0.005f};
     float decaySeconds {0.1f};
     float sustainLevel {1.0f};
     float releaseSeconds {0.05f};
-    // F020: curvas por estagio, -1..+1, com 0 linear. Ver dsp/curve.h.
+    // curva por estagio: -1 exponencial, 0 linear, +1 logaritmica.
     float attackCurve {0.0f};
     float decayCurve {0.0f};
     float releaseCurve {0.0f};
-    // Dois filtros em serie por voz. Tipo fora de faixa vira passa-baixa, e nao
-    // erro: o tipo chega como indice de choice da UI, e um indice corrompido
-    // tem de soar, nao calar. Corte em Hz logaritmico 20..20000 (recortado
-    // contra Nyquist dentro do calculo), Q 0,5..12. Defaults transparentes —
-    // passa-baixa em 20 kHz — para o T1 e o comportamento antigo nao mudarem.
+    // dois filtros em serie por voz. tipo invalido cai em passa-baixa para soar,
+    // nao calar. corte 20..20000 Hz, Q 0,5..12. os defaults sao transparentes.
     FilterType f1type {FilterType::kLowPass};
     float f1cutoffHz {20000.0f};
     float f1q {0.7071f};
-    // F020: caracter do filtro 1. 0 = 12 dB/oitava; 1 = 24 dB, com um segundo
-    // biquad identico em serie (estado proprio). O drive satura antes do filtro
-    // e compensa o pico em escala cheia; keytrack move o corte com a nota e
-    // f1env com o envelope, ambos em oitavas.
+    // filtro 1: 0 = 12 dB/oitava, 1 = 24 dB com um segundo biquad em serie.
+    // drive satura antes; keytrack e f1env movem o corte em oitavas.
     int f1Slope {0};
     float f1DriveDb {0.0f};
     float f1Keytrack {0.0f};
@@ -57,54 +51,41 @@ struct GranularParams {
     FilterType f2type {FilterType::kLowPass};
     float f2cutoffHz {20000.0f};
     float f2q {0.7071f};
-    // LFO: taxa em Hz, profundidade 0..1, alvo e forma. Profundidade zero
-    // desliga sem custo de comportamento: com depth 0 todas as contribuicoes
-    // abaixo sao zero e o motor soa identico ao sem LFO. Escalas por alvo,
-    // documentadas onde sao aplicadas: pitch ±12 st, posicao ±0,25 de fracao,
-    // densidade x[0,5, 1,5], cutoff f1 ±2 oitavas.
+    // lfo: depth 0 nao muda nada. escalas: pitch +-12 st, posicao +-0,25,
+    // densidade 0,5x..1,5x, cutoff +-2 oitavas.
     float lforateHz {1.0f};
     float lfodepth {0.0f};
     LFOTarget lfotarget {LFOTarget::kPitch};
     LFOWave lfowave {LFOWave::kSine};
-    // Nivel por grao, linear 0..1, multiplicado depois do volume em dB. E' o
-    // ganho individual contra o volume geral: o volume diz o nivel da saida, o
-    // nivel diz o quanto cada grao contribui para ela.
+    // nivel do grao, depois do volume. volume = saida; level = quanto cada grao
+    // contribui.
     float grainLevel {1.0f};
-    // Detune aleatorio por grao, em semitons 0..12, somado a afinacao antes da
-    // razao. Zero desliga sem custo de comportamento: a razao sai identica a de
-    // antes, porque o desvio multiplica por zero.
+    // detune por grao, 0..12 st. zero desliga.
     float pitchRandomSemitones {0.0f};
-    // F021: nuvem. `cloudSize` 0..1 vira uma janela de 0..500 ms em que o
-    // inicio de cada grao cai uniformemente; `pitchSpreadSemitones` dispersa a
-    // afinacao e `grainJitter` a duracao (metade a uma vez e meia, entre 1 e
-    // 100 ms). Zero nos tres devolve o motor anterior amostra a amostra.
+    // nuvem: cloud 0..1 vira 0..500 ms de atraso; pitch spread 0..24 st;
+    // jitter 0..1 muda a duracao entre 0,5x e 1,5x, presa a 1..100 ms.
     float cloudSize {0.0f};
     float pitchSpreadSemitones {0.0f};
     float grainJitter {0.0f};
-    // F018: nota ativa da pilha mono. Negativo desliga a transposicao por nota;
-    // 60 (Do4) e' a razao 1,0. A escala quantiza a nota antes de virar taxa, e
-    // root e' a tonica em semitons (0 = Do).
+    // nota da pilha mono. -1 desliga; 60 (Do4) e' razao 1,0. a escala quantiza
+    // antes da taxa, e root e' a tonica (0 = Do).
     int noteNumber {-1};
     ScaleType scale {ScaleType::kChromatic};
     int scaleRoot {0};
-    // Portamento em segundos, 0 desliga. O tempo e' o da travessia completa,
-    // qualquer que seja o intervalo: 50 ms e' 50 ms de Do4 a Sol4 e de Do4 a Do5.
+    // portamento em segundos. o tempo e' o da travessia inteira, nao depende do
+    // intervalo.
     float glideSeconds {0.0f};
-    // F019: LFO no tempo do host. Em Sync a taxa sai de lfoDiv e do BPM, e a
-    // fase e' derivada de hostPpq; em Free continua a ser lforateHz. O nucleo
-    // nao conhece o host: os dois doubles chegam do plugin, uma vez por bloco.
-    // hostPpq < 0 (ou NaN) significa "sem transporte" e cai para 120 BPM.
+    // lfo no tempo do host: em sync a taxa vem de lfoDiv e do bpm, e a fase de
+    // hostPpq. ppq < 0 ou NaN cai para 120 bpm.
     bool lfoSync {false};
     int lfoDiv {2};
     int lfoSteps {16};
     double hostBpm {120.0};
     double hostPpq {-1.0};
-    // F020: matriz de 8 rotas. Vive no estado do APVTS, e nao na tabela de
-    // parametros: nao e' automatizavel pelo host e viaja no preset. O motor
-    // aplica-a a uma copia dos parametros, uma vez por bloco.
+    // matriz de 8 rotas, no estado do projeto. nao e' automatizavel; o motor
+    // aplica a uma copia dos parametros por bloco.
     ModMatrix modMatrix {};
-    // Fontes que o plugin mede e o motor nao: velocidade da nota, roda de
-    // modulacao e os dois CCs. Normalizadas 0..1 uma vez por bloco.
+    // fontes medidas pelo plugin: velocidade, mod wheel e os dois CCs, 0..1.
     float velocity {1.0f};
     float modWheel {0.0f};
     float cc74 {0.0f};
@@ -117,9 +98,8 @@ struct Grain {
     double readStep {};
     int remaining {};
     int windowIndex {};
-    // F021: amostras de espera antes do grao comecar (nuvem temporal) e fator
-    // que mapeia o indice da janela para a tabela quando a duracao foi
-    // sacudida. Com jitter 0 o fator e' exatamente 1,0.
+    // espera antes do grao, em amostras, e fator que mapeia a janela na tabela
+    // quando o jitter muda a duracao. sem jitter, o fator e' 1,0.
     int delay {0};
     double windowScale {1.0};
     int writeIndex {0};
@@ -128,75 +108,41 @@ struct Grain {
     float panRight {};
 };
 
-// O que a thread de interface precisa para desenhar um grao no sitio onde ele
-// esta' a ler o material.
+// -- telemetria --
+// dados para desenhar um grao onde ele esta' lendo.
 struct GrainView {
-    // **O indice da voz, e nao um numero de ordem.** E' a identidade do grao, e
-    // sem ela o rastro nao se pode construir: os slots sao compactados a cada
-    // publish, portanto o slot 0 deste bloco pode ser a voz 3 e no seguinte a
-    // voz 1. Ligar um rastro a um slot，而不是 a uma voz, faria a cauda saltar
-    // entre graos e dar um rasgo falso no ecra.
-    //
-    // Estavel por todo o tempo de vida do grao, porque `voices_[i]` e' um slot
-    // fixo do motor. O valor -1 nao existe: quem le trata de voice < 0.
+    // indice da voz. os slots sao compactados a cada publish, entao o slot 0 de
+    // um bloco pode ser a voz 3 no bloco seguinte. o rastro segue a voz.
     int voice {-1};
 
-    float position {0.0f}; ///< Fracao do material, 0..1.
+    float position {0.0f}; ///< fracao do material, 0..1.
     float gain {0.0f};     ///< 0..1, sem a rampa de saida.
     float phase {0.0f};    ///< 0..1 dentro da janela do grao.
 };
 
-// Publicacao do estado dos graos para a thread de interface.
+// estado dos graos para a interface. nao pode usar fila: quem publica e' a
+// thread de audio, e fila aloca. vai por atomico, um por campo.
 //
-// O display quer desenhar cada grao onde ele esta' a ler. Isso nao pode passar
-// por um canal de mensagens: quem publica e' a thread de audio, e um canal com
-// fila aloca. Logo e' memoria partilhada com atomicos.
+// um seqlock seria a resposta obvia e daria corrida de dados no leitor. com um
+// atomico por campo nao ha corrida, mas os tres numeros de um grao podem vir de
+// blocos diferentes. para desenho, tudo bem.
 //
-// **Um atomico por campo, e nao um seqlock sobre uma struct simples.** O seqlock
-// e' a resposta obvia e e' errada aqui: o leitor da interface copia a struct
-// enquanto a thread de audio a escreve, e isso e' corrida de dados pelo padrao
-// do C++, mesmo que funcione em x86. Passa a correr mal em TSan e em qualquer
-// maquina onde o par store/load nao seja FETCH_MODIFY nem bloqueie o escritor.
-// Com um atomico por campo nao ha corrida: cada campo e' lido ou escrito
-// atomicamente e nada mais.
-//
-// O que se perde e' a coerencia *entre* campos: os tres numeros de um grao podem
-// vir de dois blocos seguidos. Num decalque decorativo e' invisivel, e por isso
-// quem le e' avisado so pelo `count`. **Ninguem mede nada com isto.** Se uma
-// medicao precisa de coerencia, mede-se na thread de audio e publica-se o
-// resultado ja fechado, como o Telemetry do processador faz com o pico.
-//
-// **O `count` tambem pode estar atrasado em relacao aos slots.** Um leitor que
-// viu count = 8 e le depois de um publish seguinte ter escrito 3 slots desenha
-// 5 graos do bloco anterior. Os valores ficam no intervalo e nunca ha indice a
-// fora, por isso nao rebenta nada — mas e' a frase que diz ao codigo de
-// desenho para nao ler o count como "os graos que existem agora".
-//
-// **Nao ha teste para publish e read a correr ao mesmo tempo.** A corrida nao e'
-// reproduzivel a pedido: um teste com duas threads durante N iteracoes passa sem
-// provar nada e falha quando calha. E' verificado por construcao — um atomico
-// por campo e release/acquire no count — e nao por teste, porque a plataforma
-// nao tem runtime de TSan. Excepcao declarada, nao escondida.
+// o count tambem pode atrasar. o leitor nao deve ler os slots como "os graos de
+// agora"; le como foto do ultimo publish.
 class GrainTelemetry {
 public:
-    // Igual a GranularEngine::kMaxVoices, verificado em baixo com static_assert.
+    // igual a GranularEngine::kMaxVoices, checado em baixo.
     static constexpr int kMaxVoices = 8;
 
-    // O portao C e' probatorio: um store que possa travar nao serve. Verificado
-    // em build, e nao por confianca de quem le o codigo. No MSVC x64 um store
-    // relaxado e' um MOVSS, mas isso e' propriedade desta plataforma e nao do
-    // standard, e um tipo diferente aqui quebraria o silencio.
+    // store que trava nao serve. no msvc x64 um store relaxado e' movss, mas isso
+    // e' da plataforma, nao do standard.
     static_assert(std::atomic<float>::is_always_lock_free,
                   "store relaxado nao pode travar: o portao C e' probatorio");
     static_assert(std::atomic<int>::is_always_lock_free,
                   "idem para o count, que e' o que o leitor sincroniza com");
 
-    // Thread de audio. Uma vez por bloco, depois de processar.
-    //
-    // Os graos activos sao **compactados para a frente**, e nao escritos no seu
-    // indice. O `count` que a interface le tem de poder servir de indice: se o
-    // grao 0 estiver parado e os 1, 2 e 3 soarem, count = 3 e a interface le os
-    // slots 0, 1 e 2 — que sem compactar seriam o grao parado e dois activos.
+    // thread de audio, uma vez por bloco. compacta os graos ativos para a frente
+    // para o count servir de indice.
     void publish(const std::array<Grain, kMaxVoices>& voices) noexcept {
         int count = 0;
 
@@ -206,41 +152,26 @@ public:
                 continue;
             }
 
-            // A identidade vai antes de tudo o resto. E' um store de `int` para
-            // um slot cujo valor cabe em tres bits, e emparelha com o count do
-            // mesmo publish: quem le um count novo sabe que a voz veio com ele.
+            // a voz vai antes do resto. quem le um count novo sabe que a voz veio
+            // com ele.
             voice_[static_cast<std::size_t>(count)].store(static_cast<int>(voice),
                                                            std::memory_order_relaxed);
 
-            // position ja vem normalizado em [0, 1] do startGrain, mas um grao
-            // com pitch a subir avanca para alem de 1 e so volta a entrar na
-            // leitura por um wrap. Publicar o valor cru punha o grao fora do ecra
-            // a direita, que e' pior do que o mostrar colado a margem.
-            //
-            // isfinite antes do clamp, e nao depois: **std::clamp nao trata
-            // NaN**, clamp(NaN) devolve NaN. Um NaN aqui sai pela mesma via que
-            // o ganho e apaga o grao do ecra em silencio. Compila para tres
-            // instrucoes de comparacao, nao para uma chamada a fpclassify.
+            // position vem 0..1, mas com pitch alto passa de 1. recorta para o
+            // grao nao sair do ecra. isfinite antes do clamp: clamp(NaN) e' NaN.
             position_[static_cast<std::size_t>(count)].store(
                 static_cast<float>(std::isfinite(grain.position)
                                        ? std::clamp(grain.position, 0.0, 1.0)
                                        : 0.0),
                 std::memory_order_relaxed);
 
-            // isfinite antes de publicar. std::clamp nao trata NaN — clamp(NaN)
-            // devolve NaN — e um NaN aqui propaga-se em silencio para a posicao
-            // do desenho e apaga o unico sinal de que ha graos. Hoje o motor nao
-            // produz isto, porque o startGrain limita as entradas e o readStep so
-            // e' finito quando sourceCount_ > 0, mas um store de NaN e' um
-            // pixel vagabundo e custa uma comparacao desfazer.
+            // NaN no ganho apaga o grao do desenho. vira zero.
             gain_[static_cast<std::size_t>(count)].store(
                 std::isfinite(grain.gain) ? grain.gain : 0.0f,
                 std::memory_order_relaxed);
 
-            // A fase sai dos dois contadores sem guardar o comprimento do grao:
-            // windowIndex e remaining sobem e descem juntos a partir de
-            // activeWindowLength_, portanto a soma e' o comprimento original.
-            // Um grao terminado tem os dois a zero, e ai a divisao daria 0/0.
+            // fase = windowIndex / (windowIndex + remaining). grao terminado tem
+            // os dois a zero; nesse caso, zero.
             const auto total = grain.windowIndex + grain.remaining;
             phase_[static_cast<std::size_t>(count)].store(
                 total > 0 ? static_cast<float>(grain.windowIndex) / static_cast<float>(total)
@@ -250,13 +181,12 @@ public:
             ++count;
         }
 
-        // Release, e o leitor usa acquire: quem viu este count viu os campos
-        // publicados antes dele.
+        // release no count. o leitor usa acquire: quem ve o count ve os campos
+        // escritos antes.
         count_.store(count, std::memory_order_release);
     }
 
-    // Thread de interface. Devolve quantos slots de `out` preencher, e preenche
-    // so esses. Zero e' um resultado valido e nao um erro.
+    // thread de interface. devolve quantos slots preencheu. zero e' valido.
     [[nodiscard]] int read(std::array<GrainView, kMaxVoices>& out) const noexcept {
         const auto count = count_.load(std::memory_order_acquire);
         if (count <= 0) {
@@ -283,6 +213,7 @@ public:
     std::atomic<int> count_ {0};
 };
 
+// -- motor --
 class GranularEngine {
 public:
     static constexpr int kMaxVoices = 8;
@@ -290,13 +221,12 @@ public:
     static constexpr float kMaxGrainMs = 100.0f;
     static constexpr float kMinGrainMs = 1.0f;
 
-// Numero de pontos da curva de entropia. Publico porque quem calcula a curva na
-    // thread de interface tem de saber quantos pontos o motor aceita.
+    // pontos da curva de entropia. publico porque a interface precisa saber
+    // quantos pontos cabem.
     static constexpr std::size_t kMaxEntropyPoints {1024};
 
-    // A telemetria tem o seu proprio kMaxVoices para nao depender da ordem de
-    // declaracao das duas classes. Se os dois deixarem de bater certo, o
-    // read() comeca a devolver um numero que o publish nunca escreveu.
+    // a telemetria tem o seu proprio limite. se os dois divergirem, o read()
+    // devolve um numero que o publish nunca escreveu.
     static_assert(GrainTelemetry::kMaxVoices == kMaxVoices,
                   "GrainTelemetry::kMaxVoices tem de ser igual a kMaxVoices");
 
@@ -306,33 +236,15 @@ public:
     void setSampleRate(double sampleRate) noexcept { sampleRate_ = sampleRate; }
     [[nodiscard]] double sampleRate() const noexcept { return sampleRate_; }
 
-    // **Thread de audio apenas.** Chamado de PluginProcessor::drainIncomingQueue,
-    // dentro de processBlock. A interface publica material pela fila SPSC e nunca
-    // chama isto: um seek e' uma mensagem, nao uma chamada.
-    //
-    // O contrato importa porque este metodo escreve estado que pertence a thread de
-    // audio — `source_`, `sourceCount_`, `entropyCurve_`, e agora tambem `voices_` —
-    // e nenhum desses campos e' atomico. Uma chamada do lado da interface seria
-    // corrida em todos eles, e o compilador nao avisa. Um "fechar ficheiro" do lado
-    // da interface e' uma mensagem pela fila, nunca esta chamada directa.
+    // thread de audio apenas, chamado de drainIncomingQueue. a interface manda
+    // material pela fila SPSC; nunca chama isto. os campos escritos aqui nao sao
+    // atomicos.
     void setSource(const float* samples, std::size_t count) noexcept;
 
-    // **Thread de audio apenas**, como a sobrecarga de dois argumentos.
-    //
-    // Publica o material E a curva de entropia ja reduzida, que e' o que a thread de
-    // interface deve passar.
-    //
-    // **A curva nunca e' calculada na thread de audio.** A versao de um argumento
-    // calcula-a, e isso e' O(region) dentro de processBlock: para 12 MB sao 12
-    // milhoes de leituras de float, e nao aloca nada — o array do histograma e' de
-    // pilha — pelo que o guard de alocacao passa e e' cego para isto. Com o
-    // transporte, arrastar a regiao republica o material a cada evento de rato, e
-    // cada publicacao era uma passagem completa na thread de audio. Varios ms de
-    // pico por evento e' xrun.
-    //
-    // Quem calcula e' pe::reduceToColumns, na thread de interface, e a curva que
-    // entra aqui tem no maximo kMaxEntropyPoints pontos. Se for nullptr, o motor usa
-    // 4,0 bits, que e' o valor medio de um executavel, e nao calcula nada.
+    // igual, mas recebe a curva de entropia ja' reduzida. quem calcula e'
+    // pe::reduceToColumns, na interface. aqui nao se calcula nada: seria O(regiao)
+    // dentro do processBlock, e arrastar a regiao repetia a conta a cada evento.
+    // sem curva, o motor usa 4,0 bits e segue.
     void setSource(const float* samples,
                    std::size_t count,
                    const float* entropyCurve,
@@ -341,52 +253,39 @@ public:
     [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
     [[nodiscard]] std::size_t sourceSize() const noexcept { return sourceCount_; }
 
-    // Envelope ADSR linear sobre o mix, para as notas ligarem e desligarem sem
-    // estalo. E' global, e nao por voz: as vozes granulares nascem e morrem
-    // sozinhas, e o que a nota comanda e' a saida.
+    // envelope no mix, nao por voz. as vozes nascem e morrem sozinhas; a nota
+    // manda na saida. abrir e fechar de uma vez e' degrau, e degrau e' estalo.
     //
-    // Abrir e fechar a saida de uma vez produz um degrau no sinal, e um degrau
-    // e' um transiente largo em frequencia: o ataque e' audivel mesmo com
-    // release curto.
-    //
-    // setSounding e' aresta, e nao nivel: true so dispara o ataque na subida de
-    // false para true (legato nao re-dispara), e false so dispara o release na
-    // descida. O processador chama a cada bloco com notes_.sounding(), por isso
-    // aresta e' o unico desenho que nao reancora a cada quadro. isSounding
-    // devolve o comando, e nao a fase: durante o release a nota ja acabou mesmo
-    // que ainda se oica a cauda.
+    // setSounding e' aresta: true so na subida, false so na descida. o
+    // processador chama a cada bloco, entao nivel reancoraria o ataque.
+    // isSounding devolve o comando, nao a fase.
     void setSounding(bool on) noexcept;
     [[nodiscard]] bool isSounding() const noexcept { return soundingCmd_; }
 
-    // Nivel corrente do envelope. Existe para o teste verificar o envelope em
-    // si, sem depender do agendamento de graos, que precisa de dezenas de
-    // blocos para produzir audio e tornaria a medicao lenta e fragil.
+    // nivel do envelope. o teste le isto para medir o envelope sem depender do
+    // agendamento de graos.
     [[nodiscard]] float gateLevel() const noexcept { return envelopeLevel_; }
 
-    // Semitons correntes do glide, para o teste medir a travessia sem depender
-    // do agendamento de graos. Em producao ninguem le isto.
+    // semitons do glide, para o teste. em producao ninguem le.
     [[nodiscard]] double glideSemitones() const noexcept { return glideSemitones_; }
 
-    // Corte efectivo do filtro 1 no ultimo calculo de coeficientes (ja com LFO,
-    // keytrack e envelope). Para os ensaios de keytrack; em producao ninguem le.
+    // corte do filtro 1 no ultimo calculo, ja' com lfo, keytrack e envelope.
+    // para o ensaio de keytrack.
     [[nodiscard]] float f1CutoffHz() const noexcept { return lastF1Cutoff_; }
 
-    // F021: o atraso e a dispersao sorteados para o ultimo grao que nasceu. O
-    // ensaio da nuvem mede o que o motor aplicou, e nao o que o gerador devia
-    // ter dado; em producao ninguem le isto.
+    // atraso, spread e duracao do ultimo grao. o ensaio da nuvem mede o que o
+    // motor aplicou, nao o que o gerador devia ter dado.
     [[nodiscard]] int lastGrainDelaySamples() const noexcept { return lastGrainDelay_; }
     [[nodiscard]] float lastGrainSpreadSemitones() const noexcept { return lastGrainSpread_; }
     [[nodiscard]] int lastGrainLengthSamples() const noexcept { return lastGrainLength_; }
 
-    // Semente do gerador. Fixa por omissao, para que a mesma fonte e os mesmos
-    // parametros deem o mesmo som — e' o que torna T1 e T2 reproduziveis. Quem
-    // quiser uma nuvem diferente em cada tomada chama isto com o relogio.
+    // semente fixa por omissao: mesma fonte e mesmos parametros, mesmo som. quem
+    // quiser outra nuvem chama setSeed com o relogio.
     static constexpr std::uint64_t kDefaultSeed = 0x9E3779B97F4A7C15ull;
     void setSeed(std::uint64_t seed) noexcept { seed_ = seed; }
     [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
 
-    // Fase do LFO, para os ensaios de sincronismo e de continuidade na troca de
-    // modo. So a thread de audio escreve; o teste le entre blocos.
+    // fase do lfo, para os ensaios de sync. so a thread de audio escreve.
     [[nodiscard]] double lfoPhase() const noexcept { return lfo_.phase(); }
 
     void processBlock(float* left, float* right, int numSamples,
@@ -395,22 +294,16 @@ public:
     [[nodiscard]] int activeVoiceCount() const noexcept;
     [[nodiscard]] int lastActiveVoices() const noexcept { return lastActiveVoices_; }
 
-    // Estado dos graos para o display. Quem escreve e' esta classe, no fim de
-    // cada bloco; quem le e' a thread de interface, que nunca deve processar um
-    // bloco para o saber.
+    // estado dos graos para o display. escreve no fim do bloco; a interface le.
     [[nodiscard]] const GrainTelemetry& telemetry() const noexcept { return telemetry_; }
 
 private:
-    // Fases do envelope. idle e sustain sao paradas; attack, decay e release
-    // movem o nivel uma taxa fixa por amostra, sem velocidade guardada — uma
-    // mola precisaria de estado e passava do alvo quando um quadro atrasasse, e
-    // aqui nao ha quadro que atrase porque nao ha velocidade.
+    // idle e sustain sao paradas. attack, decay e release andam a taxa fixa por
+    // amostra; nao ha mola nem velocidade guardada.
     enum class EnvelopePhase : std::uint8_t { idle, attack, decay, sustain, release };
 
-    // LFO saneado uma vez por bloco: taxa, profundidade, alvo e forma ja
-    // validados, prontos para startGrain e para o agendamento sem revalidar
-    // por grao. Passado por valor (4 escalares) e nao por params cru, para o
-    // caminho quente nao pagar sanitize repetido nem ler campo invalido.
+    // lfo ja' saneado, uma vez por bloco. passado por valor para o caminho quente
+    // nao revalidar por grao.
     struct LFOSettings {
         float rateHz {1.0f};
         float depth {0.0f};
@@ -428,13 +321,10 @@ private:
                     const LFOSettings& lfo) noexcept;
     void applyGate(float* left, float* right, int numSamples,
                    const GranularParams& params) noexcept;
-    // Glide da nota em semitons, uma vez por bloco. Linear no tempo declarado:
-    // a distancia nao muda a duracao, que e' o que o músico espera de um
-    // portamento com tempo.
+    // glide em semitons, uma vez por bloco. linear no tempo: a distancia nao
+    // muda a duracao.
     void updateGlide(const GranularParams& params, int numSamples) noexcept;
-    // Matriz de modulacao aplicada a copia dos parametros do bloco. As fontes
-    // saem do proprio params (nota, velocidade, CCs) e do estado do motor (LFO,
-    // envelope, entropia na posicao lida).
+    // matriz aplicada a copia dos parametros. fontes: params e estado do motor.
     void applyModMatrix(GranularParams& params, float lfoValue) noexcept;
     [[nodiscard]] float entropyAtPosition(float position) const noexcept;
 
@@ -453,16 +343,14 @@ private:
 
     double spawnAccumulator_ {0.0};
 
-    // Estado do glide. glideFrom_ e' o ponto de partida da travessia corrente e
-    // glideTarget_ o destino ja saneado; glideRemaining_ conta o tempo que falta.
+    // glide: de onde veio, para onde vai, quanto falta.
     double glideSemitones_ {0.0};
     double glideFrom_ {0.0};
     double glideTarget_ {0.0};
     double glideRemaining_ {0.0};
 
-    // Offset entre a fase livre e a fase derivada do ppq, fixado no instante em
-    // que o Sync liga. Sem ele a troca de modo dava um degrau; com ele o seek do
-    // host continua a saltar, que e' o pretendido.
+    // offset entre fase livre e fase do ppq, fixado quando o sync liga. evita
+    // degrau na troca; o seek do host continua a saltar.
     double syncPhaseOffset_ {0.0};
     bool syncEngaged_ {false};
 
@@ -474,15 +362,11 @@ private:
     Limiter limiterLeft_ {};
     Limiter limiterRight_ {};
 
-    // Estado dos dois filtros, um par por voz — o estado nao pode ser
-    // partilhado porque cada voz esta num ponto diferente da sua historia. Os
-    // coeficientes, ao contrario, sao iguais para as 8 vozes e calculados uma
-    // vez por bloco em processBlock; o cache abaixo decide se recalcula.
+    // estado por voz: cada voz esta noutro ponto da sua historia. coeficientes
+    // sao iguais para as oito e ficam em cache por bloco.
     std::array<Biquad, kMaxVoices> filterA_ {};
-    // F020: segundo estagio do filtro 1 quando o slope e' 24 dB. Estado proprio:
-    // chamar process duas vezes no mesmo Biquad nao e' cascata — a segunda
-    // chamada reutiliza a memoria do estagio e a resposta deixa de ser a de
-    // dois filtros identicos em serie.
+    // segundo estagio do filtro 1 no slope de 24 dB. estado proprio, senao
+    // processar duas vezes no mesmo biquad nao vira cascata.
     std::array<Biquad, kMaxVoices> filterA2_ {};
     std::array<Biquad, kMaxVoices> filterB_ {};
     BiquadCoeffs coeffsA_ {};
@@ -499,13 +383,12 @@ private:
     bool soundingCmd_ {false};
     EnvelopePhase envelopePhase_ {EnvelopePhase::idle};
     float releaseStartLevel_ {0.0f};
-    // F020: fase do estagio corrente (0..1) e nivel de partida do ataque. A
-    // fase existe para a curva ter sobre o que agir; com curva 0 o laco antigo
-    // continua a mandar e estes dois valores so acompanham.
+    // fase do estagio (0..1) e nivel de partida do ataque. com curva 0, o laco
+    // antigo manda e estes dois so acompanham.
     float stagePhase_ {0.0f};
     float attackStartLevel_ {0.0f};
 
-    // F021: semente e o que o ultimo grao recebeu da nuvem (para os ensaios).
+    // semente e o que o ultimo grao recebeu da nuvem.
     std::uint64_t seed_ {kDefaultSeed};
     int lastGrainDelay_ {0};
     float lastGrainSpread_ {0.0f};
@@ -515,9 +398,8 @@ private:
 
     GrainTelemetry telemetry_ {};
 
-    // LFO: fase acumulada em voltas, sempre o inicio do bloco corrente. Avanca
-    // no fim de cada processBlock, nos dois caminhos de saida — o LFO e' tempo
-    // absoluto e marcha mesmo em silencio.
+    // fase em voltas, sempre no inicio do bloco. avanca no fim, mesmo em
+    // silencio: o lfo e' tempo absoluto.
     LFO lfo_ {};
 };
 

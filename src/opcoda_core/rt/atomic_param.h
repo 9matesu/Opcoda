@@ -5,7 +5,7 @@
 
 namespace opcoda::rt {
 
-// O atômico guarda o ALVO que a interface escreveu. O histórico da rampa fica
+// o atômico guarda o ALVO que a interface escreveu. o histórico da rampa fica
 // com o consumidor, em nextSmoothed, porque o atômico não guarda estado.
 template <typename T>
 class AtomicParam {

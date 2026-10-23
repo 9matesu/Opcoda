@@ -35,7 +35,7 @@ TEST(NoteTracker, CountsChords) {
     tracker.handle(noteOn(67));
     EXPECT_TRUE(tracker.sounding());
 
-    // Uma nota-off de cada: so depois da ultima o som deve parar.
+    // uma nota-off de cada: so depois da ultima o som deve parar.
     tracker.handle(noteOff(60));
     tracker.handle(noteOff(64));
     EXPECT_TRUE(tracker.sounding()) << "o acorde parou antes de todas as notas largarem";
@@ -44,9 +44,9 @@ TEST(NoteTracker, CountsChords) {
 }
 
 TEST(NoteTracker, StrayNoteOffCannotSilenceForever) {
-    // Hostes reenviam o estado inicial no primeiro bloco, e alguns mandam
-    // note-off sem note-on. Sem o piso em zero, sounding() ficaria falso para
-    // sempre e o instrumento nunca mais tocaria.
+    // os hosts reenviam o estado inicial no primeiro bloco, e alguns mandam
+    // note-off sem note-on. sem o piso em zero, sounding() ficava falso para
+    // sempre e o instrumento nunca mais tocava.
     NoteTracker tracker;
     for (int i = 0; i < 5; ++i) {
         tracker.handle(noteOff(60));
@@ -69,7 +69,7 @@ TEST(NoteTracker, SustainKeepsSoundingAfterKeyRelease) {
 }
 
 TEST(NoteTracker, SustainDoesNotHideStillHeldKeys) {
-    // Soltar o pedal enquanto uma tecla continua premida: o som tem de ficar.
+    // soltar o pedal com uma tecla ainda premida: o som tem de ficar.
     NoteTracker tracker;
     tracker.handle(noteOn(60));
     tracker.handle(noteOn(64));
@@ -112,7 +112,7 @@ TEST(NoteTracker, ControllersAreClampedAndFlagged) {
 }
 
 TEST(NoteTracker, OutOfRangeControllerIndexIsIgnored) {
-    // Índice invalido nao pode escrever em memoria fora do array.
+    // indice invalido nao pode escrever em memoria fora do array.
     NoteTracker tracker;
     tracker.setController(-1, 0.9f);
     tracker.setController(NoteTracker::kTrackedControllers, 0.9f);
@@ -157,8 +157,8 @@ TEST(NoteTracker, RetriggerDoesNotDuplicateOnTheStack) {
     tracker.handle(noteOn(60));
     EXPECT_EQ(tracker.activeNote(), 60);
 
-    // Se o retrigger tivesse empilhado 60 duas vezes, largar a ultima tecla
-    // devolveria 60 outra vez em vez de 64.
+    // se o retrigger empilhasse 60 duas vezes, largar a ultima tecla devolvia 60
+    // outra vez em vez de 64.
     tracker.handle(noteOff(60));
     EXPECT_EQ(tracker.activeNote(), 64);
 }
@@ -170,7 +170,7 @@ TEST(NoteTracker, SustainKeepsTheActiveNote) {
     tracker.handle(sustain(true));
     tracker.handle(noteOff(67));
 
-    // A tecla saiu, mas o pedal segura a nota: o som continua e a altura fica.
+    // a tecla saiu, mas o pedal segura a nota: o som continua e a altura fica.
     EXPECT_TRUE(tracker.sounding());
     EXPECT_EQ(tracker.activeNote(), 67);
 

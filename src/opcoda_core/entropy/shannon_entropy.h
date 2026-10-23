@@ -11,10 +11,9 @@ namespace opcoda::entropy {
                                         std::size_t size,
                                         std::size_t offset) noexcept;
 
-// Mede exatamente [offset, offset + length). A versao de tres argumentos vai
-// ate o fim do arquivo, o que serve para a curva e nao serve para uma secao de
-// PE: ali o fim e' rawOffset + rawSize, e o resto do arquivo contaminaria o
-// resultado.
+// mede exactamente [offset, offset + length). a versao de tres argumentos vai ate
+// ao fim do ficheiro, o que serve para a curva; para uma secao de PE o fim e'
+// rawOffset + rawSize, e o resto do ficheiro contaminaria o resultado.
 [[nodiscard]] double shannonBitsPerByte(const std::uint8_t* data,
                                         std::size_t size,
                                         std::size_t offset,

@@ -23,8 +23,8 @@ TEST(AtomicParam, SmoothesTowardsTarget) {
     param.store(1.0f);
     const float target = param.loadForAudio();
 
-    // Rampa com coeficiente 0.5 avanca metade da distancia por passo. O
-    // historico fica com o consumidor, entao quem chama mantem `current`.
+    // rampa com coeficiente 0.5 avanca metade da distancia por passo. o historico
+    // fica com o consumidor, logo quem chama mantem `current`.
     float current = 0.0f;
     current = AtomicParam<float>::nextSmoothed(current, target, 0.5f);
     EXPECT_NEAR(current, 0.5f, 1e-6f);
@@ -35,8 +35,8 @@ TEST(AtomicParam, SmoothesTowardsTarget) {
 }
 
 TEST(AtomicParam, TargetSurvivesSmoothing) {
-    // O atomic guarda o alvo, nao o valor suavizado: ler durante a rampa tem
-    // de devolver o que a interface escreveu.
+    // o atomico guarda o alvo, nao o valor suavizado: ler durante a rampa tem de
+    // devolver o que a interface escreveu.
     AtomicParam<float> param {0.0f};
     param.store(1.0f);
     float current = 0.0f;
@@ -46,8 +46,8 @@ TEST(AtomicParam, TargetSurvivesSmoothing) {
 }
 
 TEST(AtomicParam, CrossesThreadsWithoutCorruption) {
-    // O contrato acquire/release e' o que a constitution exige: sem trava, sem
-    // espera, e o valor lido e sempre um valor valido.
+    // o contrato acquire/release e' o que a constitution exige: sem trava, sem
+    // espera, e o valor lido e' sempre um valor valido.
     AtomicParam<int> param {0};
     constexpr int kIterations = 200000;
 
@@ -61,7 +61,7 @@ TEST(AtomicParam, CrossesThreadsWithoutCorruption) {
         int previous = 0;
         for (int i = 0; i < kIterations; ++i) {
             const int value = param.loadForAudio();
-            // Nunca retrocede: o escritor so cresce.
+            // nunca retrocede: o escritor so cresce.
             EXPECT_GE(value, previous);
             previous = value;
         }
@@ -87,7 +87,7 @@ TEST(SpscRing, PopOnEmptyReturnsFalse) {
 }
 
 TEST(SpscRing, ReportsFullAndRejectsPush) {
-    // Capacidade util = 3, porque um indice reservado distingue cheio de vazio.
+    // capacidade util = 3, porque um indice reservado distingue cheio de vazio.
     using Ring4 = SpscRing<int, 4>;
     Ring4 ring;
     EXPECT_EQ(Ring4::capacity(), std::size_t{3});
@@ -122,8 +122,8 @@ TEST(SpscRing, MaintainsFifoOrder) {
 }
 
 TEST(SpscRing, TransfersManyItemsAcrossThreads) {
-    // Productor e consumidor reais: e o caminho de migracao de amostra do
-    // parser para o DSP described em 06-metodologia-arquitetura.md.
+    // produtor e consumidor reais: e' o caminho de migracao de amostra do parser
+    // para o DSP descrito em 06-metodologia-arquitetura.md.
     SpscRing<std::uint32_t, 256> ring;
     constexpr std::uint32_t kTotal = 100000;
     std::uint32_t received = 0;

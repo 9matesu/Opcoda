@@ -21,9 +21,8 @@ std::uint64_t nearestSectionStart(std::uint64_t start,
         return start;
     }
 
-    // Sem nenhuma secao com dados, o melhor inicio e' o proprio `start`: e' o
-    // que o chamador recebe de volta, e o chamador trata disso em vez de
-    // inventar um destino.
+    // sem secao com dados, o melhor inicio e' o proprio `start`. o chamador
+    // trata disso em vez de inventar um destino.
     std::uint64_t best = start;
     auto bestDistance = std::numeric_limits<std::uint64_t>::max();
 
@@ -70,23 +69,22 @@ ByteRange sectionSnapToggle(const ByteRange& current,
                             const std::uint32_t* offsets,
                             const std::uint32_t* sizes,
                             std::size_t count) noexcept {
-    // Ja alinhado: volta a regiao exata. Um `exact` vazio significa que nunca
-    // houve uma escolha exacta, e nesse caso nao ha' para onde voltar.
+    // ja alinhado: volta a regiao exata. `exact` vazio significa que nunca
+    // houve escolha exata, e nao ha' para onde voltar.
     if (isSectionAligned(current, offsets, sizes, count)) {
         return exact.empty() ? current : exact;
     }
 
     const auto start = nearestSectionStart(current.start, offsets, sizes, count);
 
-    // Sem nenhuma secao com dados, nearestSectionStart devolve o proprio
-    // inicio. Devolver a regiao atual e' o comportamento honesto: alinhar ao
-    // fim do ficheiro trocava o material do utilizador sem ele pedir nada, e
-    // isso seria pior do que o alinhamento nao fazer nada.
+    // nearestSectionStart devolveu o proprio inicio: nao ha secao com dados.
+    // devolver a regiao atual e' mais honesto do que trocar o material do
+    // utilizador, e alinhar ao fim do ficheiro seria pior.
     if (start == current.start) {
         return current;
     }
 
-    // A janela alinhada vai ate ao fim da secao.
+    // a janela alinhada vai ate ao fim da secao.
     auto end = fileSize;
     for (std::size_t i = 0; i < count; ++i) {
         if (sizes[i] == 0) {

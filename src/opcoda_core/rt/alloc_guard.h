@@ -4,10 +4,9 @@
 
 namespace opcoda::rt {
 
-// O operator new global e substituido por uma versao que consulta a flag
-// abaixo. O motor de audio marca a entrada e a saida de process(); qualquer
-// alocacao dentro da janela e um bug de tempo real. E' o portao C virando
-// codigo, e nao revisao manual.
+// o operator new global consulta esta flag. o motor marca entrada e saida de
+// process(), e qualquer alocacao dentro da janela e' bug de tempo real.
+// e' o portao C virado codigo, nao revisao manual.
 namespace alloc_guard {
 
 [[nodiscard]] bool inAudioThread() noexcept;

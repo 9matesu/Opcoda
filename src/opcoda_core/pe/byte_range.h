@@ -5,11 +5,9 @@
 
 namespace opcoda::pe {
 
-// Regiao contigua de bytes de um ficheiro, [start, end).
-//
-// E' um par de inteiros e nao um indice de secao de proposito: uma secao PE e'
-// um intervalo roundado e alinhado, enquanto o seletor de bytes escolhe uma
-// janela arbitraria, para poder atravessar o limite entre duas secoes.
+// regiao contigua de bytes, [start, end). e' um par de inteiros e nao um indice
+// de secao: o seletor escolhe uma janela arbitraria e pode atravessar o limite
+// entre duas secoes.
 struct ByteRange {
     std::uint64_t start {0};
     std::uint64_t end {0};
@@ -20,22 +18,17 @@ struct ByteRange {
     [[nodiscard]] bool empty() const noexcept { return length() == 0; }
 };
 
-// Valida e corrige a janela contra o tamanho do ficheiro.
+// valida e corrige a janela contra o tamanho do ficheiro.
 //
-// Devolve false, sem mexer em nada, quando a janela nao pode ser usada: ficheiro
-// vazio, fim antes do inicio, ou inicio ja a fora do ficheiro. Sem esse recuo a
-// janela seria publicada na fila e so falharia depois, na thread de audio, onde
-// nao ha' quem recue.
+// false, sem mexer em nada, se o ficheiro esta' vazio, o fim vem antes do inicio
+// ou o inicio ja' saiu do ficheiro. sem este recuo a janela ia para a fila e so
+// falhava na thread de audio.
 //
-// O fim e' limitado ao tamanho do ficheiro em vez de ser rejeitado: um fim
-// grande demais e' um pedido valido de "ate ao fim", e trata-lo como erro
-// obrigaria o chamador a repetir a aritmetica que esta funcao ja' faz.
+// o fim e' limitado ao tamanho em vez de rejeitado: "ate ao fim" e' pedido valido.
 [[nodiscard]] bool clampByteRange(ByteRange& range, std::uint64_t fileSize) noexcept;
 
-// Inicio da secao mais proxima de `start`, ignorando secoes sem dados brutos.
-//
-// Secoes sem dados brutos, como .bss, sao saltadas: alinhar a uma delas daria
-// uma janela vazia, que e' o mesmo que nao ter janela.
+// inicio da secao mais proxima. secoes sem dados brutos, como .bss, sao saltadas:
+// alinhar a uma delas daria janela vazia.
 [[nodiscard]] std::uint64_t nearestSectionStart(std::uint64_t start,
                                                  const std::uint32_t* offsets,
                                                  const std::uint32_t* sizes,
@@ -47,16 +40,13 @@ struct ByteRange {
                                     const std::uint32_t* sizes,
                                     std::size_t count) noexcept;
 
-// Regiao que resulta de pedir o alinhamento a secao mais proxima.
+// regiao que sai de pedir o alinhamento a secao mais proxima.
 //
-// **O alinhamento alterna.** Quando `current` ja esta' alinhado, devolve
-// `exact`, que e' a regiao exata anterior. Sem esta inversao, pedir o
-// alinhamento seria uma operacao sem volta: o utilizador chegava a uma secao
-// e nao tinha como sair dela sem reconstruir a selecao byte a byte.
+// o alinhamento alterna: se ja' esta' alinhado, devolve `exact`. sem essa volta,
+// pedir alinhamento seria operacao sem retorno.
 //
-// A escolha mora no nucleo e nao no plugin pelo mesmo motivo do resto: e' uma
-// regra sobre o PE, e o nucleo e' a parte que tem teste. O `PluginProcessor`
-// limita-se a aplicar o resultado.
+// a escolha mora no nucleo porque e' regra sobre o PE e tem teste; o
+// PluginProcessor so aplica o resultado.
 [[nodiscard]] ByteRange sectionSnapToggle(const ByteRange& current,
                                           const ByteRange& exact,
                                           std::uint64_t fileSize,

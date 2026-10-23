@@ -28,13 +28,13 @@ std::vector<float> sineSource(float toneHz, float amplitude, float seconds) {
     return samples;
 }
 
-// Grao longo, densidade baixa: o filtro ve' um tom quase continuo e o ensaio
+// grao longo, densidade baixa: o filtro ve' um tom quase continuo e o ensaio
 // mede a resposta, nao o agendamento.
 GranularParams toneParams(float cutoffHz) {
     GranularParams params;
     params.grainSizeMs = 400.0f;
-    // Densidade alta: com 400 ms de grao o motor nunca fica em silencio entre
-    // graos, e o ensaio pode medir regime em vez de apanhar uma pausa.
+    // densidade alta: com 400 ms de grao o motor nunca fica em silencio entre
+    // graos, e o ensaio mede regime em vez de apanhar uma pausa.
     params.densityGrainsPerSec = 8.0f;
     params.position = 0.5f;
     params.spray = 0.0f;
@@ -86,7 +86,7 @@ float peak(const std::vector<float>& samples) {
     return worst;
 }
 
-// Magnitude de uma componente por correlacao directa. Nao ha FFT no nucleo e o
+// magnitude de uma componente por correlacao directa. nao ha FFT no nucleo e o
 // ensaio so precisa de dois bins.
 double magnitudeAt(const std::vector<float>& samples, double frequency) {
     double real = 0.0;
@@ -106,7 +106,7 @@ double magnitudeAt(const std::vector<float>& samples, double frequency) {
 TEST(Filter, KeytrackMovesCutoffOneOctavePerOctave) {
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
-    // Com material: sem fonte o processBlock sai antes do calculo dos
+    // com material: sem fonte o processBlock sai antes do calculo dos
     // coeficientes, e o corte efectivo nunca seria escrito.
     const auto source = sineSource(220.0f, 0.1f, 0.1f);
     engine.setSource(source.data(), source.size());
@@ -125,7 +125,7 @@ TEST(Filter, KeytrackMovesCutoffOneOctavePerOctave) {
     engine.processBlock(left.data(), right.data(), kBlock, params);
     EXPECT_NEAR(engine.f1CutoffHz(), 2000.0f, 2.0f);
 
-    // Meia profundidade sobe meia oitava por oitava: Do5 a 0,5 da' 1414 Hz.
+    // meia profundidade sobe meia oitava por oitava: Do5 a 0,5 da' 1414 Hz.
     params.noteNumber = 72;
     params.f1Keytrack = 0.5f;
     engine.processBlock(left.data(), right.data(), kBlock, params);
@@ -145,9 +145,9 @@ TEST(Filter, SlopeTwentyFourAttenuatesTwiceInDbPerOctave) {
     const float rmsTwentyFour = rms(renderedTwentyFour.samples);
 
     ASSERT_GT(rmsTwelve, 1.0e-6f);
-    // Duas oitavas acima do corte: 12 dB/oitava da' -24 dB e 24 dB/oitava da'
-    // -48 dB, ou seja um quarto em amplitude. A folga e' para o Q e a soma de
-    // graos, nao para a metade da atenuacao.
+    // duas oitavas acima do corte: 12 dB/oitava da' -24 dB e 24 dB/oitava da'
+    // -48 dB, um quarto em amplitude. a folga e' para o Q e a soma de graos, nao
+    // para metade da atenuacao.
     EXPECT_LT(rmsTwentyFour, rmsTwelve * 0.15f);
 }
 
@@ -161,7 +161,7 @@ TEST(Filter, DriveAddsHarmonicsWithoutClippingOutput) {
     const auto cleanOut = render(clean, source, 90, 70);
     const auto drivenOut = render(driven, source, 90, 70);
 
-    // A compensacao 1/g faz tanh(y) <= y: o pico nao sobe nem um pouco.
+    // a compensacao 1/g faz tanh(y) <= y: o pico nao sobe nem um pouco.
     EXPECT_LE(peak(drivenOut.samples), peak(cleanOut.samples) * 1.001f);
 
     const double cleanFundamental = magnitudeAt(cleanOut.samples, 220.0);
@@ -171,14 +171,14 @@ TEST(Filter, DriveAddsHarmonicsWithoutClippingOutput) {
 
     ASSERT_GT(cleanFundamental, 1.0e-6);
     ASSERT_GT(drivenFundamental, 1.0e-6);
-    // A terceira harmonica existe no limpo (o filtro nao e' ideal) e cresce
-    // muito com o drive: e' a definicao mensuravel de "ganhou harmonicas".
+    // a terceira harmonica existe no limpo (o filtro nao e' ideal) e cresce muito
+    // com o drive: e' a definicao mensuravel de "ganhou harmonicas".
     EXPECT_GT(drivenThird / drivenFundamental, 5.0 * (cleanThird / cleanFundamental));
 }
 
 TEST(Envelope, CurveMinusOneIsExponential) {
     // 0,25^(1/8) = 0,8409 e 0,75^(1/8) = 0,9647: sobe depressa e aproxima
-    // devagar. Contra 0,25 da rampa nao e' uma variacao de alguns por cento.
+    // devagar. contra 0,25 da rampa nao e' variacao de alguns por cento.
     EXPECT_NEAR(curveShape(0.25f, -1.0f), 0.8408964f, 1.0e-5f);
     EXPECT_NEAR(curveShape(0.75f, -1.0f), 0.9646786f, 1.0e-5f);
     EXPECT_GT(curveShape(0.25f, -1.0f), 0.25f + 0.1f);
@@ -192,8 +192,8 @@ TEST(Envelope, CurvePlusOneIsLogarithmic) {
 }
 
 TEST(Envelope, CurvesReachTheEngine) {
-    // A curva nao pode viver so na funcao pura: com ataque de 10 ms e um bloco
-    // de 48 amostras a 48 kHz, tres blocos sao 30 % do estagio.
+    // a curva nao pode viver so na funcao pura: com ataque de 10 ms e um bloco de
+    // 48 amostras a 48 kHz, tres blocos sao 30 % do estagio.
     const auto levelAfterThreeBlocks = [](float curve) {
         GranularEngine engine;
         engine.prepare(kSampleRate, 48);

@@ -4,7 +4,7 @@
 
 namespace opcoda::dsp {
 
-// Escalas suportadas, na ordem em que aparecem no choice da UI (F018).
+// escalas na ordem do choice da UI.
 enum class ScaleType : std::uint8_t {
     kChromatic = 0,
     kMajor,
@@ -22,7 +22,7 @@ enum class ScaleType : std::uint8_t {
 
 inline constexpr int kScaleCount = 12;
 
-// Mascara de 12 bits, bit 0 = tonica. Chromatic devolve todos os graus.
+// mascara de 12 bits, bit 0 = tonica. chromatic devolve todos os graus.
 [[nodiscard]] constexpr std::uint16_t scaleMask(ScaleType scale) noexcept {
     switch (scale) {
         case ScaleType::kMajor: return 0x0AB5;           // 0 2 4 5 7 9 11
@@ -46,10 +46,9 @@ inline constexpr int kScaleCount = 12;
     return (remainder < 0) ? (remainder + 12) : remainder;
 }
 
-// Aproxima a nota ao grau mais proximo da escala. Empate desce: a cada
-// distancia testa-se primeiro o grau abaixo, e essa e' a decisao registada no
-// teste. Um indice de escala invalido cai em Chromatic, como os outros choices
-// do motor: estado corrompido tem de soar, nao calar.
+// aproxima a nota ao grau mais proximo. empate desce: a cada distancia testa-se
+// primeiro o grau abaixo. escala invalida cai em chromatic, como os outros
+// choices: estado corrompido tem de soar, nao calar.
 [[nodiscard]] constexpr int quantizeToScale(int note, ScaleType scale, int root) noexcept {
     const std::uint16_t mask = scaleMask(scale);
     if (mask == 0x0FFF) {
@@ -72,7 +71,7 @@ inline constexpr int kScaleCount = 12;
     return note;
 }
 
-// Semitons relativos a Do4 (MIDI 60). Em Chromatic e' a diferenca exata.
+// semitons relativos a Do4 (MIDI 60). em chromatic e' a diferenca exata.
 [[nodiscard]] constexpr double semitonesForNote(int note, ScaleType scale, int root) noexcept {
     return static_cast<double>(quantizeToScale(note, scale, root) - 60);
 }

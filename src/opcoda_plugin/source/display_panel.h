@@ -6,12 +6,8 @@
 
 namespace opcoda {
 
-// Area escura do device. E' onde mora toda a energia de brilho, porque e' a unica
-// regiao com contraste suficiente para glow: sobre o chassis claro, um halo
-// laranja some.
-//
-// Nesta etapa pinta fundo, grade e a moldura. As abas de secao e a curva de
-// entropia entram na etapa seguinte.
+// area escura do device: a regiao de maior contraste, onde o brilho se le.
+// pinta fundo, grade e moldura.
 class DisplayPanel : public juce::Component {
 public:
     DisplayPanel() {
@@ -25,8 +21,7 @@ public:
         g.setColour(palette::display);
         g.fillRect(bounds);
 
-        // Grade de 24 px do mock. A linha vertical e' a mais presente, para
-        // marcar o tempo sem competir com o conteudo.
+        // grade de 24 px, reconstruida so quando o tamanho muda.
         if (cachedWidth_ != bounds.getWidth() || cachedHeight_ != bounds.getHeight()) {
             rebuildGrid(bounds.getWidth(), bounds.getHeight());
         }
@@ -34,18 +29,16 @@ public:
         g.setColour(palette::displayGrid);
         g.strokePath(gridPath_, juce::PathStrokeType {1.0f});
 
-        // Linha do zero, no meio da altura e mais forte que a grade.
-        // drawHorizontalLine toma int, e bounds e' float.
+        // linha do zero, mais forte que a grade. drawHorizontalLine toma int e
+        // bounds e' float.
         g.setColour(juce::Colours::white.withAlpha(0.10f));
         g.drawHorizontalLine(juce::roundToInt(bounds.getCentreY()), 0.0f, bounds.getWidth());
 
-        // Brilho interno da moldura: duas linhas brancas cada vez mais fracas
-        // para dentro. E' o que afunda o ecra em relacao ao chassi — luz que vem
-        // de dentro do device, nao de cima dele.
+        // brilho interno da moldura: duas linhas brancas cada vez mais fracas para
+        // dentro, que afundam o ecra no chassi.
         //
-        // Branco e sem acento de proposito: qualquer laranja aqui teria de passar
-        // o 1.4.11, e brilho decorativo nao precisa de cor para se ler como
-        // profundidade.
+        // branco de proposito: brilho decorativo nao precisa de cor para se ler
+        // como profundidade, e qualquer laranja aqui teria de passar o 1.4.11.
         g.setColour(juce::Colours::white.withAlpha(0.07f));
         g.drawRect(bounds.reduced(1.0f), 1.0f);
         g.setColour(juce::Colours::white.withAlpha(0.03f));

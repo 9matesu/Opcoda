@@ -16,25 +16,15 @@
 
 namespace opcoda {
 
-// A fila carrega ponteiro cru, nunca shared_ptr. Sao duas razoes que apontam
-// para a mesma escolha: SpscRing exige tipo trivial para poder copiar o slot
-// sem contagem de referencia, e decrementar um contador na thread de audio
-// pode rodar o operator delete ali dentro.
-//
-// A memoria e' da thread de interface, que a mantem viva em owned_ e so a
-// libera depois que a thread de audio devolveu o ponteiro pela fila de
-// retorno.
+// a fila carrega ponteiro cru, nunca shared_ptr: SpscRing exige tipo trivial
+// no slot, e soltar a ultima referencia na thread de audio pode rodar
+// operator delete ali dentro. A memoria e' da interface, em owned_, e so' sai
+// depois de o audio devolver o ponteiro pela fila de retorno.
 using SampleBuffer = std::shared_ptr<const std::vector<float>>;
-// O que viaja pela fila: as amostras E a curva de entropia ja reduzida.
-//
-// **A curva viaja porque nao pode ser calculada na thread de audio.** O motor
-// modulava a dispersao dos graos pela entropia local, e media-a dentro de
-// processBlock: O(regiao) por troca de material, sem alocar nada — o histograma e'
-// de pilha — e portanto invisivel para o guard de alocacao. Com o transporte,
-// arrastar a regiao republica o material a cada evento de rato, e cada publicacao
-// virava uma passagem completa na thread de audio.
-//
-// A struct tem de continuar trivial para a SpscRing: dois ponteiros, nada mais.
+// o que viaja pela fila: amostras e a curva de entropia ja' reduzida.
+// a curva vem pronta, medida na interface; dentro do callback custava uma
+// passagem pela regiao a cada publicacao.
+// struct trivial: dois ponteiros, nada mais.
 struct PublishedMaterial {
     const std::vector<float>* samples {nullptr};
     const float* entropyCurve {nullptr};
@@ -42,8 +32,8 @@ struct PublishedMaterial {
 
 using SamplePtr = const std::vector<float>*;
 
-// AudioProcessor com editor minimo: a forma que carrega um binario e produz
-// audio. O visual completo entra na etapa F008.
+// AudioProcessor com editor minimo: carrega um binario e produz audio.
+// o visual completo entra na etapa F008.
 class PluginProcessor : public juce::AudioProcessor {
 public:
     PluginProcessor();
@@ -57,21 +47,16 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    // Aceita MIDI porque e' um instrumento: sem isso o host nao entrega
-    // eventos. Nao produz MIDI e nao e' efeito de MIDI, entao as duas funcoes
-    // abaixo continuam falsas.
+    // aceita MIDI porque e' instrumento: sem isso o host nao entrega eventos.
+    // nao produz MIDI e nao e' efeito de MIDI, por isso as duas abaixo sao falsas.
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    // A cauda e' o maior grao, porque e' o tempo que um grao que ja nasceu ainda
-    // tem para acabar depois de o gate fechar.
-    //
-    // **Devolver 0 era verdade antes do transporte e passou a ser mentira.** Sem
-    // transporte so havia notas, e uma nota acabava com o gate. Com o botao, o gate
-    // fecha no STOP e ha ate' 100 ms de graos em voo — e o host, avisado de que nao
-    // ha cauda, corta-os. Carregar STOP sem uma tecla premida passava a dar um
-    // corte duro a meio de um grao, e a rampa de 5 ms do gate protecte precisamente
-    // o sitio que o corte apagava.
+    // cauda = maior grao: e' o tempo que um grao ja' nascido ainda tem para
+    // acabar depois de o gate fechar.
+    // devolver 0 valia sem transporte, quando a nota acabava com o gate. Com o
+    // botao, o STOP fecha o gate e deixa ate' 100 ms de graos em voo; sem cauda
+    // declarada o host corta-os a meio.
     double getTailLengthSeconds() const override {
         return static_cast<double>(dsp::GranularEngine::kMaxGrainMs) / 1000.0;
     }
@@ -82,53 +67,43 @@ public:
     const juce::String getProgramName(int) override { return "Default"; }
     void changeProgramName(int, const juce::String&) override {}
 
-// Estado: os 25 parametros, o ficheiro carregado e a regiao.
-//
-// copyState e replaceState da APVTS tratam dos parametros, incluindo os que o
-// host exponentiale ja' tinha empurrado para dentro com setValueNotifyingHost.
-// Sem isso, reabrir um projeto no Ableton trazia os knobs de volta no valor
-// default e a automatizacao do usuario sumia.
-//
-// A parte do binario e' uma arvore Value na APVTS, e nao um campo solto, pelo
-// mesmo motivo: o host pede o estado quando o projeto e' aberto, e o caminho
-// que ele percorre e' o mesmo dos parametros.
-//
-// O .opcoda e' este mesmo XML em ficheiro: stateXml/loadStateXml sao a via
-// unica, usada pelo host E pelo Save/Load de preset. Duas serializacoes dariam
-// dois formatos que divergem no primeiro parametro novo.
+// estado: parametros, ficheiro carregado e regiao.
+// copyState e replaceState da APVTS tratam dos parametros; sem eles o projeto
+// reabre nos defaults e a automatizacao do host some. O binario vai na mesma
+// arvore Value, e o .opcoda e' esse XML em ficheiro: stateXml/loadStateXml,
+// um formato so'.
 void getStateInformation(juce::MemoryBlock& destData) override;
 void setStateInformation(const void* data, int sizeInBytes) override;
 
-// Presets de fabrica (F016): 6 pontos de partida em factory_presets.h. So na
-// thread de interface: 25 setValueNotifyingHost com undo do host.
+// presets de fabrica (F016): os pontos de partida de factory_presets.h. So' na
+// thread de interface, com undo do host a cada setValueNotifyingHost.
 void applyFactoryPreset(int index);
 
-// XML do estado completo, ou nullptr se a arvore nao serializar. Quem guarda
-// (host ou .opcoda) decide o contentor; o conteudo e' um so.
+// XML do estado completo, nullptr se a arvore nao serializar. Quem guarda
+// decide o contentor; o conteudo e' um so'.
 [[nodiscard]] std::unique_ptr<juce::XmlElement> stateXml();
-// Aplica um XML como o do stateXml. Devolve false sem tocar em nada se nao for
-// um estado Opcoda — sessao ou .opcoda de outro plugin nao calam este.
+// aplica um XML como o do stateXml. false sem tocar em nada se nao for estado
+// opcoda: sessao de outro plugin nao cala este.
 bool loadStateXml(const juce::XmlElement& xml);
 bool savePresetToFile(const juce::File& file);
 bool loadPresetFromFile(const juce::File& file);
 
-    // Chamado na thread de interface. Le o arquivo, converte e publica na fila.
-    // Devolve false e preenche lastError em caso de recusa.
+    // thread de interface. Le o ficheiro, converte e publica na fila; false
+    // preenche lastError.
     bool ingest(const juce::String& path);
 
     [[nodiscard]] juce::String lastError() const noexcept { return lastError_; }
     [[nodiscard]] juce::String sourceName() const noexcept { return sourceName_; }
 
-    // Metadados do material carregado para a faixa de arquivo do editor. Tudo
-    // e' publicado no ingest e lido na thread de interface, entao nenhum campo
-    // precisa de atomico: as duas pontas sao a mesma thread.
+    // metadados do material carregado, para a faixa de arquivo do editor. Escrito
+    // no ingest e lido na interface: mesma thread, nenhum campo precisa de atomico.
     struct SourceInfo {
         juce::String name;
-        juce::String formatTag;  // "[64-bit PE]", como no mock
+        juce::String formatTag;  // "[64-bit PE]", igual ao mock
         std::int64_t sizeBytes {0};
 
-        // Uma linha por secao, com a entropia em bits por byte. Publicado para
-        // o display, que precisa desenhar as abas proporcionais ao tamanho.
+        // uma linha por secao, com entropia em bits por byte. O display desenha as abas
+        // proporcionais ao tamanho.
         struct SectionInfo {
             juce::String name;
             std::uint32_t rawOffset {0};
@@ -139,55 +114,42 @@ bool loadPresetFromFile(const juce::File& file);
 std::vector<SectionInfo> sections;
     };
 
-// Seletor de bytes: escolhe qual regiao do binario alimenta o motor.
-    //
-    // A janela e' uma regiao contigua [start, end) e nao um indice de secao.
-    // A struct e' a do nucleo, em opcoda_core/pe/byte_range.h, porque a regra de
-    // validacao tem teste la e nao aqui.
+// -- seletor de bytes --
+// escolhe que regiao do binario alimenta o motor. Janela contigua [start, end),
+// nao indice de secao. A struct e' do nucleo, em pe/byte_range.h: a regra de
+// validacao tem teste la'.
     using ByteRange = pe::ByteRange;
 
-    // Regiao corrente. Comeca na primeira secao com dados e e' movida pelo
-    // seletor.
+    // regiao corrente. Comeca na primeira secao com dados e o seletor move-a.
     [[nodiscard]] const ByteRange& byteRange() const noexcept { return byteRange_; }
 
-    // Move o seletor. Devolve false e nao mexe em nada se o intervalo nao for
-    // valido: vazio, invertido, ou a sair do ficheiro.
-    //
-    // A restricao e' do nucleo, nao da interface: e' o motor que recusa ler fora
-    // do buffer, e valida-lo aqui evita publicar na fila um buffer invalido que
-    // so falharia depois, na thread de audio.
+    // move o seletor. false sem mexer em nada se o intervalo for vazio, invertido
+    // ou sair do ficheiro.
+    // validar aqui evita publicar na fila um buffer que so' falharia no callback.
     bool setByteRange(std::uint64_t start, std::uint64_t end, bool rememberExactRange = true);
 
-// Alterna entre a regiao exacta e a secao PE mais proxima.
-//
-// E' o que o duplo clique e a tecla Enter fazem no seletor. **Alterna** em vez
-// de alinhar sempre: sem a volta, pedir o alinhamento seria uma operacao sem
-// saida, e quem entrasse numa secao nao saberia como voltar ao byte.
-//
-// A decisao vive em pe::sectionSnapToggle, no nucleo, porque a regra tem teste
-// la. Este metodo junta as secoes do PE e publica o resultado.
+// alterna entre a regiao exacta e a secao PE mais proxima. E' o duplo clique e
+// o Enter no seletor.
+// alterna em vez de alinhar sempre: sem a volta, quem entrasse numa secao nao
+// tinha como voltar ao byte.
+// a decisao e' pe::sectionSnapToggle, no nucleo, que tem teste. Aqui so' se
+// juntam as secoes e se publica.
 bool snapByteRangeToSection();
 
-// true quando a regiao atual esta' alinhada numa secao com dados brutos.
+// true quando a regiao esta' alinhada numa secao com dados brutos.
 [[nodiscard]] bool byteRangeIsSectionAligned() const noexcept;
 
-    // Telemetria publicada pelo callback e lida pelo editor a 20 Hz.
-    //
-    // Sao atomicos soltos em vez de uma struct protegida por lock: sao cinco
-    // valores de leitura, e o custo de um CriticalSection por bloco seria o
-    // oposto do que este projeto persegue. Nao ha snapshot consistente entre os
-    // campos, e para uma leitura de pico e contagem de vozes isso e' irrelevante
-    // e vale a pena dizer explicitamente em vez de fingir que e' atómico.
+    // telemetria do callback, lida pelo editor a 20 Hz. Sao atomicos soltos e nao
+    // uma struct com lock: nao ha snapshot consistente entre campos, o que para
+    // pico e contagem de vozes nao pesa.
     struct Telemetry {
         std::atomic<float> peakDb {-1.0f};
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};
 
-        // Transporte. Sao tres campos e nao um, porque o display precisa de duas
-        // coisas diferentes: *onde* esta a cabeca e *quanto tempo* dura a volta.
-        // publishedPosition vem da thread de audio a cada bloco, e as outras duas
-        // sao estado da interface lido de lado.
+        // transporte em tres campos: onde esta' a cabeca (do callback, por bloco) e
+        // quanto tempo dura a volta (da interface).
         std::atomic<float> playheadFraction {0.0f};
         std::atomic<double> playDurationSeconds {0.0};
         std::atomic<bool> playing {false};
@@ -195,29 +157,21 @@ bool snapByteRangeToSection();
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
 
-    // Onde esta' cada grao. A thread de audio publica uma vez por bloco renderizado;
-    // o editor le isto a 60 Hz para desenhar os graos sobre a forma de onda.
-    //
-    // **Isto e' leitura de lado. O que nao se pode e' chamar processBlock() a
-    // partir da thread de interface**, porque esse seria o caminho que escreve
-    // no motor. O read() em si so escreve no array de quem chama, e nao toca em
-    // nada do motor.
+    // onde esta' cada grao: o callback publica uma vez por bloco, o editor le a
+    // 60 Hz e desenha sobre a forma de onda.
+    // nota: ler aqui e' seguro; chamar processBlock da interface nao, porque esse
+    // e' o caminho que escreve no motor.
     [[nodiscard]] const dsp::GrainTelemetry& grainTelemetry() const noexcept {
         return engine_.telemetry();
     }
 
-    // Transporte de audicao: percorre a regiao sem nota MIDI, para se ouvir o
-    // material sem teclado. E' o que torna a forma de onda navegavel audivel, e
-    // nao so visivel.
-    //
-    // Os tres metodos sao a interface publica do transporte, e sao chamados da
-    // thread de interface. A thread de audio nunca os chama: ela so' chama
-    // advance(), e isso acontece dentro de processBlock.
+    // transporte de audicao: percorre a regiao sem nota MIDI, para ouvir o material
+    // sem teclado. Os metodos abaixo sao da interface, que nunca chama advance();
+    // isso acontece dentro de processBlock.
     [[nodiscard]] bool isTransportPlaying() const noexcept { return transport_.isPlaying(); }
 
-    // Verdadeiro quando a regiao actual produz som. Com menos de tres bytes nao ha
-    // posicao que o motor leia, e o botao de reproducao tem de ficar desativado em
-    // vez de aceitar o toque e produzir um drone de uma amostra.
+    // verdadeiro quando a regiao produz som. Com menos de tres bytes nao ha posicao
+    // que o motor leia, e o botao fica desativado.
     [[nodiscard]] bool hasPlayableRegion() const noexcept { return transport_.hasRegion(); }
 
     void startTransport() noexcept { transport_.play(); }
@@ -230,16 +184,14 @@ bool snapByteRangeToSection();
         }
     }
 
-    // Teclado virtual e teclas do computador. A thread de interface empurra o
-    // evento e o callback consome na fila sem trava: a nota entra pela mesma
-    // NoteTracker que o MIDI do host, sem passar pelo MidiBuffer (que o host
-    // manda, nao a interface) e sem alocar no caminho de audio.
+    // teclado virtual e teclas do computador. A interface empurra o evento e o
+    // callback consome na fila: entra pelo mesmo NoteTracker que o MIDI do host,
+    // sem passar pelo MidiBuffer e sem alocar no audio.
     void pushKeyboardNote(int noteNumber, float velocity, bool on) noexcept;
 
-    // Ancora de busca do transporte. O valor vem do parametro POSITION, e so
-    // quando o utilizador o move: se o editor escrevesse isto a cada quadro, o
-    // transporte voltava ao ponto de ancoragem sessenta vezes por segundo e a
-    // cabeca nunca passava dele.
+    // ancora de busca do transporte, vinda do parametro POSITION e so' quando o
+    // utilizador o move. Escrita a cada quadro pelo editor, a cabeca nunca saia do
+    // ponto de ancoragem.
     void seekTransportTo(float fraction) noexcept { transport_.seekToFraction(fraction); }
 
     [[nodiscard]] float transportPosition() const noexcept {
@@ -250,174 +202,137 @@ bool snapByteRangeToSection();
         return transport_.durationSeconds();
     }
 
-    // Verdadeiro quando o host esta' a correr o transporte.
-    //
-    // **Sem isto o botao de reproducao mente.** O motor so' existe enquanto o host
-    // chama processBlock, e um host parado nao chama. Um botao que aceita o toque
-    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque, e
-    // por isso a interface desativa-o e diz porquê.
-    //
-    // getPlayHead() pode ser nulo: e' o que acontece num teste sem host, e o
-    //nullptr e' resposta valida e nao um erro.
-    // **Verdadeiro apenas quando sabemos que o host esta' parado.** E o inverso de
-    // "o host esta' a tocar", e a distincao e' o ponto.
-    //
-    // Sem isto o botao de reproducao mente. O motor so' existe enquanto o host
-    // chama processBlock, e um host parado nao chama: um botao que aceita o toque
-    // nesse estado e nao produz nada e' pior do que um botao que recusa o toque.
-    //
-    // A distincao esta' no que acontece quando o host nao diz nada. getPosition()
-    // devolve nullopt num host que nao fornece informacao de tempo, e nesse caso a
-    // resposta e' `false` — nao sabemos que parou. Tratar o desconhecido como
-    // parado desabilitaria o botao para sempre em qualquer host que nao de tempo,
-    // e o Standalone sem dispositivo de audio e' um deles.
+    // verdadeiro so' quando sabemos que o host esta' parado. E' o inverso de "o
+    // host esta' a tocar", e a distincao e' o ponto.
+    // o motor so' existe enquanto o host chama processBlock, e host parado nao
+    // chama: aceitar o toque e nao produzir nada e' pior do que recusar, e por isso
+    // a interface desativa o botao.
+    // getPosition() devolve nullopt em host sem informacao de tempo, e ai' a
+    // resposta e' false: desconhecido nao e' parado. Tratar como parado deixava o
+    // standalone sem dispositivo de audio com o botao travado para sempre.
     [[nodiscard]] bool hostTransportIsKnownToBeStopped() const noexcept {
         const auto* head = getPlayHead();
         if (head == nullptr) {
-            // Sem host nenhum nao ha quem mande. Num teste, isto e' o que evita
-            // que o botao fique travado.
+            // sem host nao ha quem mande: false evita o botao travado num teste.
             return false;
         }
 
-        // A API actual do JUCE 8 e' getPosition(), que devolve um Optional.
-        // CurrentPositionInfo com isPlaying foi depreciada, e por isso nao e'
-        // usada: um aviso de depreciacao num /WX parte o build, e vale a pena que
-        // o portao aponte o uso de API velha.
+        // JUCE 8 usa getPosition(), que devolve Optional. CurrentPositionInfo com
+        // isPlaying esta' depreciada; aviso depreciado parte o build com /WX.
         const auto position = head->getPosition();
         if (!position.hasValue()) {
-            return false; // host sem informacao de tempo: desconhecido, nao parado
+            return false; // host sem tempo: desconhecido, nao parado
         }
         return !position->getIsPlaying();
     }
 
     [[nodiscard]] const SourceInfo& sourceInfo() const noexcept { return sourceInfo_; }
 
-    // Bytes crus do ficheiro carregado, para a grelha mostrar os bytes.
-    //
-    // E' a mesma razao que fez o ingest guardar o ficheiro em vez de o ler do
-    // disco outra vez: a alternativa e' I/O na thread de interface a cada
-    // redesenho. O vector nao muda de endereco quando o ingest atribui outro
-    // conteudo, por isso a grelha guarda um ponteiro para ele e nao uma copia.
-    //
-    // Pertence a thread de interface, que e' a unica que escreve. A thread de
-    // audio nunca a le: so ve o buffer ja convertido, pela fila.
+    // bytes crus do ficheiro, para a grelha mostrar os bytes. Guardados no ingest
+    // para nao haver I/O de disco a cada redesenho.
+    // o vector nao muda de endereco quando o ingest troca o conteudo, por isso a
+    // grelha guarda o ponteiro e nao uma copia.
+    // so' a interface escreve e le. O audio nunca ve' isto: so' o buffer
+    // convertido, pela fila.
     [[nodiscard]] const std::vector<std::uint8_t>& sourceBytes() const noexcept {
         return sourceBytes_;
     }
 
-    // Aplica na thread de interface os ultimos CCs recebidos.
-    //
-    // O caminho alternativo, escrever no parametro direto da thread de audio,
-    // foi descartado de proposito. setValueNotifyingHost notifica os
-    // listeners, e o SliderParameterAttachment e' um deles: seria acesso
-    // cruzado ao GUI a partir do callback, e a GUI a partir do callback e'
-    // exatamente a classe de defeito que o guard de alocacao nao apanha.
-    //
-    // O custo e' a latencia do timer do editor, cerca de 50 ms. Em troca, o
-    // parametro continua a ser a fonte unica da verdade: o host e' notificado,
-    // o knob segue, e o estado do projeto fica certo sem caminho paralelo.
+    // aplica na interface os ultimos CCs recebidos.
+    // escrever no parametro da thread de audio foi descartado: setValueNotifyingHost
+    // notifica listeners, e o SliderParameterAttachment e' um deles — acesso
+    // cruzado ao GUI a partir do callback.
+    // custo: a latencia do timer do editor, uns 50 ms. Em troca o parametro segue a
+    // fonte unica da verdade, com o host notificado e o knob atras.
     void applyPendingControllerChanges();
 
-    // Drena os eventos do teclado virtual. Roda no callback, antes de
-    // currentParams(), para a nota deste bloco ja entrar na altura.
+    // drena o teclado virtual no callback, antes de currentParams(), para a nota
+    // deste bloco ja' entrar na altura.
     void drainKeyboardNotes() noexcept;
 
-    // --- F020: matriz de modulacao ---
-    //
-    // 8 rotas vivem no estado (no MODMATRIX, ao lado dos PARAM) e nao na tabela
-    // de parametros: nao sao automatizaveis e viajam no preset. A thread de
-    // interface escreve, a de audio le uma copia por bloco.
-    //
-    // A publicacao sao 24 inteiros atomicos mais uma geracao. Um bloco que
-    // apanhe a troca ve' a matriz antiga inteira, e nao metade de cada, porque a
-    // geracao so' sobe depois das palavras.
+    // -- F020: matriz de modulacao --
+    // as 8 rotas vivem no estado, no MODMATRIX ao lado dos PARAM: nao sao
+    // automatizaveis e viajam no preset. A interface escreve, o audio le uma copia
+    // por bloco.
+    // publicacao: 24 inteiros atomicos mais a geracao, que so' sobe depois das
+    // palavras. Um bloco que apanhe a troca ve' a matriz antiga inteira.
     [[nodiscard]] dsp::ModMatrix modMatrix() const;
     bool setModRoute(int index, dsp::ModRoute route);
     void publishModMatrix();
 
-    // Le BPM e ppq do host uma vez por bloco e guarda-os em atomicos. O nucleo
-    // nao conhece o host; estes dois doubles sao tudo o que atravessa. Sem
-    // transporte (Standalone) o BPM fica em 120 e o ppq em -1, que o motor le
-    // como "sem ppq".
+    // le BPM e ppq do host uma vez por bloco e guarda em atomicos. O nucleo nao
+    // conhece o host; estes dois doubles sao tudo o que atravessa.
+    // sem transporte (Standalone) fica 120 e -1, que o motor le como "sem ppq".
     void updateHostTransport() noexcept;
-    // live_ e' publicado pela thread de audio e consultado pela de interface.
-    // Sem o atomico a leitura do editor seria uma corrida com a troca de
-    // material, o que o compilador nao pode flagar porque os ponteiros sao do
-    // mesmo tipo.
+    // live_ e' publicado pelo audio e lido pela interface. Sem o atomico a leitura
+    // seria uma corrida com a troca de material, que o compilador nao flagra: os
+    // ponteiros sao do mesmo tipo.
     [[nodiscard]] bool hasSource() const noexcept {
         return live_.load(std::memory_order_acquire) != nullptr;
     }
 
-    // Os seis parametros do MVP (Tabela 8 do artigo), expostos ao host para
-    // automacao. O estado e' lido uma vez por bloco e copiado para a estrutura
-    // do motor, que nao guarda referencia: e o que mantem o caminho de audio
-    // livre de acesso concorrente a estado do host.
+    // layout dos parametros expostos ao host para automacao. O estado e' lido uma
+    // vez por bloco e copiado para o motor, que nao guarda referencia: e' o que
+    // deixa o caminho de audio fora do estado do host.
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     [[nodiscard]] dsp::GranularParams currentParams() const noexcept;
 
     [[nodiscard]] juce::AudioProcessorValueTreeState& parameters() noexcept { return parameters_; }
     [[nodiscard]] const juce::AudioProcessorValueTreeState& parameters() const noexcept { return parameters_; }
 
-    // Chamado na thread de interface, periodicamente: so agora o ponteiro
-    // devolvido pela thread de audio pode ser liberado com seguranca.
+    // thread de interface, periodico: so' agora o ponteiro devolvido pelo audio
+    // pode ser liberado.
     void releaseReturnedBuffers();
 
 private:
-    // Ponto unico de entrada da amostra na thread de audio. Troca o material
-    // ativo pelo recem-chegado e devolve o antigo para a interface, que e' a
-    // unica que pode liberar a memoria.
+    // ponto unico de entrada da amostra no audio. Troca o material ativo pelo
+    // recem-chegado e devolve o antigo a' interface, a unica que libera memoria.
     void drainIncomingQueue() noexcept;
 
-    // Garante o no MODMATRIX no estado. Chamado na construcao e depois de
-    // replaceState: um projeto gravado antes da F020 nao traz o no, e o estado
-    // tem de continuar a escrever-se completo.
+    // garante o no MODMATRIX no estado: construcao e depois de cada
+    // replaceState, porque projeto gravado antes da F020 nao traz o no.
     void ensureModMatrixNode();
 
-    // Le a matriz publicada para o snapshot do bloco corrente. Roda na thread
-    // de audio, nao aloca e so' copia quando a geracao muda.
+    // le a matriz publicada para o snapshot deste bloco. Roda no audio, nao aloca
+    // e so' copia quando a geracao muda.
     void refreshModMatrix() noexcept;
 
-    // Le o MidiBuffer do bloco e atualiza a contagem de notas. Roda na thread
-    // de audio e nao aloca nem bloqueia: um MidiBuffer e' so uma lista de
-    // mensagens com contadores ja resolvidos.
+    // le o MidiBuffer do bloco e atualiza o NoteTracker. Roda no audio, sem alocar
+    // nem bloquear: o MidiBuffer ja' traz os contadores resolvidos.
 void readNotes(const juce::MidiBuffer& midi) noexcept;
 
     void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
 
-    // Bytes crus do ficheiro carregado, para o seletor poder converter qualquer
-    // janela sem voltar a ler o disco. O accessor publico e' o sourceBytes()
-    // acima; este e' o vector.
+    // copia crua do ficheiro, para o seletor converter qualquer janela sem voltar
+    // ao disco. O accessor publico e' o sourceBytes(); este e' o vector.
     std::vector<std::uint8_t> sourceBytes_;
 
-    // Converte a janela corrente e publica na fila. Devolve false sem mexer em
-    // nada se a janela nao produz audio.
+    // converte a janela corrente e publica na fila. false sem mexer em nada se a
+    // janela nao produz audio.
     bool publishByteRange();
 
     opcoda::dsp::GranularEngine engine_;
 
-    // Duas filas em sentidos opostos, com ponteiro cru. A thread de interface
-    // publica o material novo e recolhe o ponteiro que a thread de audio ja
-    // terminou de usar.
+    // duas filas em sentidos opostos, ponteiro cru: a interface publica material
+    // novo e recolhe o que o audio ja' terminou de usar.
     rt::SpscRing<PublishedMaterial, 4> incoming_;
     rt::SpscRing<PublishedMaterial, 4> returned_;
 
-    // Eventos do teclado virtual. Capacidade 64: um bloco de 2048 amostras a
-    // 48 kHz dura 43 ms, e nesse tempo nao se carrega em 64 teclas. A fila
-    // cheia descarta, como manda o desenho das filas sem trava.
+    // teclado virtual. Capacidade 64: um bloco de 2048 a 48 kHz dura 43 ms, e nesse
+    // tempo nao se carrega em 64 teclas. Cheia, descarta — como as filas sem trava.
     rt::SpscRing<rt::NoteTracker::Event, 64> keyboardNotes_;
 
-    // Tempo do host, escrito uma vez por bloco pelo callback e lido por
-    // currentParams() no mesmo bloco. Relaxado chega: os dois valores vem do
-    // mesmo bloco e nao ordenam nada entre si.
+    // tempo do host: escrito por bloco pelo callback e lido por currentParams() no
+    // mesmo bloco. Relaxado chega, nao ordena nada entre os dois.
     std::atomic<double> hostBpm_ {120.0};
     std::atomic<double> hostPpq_ {-1.0};
 
-    // Donos de toda a memoria de amostra. So a thread de interface escreve
-    // aqui, e so remove um buffer depois que a thread de audio o devolveu.
+    // donos de toda a memoria de amostra. So' a interface escreve, e so' remove
+    // depois de o audio devolver o buffer.
     std::vector<SampleBuffer> owned_;
 
-    // A curva de entropiareduzida que acompanha cada buffer. Vive ao lado de
-    // owned_ com o mesmo indice, e viaja com o ponteiro na fila.
+    // curva de entropia de cada buffer, no mesmo indice de owned_, e viaja com o
+    // ponteiro na fila.
     std::vector<std::vector<float>> entropyCurves_;
 
     std::atomic<SamplePtr> live_ {nullptr};
@@ -426,43 +341,39 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     SourceInfo sourceInfo_;
     ByteRange byteRange_;
 
-    // Inicio exato, sem alinhamento, da ultima regiao escolhida pelo utilizador.
-    // E' o destino do duplo clique quando a regiao esta' alinhada numa secao, e
-    // o que torna a operacao reversivel.
+    // inicio exacto, sem alinhamento, da ultima regiao escolhida. E' o destino do
+    // duplo clique com a regiao alinhada, e o que torna a operacao reversivel.
     ByteRange lastExactRange_ {};
 
-    // Caminho do binario ativo, para o estado do host. Distinto de sourceName_,
-    // que e' so o nome do ficheiro para a interface.
+    // caminho do binario ativo, para o estado do host. Distinto de sourceName_, que
+    // e' so' o nome do ficheiro para a interface.
     juce::String sourcePath_;
 
-    // Notas premidas e CCs mapeados. Vive na thread de audio porque e' estado do
-    // audio, e o host so entrega MIDI durante processBlock.
-    //
-    // A regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter testes.
-    // Aqui so se traduz MidiMessage em Event, que e' a parte fina.
+    // notas premidas e CCs mapeados. Vive no audio porque e' estado do audio e o
+    // host so' entrega MIDI durante processBlock.
+    // a regra esta' em rt::NoteTracker, no nucleo e sem JUCE, para ter teste. Aqui
+    // so' se traduz MidiMessage em Event.
     rt::NoteTracker notes_;
 
-    // Transporte de audicao. Vive ao lado da engine e nao dentro dela porque sao
-    // duas perguntas diferentes: a engine pergunta "que som produzir agora" e o
-    // transporte pergunta "de onde comecar". O motor recebe a posicao ja
-    // resolvida, e continua a nao saber que existe um transporte.
+    // transporte de audicao, ao lado da engine e nao dentro: a engine responde "que
+    // som produzir agora", o transporte "de onde comecar". O motor recebe a
+    // posicao ja' resolvida e nao sabe que existe transporte.
     rt::Transport transport_;
 
     Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;
-    static constexpr int kCcModWheel = 1;  // Roda de modulacao: fonte da matriz
-    static constexpr int kCcDensity = 74;  // Brightness: DENSITY
-    static constexpr int kCcPosition = 71; // Resonance: POSITION
+    static constexpr int kCcModWheel = 1;  // roda de modulacao, fonte da matriz
+    static constexpr int kCcDensity = 74;  // Brightness, mapeia em DENSITY
+    static constexpr int kCcPosition = 71; // Resonance, mapeia em POSITION
     static constexpr int kDensityController = 0;
     static constexpr int kPositionController = 1;
     static constexpr int kModWheelController = 2;
 
     static constexpr const char* kModMatrixNode = "MODMATRIX";
 
-    // Palavras publicadas (fonte, destino, amount) e o snapshot do bloco. O
-    // snapshot so' e' escrito pela thread de audio; as palavras so' pela de
-    // interface. Nenhum dos dois lados escreve no que o outro le.
+    // palavras publicadas (fonte, destino, amount) e o snapshot do bloco. As
+    // palavras so' pela interface, o snapshot so' pelo audio.
     std::array<std::atomic<int>, dsp::kMaxModRoutes * dsp::kModRouteWords> modMatrixWords_ {};
     std::atomic<std::uint32_t> modMatrixGeneration_ {0};
     std::uint32_t modMatrixAppliedGeneration_ {0};

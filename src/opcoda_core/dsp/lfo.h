@@ -5,8 +5,8 @@
 
 namespace opcoda::dsp {
 
-// Alvo do LFO, na ordem em que a UI vai listar. Como FilterType, a ordem e'
-// contrato com o choice: trocar a ordem mudava o som de sessoes salvas.
+// alvo do lfo, na ordem do choice da UI. como FilterType, a ordem e' contrato:
+// trocar muda o som de sessoes salvas.
 enum class LFOTarget : std::uint8_t {
     kPitch = 0,
     kDensity,
@@ -14,7 +14,7 @@ enum class LFOTarget : std::uint8_t {
     kPosition,
 };
 
-// Forma de onda, idem: a ordem e' contrato.
+// idem: a ordem e' contrato.
 enum class LFOWave : std::uint8_t {
     kSine = 0,
     kTri,
@@ -26,9 +26,8 @@ enum class LFOWave : std::uint8_t {
 [[nodiscard]] const char* lfoTargetName(LFOTarget target) noexcept;
 [[nodiscard]] const char* lfoWaveName(LFOWave wave) noexcept;
 
-// Tipos fora de faixa viram o primeiro da lista, e nao erro: chegam como
-// indice de choice da UI. Mesma regra do sanitizeFilterType, e pelo mesmo
-// motivo — um indice corrompido tem de soar, nao calar.
+// fora de faixa vira o primeiro da lista. chega como indice de choice, e indice
+// corrompido tem de soar, nao calar. mesma regra do sanitizeFilterType.
 [[nodiscard]] inline LFOTarget sanitizeLFOTarget(LFOTarget target) noexcept {
     return (target <= LFOTarget::kPosition) ? target : LFOTarget::kPitch;
 }
@@ -37,14 +36,12 @@ enum class LFOWave : std::uint8_t {
     return (wave <= LFOWave::kSampleHold) ? wave : LFOWave::kSine;
 }
 
-// Divisao musical do LFO sincronizado, na ordem do choice da UI — a ordem e'
-// contrato, como a das formas: trocar mudava o som de sessoes salvas.
+// divisao musical do lfo sincronizado, na ordem do choice. a ordem e' contrato.
 //
-// A divisao diz quantas notas daquele valor cabem numa batida, e e' isso que
-// cyclesPerBeat devolve: 1/4 = 1 ciclo por batida, 1/8 = 2, 1/16 = 4. Pontuada
-// multiplica o comprimento por 1,5 (menos ciclos por batida); tercina por 2/3
-// (mais ciclos). 1/1 tem 0,25 ciclos por batida porque um compasso 4/4 leva
-// quatro batidas.
+// a divisao diz quantas notas daquele valor cabem numa batida, e e' isso que
+// cyclesPerBeat devolve: 1/4 = 1 ciclo por batida, 1/8 = 2, 1/16 = 4. pontuada
+// multiplica o comprimento por 1,5, tercina por 2/3. 1/1 tem 0,25 porque um
+// compasso 4/4 leva quatro batidas.
 inline constexpr int kLFODivCount = 12;
 
 [[nodiscard]] inline int sanitizeLFODiv(int div) noexcept {
@@ -68,8 +65,7 @@ inline constexpr int kLFODivCount = 12;
     }
 }
 
-// Ciclos por batida. 1/8 -> 2 ciclos por batida -> 4 Hz a 120 BPM, porque a
-// 120 BPM uma batida dura 0,5 s.
+// ciclos por batida. 1/8 da 2 ciclos, que a 120 bpm sao 4 Hz.
 [[nodiscard]] inline double cyclesPerBeat(int div) noexcept {
     switch (sanitizeLFODiv(div)) {
         case 0: return 0.25;
@@ -87,7 +83,7 @@ inline constexpr int kLFODivCount = 12;
     }
 }
 
-// BPM invalido cai para 120: sem transporte o LFO tem de continuar a oscilar,
+// bpm invalido cai para 120: sem transporte o lfo tem de continuar a oscilar,
 // e nao parar nem dividir por zero.
 [[nodiscard]] inline double sanitizeBpm(double bpm) noexcept {
     return (std::isfinite(bpm) && bpm > 0.0 && bpm <= 1000.0) ? bpm : 120.0;
@@ -97,9 +93,8 @@ inline constexpr int kLFODivCount = 12;
     return cyclesPerBeat(div) * sanitizeBpm(bpm) / 60.0;
 }
 
-// Degraus: a forma e' amostrada em `steps` patamares por ciclo, pela formula
-// floor(fase * passos) / passos. 16 e' o valor "sem quantizacao", e nao um
-// degrau de 16: acima disso a diferenca para a onda continua e' inaudivel.
+// a forma e' amostrada em `steps` patamares por ciclo: floor(fase * passos) / passos.
+// 16 ja' e' "sem quantizacao", a diferenca para a onda continua e' inaudivel.
 [[nodiscard]] inline int sanitizeLFOSteps(int steps) noexcept {
     return (steps < 1) ? 1 : ((steps > 16) ? 16 : steps);
 }
@@ -112,59 +107,41 @@ inline constexpr int kLFODivCount = 12;
     return std::floor(phase * static_cast<double>(n)) / static_cast<double>(n);
 }
 
-// O LFO e' funcao pura do tempo absoluto, e nao um oscilador com estado por
-// amostra. A fase avanca uma vez por bloco (`advance`), e o valor em qualquer
-// instante dentro do bloco sai de `valueAt` com o offset em amostras — exato,
-// sem laco por amostra e sem quantizacao em fronteira de bloco.
+// lfo e' funcao pura do tempo absoluto, nao um oscilador com estado por amostra.
+// a fase avanca uma vez por bloco e o valor em qualquer instante do bloco sai de
+// valueAt com o offset em amostras.
 //
-// Por que nao avancar por amostra: o processBlock nao tem laco por amostra
-// proprio (os lacos moram em renderVoice e applyGate), e um terceiro laco so
-// para o LFO seria O(bloco) com uma soma e um wrap. A forma fechada da o mesmo
-// valor com O(1) por leitura, e leitura so ha onde ha spawn ou recalculacao
-// de coeficiente.
-//
-// Determinismo: fase em double a partir de zero, S&H por hash inteiro do
-// indice do ciclo — sem RNG com estado, sem parede de clock, sem sin() de
-// biblioteca na semente (o sin varia entre libm e quebraria a repetibilidade
-// entre compiladores; splitmix64 e' so inteiro e e' bit-identico em toda
-// parte).
+// sem wrap na fase: o indice do ciclo do S&H e' o floor dela. S&H por splitmix64
+// do indice, inteiro puro — bit-identico entre compiladores, ao contrario do sin
+// de libm.
 class LFO {
 public:
     void reset() noexcept { phase_ = 0.0; }
 
-    // Fase derivada do transporte. O motor chama isto quando o modo Sync esta'
-    // ligado; a fase passa a ser funcao do ppq, e nao do tempo acumulado.
-    // Avancar depois do set e' inofensivo: o proximo bloco volta a derivar.
+    // fase derivada do transporte, quando o modo sync esta' ligado. avancar
+    // depois do set e' inofensivo: o proximo bloco volta a derivar.
     void setPhase(double phase) noexcept { phase_ = phase; }
 
-    // Avanca a fase em rate*numSamples/sr voltas, SEM wrap. Uma vez por bloco,
-    // NO FIM do processBlock (nos dois caminhos de saida, com e sem material —
-    // o LFO e' tempo absoluto e marcha mesmo em silencio). Sem wrap de
-    // proposito: o indice do ciclo do S&H e' o floor da fase, e com wrap ele
-    // seria sempre zero. double aguenta seculos a 20 Hz; waveAt dobra a fracao
-    // so para a posicao dentro do ciclo. Com isso, phase_ e' sempre "o inicio
-    // do bloco corrente": a continuidade entre blocos (e sob mudanca de taxa)
-    // vem de graca, porque so o incremento muda, nunca a fase acumulada.
+    // avanca a fase em rate*numSamples/sr voltas, SEM wrap. uma vez por bloco, no
+    // fim do processBlock, e nos dois caminhos de saida: o lfo e' tempo absoluto e
+    // marcha mesmo em silencio. sem wrap de proposito, senao o indice do ciclo do
+    // S&H seria sempre zero. phase_ e' sempre o inicio do bloco corrente.
     void advance(float rateHz, int numSamples, double sampleRate) noexcept;
 
-    // Valor bipolar [-1, 1] no instante `offsetSamples` dentro do bloco
-    // corrente: wave(phase_ + rate*offset/sr). Chamar com o offset da voz da o
-    // valor exato onde o grao nasce, e nao o valor do inicio do bloco — a
-    // 20 Hz com bloco de 256, o inicio e o fim do bloco estao a 0,13 ciclos de
-    // distancia, e quantizar no inicio seria degrau audivel no pitch.
+    // valor bipolar no instante offsetSamples dentro do bloco corrente. passar o
+    // offset da voz da o valor onde o grao nasce, e nao o do inicio do bloco:
+    // a 20 Hz com bloco de 256, os dois estao a 0,13 ciclos de distancia.
     [[nodiscard]] float valueAt(LFOWave wave,
                                float rateHz,
                                int offsetSamples,
                                double sampleRate,
                                int steps = 16) const noexcept;
 
-    // Valor no inicio do bloco: para densidade e cutoff, que sao por bloco e
-    // nao por grao.
+    // valor no inicio do bloco: densidade e cutoff, que sao por bloco e nao por grao.
     [[nodiscard]] float blockValue(LFOWave wave, int steps = 16) const noexcept;
 
-    // So para teste e debug: fase em voltas, sem wrap. Audio-thread only como
-    // o resto do motor — ler da interface seria corrida, e o display nao tem
-    // nada que ler aqui (a telemetria e' o caminho dele).
+    // so para teste e debug: fase em voltas, sem wrap. thread de audio, como o
+    // resto do motor. o display le a telemetria.
     [[nodiscard]] double phase() const noexcept { return phase_; }
 
 private:

@@ -32,9 +32,9 @@ float hannCoefficient(std::size_t index, std::size_t length) {
     return static_cast<float>(0.5 * (1.0 - std::cos(2.0 * 3.14159265358979323846 * t)));
 }
 
-// Magnitude no bin k de uma FFT radix-2 com janela Blackman-Harris,
-// conforme o protocolo do ensaio T1. Implementacao propia porque a FFT nao
-// entra no caminho de audio e nao vale uma dependencia de runtime.
+// magnitude no bin k de uma FFT radix-2 com janela blackman-harris, no protocolo
+// do ensaio T1. implementacao propria: a FFT nao entra no caminho de audio e nao
+// vale uma dependencia de runtime.
 void blackmanHarris(std::vector<double>& window, std::size_t length) {
     window.resize(length);
     if (length <= 1) {
@@ -63,7 +63,7 @@ void magnitudeSpectrum(const std::vector<float>& signal,
         spectrum[i] = {value * std::cos(angle), value * std::sin(angle)};
     }
 
-    // Cooley-Tukey iterativo in-place
+    // cooley-tukey iterativo in-place
     for (std::size_t i = 1, j = 0; i < fftSize; ++i) {
         std::size_t bit = fftSize >> 1;
         for (; j & bit; bit >>= 1) {
@@ -97,9 +97,9 @@ void magnitudeSpectrum(const std::vector<float>& signal,
 }
 
 std::vector<float> renderRaw(const std::vector<std::uint8_t>& bytes, int numSamples) {
-    // Controle negativo do T1: a mesma conversao, sem motor granular e sem
-    // condicionamento. Precisa de 44100 amostras e o PE sintetico tem 768
-    // bytes, entao o arquivo e repetido: e o que um .exe grande faria.
+    // controle negativo do T1: a mesma conversao, sem motor granular e sem
+    // condicionamento. precisa de 44100 amostras e o PE sintetico tem 768 bytes,
+    // logo o ficheiro e' repetido: e' o que um .exe grande faria.
     std::vector<std::uint8_t> tiled;
     tiled.reserve(static_cast<std::size_t>(numSamples));
     while (tiled.size() < static_cast<std::size_t>(numSamples)) {
@@ -143,7 +143,7 @@ double dcMagnitudeDb(const std::vector<double>& magnitudes) {
 }
 
 double lowBandPeakDb(const std::vector<double>& magnitudes) {
-    // Bins abaixo de 20 Hz a 44,1 kHz com N = 65536.
+    // bins abaixo de 20 Hz a 44,1 kHz com N = 65536.
     const std::size_t limit = (20 * kT1Window) / 44100 + 1;
     const std::size_t upper = std::min(limit, magnitudes.size());
     double peak = 0.0;
@@ -156,10 +156,10 @@ double lowBandPeakDb(const std::vector<double>& magnitudes) {
 } // namespace
 
 TEST(T1DcAttenuation, BinaryWithStrongOffsetIsAttenuatedByFortyDecibels) {
-    // Criterio T1: o bin DC da saida tratada fica pelo menos 40 dB abaixo do
+    // criterio T1: o bin DC da saida tratada fica pelo menos 40 dB abaixo do
     // mesmo bin da leitura bruta.
     PeBuilder builder;
-    // Preenche .text com gradiente cujo valor medio e muito longe de zero.
+    // preenche .text com gradiente cujo valor medio fica muito longe de zero.
     builder.fillTextWithGradient(200, 20);
 
     const auto raw = renderRaw(builder.bytes, 44100);
@@ -181,7 +181,7 @@ TEST(T1DcAttenuation, BinaryWithStrongOffsetIsAttenuatedByFortyDecibels) {
 }
 
 TEST(T1DcAttenuation, SubTwentyHertzStaysBelowMinusSixtyDbfs) {
-    // Criterio T1: energia abaixo de 20 Hz menor que -60 dBFS.
+    // criterio T1: energia abaixo de 20 Hz menor que -60 dBFS.
     PeBuilder builder;
     builder.fillTextWithGradient(180, 40);
 
@@ -197,10 +197,9 @@ TEST(T1DcAttenuation, SubTwentyHertzStaysBelowMinusSixtyDbfs) {
 }
 
 TEST(T1DcAttenuation, DcBlockerRemovesPureConstantSignal) {
-    // Isolamento da cadeia: um sinal puramente constante tem de sair sem
-    // nivel medio, sem depender do agendador granular. A transiente de partida
-    // decai com R^n, entao o regime e medido depois de um periodo de
-    // acomodacao.
+    // isolamento da cadeia: um sinal constante tem de sair sem nivel medio, sem
+    // depender do agendador granular. a transiente de partida decai com R^n, logo
+    // mede-se o regime depois de acomodar.
     DcBlocker blocker;
     blocker.setSampleRate(kSampleRate);
     blocker.prepare();
@@ -224,15 +223,15 @@ TEST(T1DcAttenuation, DcBlockerRemovesPureConstantSignal) {
 }
 
 TEST(T1DcAttenuation, ToSamplesMapsByteRangeToUnitInterval) {
-    // A conversao byte -> amostra e' a fronteira entre o binario e o motor.
+    // a conversao byte -> amostra e' a fronteira entre o binario e o motor.
     const std::vector<std::uint8_t> data = {0, 127, 128, 255};
     const auto samples = toSamples(data.data(), 0, data.size());
 
     ASSERT_EQ(samples.size(), data.size());
     EXPECT_NEAR(samples[0], -1.0f, 1e-6f);
     EXPECT_NEAR(samples[3], 1.0f, 1e-6f);
-    // 127 e 128 sao os bytes mais proximos do zero, e nenhum deles e exatamente
-    // zero: e o offset que o DC-blocker existe para remover.
+    // 127 e 128 sao os bytes mais proximos do zero, e nenhum e' exactamente
+    // zero: e' o offset que o DC-blocker existe para remover.
     EXPECT_NEAR(samples[1], -0.5f / 127.5f, 1e-6f);
     EXPECT_NEAR(samples[2], 0.5f / 127.5f, 1e-6f);
 }
@@ -252,7 +251,7 @@ TEST(T1DcAttenuation, ToSamplesRejectsDegenerateInput) {
 }
 
 TEST(T1DcAttenuation, WindowEndpointEnergyIsMinimal) {
-    // A janela precisa zerar as bordas; sem isso aparece clique entre graos.
+    // a janela tem de zerar as bordas; sem isso aparece clique entre graos.
     std::vector<float> window(kT1Window);
     for (std::size_t i = 0; i < window.size(); ++i) {
         window[i] = hannCoefficient(i, window.size());

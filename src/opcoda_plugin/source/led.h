@@ -6,16 +6,12 @@
 
 namespace opcoda {
 
-// Indicador com brilho.
+// indicador com brilho: gradiente radial do centro opaco para a borda
+// transparente. nao ha BlendMode aditivo no JUCE 8 e nao faz falta -- em modo
+// normal a queda de alpha sobre o escuro le-se como luz.
 //
-// O brilho e' um gradiente radial que vai do centro opaco para a borda
-// transparente. Nao existe BlendMode aditivo no JUCE 8, e nao faz falta: em
-// BlendMode normal, a queda de alpha sobre um fundo escuro produz o mesmo
-// resultado visual de uma luz que se dissolve no fundo.
-//
-// Nenhum LED carrega informacao sozinho. Cada instanciacao vem acompanhada de
-// um Label, porque cor nao e' suficiente para quem nao distingue verde de
-// vermelho, e o criterio 1.4.1 do WCAG 2.2 pede mais que cor.
+// nenhum LED carrega informacao sozinho: cada um vem com um Label, porque cor nao
+// chega a quem nao distingue verde de vermelho (1.4.1).
 class Led : public juce::Component {
 public:
     enum class State {
@@ -41,7 +37,7 @@ public:
         const auto centre = bounds.getCentre();
         const float radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
 
-        // Soquete: circulo escuro recuado com borda de 1 px.
+        // soquete: circulo escuro recuado com borda de 1 px.
         g.setColour(palette::display);
         g.fillEllipse(bounds.reduced(1.0f));
         g.setColour(palette::alpha(palette::chassisBorder, 0.55f));
@@ -53,7 +49,7 @@ public:
 
         const auto tint = colourFor(state_);
 
-        // Halo: do centro para fora, opaco a transparente.
+        // halo: do centro para fora, opaco a transparente.
         const float haloRadius = radius * 2.4f;
         juce::ColourGradient halo(tint, centre, tint.withAlpha(0.0f),
                                   centre.translated(haloRadius, 0.0f), true);
@@ -61,7 +57,7 @@ public:
         g.fillEllipse(centre.x - haloRadius, centre.y - haloRadius,
                       haloRadius * 2.0f, haloRadius * 2.0f);
 
-        // Nucleo aceso, opaco.
+        // nucleo aceso, opaco.
         g.setColour(tint);
         g.fillEllipse(bounds.reduced(radius * 0.42f));
     }

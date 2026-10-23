@@ -8,28 +8,17 @@
 
 namespace opcoda {
 
-// Tipografia do Opcoda: Inter Display para tudo, texto e numeros.
+// tipografia do Opcoda: Inter Display para texto e numeros, entre 9 e 11 px.
+// e' o corte da familia com altura de x para texto pequeno, e le-se melhor a 10 px
+// do que a Inter.
 //
-// **Inter Display e nao Inter.** Inter Display e' o corte da mesma familia com
-// altura de x e contraste concebidos para texto pequeno, e esta interface passa a
-// vida entre 9 e 11 px — o rodape, os rotulos dos knobs, os digitos do endereco.
-// A 10 px le-se melhor, e a letra e' mais aberta sem ser maior.
+// **sem monoespacada.** a JetBrains Mono saiu porque os numeros pareciam
+// apertados. os numeros vao na mesma Inter, alinhados a direita em caixa de
+// largura fixa: nao ha `tnum` no JUCE para travar a largura dos digitos.
 //
-// **Sem monoespacada.** A JetBrains Mono saiu porque a leitura numerica parecia
-// apertada nas caixas do rodape e da grelha. Os numeros vao na mesma Inter,
-// alinhados a direita em caixa de largura fixa — a borda direita fica quieta e o
-// valor nao respira. Nao ha `tnum` no JUCE para travar a largura dos digitos, e
-// alinhar a direita e' o que segura a leitura sem ele.
-//
-// **A fonte vem por Typeface::Ptr e nao por nome.** Os dois ficheiros reduzidos
-// partilhavam nome Postscript antes de tools/vendor_fonts.py o reescrever. Uma
-// busca por nome e depois por estilo resolveria o conflito de forma implicita e
-// fragil; um ponteiro para o typeface nao tem nada para resolver.
-//
-// **Se um ficheiro faltar, a fonte do sistema serve e nada avisa.** Um aviso em
-// consola numa janela que o utilizador fecha sem ler e' ruido, e um binario que
-// nao abre por causa de uma fonte e' pior do que uma interface com a letra do
-// sistema. A interface fica legivel nas duas situacoes.
+// **a fonte vem por Typeface::Ptr e nao por nome**, para nao depender de busca por
+// nome e depois por estilo. se faltar um ficheiro, a fonte do sistema serve e
+// ninguem avisa -- um binario que nao abre por causa de uma fonte e' pior.
 struct Fonts {
     juce::Typeface::Ptr sansRegular;
     juce::Typeface::Ptr sansStrong;
@@ -38,11 +27,9 @@ struct Fonts {
         return sansRegular != nullptr;
     }
 
-    // A fabrica de que a interface inteira depende. Todas as fontes do plugin
-    // passam por aqui, e nao ha um segundo sitio onde se escreve uma.
-    //
-    // Era metodo de BoxedLabel; o componente morreu (caixas fora) e a fabrica
-    // ficou, porque continua a ser o unico caminho para a fonte embebida.
+    // a fabrica de que a interface depende: todas as fontes passam por aqui. era
+    // metodo de BoxedLabel, que morreu; ficou por ser o unico caminho para a fonte
+    // embebida.
     [[nodiscard]] juce::Font sans(float height, bool strong = false) const {
         if (const auto& face = strong ? sansStrong : sansRegular) {
             return juce::Font {juce::FontOptions {face}.withHeight(height)};
@@ -51,18 +38,18 @@ struct Fonts {
     }
 
 private:
-    // O caminho de recurso. FontOptions e' imutavel e nao tem setTypefaceName, e o
-    // construtor com nome e' a forma de o escrever.
+    // o caminho sem typeface embebida: nome do sistema. FontOptions e' imutavel e
+    // nao tem setTypefaceName, por isso o nome vai no construtor.
     [[nodiscard]] static juce::Font fallbackSans(float height, bool strong) {
         return juce::Font {juce::FontOptions {juce::Font::getDefaultSansSerifFontName(), height,
                                               strong ? juce::Font::bold : juce::Font::plain}};
     }
 };
 
-// Carrega uma vez e devolve sempre a mesma. O resultado vive num static para que o
-// typeface fique registado enquanto o plugin viver: createSystemTypefaceFor
-// desregista quando o ultimo Ptr morre, e um Font guardado sem o typeface seria
-// desenhado com a substitute.
+// carrega uma vez e devolve sempre a mesma. o resultado vive num static para o
+// typeface ficar registado enquanto o plugin viver: createSystemTypefaceFor
+// desregista quando o ultimo Ptr morre, e um Font sem o typeface cai na
+// substitute.
 inline const Fonts& fonts() {
     static const Fonts loaded = [] {
         const auto load = [](const char* data, int size) {

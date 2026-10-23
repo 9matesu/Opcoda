@@ -13,16 +13,19 @@ flowchart LR
   A[PE file] --> B[Byte to sample]
   B --> C[Audio buffer]
   C --> D[Granular engine 8 voices]
-  D --> E[Filters x2]
-  E --> F[DC blocker]
+  D --> E[DC blocker]
+  E --> F[ADSR gate]
   F --> G[Limiter]
   G --> H[Output]
+  I[LFO and matrix] --> D
+  J[ADSR] --> F
+  J -.-> D
 ```
 
 ## Screenshots
 
-Capture the Standalone UI with `tools/capture-ui.ps1` and place images under
-`docs/assets/screenshots/`. No screenshots are committed yet.
+The real Standalone capture is at `docs/assets/screenshots/opcoda-ui.png`.
+Regenerate it with `tools/capture-ui.ps1`.
 
 ## Build
 

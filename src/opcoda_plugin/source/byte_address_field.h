@@ -10,41 +10,37 @@
 
 namespace opcoda {
 
-// Campo de endereco: o "Go to address" do Ghidra.
+// campo de endereco: o "go to address" do Ghidra. e' o caminho de teclado para a
+// regiao -- a grelha e' so de rato, e o que se perde esta' em
+// docs/10-acessibilidade-w3c.md. o que fica e' um TextEditor de verdade, com
+// foco, selecao e nome acessivel.
 //
-// **E' o caminho de teclado para a regiao.** O seletor de 30 px que existia
-// antes dava setas, Home, End e Enter; a grelha que o substitui e' so de rato.
-// O que se perde e' escrito em docs/10-acessibilidade-w3c.md, e o que fica e'
-// isto: um TextEditor de verdade, que tem foco, selecao, e um nome accessivel.
+// escreve o endereco, nao a fracao de leitura: o endereco escolhe que bytes sao o
+// material, o POSITION escolhe que byte deles se le.
 //
-// O campo escreve o endereco e nao a fracao de leitura. Sao coisas diferentes:
-// o endereco escolhe que bytes sao o material, e o POSITION escolhe que byte
-// deles se le. Um arrasta de deslize trocava o primeiro, e um clique na grelha
-// mexe no segundo.
-//
-// Aceita "1F4", "0x1F4" e "000001F4", em qualquer caixa. Enter confirma, Esc
+// aceita "1F4", "0x1F4" e "000001F4", em qualquer caixa. Enter confirma, Esc
 // volta ao valor anterior, e sair do campo confirma.
 class ByteAddressField : public juce::Component {
 public:
     ByteAddressField();
 
-    // Endereco confirmado. O editor e' que decide o que se faz com ele, porque
-    // so ele sabe o comprimento da regiao atual.
+    // endereco confirmado. o editor decide o que se faz com ele, porque so ele
+    // sabe o comprimento da regiao atual.
     std::function<void(std::uint64_t address)> onAddressEntered;
 
-    // Endereco mais alto que existe. Acima disso o campo corrige para o ultimo
+    // endereco mais alto que existe: acima disso o campo corrige para o ultimo
     // byte em vez de escrever um endereco que nao ha.
     void setHighestAddress(std::uint64_t highest);
 
-    // Escreve o endereco sem emitir o callback. E' o caminho de leitura, e e' o
-    // que impede que o Processor a reagir ao que ele proprio acabou de fazer.
+    // escreve o endereco sem emitir o callback: e' o caminho de leitura, o que
+    // impede o Processor de reagir ao que ele proprio acabou de fazer.
     void showAddress(std::uint64_t address);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
 
-    // Concentra o foco no campo. Chamado pelo editor quando o material muda, senao
-    // quem esta a escrever perde o foco do meio de uma digitacao.
+    // foco no campo. chamado pelo editor quando o material muda, senao quem esta
+    // a escrever perde o foco a meio de uma digitacao.
     void grabFocusOnField() { editor_.grabKeyboardFocus(); }
 
 private:
@@ -55,11 +51,10 @@ private:
 
     // TextEditor com as quatro teclas de navegacao retiradas.
     //
-    // Nao se deixa o campo repassar as setas para o componente que o contem: o
-    // que consome uma tecla no TextEditor depende do cursor estar ou nao no fim
-    // do texto, e um campo em foco que responde a setas as vezes e' um defeito
-    // que so aparece quando o campo ja tem conteudo. Aqui a captura e' a mesma
-    // nos dois casos, porque a tecla nunca chega ao TextEditor.
+    // o que um TextEditor consome depende do cursor estar ou nao no fim do texto,
+    // e um campo que responde a setas as vezes e' um defeito que so aparece com
+    // conteudo. aqui a tecla nunca chega ao TextEditor, por isso a captura e' a
+    // mesma nos dois casos.
     struct AddressEditor : juce::TextEditor {
         std::function<bool(const juce::KeyPress&)> onNavigationKey;
 
@@ -76,8 +71,8 @@ private:
     };
 
     AddressEditor editor_;
-    // Pela fabrica e nao por FontOptions directo: e' o unico caminho para uma
-    // fonte, e um FontOptions directo aqui voltaria a ser a fonte do sistema.
+    // pela fabrica e nao por FontOptions directo: um FontOptions directo aqui
+    // voltava a ser a fonte do sistema.
     juce::Font font_ {fonts().sans(11.0f)};
     std::uint64_t highestAddress_ {0};
     std::uint64_t shownAddress_ {0};

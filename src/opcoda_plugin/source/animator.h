@@ -4,23 +4,18 @@
 
 namespace opcoda {
 
-// Interpolacao por meia-vida exponencial.
-//
-// **Meia-vida e nao mola.** Uma mola precisa de velocidade, e velocidade precisa de
-// estado: se um quadro atrasar, o valor salta e a mola passa do alvo. A meia-vida so
-// precisa do valor e do alvo, e o que ela faz e'
+// interpolacao por meia-vida exponencial:
 //
 //     valor += (alvo - valor) * (1 - 2^(-dt / meiaVida))
 //
-// que e' a mesma curva com qualquer taxa de quadros. A 20 Hz e a 144 Hz o mesmo
-// meia-vida de 60 ms da o mesmo aspecto, e e' isso que interessa num display que o
-// host decide a que ritmo repinta.
+// so precisa do valor e do alvo. uma mola precisaria de velocidade, e um quadro
+// atrasado fazia-a passar do alvo.
 //
-// **independente da taxa de quadros e' o ponto, nao um detalhe.** Uma interpolacao
-// linear por quadro parece igual a 60 Hz e a 120 Hz, e o dobro de rapida a 240 Hz —
-// e 240 Hz e' um monitor que existe. Com a forma exponencial o erro desaparece.
+// **independente da taxa de quadros e' o ponto.** a mesma meia-vida da o mesmo
+// aspecto a 20 Hz e a 144 Hz. interpolacao linear por quadro parecia igual a 60
+// e a 120 Hz, e ao dobro a 240.
 //
-// Nao aloca, nao tem estado escondido e nao precisa de ser centrada.
+// nao aloca nem guarda estado escondido.
 class Eased {
 public:
     Eased() = default;
@@ -31,8 +26,8 @@ public:
         target_ = target;
     }
 
-    // Repoe o valor sem animacao. Usado quando o alvo muda de escala — o alvo deixa
-    // de ser comparavel com o valor — e animar a transicao daria um salto falso.
+    // repoe valor e alvo sem animacao. usado quando o alvo muda de escala: animar
+    // a transicao daria um salto falso.
     void jumpTo(float value) noexcept {
         value_ = value;
         target_ = value;
@@ -44,8 +39,7 @@ public:
             return;
         }
 
-        // log(2) escrito como constante: e' o que faz `dt / meiaVida` contar meios
-        // periodos, e portanto o valor cair para metade ao fim de meiaVida.
+        // log(2) como constante: e' o que faz dt/meiaVida contar meias vidas.
         constexpr float kLn2 {0.69314718055994530942f};
         const auto weight = 1.0f - std::exp(-kLn2 * deltaSeconds / halfLifeSeconds);
 
@@ -54,9 +48,8 @@ public:
 
     [[nodiscard]] float value() const noexcept { return value_; }
 
-    // Verdadeiro quando o valor ja' tao perto do alvo que a diferenca nao se ve.
-    // Usado para parar de repintar: um repaint por quadro sem mudanca visivel e' o
-    // custo que uma animacao mal feita cobra.
+    // verdadeiro quando a diferenca ja nao se ve. serve para parar de repintar:
+    // um repaint por quadro sem mudanca visivel cobra o custo da animacao.
     [[nodiscard]] bool settled(float epsilon = 0.001f) const noexcept {
         return std::fabs(target_ - value_) < epsilon;
     }

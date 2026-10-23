@@ -45,7 +45,7 @@ TEST(Matrix, TwoRoutesFromOneSourceSumAtDestination) {
     values.velocity = 1.0f;
 
     EXPECT_NEAR(matrixOffset(matrix, ModDest::kPitch, values), 0.75f, 1.0e-5f);
-    // A mesma matriz nao contribui para outro destino.
+    // a mesma matriz nao contribui para outro destino.
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPan, values), 0.0f);
 }
 
@@ -66,8 +66,8 @@ TEST(Matrix, InvalidRouteIsIgnored) {
     ModSourceValues values;
     values.lfo = 1.0f;
 
-    // Fonte ou destino vazio nao modula; amount NaN vale zero, e nao propaga
-    // NaN para o parametro.
+    // fonte ou destino vazio nao modula; amount NaN vale zero, e nao propaga NaN
+    // para o parametro.
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPitch, values), 0.0f);
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPan, values), 0.0f);
 }
@@ -78,7 +78,7 @@ TEST(Matrix, OffsetIsClamped) {
     ModSourceValues values;
     values.velocity = 1.0f;
 
-    // Duas rotas a 100 % pediriam 2,0; o destino recebe 1,0 e satura no extremo.
+    // duas rotas a 100 % pediam 2,0; o destino recebe 1,0 e satura no extremo.
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPitch, values), 1.0f);
 }
 
@@ -111,7 +111,7 @@ TEST(Matrix, CorruptStateOpensEmpty) {
 }
 
 TEST(Matrix, EngineAppliesRouteToFilterCutoff) {
-    // A prova de ligacao: a rota nao pode viver so no teste da funcao pura.
+    // prova de ligacao: a rota nao pode viver so no teste da funcao pura.
     const std::vector<float> source(4800, 0.1f);
     GranularEngine engine;
     engine.prepare(48000.0, 256);
@@ -129,8 +129,8 @@ TEST(Matrix, EngineAppliesRouteToFilterCutoff) {
     // amount 1 a 5 oitavas: 100 Hz * 32.
     EXPECT_NEAR(engine.f1CutoffHz(), 3200.0f, 2.0f);
 
-    // Sem rota o corte fica no declarado, e a matriz nao deixa rasto entre
-    // blocos (o params e' copiado por bloco).
+    // sem rota o corte fica no declarado, e a matriz nao deixa rasto entre blocos
+    // (o params e' copiado por bloco).
     params.modMatrix = ModMatrix {};
     engine.processBlock(left.data(), right.data(), 256, params);
     EXPECT_NEAR(engine.f1CutoffHz(), 100.0f, 0.5f);

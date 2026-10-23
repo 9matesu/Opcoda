@@ -13,53 +13,42 @@
 
 namespace opcoda {
 
-// Grelha de bytes do binario carregado, no formato de um hex dump: endereco a
-// esquerda, dezasseis bytes por linha em hexadecimal, e a coluna ASCII a dizer o
-// que cada byte diz.
+// grelha de bytes do binario em formato de hex dump: endereco a esquerda,
+// dezasseis bytes por linha e a coluna ascii. substitui o seletor de 30 px -- um
+// ficheiro de 12 MB nao cabe num mapa, e cada linha ja traz o endereco.
 //
-// **Substitui o seletor de 30 px, e nao o acompanha.** A faixa antiga era um
-// mapa do ficheiro inteiro com um cursor; um ficheiro de 12 MB nao cabe em
-// grelha, e o que o utilizador quer e' ver os bytes, nao a sua posicao relativa.
-// A posicao no ficheiro continua legivel porque cada linha tem o seu endereco.
+// o clique escreve POSITION, nao um ByteRange: se o byte estiver fora da regiao,
+// quem a puxa e' o editor, antes de escrever a posicao.
 //
-// O clique escreve o parametro POSITION, um dos seis da Tabela 8. Nao escreve
-// um ByteRange novo: se o byte estiver fora da regiao, quem puxa a regiao e' o
-// editor, antes de escrever a posicao.
+// **A grelha so se opera com o rato, e isso ja deixou de ser um problema de
+// acessibilidade.** as celulas sao pintadas e nao sao componentes, e nao ha como
+// dar nome a 200 celulas.
 //
-// **A grelha e' operada so com o rato, e isso ja deixou de ser um problema de
-// acessibilidade.** As celulas sao pintadas e nao sao componentes, e um Component so
-// nao tem filhos acessiveis: nao ha como dar nome a 200 celulas. Isso continua
-    // verdadeiro e por isso a grelha nao ganha um nome por celula.
+// o caminho de teclado vive no ByteDisplay, que contem esta grelha e tem uma
+// caret de navegacao com nome e valor. As setas, `Inicio`, `Fim`, `Enter` e `Esc`
+// operam o display inteiro, e a excecao ao 2.5.8 foi retirada de
+// docs/10-acessibilidade-w3c.md.
 //
-// O caminho de teclado passou a existir no ByteDisplay, que e' o componente que
-// contem esta grelha e que tem uma caret de navegacao com o nome e o valor
-// tertentu. As setas, `Inicio`, `Fim`, `Enter` e `Esc` operam o display inteiro sem
-// passar por nenhum outro controle, e a excecao ao criterio 2.5.8 que esta classe
-// justificava foi retirada de docs/10-acessibilidade-w3c.md.
-//
-// O ByteAddressField tambem nao e' a alternativa: ele consome as quatro teclas de
-// navegacao de proposito, para o caret do TextEditor nao responder a setas de forma
-// diferente conforme o cursor esteja ou nao no fim do texto.
+// o ByteAddressField nao serve de alternativa: consome as quatro teclas de
+// navegacao de proposito, para o caret nao responder a setas conforme o cursor
+// esteja ou nao no fim do texto.
 class HexGrid : public juce::Component {
 public:
     HexGrid();
 
-    // Endereco da celula clicada. Quem decide o que se escreve com ele e' o
-    // editor: e' ele que sabe se o byte esta dentro da regiao.
+    // endereco da celula clicada. o editor decide o que fazer com ele: e' ele
+    // que sabe se o byte esta dentro da regiao.
     std::function<void(std::uint64_t address)> onCellActivated;
 
-    // Duplo clique: alterna entre a regiao exacta e a secao PE mais proxima, a
-    // mesma operacao que o duplo clique no seletor antigo fazia.
+    // duplo clique: alterna entre a regiao exacta e a secao PE mais proxima.
     std::function<void()> onSnapRequested;
 
-    // O utilizador mexeu na janela: rolou, ou clicou numa celula. Corta o
-    // seguimento automatico dos graos, porque a partir daqui quem manda e' a
-    // pessoa.
+    // o utilizador rolou ou clicou numa celula: corta o seguimento dos graos,
+    // porque a partir daqui quem manda e' a pessoa.
     std::function<void()> onUserScrolled;
 
-    // Os bytes crus. O ponteiro e' para o vector do Processor e fica valido
-    // enquanto o Processor viver, porque o vector nao muda de endereco quando o
-    // ingest atribui outro. O conteudo muda, e o editor avisa com setSource.
+    // bytes crus. o ponteiro e' para o vector do Processor e vive enquanto ele;
+    // o conteudo muda e o editor avisa com setSource.
     void setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize);
 
     void setSections(const std::vector<PluginProcessor::SourceInfo::SectionInfo>& sections) {
@@ -69,26 +58,24 @@ public:
 
     void setRegion(std::uint64_t start, std::uint64_t end);
 
-    // Endereco da cabeca de leitura. Move-se para a vista se sair do ecrã: um
-    // cursor que o utilizador nao ve nao diz nada.
+    // cabeca de leitura. se sair da vista, a vista move-se para la: um cursor
+    // que o utilizador nao ve nao diz nada.
     void setReadHead(std::uint64_t address);
 
-    // Navegacao. Publica porque quem tem o foco do teclado e' o campo de
-    // endereco, e as teclas de pagina precisam de mexer aqui.
+    // publica porque quem tem o foco do teclado e' o campo de endereco, e as
+    // teclas de pagina precisam de mexer aqui.
     void scrollToAddress(std::uint64_t address);
     void scrollByLines(int lines);
 
-    // Retangulo da celula de um endereco, em coordenadas locais, ou um rectangulo
-    // vazio se a linha nao estiver na janela.
+    // retangulo da celula em coordenadas locais, ou vazio se a linha nao estiver
+    // na janela.
     //
-    // Existe para o ByteDisplay desenhar os graos **na celula** em vez de numa
-    // fracao da largura. Sem ele a unica hipotese e' desenhar a fracca da regiao
-    // como se fosse a posicao no ecra, e isso e' uma mentira geometrica: a regiao
-    // pode ser 0,1% de um ficheiro de 51 MB, e entao a fracao 0,5 cai numa linha
-    // que ninguem esta' a ver.
+    // existe para o ByteDisplay desenhar os graos na celula, e nao numa fracao da
+    // largura: a regiao pode ser 0,1% de um ficheiro de 51 MB, e a fracao 0,5 cai
+    // numa linha que ninguem esta' a ver.
     [[nodiscard]] juce::Rectangle<float> cellRectForAddress(std::uint64_t address) const;
 
-    // Verdadeiro quando a linha do endereco esta' dentro da janela visivel.
+    // verdadeiro quando a linha do endereco esta' dentro da janela visivel.
     [[nodiscard]] bool isAddressVisible(std::uint64_t address) const noexcept;
 
     void paint(juce::Graphics& g) override;
@@ -99,9 +86,8 @@ public:
                         const juce::MouseWheelDetails& wheel) override;
 
 private:
-    // As medidas sao derivadas da fonte e nao sao constantes cruas: uma celula
-    // estreita demais corta o segundo digito do byte, e o display inteiro
-    // perde-se sem dar erro nenhum.
+    // medidas derivadas da fonte, nao constantes cruas: uma celula estreita
+    // demais corta o segundo digito e o display perde-se sem dar erro.
     struct Metrics {
         float cellWidth {0.0f};
         float cellAdvance {0.0f};
@@ -120,18 +106,16 @@ private:
     [[nodiscard]] std::uint64_t rowAddress(int row) const;
     [[nodiscard]] std::uint64_t highestTop() const noexcept;
 
-    // Rectangulo de uma celula. Existe para o desenho e para o clique leerem a
-    // mesma geometria: se cada um fizesse a conta, o separador de grupo
-    // acertaria no desenho e erraria no clique, e o byte marcado deixaria de
-    // ser o byte clicado.
+    // desenho e clique leem a mesma geometria: o separador de grupo acerta nos
+    // dois, senao o byte marcado deixaria de ser o byte clicado.
     [[nodiscard]] juce::Rectangle<float> cellRect(std::uint64_t column, int row) const;
 
-    // Endereco do ficheiro com as casas que o digest do tamanho pede. Oito e' o
-    // minimo, para um PE com mais de 4 GB de endereco nao ser cortado.
+    // endereco com as casas que o tamanho pede. oito e' o minimo, para um PE com
+    // mais de 4 GB nao ser cortado.
     [[nodiscard]] juce::String formatAddress(std::uint64_t address) const;
 
-    // Endereco sob um ponto, ou std::numeric_limits<std::uint64_t>::max() se o
-    // ponto nao for uma celula. O max e' um endereco que nenhum ficheiro tem.
+    // endereco sob um ponto, ou uint64 max quando o ponto nao e' celula. o max e'
+    // um endereco que nenhum ficheiro tem.
     [[nodiscard]] std::uint64_t addressAt(juce::Point<float> position) const;
 
     void paintColumnHeader(juce::Graphics& g);
@@ -140,7 +124,7 @@ private:
     void paintBytes(juce::Graphics& g, int row);
     void paintAscii(juce::Graphics& g, int row);
 
-    // Secao que contem um endereco, ou nullptr se nenhuma contiver.
+    // secao que contem o endereco, ou nullptr.
     [[nodiscard]] const PluginProcessor::SourceInfo::SectionInfo* sectionAt(
         std::uint64_t address) const;
 
@@ -159,8 +143,8 @@ private:
     std::uint64_t regionEnd_ {0};
     std::uint64_t readHead_ {0};
 
-    // Sempre multiplo de kBytesPerRow: e' o que mantem o endereco de cada
-    // linha em round numbers, que e' como se le um hex dump.
+    // sempre multiplo de kBytesPerRow: mantem o endereco de cada linha redondo,
+    // que e' como se le um hex dump.
     std::uint64_t topByte_ {0};
 
     juce::Font font_ {fonts().sans(11.0f)};

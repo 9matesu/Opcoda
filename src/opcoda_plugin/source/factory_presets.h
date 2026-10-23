@@ -4,18 +4,14 @@
 
 namespace opcoda {
 
-// Os 6 presets de fabrica: pontos de partida sãos, nao demos mixados. Cada
-// valor esta na unidade do parametro (ms, Hz, indice de choice) e dentro do
-// intervalo do layout — um valor fora de faixa aqui atravessa convertTo0to1 e
-// sai recortado em silencio, por isso a tabela e' a fonte e nao ha sanitize
-// depois dela. Pares por ID em vez de ordem do layout: a ordem pode mudar, o
-// ID nao.
+// seis presets de fabrica. sao pontos de partida, nao demos mixadas. cada valor
+// esta na unidade do parametro (ms, hz, indice de choice) e dentro da faixa do
+// layout. a tabela e' a fonte; nao ha sanitize depois dela. pares por id, nao
+// por ordem do layout: a ordem muda, o id nao.
 //
-// Afinados por raciocinio, nao por ouvido: Cloud e' densidade alta com ataque
-// longo (nuvem sem transiente), Shimmer e' +12 st com HP (brilho sem lama),
-// Pulse e' S&H... — quadrada na densidade (porta ritmica), Drone e' scan lento
-// com LP (cabeça que anda sem pressa), Grit e' BP estreito com detune (banda
-// que morde). Quem tem ouvido ajusta; a estrutura nao muda.
+// afinados por raciocinio, nao por ouvido. cloud = densidade alta e ataque
+// longo; shimmer = +12 st com hp; pulse = s&h quadrada na densidade; drone =
+// scan lento com lp; grit = bp estreito com detune. quem tem ouvido ajusta.
 struct FactoryPreset {
     const char* name;
     // grain, density, position, spray, pitch, volume

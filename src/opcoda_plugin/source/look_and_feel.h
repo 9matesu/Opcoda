@@ -9,33 +9,23 @@
 
 namespace opcoda {
 
-// LookAndFeel do Opcoda. Existe para dois desenhos: o knob e o botao. Todo o
-// resto fica no LookAndFeel padrao.
+// LookAndFeel do Opcoda: so o knob e o botao sao desenhados aqui, o resto fica
+// no padrao do JUCE. nada vem de imagem -- o corpo do knob e' um Path que
+// escala, e nao ha PNG a descodificar no arranque.
 //
-// **As pecas sao desenhadas em codigo, e nao vem nenhuma imagem do binario.**
-// Foi uma decisao, e nao uma falta de arte: knob-md.png eram 186x192 pixels para
-// pintar um disco de 62, e button-large.png obrigava a desenhar uma peca
-// quadrada ao lado do texto porque esticar o bisel de 2 px o deixava com 1 px de
-// um lado e 4 px do outro. Com Path o corpo escala, o bisel tem a espessura que
-// se pede, e nao ha um descodificador de PNG a correr no arranque.
+// os knobs sao juce::Slider de verdade: e' o que da foco por teclado, setas e
+// AccessibilityHandler (docs/10-acessibilidade-w3c.md).
 //
-// O aviso que vivia em assets.h fica aqui: este ficheiro usa
-// juce::ColourGradient, que e' de juce_graphics. O modulo chega por
-// juce_gui_basics e juce_audio_processors e nao por um include explicito, o que
-// significa que a falha, se alguma vez acontecer, aparece neste ficheiro e nao
-// onde a falta e'.
-//
-// Os knobs sao juce::Slider de verdade, nao desenho customizado. Isso nao e'
-// padrao: e o que da foco por teclado, ajuste com setas e
-// AccessibilityHandler de graca, e sao exatamente os criterios que a
-// docs/10-acessibilidade-w3c.md exige.
+// nota: este ficheiro usa juce::ColourGradient, que e' de juce_graphics. o
+// modulo chega por juce_gui_basics, nao por um include explicito, por isso a
+// falha, se acontecer, aparece aqui e nao onde a falta e'.
 class OpcodaLookAndFeel : public juce::LookAndFeel_V4 {
 public:
     OpcodaLookAndFeel() {
         setColour(juce::ResizableWindow::backgroundColourId, palette::chassis);
 
-        // O valor fica em um Label proprio, nao na TextBox do Slider, para o
-        // mock poder ter a caixa valBox com fonte monoespacada.
+        // as cores da textBox ficam definidas sem textBox visivel: o valor vive
+        // num Label proprio.
         setColour(juce::Slider::textBoxTextColourId, palette::textDark);
         setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
@@ -48,19 +38,9 @@ public:
         setColour(juce::TextButton::textColourOnId, palette::textDark);
     }
 
-    // Knob estilo Ableton: disco fino, arco fino, ponteiro curto. Sem serrilhado.
-    //
-    // O corpo e' fixo e o valor mexe-se no arco e no ponteiro. O serrilhado saiu
-    // porque era a peca que mais gritava "synth de 2006": 36 dentes a 1 px viram
-    // ruido cinzento em qualquer diametro util, e um anel liso com luz de cima
-    // le-se como controle moderno sem perder a pega — a pega esta' no gesto, nao
-    // no desenho.
-    //
-    // A divisao entre o corpo e o indicador nao e' arbitraria: o corpo e' igual
-    // para os seis knobs e por isso desenha-se sempre da mesma forma, enquanto o
-    // arco precisa de conhecer o valor e o anel de foco precisa de saber se o
-    // componente tem o foco do teclado. As duas ultimas coisas so existem em
-    // codigo, e nenhuma das duas cabia numa imagem.
+    // knob estilo Ableton: disco liso, arco fino, ponteiro curto. O corpo nao
+    // muda com o valor; so o arco e o ponteiro mudam, e o anel de foco depende
+    // do teclado -- por isso isto e' codigo e nao imagem.
     void drawRotarySlider(juce::Graphics& g,
                           int x,
                           int y,
@@ -77,14 +57,13 @@ public:
         const float angle = rotaryStartAngle +
                             sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
 
-        // Raio de zero e' um rectangulo degenerado. Acontece quando a janela
-        // encolhe abaixo do minimo declarado, e mesmo assim tem de pintar em vez
-        // de deixar um buraco no painel.
+        // raio zero e' um rectangulo degenerado: acontece quando a janela
+        // encolhe abaixo do minimo e tem de pintar na mesma.
         if (radius > 1.0f) {
             drawKnobBody(g, centre, radius);
 
-            // Trilha do arco de valor, sempre presente: e' a escala, e uma escala
-            // que so aparece preenchida obriga a adivinhar o resto.
+            // trilha do arco: a escala fica sempre visivel, senao o resto
+            // adivinha-se.
             juce::Path track;
             track.addCentredArc(centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f,
                                 rotaryStartAngle, rotaryEndAngle, true);
@@ -92,10 +71,8 @@ public:
             g.strokePath(track, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
                                                        juce::PathStrokeType::rounded});
 
-            // Arco preenchido, do minimo ate ao valor, com halo curto por baixo:
-            // a mesma lingua do glow da onda (pilha de alfa, sem blur) e a
-            // resposta ao "small outer glow on active controls". Contido: um
-            // passe estreito e fraco — o arco carrega o valor, nao decora.
+            // arco de valor com halo curto por baixo. pilha de alfa e nao blur,
+            // como o glow da onda -- o arco carrega o valor, nao decora.
             juce::Path valueArc;
             valueArc.addCentredArc(centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f,
                                    rotaryStartAngle, angle, true);
@@ -106,14 +83,9 @@ public:
             g.strokePath(valueArc, juce::PathStrokeType {2.0f, juce::PathStrokeType::curved,
                                                         juce::PathStrokeType::rounded});
 
-            // Ponteiro. O indicador do valor e' uma haste curta e nao um raio
-            // inteiro: sai a 30 % do centro e morre antes da borda, como no
-            // Ableton. Uma haste de ponta a ponta divide o disco em dois e o
-            // olho le metade; curta, ela e' um indice e nao uma divisao.
-            //
-            // A haste vai para fora e e' desenhada *depois* do arco, para ficar
-            // por cima dele. Ao contrario, nascia por baixo do arco e o primeiro
-            // troco da faixa aparecia cortado.
+            // ponteiro: haste curta, de 30 % do raio ate antes da borda. vai
+            // depois do arco, para ficar por cima; ao contrario, o primeiro troco
+            // nascia cortado.
             const auto inner = radius * 0.30f;
             const auto outer = radius - 2.5f;
             const auto tailX = centre.x + std::sin(angle) * inner;
@@ -121,56 +93,40 @@ public:
             const auto tipX = centre.x + std::sin(angle) * outer;
             const auto tipY = centre.y - std::cos(angle) * outer;
 
-            // O ponteiro flutua sobre a face como o corpo sobre o painel: a
-            // sombra de 1 px para baixo e para a direita ancora a haste, e sem
-            // ela o laranja parece impresso em vez de montado.
+            // sombra de 1 px para baixo e para a direita: ancora a haste na
+            // face, senao o laranja parece impresso.
             g.setColour(palette::alpha(juce::Colours::black, 0.30f));
             g.drawLine(tailX + 1.0f, tailY + 1.0f, tipX + 1.0f, tipY + 1.0f, 2.5f);
             g.setColour(palette::accent);
             g.drawLine(tailX, tailY, tipX, tipY, 2.5f);
         }
 
-        // Anel de foco. Sem ele, quem navega por teclado nao sabe qual knob
-        // esta' ativo, e o criterio 2.4.7 do WCAG 2.2 pede foco visivel. E' o
-        // unico sinal de que o controle esta' com o foco do teclado.
-        //
-        // A cor e' focusRing e nao accent porque este anel nao tem leitura
-        // numerica ao lado que o repita: accent sobre o chassis da 1,24:1, e o
-        // 1.4.11 exige 3:1 de um indicador de foco. focusRing da 9,73:1.
+        // anel de foco: unico sinal de que o knob tem o foco de teclado (2.4.7).
+        // focusRing e nao accent porque accent sobre o chassis da 1,24:1, e o
+        // 1.4.11 pede 3:1 para um indicador de foco.
         if (slider.hasKeyboardFocus(true)) {
             g.setColour(palette::focusRing);
             g.drawEllipse(bounds.reduced(-3.0f), 2.0f);
         }
     }
 
-    // Botao compacto de workstation: retangulo de raio minimo, borda fina,
-    // inativo neutro, ativo com filete ambar. O componente continua
-    // juce::TextButton — teclado, foco e AccessibilityHandler de graca.
+    // botao compacto: rectangulo de raio minimo, borda fina, inativo neutro e
+    // ativo com filete ambar. o componente continua juce::TextButton -- teclado,
+    // foco e AccessibilityHandler de graca.
     //
-    // A superficie importa e o botao nao a conhece: `uiOnDark` diz que ele mora
-    // sobre o display escuro (a linha de estado). Como o chassis tambem e'
-    // escuro agora, a tinta e' a mesma dos dois lados; a propriedade fica
-    // porque o wash do hover precisa dela.
+    // a propriedade `uiIcon` diz o desenho: "transport" faz play/stop, "folder"
+    // a pasta, "tab" a palavra numa caixa. sem ela nao se desenha nada.
     //
-    // O que diz qual botao e' vai na propriedade `uiIcon`: "transport" desenha
-    // ▶/■, "folder" desenha a pasta, "tab" desenha a palavra numa caixa de
-    // borda fina. Sem a propriedade nao se desenha nada, porque um botao sem
-    // icone e' um alvo invisivel e um alvo invisivel nao passa nem no 2.5.8
-    // nem no bom senso.
-    //
-    // Os quatro estados continuam distinguiveis sem cor: repouso e' o icone
-    // quieto, sobreposto ganha o banho de alfa, premido escurece, e ligado
-    // troca a forma (▶ vira ■, aba ganha o filete) e o peso do texto. A troca
-    // de palavra PLAY/STOP virou troca de forma pelo mesmo motivo que a criou:
-    // o estado tem de se ler sem ver cor, e forma e' o que o 1.4.1 pede.
+    // os estados distinguem-se sem cor: hover ganha banho de alfa, premido
+    // escurece, ligado troca a forma (play vira stop, aba ganha filete).
     void drawButtonBackground(juce::Graphics& g,
                               juce::Button& button,
                               const juce::Colour&,
                               bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override {
-        // Os limites sao os do botao e nao os deste LookAndFeel. Os dois derives
-        // de Component, e `getLocalBounds()` aqui dentro devolveria a area do
-        // LookAndFeel, que e' zero: o botao seria desenhado com 1 px de altura.
+        // os limites sao os do botao, nao os deste LookAndFeel: getLocalBounds()
+        // aqui dentro devolveria a area do LookAndFeel, que e' zero, e o botao
+        // sairia com 1 px.
         const auto bounds = button.getLocalBounds().toFloat();
         const auto reduced = bounds.reduced(0.5f);
         if (reduced.getWidth() <= 1.0f || reduced.getHeight() <= 1.0f) {
@@ -180,9 +136,8 @@ public:
         const auto isTab = button.getProperties()["uiIcon"].toString() == "tab";
         const auto on = button.getToggleState();
 
-        // Caixa da aba: borda fina sempre, preenchimento so quando ativa.
-        // Inativa neutra (fundo do pai), ativa com subPanel para separar do
-        // fundo sem gritar. Raio 2: workstation, nao pill.
+        // caixa da aba: borda fina sempre, preenchimento so quando ativa. raio
+        // 2, workstation e nao pill.
         if (isTab) {
             g.setColour(on ? palette::subPanel
                            : palette::alpha(palette::subPanel, 0.25f));
@@ -191,9 +146,9 @@ public:
             g.drawRoundedRectangle(reduced, 2.0f, 1.0f);
         }
 
-        // Banho de alfa no hover e no premido: e' o unico relevo que sobrou, e
-        // chega porque o icone ja tem forma propria. Branco no escuro — o
-        // chassis e o display sao ambos escuros agora.
+        // banho de alfa no hover e no premido: e' o unico relevo que sobrou.
+        // `uiOnDark` so serve ao wash, e chassis e display sao ambos escuros, por
+        // isso o branco e' branco nos dois casos.
         const auto onDark = button.getProperties()["uiOnDark"];
         const auto wash = onDark ? juce::Colours::white : juce::Colours::white;
         if (shouldDrawButtonAsHighlighted && !shouldDrawButtonAsDown) {
@@ -205,10 +160,9 @@ public:
             g.fillRoundedRectangle(reduced, isTab ? 2.0f : 4.0f);
         }
 
-        // Aba activa: filete de acento em baixo, com halo fraco por tras. E'
-        // pista redundante — o texto da aba activa vai em forte e claro, e e'
-        // isso que carrega o estado. O halo e' a mesma lingua do glow da onda:
-        // a vista activa tem luz, as outras nao.
+        // aba activa: filete de acento em baixo, com halo fraco por tras. pista
+        // redundante -- o texto da aba activa ja vai em forte e claro, e carrega
+        // o estado sozinho.
         if (on && isTab) {
             const auto bar = juce::Rectangle<float> {reduced.getX() + 4.0f,
                                                      reduced.getBottom() - 2.5f,
@@ -219,19 +173,16 @@ public:
             g.fillRect(bar);
         }
 
-        // 2.4.7 Foco visivel. O desenho nao sabe se o botao tem o foco.
-        // focusRing e' ambar (~7:1 sobre o fundo escuro): o anel tem de
-        // contrastar com a superficie, e a forma (anel de 2 px) e' a segunda
-        // pista que o 1.4.1 pede.
+        // 2.4.7 foco visivel. focusRing e' ambar (~7:1 sobre o escuro), e o anel
+        // de 2 px e' a forma que o 1.4.1 pede.
         if (button.hasKeyboardFocus(true)) {
             g.setColour(palette::focusRing);
             g.drawRoundedRectangle(reduced.reduced(1.0f), isTab ? 2.0f : 4.0f, 2.0f);
         }
     }
 
-    // O icone e' desenhado em codigo e nunca vem de uma peca nem de uma fonte de
-    // icones, porque nao ha nenhuma no repositorio e uma fonte so para tres
-    // glifos seria peso morto.
+    // icone desenhado em codigo: nao ha fonte de icones no repositorio, e uma
+    // fonte so para tres glifos seria peso morto.
     void drawButtonText(juce::Graphics& g,
                         juce::TextButton& button,
                         bool,
@@ -241,11 +192,8 @@ public:
             return;
         }
 
-        // Desligado usa o apagado da superficie em vez de sumir: um icone que
-        // some quando o transporte do host para parece que o botao foi embora, e
-        // um botao que recusa o toque tem de continuar la para recusar.
-        // Secundario (~7:1 sobre o fundo escuro) chega para icone desligado,
-        // que nao e' texto de leitura.
+        // desligado usa o apagado da superficie em vez de sumir: um botao que
+        // recusa o toque tem de continuar la para recusar.
         const auto onDark = static_cast<bool>(button.getProperties()["uiOnDark"]);
         const auto ink = button.isEnabled()
                              ? (onDark ? palette::textOnDark : palette::textDark)
@@ -261,9 +209,8 @@ public:
             return;
         }
 
-        // Aba de vista: a palavra curta, forte e clara quando activa, normal e
-        // secundaria quando nao. A mudanca de peso e cor carrega o estado; o
-        // filete e a caixa desenhados no fundo sao redundancia.
+        // aba: palavra curta, forte e clara quando activa, normal e secundaria
+        // quando nao. o peso e a cor carregam o estado.
         const auto on = button.getToggleState();
         g.setFont(fonts().sans(9.0f, on));
         g.setColour(on ? palette::textDark : palette::textSub);
@@ -271,14 +218,11 @@ public:
     }
 
  private:
-    // Transporte: triangulo para tocar, quadrado para parar, centrados na area
-    // util do botao. O tamanho e' fracao do menor lado para nao encostar na
-    // borda quando a janela encolhe o botao.
+    // transporte: triangulo para tocar, quadrado para parar, centrados na area
+    // util. o lado e' fracao do menor para nao encostar quando a janela encolhe.
     //
-    // Halo branco por tras do glifo: o transporte mora no display escuro, e um
-    // halo claro ali e' a mesma luz dos graios — o botao que comanda o som tem a
-    // mesma energia do som a acontecer. Pilha de alfa e nao blur, como em todo o
-    // glow da casa.
+    // halo branco por tras do glifo: o transporte mora no display escuro, e a
+    // luz ali e' a mesma dos graos. pilha de alfa e nao blur.
     static void paintTransportGlyph(juce::Graphics& g,
                                     const juce::Rectangle<float>& bounds,
                                     bool playing,
@@ -295,9 +239,8 @@ public:
                               centre.x + side * 0.62f, centre.y);
         }
 
-        // O halo e' o glifo dilatado: sem blur no renderizador de software, um
-        // passe alargado e fraco por baixo do passe cheio da a leitura de luz
-        // sem custo que apareca no perfil.
+        // halo: o glifo dilatado. sem blur no software, um passe alargado e fraco
+        // por baixo do cheio da a leitura de luz barata.
         g.setColour(palette::alpha(juce::Colours::white, 0.12f));
         juce::Path haloPath;
         haloPath.addRoundedRectangle(glyph.getBounds().expanded(3.0f), 3.0f);
@@ -307,8 +250,7 @@ public:
         g.fillPath(glyph);
     }
 
-    // Pasta: costas com aba e frente por cima, so com contorno. Cheia seria um
-    // borrao a 14 px; o contorno le-se como pasta e deixa o chassi respirar.
+    // pasta so com contorno: cheia seria um borrao a 14 px.
     static void paintFolderGlyph(juce::Graphics& g,
                                  const juce::Rectangle<float>& bounds,
                                  juce::Colour ink) {
@@ -328,40 +270,33 @@ public:
                                                   juce::PathStrokeType::rounded});
     }
 
-    // O corpo do knob: disco liso, aro fino e ponto de origem.
-    //
-    // A luz vem de cima, quase de frente, como num controle do Ableton: o
-    // gradiente e' curto, do claro para o tom do painel, e nao ha aro escuro a
-    // separar o disco do fundo. Sem o serrilhado nao ha Path para memorizar nem
-    // cache para invalidar — o corpo inteiro sao tres fills e dois strokes.
+    // corpo do knob: disco liso, aro fino e ponto de origem. luz de cima,
+    // gradiente curto do claro para o tom do painel, sem aro escuro a separar.
     void drawKnobBody(juce::Graphics& g, juce::Point<float> centre, float radius) {
         const auto rim = juce::Rectangle<float> {centre.x - radius, centre.y - radius,
                                                   radius * 2.0f, radius * 2.0f};
 
-        // Sombra projetada: o corpo flutua sobre o painel em vez de estar
-        // colado nele. Duas elipses concentricas deslocadas 2 px para baixo —
-        // um blur de verdade nao existe barato no JUCE, e dois fills por knob
-        // a 60 Hz custam menos que um DropShadowEffect por quadro.
+        // sombra projetada: duas elipses deslocadas 2 px para baixo. um blur de
+        // verdade nao existe barato no JUCE.
         for (int i = 2; i >= 1; --i) {
             const auto spread = static_cast<float>(i);
             g.setColour(palette::alpha(juce::Colours::black, 0.10f - 0.025f * spread));
             g.fillEllipse(rim.expanded(spread).translated(0.0f, 2.0f));
         }
 
-        // Disco, com luz suave de cima. O claro e' valBox e o escuro e' o proprio
-        // painel: sem aro de chassisDark a separar, o disco assenta no modulo em
-        // vez de flutuar sobre um anel.
+        // disco com luz de cima: claro valBox em cima, panelBg em baixo, sem aro
+        // escuro a separar.
         g.setGradientFill(juce::ColourGradient {
             palette::valBox, centre.translated(0.0f, -radius * 0.5f),
             palette::panelBg, centre.translated(0.0f, radius * 0.55f), false});
         g.fillEllipse(rim);
 
-        // Aro fino, so para fechar a forma contra o painel.
+        // aro fino, so para fechar a forma contra o painel.
         g.setColour(palette::alpha(palette::chassisBorder, 0.40f));
         g.drawEllipse(rim.reduced(0.5f), 1.0f);
 
-        // Ponto de origem, no centro. Fica por baixo do arco e do ponteiro, e e'
-        // por isso que a haste do valor comeca a 30 % do raio e nao no centro.
+        // ponto de origem no centro. fica por baixo do arco e do ponteiro, por
+        // isso a haste comeca a 30 % do raio.
         const auto markerRadius = radius * 0.06f;
         g.setColour(palette::alpha(palette::chassisBorder, 0.65f));
         g.fillEllipse(centre.x - markerRadius, centre.y - markerRadius, markerRadius * 2.0f,

@@ -10,34 +10,27 @@
 
 namespace opcoda::view {
 
-// O rastro dos graos, sem JUCE.
+// o rastro dos graos, sem JUCE.
 //
-// **Vive no nucleo e nao no ByteDisplay por causa dos testes.** A logica toda —
-// deslocar, truncar, esvaziar por voz, decidir se ha razao para pintar — e' aritmetica
-// pura sobre arrays fixos, e dentro de um `juce::Component` nao ha como a testar sem
-// instanciar uma janela. `pe::reduceToColumns` e' o mesmo caso: e' calculo que o
-// display faz na thread de interface, e vive aqui para ter quinze ensaios.
+// e' aritmetica pura sobre arrays fixos — deslocar, truncar, esvaziar por voz,
+// decidir se ha razao para pintar — e dentro de um Component nao havia como a
+// testar. nao aloca e roda na thread de interface a 60 Hz.
 //
-// Nao aloca, nao tem estado escondido e e' called na thread de interface a 60 Hz.
-//
-// **O rastro e' por voz, e nao por slot publicado.** O `publish` do motor compacta os
-// graos activos para a frente, portanto o slot 0 e' o primeiro grao activo *deste*
-// bloco e nada mais. Ligar uma cauda a um slot faria a cauda saltar de um grao para
-// outro cada vez que um deles morre, e o ecra ganharia um rasgo falso atravessado a
-// cada bloco. `GrainView::voice` e' o indice fixo no motor, e e' o que fecha a cauda.
+// o rastro e' por voz, e nao por slot publicado. o publish do motor compacta os
+// graos ativos, entao o slot 0 e' o primeiro grao deste bloco e nada mais. ligar
+// uma cauda ao slot faria a cauda saltar de grao em grao a cada morte e dar um
+// rasgo falso no ecra. GrainView::voice e' o indice fixo.
 class GrainTrailSet {
 public:
     static constexpr int kMaxVoices = dsp::GrainTelemetry::kMaxVoices;
     static constexpr int kFrames = 24;
 
-    // Vinte e quatro quadros, e nao oito. Oito era o minimo para evitar a
-    // cintilacao de um grao que atravessa o ecra em dois quadros e meio, e a medicao
-    // mostrou que nao chega: um grao anda cerca de 0,4 px por quadro numa regiao de
-    // 700 KB, e oito quadros davam dois pixels de curso, lidos como ponto. Com
-    // vinte e quatro sao seis, e a cauda ve-se como cauda.
+    // vinte e quatro quadros, e nao oito. oito era o minimo para evitar cintilacao,
+    // e a medicao mostrou que nao chega: um grao anda ~0,4 px por quadro numa
+    // regiao de 700 KB, lido como ponto. com 24 sao seis pixels de curso.
     //
-    // **Com spray e pitch a zero o rastro continua a ler-se como ponto**, e isso e'
-    // o comportamento certo: nao ha direccao para mostrar, porque o grao nao se mexe.
+    // com spray e pitch a zero o rastro continua a ser um ponto, e isso esta' certo:
+    // nao ha direccao para mostrar.
 
     struct Trail {
         std::array<float, kFrames> positions {};
@@ -48,40 +41,38 @@ public:
             return count > 0 ? positions[static_cast<std::size_t>(count - 1)] : 0.0f;
         }
 
-        // Curso total do rastro, em fracao da regiao. E' zero enquanto o grao nao
-        // se mexe, e e' por isso que o desenho trata curso zero como "ponto".
+        // curso total em fracao da regiao. zero enquanto o grao nao se mexe, e e'
+        // por isso que o desenho trata curso zero como ponto.
         [[nodiscard]] float span() const noexcept { return newest() - oldest(); }
 
-        // Posicao e' valida quando esta no intervalo. Um valor fora disso vem de um
-        // publish antigo ou de um bug a montante, e nao de um grao a ler.
+        // posicao valida quando esta' no intervalo. fora disso vem de um publish
+        // antigo ou de um bug a montante, nao de um grao a ler.
         [[nodiscard]] static bool validPosition(float value) noexcept {
             return value >= 0.0f && value <= 1.0f;
         }
     };
 
-    // Acrescenta a posicao de hoje a uma voz, e o endereco que essa posicao
-    // representa. Devolve false e nao mexe em nada se a identidade for invalida:
-    // melhor um grao sem rastro do que um rastro no sitio errado.
+    // acrescenta a posicao de hoje a uma voz, e o endereco que ela representa.
+    // false, sem mexer em nada, se a identidade for invalida: melhor um grao sem
+    // rastro do que um rastro no sitio errado.
     //
-    // **O endereco e' calculado aqui e nao pelo display**, para que o valor que a
-    // vista hex usa seja o mesmo que aqui esta' sob ensaio. Foi a primeira
-    // implementacao a converter no `paint`, e a aritmetica ficou sem um unico
-    // ensaio — sendo exactamente a parte que pode mentir sobre onde o grao esta'.
+    // o endereco e' calculado aqui e nao pelo display, para a conta que a vista hex
+    // usa ficar sob ensaio. no paint ficava a parte que pode mentir, sem teste.
     bool push(int voice, float position) noexcept {
         if (voice < 0 || voice >= kMaxVoices || !Trail::validPosition(position)) {
             return false;
         }
         if (region_.empty()) {
-            // Sem regiao a fracao nao quer dizer nada, e converter na daria o byte 0
-            // — que e' o inicio do ficheiro, e nao o inicio do material.
+            // sem regiao a fracao nao quer dizer nada, e converter daria o byte 0:
+            // o inicio do ficheiro, e nao o inicio do material.
             return false;
         }
 
         auto& trail = trails_[static_cast<std::size_t>(voice)];
 
-        // Desloca e acrescenta. O mais antigo cai fora, e e' isso que da a
-        // comprimento ao rastro em quadros e nao em tempo: o rastro mede sempre os
-        // ultimos kFrames quadros, independente da taxa a que o host repinta.
+        // desloca e acrescenta. o mais antigo cai fora, e o rastro mede sempre os
+        // ultimos kFrames quadros, nao segundos: a taxa de repintura do host nao
+        // muda o comprimento.
         for (int f = std::min(trail.count, kFrames - 1); f > 0; --f) {
             trail.positions[static_cast<std::size_t>(f)] =
                 trail.positions[static_cast<std::size_t>(f - 1)];
@@ -97,9 +88,9 @@ public:
         return true;
     }
 
-    // Esvazia tudo. Chamado quando a fracao deixa de significar a mesma coisa: mudar
-    // de regiao ou de vista. Sem isto, a cauda de um grao que leu o fim da regiao
-    // antiga aparecia sobre a regiao nova, o que e' pior do que nao ter cauda nenhuma.
+    // esvazia tudo. chamado quando a fracao deixa de significar a mesma coisa:
+    // regiao ou vista nova. sem isto a cauda de um grao que leu a regiao antiga
+    // aparecia sobre a nova, pior do que nao ter cauda.
     void clear() noexcept {
         for (auto& trail : trails_) {
             trail = Trail {};
@@ -115,9 +106,9 @@ public:
         return trails_[static_cast<std::size_t>(clampVoice(voice))];
     }
 
-    // Vozes fora do intervalo nao sao ativas, e nao a voz 0. `clampVoice` serve
-    // para ler, mas para perguntar se uma voz esta a tocar a resposta tem de ser
-    // "nao": empurrar `push(-1, ...)` recusado nao pode deixar a voz 0 marcada.
+    // voz fora do intervalo nao esta' ativa, e nao vale a voz 0. clampVoice serve
+    // para ler; para perguntar se uma voz toca, a resposta e' "nao", senao um
+    // push(-1) recusado deixaria a voz 0 marcada.
     [[nodiscard]] bool active(int voice) const noexcept {
         if (voice < 0 || voice >= kMaxVoices) {
             return false;
@@ -129,8 +120,8 @@ public:
         return addresses_[static_cast<std::size_t>(clampVoice(voice))];
     }
 
-    // Algum rastro tem curso? E' o teste barato para "vale a pena pintar", e sem ele
-    // o display repinta a 60 Hz mesmo sem som nenhum.
+    // algum rastro ativo? e' o teste barato para "vale a pena pintar"; sem ele o
+    // display repinta a 60 Hz mesmo em silencio.
     [[nodiscard]] bool anyActive() const noexcept {
         for (std::size_t v = 0; v < active_.size(); ++v) {
             if (active_[v]) {

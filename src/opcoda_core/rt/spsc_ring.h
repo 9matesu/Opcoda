@@ -6,9 +6,9 @@
 
 namespace opcoda::rt {
 
-// Um produtor, um consumidor, sem alocação e sem trava. O consumidor sempre
-// recebe dado velho ou novo, nunca leitura parcial nem espera: é o que elimina
-// a inversão de prioridade entre a thread de interface e a de áudio.
+// um produtor, um consumidor, sem alocação e sem trava. o consumidor recebe dado
+// velho ou novo, nunca leitura parcial nem espera: é o que elimina a inversão de
+// prioridade entre a thread de interface e a de áudio.
 template <typename T, std::size_t Capacity>
 class SpscRing {
     static_assert(Capacity >= 2, "Capacidade mínima de 2 para distinguir cheio de vazio");
@@ -63,11 +63,9 @@ private:
 
     T slots_[Capacity] {};
 
-    // Um bloco de uma linha de cache por índice: são escritos por threads
-    // diferentes em cadência alta, e sem a separação toda operação causaria
-    // false sharing. O bloco não declara alignas porque o MSVC emite C4324 ao
-    // empacotar struct com membro alinhado, e o portão A trata warning como
-    // erro; o alinhamento natural de 64 em x86-64 já produz o mesmo efeito.
+    // um bloco de cache line por índice: são escritos por threads diferentes em
+    // cadência alta, e sem a separação há false sharing. o bloco não declara
+    // alignas porque o MSVC emite C4324 e o portão A trata warning como erro.
     static constexpr std::size_t kCacheLineBytes = 64;
 
     std::atomic<std::size_t> writeIndex_ {0};

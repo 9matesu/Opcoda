@@ -18,19 +18,17 @@
 namespace opcoda {
 
 PluginProcessor::PluginProcessor()
-    // So saida. Um barramento de entrada deixaria a trilha de audio do Ableton
-    // esperando um sinal que o plugin nunca usa, e obrigaria o host a tratar o
-    // Opcoda como efeito em vez de instrumento.
+    // so' saida. Um barramento de entrada deixaria a trilha do Ableton a espera de
+    // um sinal que o plugin nunca usa, e faria o host trata-lo como efeito.
 : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters_(*this, nullptr, "Opcoda", createParameterLayout()) {
-    // F020: a matriz nasce no estado, ao lado dos PARAM, e nao na tabela: o host
-    // nao a ve como parametro, nao a automatiza, e ela viaja no preset e no
-    // .opcoda porque o XML e' o mesmo.
+    // F020: a matriz nasce no estado, ao lado dos PARAM, e nao na tabela: o host nao
+    // a ve' como parametro, nao a automatiza, e ela viaja no preset e no .opcoda
+    // porque o XML e' o mesmo.
     ensureModMatrixNode();
     publishModMatrix();
-    // A tabela publica fecha em 41. A matriz nao entra aqui: se alguem
-    // transformar uma rota em parametro, o host passa a automatiza-la e este
-    // assert — em Debug — e' o aviso.
+    // a tabela fecha em 41. A matriz nao entra aqui: se uma rota virar parametro, o
+    // host passa a automatiza-la e este assert em Debug avisa.
     jassert(getParameters().size() == 41);
 }
 
@@ -87,9 +85,7 @@ void PluginProcessor::publishModMatrix() {
     for (std::size_t i = 0; i < words.size(); ++i) {
         modMatrixWords_[i].store(words[i], std::memory_order_relaxed);
     }
-    // Release depois das palavras: quem ve' a geracao nova ve' as palavras
-    // novas, e um bloco que apanhe a troca fica com a matriz antiga inteira em
-    // vez de metade de cada.
+    // release depois das palavras: quem ve' a geracao nova ve' as palavras novas.
     modMatrixGeneration_.fetch_add(1, std::memory_order_release);
 }
 
@@ -111,16 +107,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         return std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID {id, 1}, juce::String {name}, juce::NormalisableRange<float> {lo, hi}, def);
     };
-    // Parametro inteiro com passo 1. O degrau do LFO e' uma contagem (1..16), e
-    // um float continuo dava 3,7 degraus — o motor arredondaria e a automacao
-    // mostraria valores que nao existem.
+    // inteiro com passo 1. O degrau do LFO e' contagem (1..16) e um float continuo
+    // daria 3,7 degraus na automacao.
     const auto intRange = [](const char* id, const char* name, int lo, int hi, int def) {
         return std::make_unique<juce::AudioParameterInt>(
             juce::ParameterID {id, 1}, juce::String {name}, lo, hi, def);
     };
-    // Corte em Hz com centro em 1 kHz: linear de 20 a 20000 punha a oitava
-    // 40..80 Hz nos primeiros 2 graus do knob e o resto era passeio. O skew so
-    // remapeia o gesto — o valor guardado e automatizado continua em Hz.
+    // corte em Hz com centro em 1 kHz. Linear de 20 a 20000 punha a oitava de 40 a
+    // 80 Hz nos primeiros 2 graus do knob e o resto era passeio. O skew so' remapeia
+    // o gesto; o valor guardado e automatizado continua em Hz.
     const auto logCutoff = [](const char* id, const char* name, float def) {
         juce::NormalisableRange<float> cutoff {20.0f, 20000.0f};
         cutoff.setSkewForCentre(1000.0f);
@@ -132,8 +127,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
             juce::ParameterID {id, 1}, juce::String {name}, std::move(options), def);
     };
 
-    // Os seis IDs originais nao mudam — sessoes salvas referenciam por ID — so
-    // o nome exibido passa a ingles. Os 19 novos ja nascem com ID ingles.
+    // os seis IDs originais nao mudam — sessao salva referencia por ID — so' o nome
+    // exibido passou a ingles. Os novos ja' nascem com ID ingles.
     return {
         range("grain", "Grain Size", 1.0f, 100.0f, 40.0f),
         range("density", "Density", 1.0f, 200.0f, 20.0f),
@@ -145,9 +140,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("pan", "Pan", -1.0f, 1.0f, 0.0f),
         range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
         range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
-        // F021: a nuvem. Zero em todos devolve o motor anterior, amostra a
-        // amostra — o espalhamento, a dispersao de afinacao e o jitter so
-        // entram quando o knob sai do zero.
+        // F021: a nuvem. Zero em todos devolve o motor anterior, amostra a amostra:
+        // espalhamento, dispersao de afinacao e jitter so' entram quando o knob sai do
+        // zero.
         range("cloudsize", "Cloud Size", 0.0f, 1.0f, 0.0f),
         range("pitchspread", "Pitch Spread", 0.0f, 24.0f, 0.0f),
         range("grainjit", "Grain Jitter", 0.0f, 1.0f, 0.0f),
@@ -156,17 +151,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("decay", "Decay", 0.001f, 2.0f, 0.1f),
         range("sustain", "Sustain", 0.0f, 1.0f, 1.0f),
         range("release", "Release", 0.001f, 2.0f, 0.05f),
-        // F020: curvas por estagio. -1 exponencial, 0 linear, +1 logaritmica —
-        // a forma e' phase^(2^(-3*curva)), documentada em dsp/curve.h.
+        // F020: curvas por estagio. -1 exponencial, 0 linear, +1 logaritmica, forma
+        // phase^(2^(-3*curva)), documentada em dsp/curve.h.
         range("atkcurve", "Attack Curve", -1.0f, 1.0f, 0.0f),
         range("deccurve", "Decay Curve", -1.0f, 1.0f, 0.0f),
         range("relcurve", "Release Curve", -1.0f, 1.0f, 0.0f),
         choice("f1type", "Filter 1 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
         logCutoff("f1cutoff", "Filter 1 Cutoff", 20000.0f),
         range("f1q", "Filter 1 Q", 0.5f, 12.0f, 0.7071f),
-        // F020: caracter analogico do filtro 1. O drive em dB, o keytrack em
-        // profundidade 0..1 (1 = uma oitava de corte por oitava de nota) e o
-        // envelope com sinal, ate' 5 oitavas para cada lado.
+        // F020: caracter analogico do filtro 1. Drive em dB, keytrack 0..1 (1 = uma
+        // oitava de corte por oitava de nota) e envelope com sinal, ate' 5 oitavas para
+        // cada lado.
         choice("f1slope", "Filter 1 Slope", {"12 dB", "24 dB"}, 0),
         range("f1drive", "Filter 1 Drive", 0.0f, 24.0f, 0.0f),
         range("f1keytrack", "Filter 1 Keytrack", 0.0f, 1.0f, 0.0f),
@@ -178,7 +173,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("lfodepth", "LFO Depth", 0.0f, 1.0f, 0.0f),
         choice("lfotarget", "LFO Target", {"Pitch", "Density", "Cutoff", "Position"}, 0),
         choice("lfowave", "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"}, 0),
-        // F018: teclado e escala. Os IDs nascem em ingles, como os 16 da emenda.
+        // F018: teclado e escala.
         choice("scale", "Scale", {"Chromatic", "Major", "Natural Minor", "Harmonic Minor",
                                   "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                   "Pentatonic Major", "Pentatonic Minor", "Blues",
@@ -193,16 +188,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
 }
 
 dsp::GranularParams PluginProcessor::currentParams() const noexcept {
-    // getRawParameterValue da o ponteiro para o valor guardavel, e o valor e'
-    // o que o utilizador ve: nao e' normalizado. Confundir os dois espacos
-    // entrega ao motor 0.4 em vez de 40 e nao da erro nenhum — e um bug que so
-    // aparece como som esquisito.
+    // getRawParameterValue da o valor guardavel, que e' o que o utilizador ve', nao
+    // o normalizado. Trocar os dois espacos entrega 0.4 em vez de 40 e nao da erro
+    // nenhum: aparece como som esquisito.
     const auto value = [this](const char* id) {
         return static_cast<float>(*parameters_.getRawParameterValue(id));
     };
 
-    // Indice de choice chega como float 0..N-1; o sanitize existe para o dia
-    // em que nao chegar — estado corrompido de sessao tem de soar, nao calar.
+    // choice chega como float 0..N-1. O sanitize cobre estado corrompido de sessao,
+    // que tem de soar e nao calar.
     const auto choiceIndex = [&value](const char* id) {
         return static_cast<int>(value(id) + 0.5f);
     };
@@ -243,8 +237,8 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.lfotarget = dsp::sanitizeLFOTarget(static_cast<dsp::LFOTarget>(choiceIndex("lfotarget")));
     params.lfowave = dsp::sanitizeLFOWave(static_cast<dsp::LFOWave>(choiceIndex("lfowave")));
 
-    // F018: a nota da pilha mono vira transposicao no motor. O indice da escala
-    // e' saneado aqui, como os outros choices: estado corrompido tem de soar.
+    // F018: a nota da pilha mono vira transposicao no motor. O indice da escala e'
+    // saneado aqui, como os outros choices.
     params.noteNumber = notes_.activeNote();
     const int scaleIndex = choiceIndex("scale");
     params.scale = (scaleIndex >= 0 && scaleIndex < dsp::kScaleCount)
@@ -253,17 +247,16 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.scaleRoot = dsp::wrap12(choiceIndex("root"));
     params.glideSeconds = value("glide");
 
-    // F019: modo, divisao, degraus e o tempo do host. Em Sync o motor deriva a
-    // fase do ppq; em Free ignora os dois doubles e usa lforateHz.
+    // F019: modo, divisao, degraus e tempo do host. Em Sync o motor deriva a fase do
+    // ppq; em Free ignora os dois doubles e usa lforateHz.
     params.lfoSync = choiceIndex("lfosync") == 1;
     params.lfoDiv = dsp::sanitizeLFODiv(choiceIndex("lfodiv"));
     params.lfoSteps = dsp::sanitizeLFOSteps(static_cast<int>(value("lfosteps") + 0.5f));
     params.hostBpm = hostBpm_.load(std::memory_order_relaxed);
     params.hostPpq = hostPpq_.load(std::memory_order_relaxed);
 
-    // F020: fontes que o motor nao pode medir sozinho. A matriz vem do
-    // snapshot publicado pela thread de interface; a velocidade e os CCs saem
-    // do NoteTracker, que ja corre na thread de audio.
+    // F020: fontes que o motor nao mede sozinho. A matriz vem do snapshot publicado
+    // pela interface; velocidade e CCs saem do NoteTracker, que ja' corre no audio.
     params.velocity = notes_.velocity();
     params.modWheel = notes_.controller(kModWheelController);
     params.cc74 = notes_.controller(kDensityController);
@@ -274,17 +267,16 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
 
 void PluginProcessor::prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) {
     engine_.prepare(sampleRate, maximumExpectedSamplesPerBlock);
-    // O transporte precisa da taxa de amostragem para saber quantos bytes por
-    // amostra consome, e e' a unica vez que a recebe: depois do primeiro bloco o
-    // host pode mudar a taxa sem avisar, e quem continua a ter a verdade e' o
-    // metodo de prepare.
+    // o transporte precisa da taxa para saber quantos bytes por amostra consome, e
+    // e' aqui que a recebe: quem continua a ter a verdade sobre a taxa e' este
+    // metodo.
     transport_.prepare(sampleRate);
 }
 
 void PluginProcessor::releaseResources() {
     engine_.reset();
-    // O transporte e' reposto pela via do pedido, nao por escrito directo: quem
-    // escreve em position_ e' advance(), e so' advance' escreve.
+    // reposto pelo metodo do transporte, nao escrevendo position_ a mao: quem
+    // escreve ali e' advance().
 transport_.reset();
     incoming_.clear();
     returned_.clear();
@@ -329,19 +321,17 @@ sourceName_ = juce::File(path).getFileName();
     sourceInfo_.formatTag = "[64-bit PE]";
     sourceInfo_.sizeBytes = static_cast<std::int64_t>(size);
 
-    // Os bytes crus ficam para o seletor de bytes converter qualquer janela sem
-    // voltar a ler o disco.
+    // bytes crus ficam para o seletor converter qualquer janela sem voltar ao disco.
     sourceBytes_ = std::move(bytes);
 
-    // As secoes e a curva vao para o estado do editor. Antes eram descartadas
-    // aqui, e o display nao tinha o que desenhar.
+    // secoes para o display, uma entrada por secao do PE.
     sourceInfo_.sections.clear();
     sourceInfo_.sections.reserve(parsed.image.numberOfSections);
     for (std::size_t i = 0; i < parsed.image.numberOfSections; ++i) {
         const auto& parsedSection = parsed.image.sections[i];
         SourceInfo::SectionInfo entry;
-        // O campo de nome tem 8 bytes e pode nao estar terminado, por isso o
-        // comprimento vai explícito em vez de usar strlen.
+        // o campo de nome tem 8 bytes e pode nao estar terminado, por isso o comprimento
+        // vai explicito em vez de strlen.
         entry.name = juce::String::fromUTF8(parsedSection.name,
                                             static_cast<int>(
                                                 std::find(parsedSection.name,
@@ -353,14 +343,12 @@ sourceName_ = juce::File(path).getFileName();
         sourceInfo_.sections.push_back(std::move(entry));
     }
 
-    // A curva de entropia do ficheiro inteiro foi embora com o componente que a
-    // desenhava. O rodape passou a medir a entropia da janela de 256 bytes onde
-    // esta a cabeca de leitura, que e' o que interessa e custa um histograma por
-    // tique em vez de 320 no ingest.
+    // a curva de entropia do ficheiro inteiro saiu com o componente que a desenhava.
+    // o rodape mede a janela de 256 bytes onde esta' a cabeca de leitura: um
+    // histograma por tique em vez de 320 no ingest.
 
-    // O seletor arranca na primeira secao com dados, e nao em zero: o cabecalho
-    // PE nao produz audio reconhecivel, e comecar la faria o instrumento soar
-    // errado logo apos o primeiro arrasto.
+    // arranca na primeira secao com dados, nao em zero: o cabecalho PE nao produz
+    // audio reconhecivel e o instrumento soaria errado no primeiro arrasto.
     byteRange_ = {};
     lastExactRange_ = {};
     for (const auto& section : parsed.image.sections) {
@@ -378,29 +366,28 @@ sourceName_ = juce::File(path).getFileName();
 
     lastError_.clear();
 
-    // A curva e as secoes estao publicadas acima; falta o audio. Se a primeira
-    // janela nao produzir audio, o ingest e' um sucesso sem som, que e' o mesmo
-    // que recusa so sem o codigo de erro.
+    // janela publicada. Se a primeira nao produzir audio, o ingest e' sucesso sem
+    // som, que e' o mesmo que recusa sem codigo de erro.
     return publishByteRange();
 }
 
 bool PluginProcessor::setByteRange(std::uint64_t start, std::uint64_t end,
                                    bool rememberExactRange) {
-    // A janela e' validada no nucleo, e nao aqui: e' a unica forma de a regra ter
-    // teste, porque o nucleo nao depende de JUCE e este ficheiro depende.
+    // validacao no nucleo: a regra so' tem teste la', porque o nucleo nao depende de
+    // JUCE.
     pe::ByteRange next {start, end};
     if (!pe::clampByteRange(next, static_cast<std::uint64_t>(sourceBytes_.size()))) {
         return false;
     }
 
-    // Pedir a mesma janela nao republica material: republicar interromperia o
-    // audio para trocar por uma copia igual, sem ganho nenhum.
+    // pedir a mesma janela nao republica: interromperia o audio para trocar por uma
+    // copia igual.
     if (next.start == byteRange_.start && next.end == byteRange_.end) {
         return true;
     }
 
-    // Falha nao mexe no estado: a thread de audio continua com o material
-    // anterior em vez de ficar sem fonte.
+    // falha nao mexe no estado: o audio continua com o material anterior em vez de
+    // ficar sem fonte.
     const auto previous = byteRange_;
     byteRange_ = next;
     if (!publishByteRange()) {
@@ -420,9 +407,8 @@ bool PluginProcessor::snapByteRangeToSection() {
         return false;
     }
 
-    // O nucleo decide, porque a regra tem teste la e nao aqui. Aqui so se junta
-    // a lista de secoes do PE ao formato que a funcao espera, e se publica o
-    // resultado.
+    // o nucleo decide, porque a regra tem teste la'. Aqui so' se juntam as secoes do
+    // PE no formato que a funcao espera e se publica o resultado.
     std::vector<std::uint32_t> offsets;
     std::vector<std::uint32_t> sizes;
     offsets.reserve(sourceInfo_.sections.size());
@@ -437,8 +423,7 @@ bool PluginProcessor::snapByteRangeToSection() {
                                             offsets.data(), sizes.data(), offsets.size());
 
     if (next.start == previous.start && next.end == previous.end) {
-        // Nada a mudar. Republicar material identico interromperia o audio para
-        // trocar por uma copia igual.
+        // nada a mudar. Republicar material identico interromperia o audio sem ganho.
         return true;
     }
 
@@ -446,9 +431,9 @@ bool PluginProcessor::snapByteRangeToSection() {
         return false;
     }
 
-    // Ao alinhar, a regiao anterior passa a ser a exacta a que se pode voltar.
-    // Ao voltar a exacta, a exacta continua a ser a mesma, e nao a regiao
-    // alinhada: senao o segundo duplo clique saltava para o sitio errado.
+    // alinhado, a regiao anterior passa a ser a exacta de retorno. Ao voltar, a
+    // exacta continua a mesma: senao o segundo duplo clique saltava para o sitio
+    // errado.
     if (!byteRangeIsSectionAligned()) {
         lastExactRange_ = next;
     }
@@ -483,9 +468,9 @@ bool PluginProcessor::publishByteRange() {
         return false;
     }
 
-    // A curva de entropia e' calculada AQUI, na thread de interface, e nao no
-    // motor. Sao 256 pontos da regiao, e o custo e' irrelevante fora do callback —
-    // enquanto dentro do callback era uma passagem completa por troca de material.
+    // a curva e' calculada AQUI, na interface, e nao no motor. Sao 256 pontos da
+    // regiao: custo irrelevante fora do callback, e dentro era uma passagem completa
+    // por troca de material.
     std::vector<float> curve(dsp::GranularEngine::kMaxEntropyPoints, 0.0f);
     {
         std::vector<pe::Column> columns;
@@ -497,13 +482,12 @@ bool PluginProcessor::publishByteRange() {
                 curve[i] = index < columns.size() ? columns[index].entropyBits : 0.0f;
             }
         }
-        // Sem colunas a curva fica a zeros e o motor usa o valor medio, que e' o
-        // mesmo que a curva desativada daria.
+        // sem colunas a curva fica a zeros e o motor usa o valor medio, o mesmo que a
+        // curva desativada daria.
     }
 
-    // Se a fila de entrada esta cheia, a thread de audio ainda nao consumiu a
-    // publicacao anterior. Recusar e melhor do que crescer: a memoria e' do
-    // produtor, e uma alocacao ali custaria o contrato de tempo real.
+    // memoria do produtor. Fila cheia quer dizer que o audio ainda nao consumiu a
+    // publicacao anterior; o push recusa com E_BUSY em vez de crescer.
     owned_.push_back(std::move(buffer));
     entropyCurves_.push_back(std::move(curve));
 
@@ -515,10 +499,8 @@ bool PluginProcessor::publishByteRange() {
         return false;
     }
 
-    // O transporte so sabe o comprimento da regiao quando lha dizemos. Sem
-    // esta linha a duracao de uma volta seria a do material anterior, e o
-    // primeiro transporte depois de carregar um ficheiro arrastaria a duracao do
-    // ficheiro que estava la antes.
+    // o transporte so' sabe o comprimento da regiao quando lho dizemos. Sem esta
+    // linha a duracao de uma volta seria a do material anterior.
     transport_.setRegionLength(range.length());
     telemetry_.playDurationSeconds.store(transport_.durationSeconds(),
                                           std::memory_order_relaxed);
@@ -530,15 +512,13 @@ void PluginProcessor::drainIncomingQueue() noexcept {
     while (incoming_.pop(incoming)) {
         const auto previous = live_.load(std::memory_order_relaxed);
         if (previous != nullptr) {
-            // Devolve o ponteiro antigo antes de trocar, para que a interface
-            // nunca libere memoria que a thread de audio ainda esta lendo.
+            // devolve o antigo antes de trocar, para a interface nunca liberar memoria que o
+            // audio ainda esta' lendo.
             returned_.push({previous, nullptr});
         }
         live_.store(incoming.samples, std::memory_order_release);
-        // **So' copia o ponteiro da curva.** A medicao foi feita na interface; aqui
-        // ha um copy_n de no maximo 1024 floats e nada mais. A versao anterior
-        // media a entropia do material inteiro dentro deste metodo, que e' chamado
-        // de processBlock.
+        // so' copia o ponteiro da curva: no maximo 1024 floats. A medicao foi feita na
+        // interface; antes era aqui dentro, a cada troca de material.
         engine_.setSource(incoming.samples->data(), incoming.samples->size(),
                           incoming.entropyCurve, dsp::GranularEngine::kMaxEntropyPoints);
     }
@@ -556,8 +536,8 @@ void PluginProcessor::releaseReturnedBuffers() {
 
         if (index < owned_.size()) {
             owned_.erase(owned_.begin() + static_cast<std::ptrdiff_t>(index));
-            // A curva segue o buffer. Esvaziar so' as amostras deixaria o indice
-            // desalinhado e a proxima publicacao escreveria a curva no sitio errado.
+            // a curva segue o buffer. Apagar so' as amostras desalinhava o indice e a
+            // proxima publicacao escrevia a curva no sitio errado.
             if (index < entropyCurves_.size()) {
                 entropyCurves_.erase(entropyCurves_.begin() +
                                      static_cast<std::ptrdiff_t>(index));
@@ -568,8 +548,8 @@ void PluginProcessor::releaseReturnedBuffers() {
 
 void PluginProcessor::pushKeyboardNote(int noteNumber, float velocity, bool on) noexcept {
     const int value = juce::jlimit(0, 127, static_cast<int>(velocity * 127.0f + 0.5f));
-    // push devolve false com a fila cheia; perder uma tecla e' preferivel a
-    // bloquear a thread de interface ou a alocar.
+    // push false com a fila cheia: perder uma tecla e' melhor do que bloquear a
+    // interface ou alocar.
     static_cast<void>(keyboardNotes_.push({on ? rt::NoteTracker::Event::Kind::noteOn
                                               : rt::NoteTracker::Event::Kind::noteOff,
                                            noteNumber & 0x7F, value}));
@@ -606,9 +586,9 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
         return;
     }
 
-    // Range-for: MidiBuffer::Iterator foi deprecado no JUCE 8. A construcao de
-    // MidiMessage a partir de MidiMessageMetadata nao aloca, porque os bytes
-    // sao uma vista sobre o proprio buffer.
+    // range-for, porque MidiBuffer::Iterator esta' depreciado no JUCE 8. A
+    // MidiMessage sai de MidiMessageMetadata sem alocar: os bytes sao vista sobre o
+    // proprio buffer.
     for (const auto metadata : midi) {
         const juce::MidiMessage message = metadata.getMessage();
 
@@ -627,9 +607,9 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
             kind = rt::NoteTracker::Event::Kind::noteOff;
         }
 
-        // A roda de modulacao (CC1) nao move nenhum parametro: e' fonte da
-        // matriz, e so' modula onde uma rota a ligar. CC74 e CC71 continuam a
-        // ter o mapeamento directo que tinham, e servem de fonte tambem.
+        // CC1 nao move parametro nenhum: e' fonte da matriz e so' modula onde ha uma
+        // rota a ligar. CC74 e CC71 mantem o mapeamento directo que tinham e servem de
+        // fonte tambem.
         const float normalised = message.getControllerValue() / 127.0f;
         if (message.getControllerNumber() == kCcDensity) {
             notes_.setController(kDensityController, normalised);
@@ -639,9 +619,9 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
             notes_.setController(kModWheelController, normalised);
         }
 
-        // O numero tem de ser o da nota: getControllerNumber() devolve 0 numa
-        // mensagem de nota, e passar aquele valor aqui punha todas as notas em 0
-        // (quatro oitavas abaixo) sem que nada falhasse.
+        // o numero tem de ser o da nota. getControllerNumber() devolve 0 numa nota, e
+        // passar aquele valor punha todas as notas em 0 (quatro oitavas abaixo) sem que
+        // nada falhasse.
         notes_.handle({kind, message.getNoteNumber(), message.getControllerValue()});
     }
 }
@@ -665,41 +645,35 @@ void PluginProcessor::applyPendingControllerChanges() {
 void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
 
-    // A troca de material e' o unico ponto de cruzamento entre as threads, e
-    // acontece por troca de ponteiro, sem alocar e sem esperar.
+    // a troca de material e' o unico ponto de cruzamento entre as threads: troca de
+    // ponteiro, sem alocar e sem esperar.
     drainIncomingQueue();
     readNotes(midi);
     drainKeyboardNotes();
     updateHostTransport();
-    // Sem isto o snapshot da matriz so mudava quando a interface tocasse no
-    // motor, e o preset carregado ficaria a soar com as rotas anteriores.
+    // sem isto o snapshot so' mudava quando a interface tocasse no motor, e o preset
+    // carregado soava com as rotas anteriores.
     refreshModMatrix();
 
 const auto numSamples = buffer.getNumSamples();
 
-    // Transporte e gate. A ordem e' o que impede som sem posicao ou posicao sem
-    // som: o advance vem primeiro, e o mesmo booleano local decide a posicao que
-    // entra nos params e o gate que entra no motor.
-    //
-    // **Um booleano local e nao duas leituras do atomico.** Se o utilizador carregar
-    // em stop entre as duas, a posicao e' de um estado e o gate de outro, e o
-    // resultado e' audio a sair de uma regiao que o transporte ja largou.
+    // transporte e gate. O advance vem primeiro e um booleano local decide a
+    // posicao que entra nos params e o gate que entra no motor.
+    // booleano local e nao duas leituras do atomico: um stop no meio daria posicao
+    // de um estado e gate de outro, e o audio sairia de uma regiao ja' largada.
     const auto playing = transport_.isPlaying();
 
     auto params = currentParams();
-    // Scan Speed nao e' parametro do motor — e' taxa do transporte, que e'
-    // estado atomico proprio. Um store relaxado por bloco e' o custo, e o
-    // setRate ja recorta NaN para 1,0: automacao corrompida nao trava o scan.
+    // scan Speed nao e' parametro do motor, e' taxa do transporte. Um store relaxado
+    // por bloco e' o custo, e setRate ja' recorta NaN para 1.
     transport_.setRate(static_cast<double>(*parameters_.getRawParameterValue("scanspeed")));
     if (playing) {
         params.position = transport_.advance(numSamples, playing);
     }
 
-    // O OR com as notas e' o que faz o botao funcionar sem MIDI: o motor so'
-    // precisa de gate aberto para produzir, e gate aberto sem nota e' exactamente
-    // o que o transporte e'. O ADSR com defaults (attack 5 ms) continua a valer,
-    // porque setSounding e' a mesma porta que as notas usam — e e' chamada a
-    // cada bloco, por isso o disparo e' na aresta e nao no nivel.
+    // o OR com as notas faz o botao soar sem MIDI: o motor so' precisa de gate
+    // aberto, e gate aberto sem nota e' o transporte. setSounding e' a mesma porta
+    // das notas e e' chamada a cada bloco, por isso o disparo e' na aresta.
     engine_.setSounding(notes_.sounding() || playing);
     engine_.processBlock(buffer.getWritePointer(0),
                          buffer.getWritePointer(1),
@@ -709,8 +683,8 @@ const auto numSamples = buffer.getNumSamples();
     publishTelemetry(buffer);
 }
 
-// Publica o pico do bloco, as vozes ativas e a posicao do transporte. Roda depois
-// do motor e antes de sair: a leitura e' sobre o bloco que acabou de ser escrito.
+// pico, vozes ativas e posicao do transporte, depois do motor e antes de sair: a
+// leitura e' sobre o bloco que acabou de ser escrito.
 void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept {
     float peak = 0.0f;
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
@@ -722,14 +696,13 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
 
     const auto decibels = (peak > 1.0e-6f) ? juce::Decibels::gainToDecibels(peak) : -1.0f;
 
-    // relaxed e' suficiente: sao valores de leitura para um mostrador, e a
-    // ordenacao que interessa e' dentro do proprio bloco, que ja terminou.
+    // relaxado chega: sao valores de mostrador, e a ordenacao que interessa e' dentro
+    // do bloco, que ja' terminou.
     telemetry_.peakDb.store(decibels, std::memory_order_relaxed);
     telemetry_.activeVoices.store(engine_.lastActiveVoices(), std::memory_order_relaxed);
 
-    // O `sounding` e' o mesmo OU que o motor recebeu, e nao notes_.sounding(): o
-    // rodape e' a resposta a "esta a sair som", e durante o transporte a resposta
-    // e' sim mesmo sem nota nenhuma.
+    // sounding e' o mesmo OU que o motor recebeu, nao notes_.sounding(): o rodape
+    // responde "esta a sair som", e com transporte a resposta e' sim mesmo sem nota.
     const auto audible = notes_.sounding() || transport_.isPlaying();
     telemetry_.sounding.store(audible, std::memory_order_relaxed);
     telemetry_.playing.store(transport_.isPlaying(), std::memory_order_relaxed);
@@ -745,8 +718,8 @@ void PluginProcessor::applyFactoryPreset(int index) {
     }
     const auto& preset = presets[static_cast<std::size_t>(index)];
 
-    // Por ID, e nao por ordem do layout: a tabela e' a fonte e a ordem pode
-    // mudar. convertTo0to1 porque setValueNotifyingHost fala normalizado.
+    // por ID, nao por ordem do layout: a tabela e' a fonte e a ordem pode mudar.
+    // convertTo0to1 porque setValueNotifyingHost fala normalizado.
     const auto set = [this](const char* id, float plainValue) {
         if (auto* parameter = parameters_.getParameter(id)) {
             parameter->setValueNotifyingHost(parameter->convertTo0to1(plainValue));
@@ -779,18 +752,17 @@ void PluginProcessor::applyFactoryPreset(int index) {
     set("lfowave", preset.lfowave);
 }
 
-// Nao-const porque copyState e' nao-const no JUCE: copiar o estado mexe no
-// undo interno da arvore. Chamar de const mentiria sobre isso.
+// nao-const porque copyState e' nao-const no JUCE: copiar o estado mexe no undo
+// interno da arvore.
 std::unique_ptr<juce::XmlElement> PluginProcessor::stateXml() {
     auto state = parameters_.copyState();
 
-    // O binario carregado vai para o estado porque sem ele o projeto abre com
-    // os parametros certos e o som errado, que e' pior do que nao abrir nada.
+    // o binario vai no estado: sem ele o projeto abre com os parametros certos e o
+    // som errado.
     state.setProperty("sourcePath", sourcePath_, nullptr);
 
-    // A regiao tambem vai, pelo mesmo motivo: sem ela o projeto abre a tocar
-    // outra parte do ficheiro, e o utilizador nao sabe porque. Fica como
-    // propriedade e nao como PARAM, para nao virar parametro automatizavel.
+    // a regiao tambem, senao o projeto abre a tocar outra parte do ficheiro sem o
+    // utilizador saber porque. Propriedade e nao PARAM, para nao virar automatizavel.
     state.setProperty("byteStart", static_cast<std::int64_t>(byteRange_.start), nullptr);
     state.setProperty("byteEnd", static_cast<std::int64_t>(byteRange_.end), nullptr);
 
@@ -810,31 +782,28 @@ bool PluginProcessor::loadStateXml(const juce::XmlElement& xml) {
 
     parameters_.replaceState(juce::ValueTree::fromXml(xml));
 
-    // replaceState copia filhos: um estado antigo, sem MODMATRIX, apagaria o no.
-    // Recriar aqui mantem o estado sempre completo, e republicar garante que a
-    // matriz que vai soar e' a que veio no ficheiro (ou vazia, se nao veio).
+    // replaceState copia os filhos: estado antigo, sem MODMATRIX, apagaria o no.
+    // recriar mantem o estado completo, e republicar garante que soa a matriz do
+    // ficheiro (ou vazia, se nao veio).
     ensureModMatrixNode();
     publishModMatrix();
 
-// O arquivo e' reingestado pela mesma via de ingest do arrasto: ler disco,
-    // converter e publicar na fila. Nao ha caminho paralelo, e' o mesmo codigo
-    // que ja' tem teste.
+// o ficheiro e' reingerido pela mesma via do arrasto: ler, converter, publicar.
+// nao ha caminho paralelo.
     const auto tree = parameters_.state;
     const auto path = tree.getProperty("sourcePath").toString();
     if (path.isNotEmpty() && juce::File(path).existsAsFile()) {
         if (ingest(path)) {
-            // A regiao so e' restaurada se o ingest passou. Aplicar antes
-            // faria setByteRange Working contra um buffer vazio, e o projeto
-            // abriria mudo sem dar erro.
+            // a regiao so' e' restaurada se o ingest passou. Aplicada antes, corria contra
+            // um buffer vazio e o projeto abria mudo sem dar erro.
             const auto start = static_cast<std::uint64_t>(
                 juce::jmax<juce::int64>(0, tree.getProperty("byteStart").toString()
                                                      .getLargeIntValue()));
             const auto end = static_cast<std::uint64_t>(
                 juce::jmax<juce::int64>(0, tree.getProperty("byteEnd").toString()
                                                    .getLargeIntValue()));
-            // Uma regiao guardada invalida neste ficheiro nao e' erro: o ficheiro pode
-            // ter mudado desde que o projeto foi guardado. O ingest ja deixou
-            // material auditavel, entao segue com ele.
+            // regiao guardada invalida neste ficheiro nao e' erro: o ficheiro pode ter
+            // mudado desde o save. O ingest ja' deixou material auditavel.
             if (end > start) {
                 static_cast<void>(setByteRange(start, end));
             }
@@ -854,8 +823,8 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes) {
     if (xml == nullptr) {
         return;
     }
-    // Falso nao e' erro aqui: o host pode entregar qualquer blob, e o contrato
-    // do setStateInformation e' ignorar o que nao reconhece.
+    // falso nao e' erro: o host pode entregar qualquer blob, e o contrato do
+    // setStateInformation e' ignorar o que nao reconhece.
     static_cast<void>(loadStateXml(*xml));
 }
 
@@ -864,8 +833,8 @@ bool PluginProcessor::savePresetToFile(const juce::File& file) {
     if (xml == nullptr) {
         return false;
     }
-    // replaceWithText e nao append: um .opcoda anterior tem de sair inteiro, e
-    // um append a meio de um XML velho dava um ficheiro com dois documentos.
+    // replaceWithText e nao append: um .opcoda anterior tem de sair inteiro, senao
+    // o ficheiro ficava com dois documentos.
     return file.replaceWithText(xml->toString());
 }
 
@@ -879,8 +848,8 @@ bool PluginProcessor::loadPresetFromFile(const juce::File& file) {
 
 } // namespace opcoda
 
-// Ponto de entrada que o JUCE procura pelo nome, sem namespace. Dentro de
-// opcoda:: ele linka como createPluginFilter@@ e o Standalone nao resolve.
+// entrada que o JUCE procura pelo nome, sem namespace. Dentro de opcoda:: linka
+// como createPluginFilter@@ e o Standalone nao resolve.
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
     return new opcoda::PluginProcessor();
 }

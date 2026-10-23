@@ -28,9 +28,9 @@ const char* lfoWaveName(LFOWave wave) noexcept {
 
 namespace {
 
-// splitmix64: hash inteiro deterministico para o S&H. O ciclo N tem sempre o
-// mesmo valor, em qualquer compilador e sem estado — sin() de biblioteca
-// variava entre libm e quebrava a repetibilidade que o T1/T2 assumem.
+// splitmix64: hash inteiro para o S&H. o ciclo N da sempre o mesmo valor, sem
+// estado e igual entre compiladores. sin() de libm variava e quebrava a
+// repetibilidade que o T1/T2 assumem.
 std::uint64_t splitmix64(std::uint64_t x) noexcept {
     x += 0x9E3779B97F4A7C15ull;
     x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -41,7 +41,7 @@ std::uint64_t splitmix64(std::uint64_t x) noexcept {
 } // namespace
 
 float LFO::waveAt(LFOWave wave, double phase) noexcept {
-    // Fase em [0, 1). O wrap e' do advance/valueAt; aqui nao se confia: fracao
+    // fase em [0, 1). o wrap e' do advance/valueAt; aqui nao se confia: fracao
     // fora disso dobra a forma em vez de indexar lixo.
     const double p = phase - std::floor(phase);
 
@@ -52,9 +52,8 @@ float LFO::waveAt(LFOWave wave, double phase) noexcept {
         case LFOWave::kSaw: return static_cast<float>(2.0 * p - 1.0);
         case LFOWave::kSquare: return p < 0.5 ? 1.0f : -1.0f;
         case LFOWave::kSampleHold: {
-            // Indice do ciclo, nao da amostra: o valor segura o ciclo inteiro
-            // e so muda na virada, que e' a definicao de sample-and-hold. Os
-            // 53 bits de cima viram [0, 1), depois bipolar.
+            // indice do ciclo, nao da amostra: o valor segura o ciclo inteiro.
+            // os 53 bits de cima viram [0, 1), depois bipolar.
             const auto cycle = static_cast<std::uint64_t>(std::floor(phase));
             constexpr double kToUnit = 1.0 / 9007199254740992.0;
             return static_cast<float>(static_cast<double>(splitmix64(cycle) >> 11) * kToUnit *

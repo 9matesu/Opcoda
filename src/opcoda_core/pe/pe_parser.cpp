@@ -143,9 +143,9 @@ PeParseResult parse(const std::uint8_t* data, std::size_t size) noexcept {
             return result;
         }
 
-        // A secao tem um fim proprio, rawOffset + rawSize, e medir ate o fim
-        // do arquivo pegaria o material das secoes seguintes. Uma secao sem
-        // dados brutos, como .bss, fica com entropia zero.
+        // a secao tem fim proprio, rawOffset + rawSize. medir ate ao fim do
+        // ficheiro pegaria o material das secoes seguintes. secao sem dados
+        // brutos, como .bss, fica com entropia zero.
         section.entropy = entropy::shannonBitsPerByte(
             data, size, section.rawOffset, section.rawSize);
 

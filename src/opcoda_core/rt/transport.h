@@ -5,65 +5,43 @@
 
 namespace opcoda::rt {
 
-// Transporte de audicao: percorre a regiao selecionada de inicio a fim, sem
-// nota MIDI, para que se possa ouvir o material sem teclado.
+// transporte de audicao: percorre a regiao selecionada de inicio a fim, sem nota
+// MIDI, para se ouvir o material sem teclado.
 //
-// **Vive no nucleo e nao no plugin** pela razao de sempre: nao depende de JUCE, e
-// por isso tem teste, sanitizers e cobertura. E' a mesma disciplina da
-// NoteTracker, e a regra que vale e a mesma - o que cruza threads e' atomico, e o
-// que e' de uma thread so e' variavel simples.
+// vive no nucleo e nao no plugin porque nao depende de JUCE, e por isso tem teste,
+// sanitizers e cobertura. o que cruza threads e' atomico; o que e' de uma thread
+// so e' variavel simples.
 //
-// A divisao do trabalho e' esta, e cada metade tem o seu dono:
+// a interface chama play, stop e seekToFraction, de qualquer thread; a thread de
+// audio chama advance, uma vez por bloco. advance() e' a unica funcao que mexe em
+// posicao_, e a interface le a cabeca por positionFraction().
 //
-//   - a interface chama play, stop e seekToFraction, de qualquer thread;
-//   - a thread de audio chama advance, uma vez por bloco.
+// a posicao e' fracao da REGIAO, nao endereco do ficheiro. a regiao de N bytes tem
+// N amostras e o motor le `read = position * (sourceCount - 1)`; a traducao para
+// endereco e' do editor, com pe::byteForPosition.
 //
-// **advance() e' a unica funcao que mexe em posicao_, e posicao_ nunca e' escrita
-// por ninguem fora da thread de audio.** A interface descobre onde esta a cabeca
-// por positionFraction(), que le o valor publicado, e nao por posicao_.
-//
-// A posicao e' uma fracao da REGIAO e nao um endereco do ficheiro. pe::toSamples
-// converte um byte numa amostra, entao uma regiao de N bytes tem N amostras, e o
-// motor le `read = position * (sourceCount - 1)`. E' por isso que este classe
-// trabalha em espaco de fracao e a traducao para endereco e' do editor, com
-// pe::byteForPosition.
-//
-// **A posicao nunca chega a 1,0.** Em granular_engine.cpp a voz desliga quando
-// `index + 1 >= sourceCount`, e por isso pe::positionForByte ja' e' meio aberto em
-// cima: o endereco mais alto que produz som e' `end - 2`. Um transporte que
-// embrulha em 1,0 exacto leva a ultima fraccao de cada volta a audibilidade zero,
-// e isso ouve-se como um clique a cada volta. O lado de cima e' por isso
-// `1 - 2/bytes`, e nao 1,0.
+// a posicao nunca chega a 1,0: a voz desliga em `index + 1 >= sourceCount`. o lado
+// de cima e' 1 - 2/bytes, senao a ultima fracao de cada volta fica muda e ouve-se
+// um clique.
 class Transport {
 public:
-    // Tecto de duracao. Doze megabytes a 48 kHz dao 262 s de reproduccao directa,
-    // que nao e' uma audicao: e' uma espera. Passados 30 s o material ja foi
-    // ouvido e o transporte esta a repetir.
+    // tecto de duracao. 12 MB a 48 kHz dao 262 s de espera, nao de audicao: aos
+    // 30 s o material ja' foi ouvido e o transporte esta a repetir.
     static constexpr double kMaxSeconds {30.0};
 
-    // Piso de duracao, e ele tem uma razao que nao e' "arredondar".
+    // piso de duracao, e nao por arredondamento.
     //
-    // Abaixo do comprimento do maior grao que o motor consegue produzir, uma
-    // passagem nem da para completar um grao: o transporte produz um clique e
-    // nao uma audicao. Esse comprimento e' GranularEngine::kMaxGrainMs, 100 ms, e
-    // por isso o piso e' 0,1 s.
+    // abaixo do maior grao que o motor produz nao da para completar um grao: sai um
+    // clique e nao uma audicao. esse comprimento e' GranularEngine::kMaxGrainMs,
+    // 100 ms. o static_assert em transport.cpp prende os dois numeros.
     //
-    // O valor e' verificado contra o motor por static_assert em transport.cpp, e
-    // nao repetido aqui: dois numeros que precisam de concordar num so sitio
-    // divergem no primeiro que alguem mexer num deles.
-    //
-    // O que este piso **nao** faz e' salvar a regiao de 4 KB, que dura 85 ms de
-    // forma natural. Essa fica esticada para 100 ms, uma alteracao de 17 %, e e' a
-    // diferenca entre "quase o tempo certo" e "clique". Ver a Historia 1 da
-    // specs/008-transporte-e-vistas: o piso e' 0,1 s e nao 0,25 s por causa
-    // disso.
+    // o piso nao salva a regiao de 4 KB (85 ms), que fica esticada para 100 ms. e' a
+    // diferenca entre "quase o tempo certo" e "clique".
     static constexpr double kMinSeconds {0.1};
 
-    // Os atomicos precisam de ser lock-free. Um atomic que toma um mutex interno
-    // dentro da thread de audio viola o Principio II do mesmo modo que um lock
-    // explicito, e a falha seria invisivel numa revisao. No x64 do MSVC sao
-    // todos lock-free, e estas assercoes turningam isso em erro de compilacao
-    // se algum dia deixar de ser.
+    // os atomicos tem de ser lock-free. um atomic com mutex interno dentro da
+    // thread de audio viola o Principio II do mesmo modo que um lock explicito, e
+    // a falha seria invisivel numa revisao. no x64 do MSVC sao todos lock-free.
     static_assert(std::atomic<bool>::is_always_lock_free,
                   "Transport exige atomic<bool> sem lock");
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
@@ -71,106 +49,92 @@ public:
     static_assert(std::atomic<double>::is_always_lock_free,
                   "Transport exige atomic<double> sem lock");
 
-    // Taxa de amostragem. Chamada de prepareToPlay, na thread de interface, e nao
-    // da thread de audio: e' por isso que e' uma variavel simples e nao um
-    // atomico. Quem escreve e' sempre o mesmo e sempre antes do primeiro bloco.
+    // taxa de amostragem. chamada de prepareToPlay, na thread de interface e antes
+    // do primeiro bloco; por isso e' variavel simples e nao atomico.
     void prepare(double sampleRate) noexcept;
 
-    // Comprimento da regiao em bytes, que e' tambem o comprimento do buffer de
-    // amostras que o motor recebe. Chamado da interface quando a regiao muda.
+    // comprimento da regiao em bytes, que e' tambem o do buffer de amostras que o
+    // motor recebe. chamado da interface quando a regiao muda.
     void setRegionLength(std::uint64_t bytes) noexcept;
 
-    // Ancora de busca: a fracao a partir da qual a proxima volta comeca. E' o
-    // valor de POSITION, e por isso o knob continua vivo e automatizavel.
+    // ancora de busca: a fracao onde a proxima volta comeca. e' o valor de POSITION,
+    // por isso o knob continua vivo e automatizavel.
     //
-    // **A ancora nao e' lida a cada bloco.**seekToFraction incrementa uma geracao,
-    // e a thread de audio aplica a ancora uma vez e so. Sem a geracao, o editor
-    // - que repinta a 60 Hz - voltaria a ancorar a cada quadro e a cabeca nunca
-    // passaria do ponto de ancoragem.
+    // a ancora nao e' lida a cada bloco. seekToFraction incrementa uma geracao e a
+    // thread de audio aplica uma vez; sem isso o editor, que repinta a 60 Hz,
+    // voltaria a ancorar a cada quadro e a cabeca nunca passaria do ponto.
     void seekToFraction(double fraction) noexcept;
 
     void play() noexcept;
     void stop() noexcept;
 
-    // Velocidade de varredura: multiplica o avanco por amostra. 1.0 e' o tempo
-    // natural, 2.0 percorre a regiao em metade do tempo. Faixa 0,25..4,0:
-    // abaixo disso a volta arrasta-se, acima disso a cabeca salta posicoes
-    // inteiras por bloco e o display mente sobre onde o som esta.
+    // velocidade de varredura, multiplica o avanco por amostra. 1,0 e' tempo
+    // natural, 2,0 percorre em metade do tempo. faixa 0,25..4,0: abaixo arrasta,
+    // acima a cabeca salta posicoes inteiras por bloco e o display mente.
     //
-    // De qualquer thread; a thread de audio le o atomico dentro de
-    // durationSeconds(), O(1) por bloco — uma vez via advance, outra via
-    // publishTelemetry. Segue o mesmo desenho da ancora: estado partilhado em
-    // atomico lock-free, nunca escrita directa.
+    // de qualquer thread; a thread de audio le o atomico em durationSeconds(),
+    // o(1) por bloco. mesmo desenho da ancora: atomico lock-free, nunca escrita
+    // directa.
     void setRate(double rate) noexcept;
 
-    // Repoe o estado inicial e para. Chamado de releaseResources.
+    // repoe o estado inicial e para. chamado de releaseResources.
     void reset() noexcept;
 
     [[nodiscard]] bool isPlaying() const noexcept {
         return playing_.load(std::memory_order_acquire);
     }
 
-    // Verdadeiro quando ha regiao com material suficiente para produzir som.
+    // verdadeiro quando ha regiao com material para soar.
     //
-    // **O predicado e' `>= 3`, e nao `>= 1` nem `>= 2`.** Com dois bytes,
-    // upperBound() da 1 - 2/2 = 0 e advance() congelava em zero para sempre com o
-    // gate aberto: um drone de uma amostra com o cursor parado e um botao que parece
-    // funcionar. Com tres ha uma posicao util, que e' o que `end - 2` exige.
+    // o predicado e' `>= 3`, e nao `>= 1` nem `>= 2`. com dois bytes, upperBound()
+    // da 1 - 2/2 = 0 e advance() congelava em zero com o gate aberto: um drone de
+    // uma amostra com um botao que parece funcionar.
     [[nodiscard]] bool hasRegion() const noexcept {
         return regionBytes_.load(std::memory_order_acquire) >= 3;
     }
 
-    // **Thread de audio, uma vez por bloco.** Devolve a fracao de posicao a usar
-    // neste bloco, ja avancada e ja recortada.
+    // thread de audio, uma vez por bloco. devolve a fracao de posicao a usar neste
+    // bloco, ja avancada e recortada.
     //
-    // `playingSnapshot` tem de ser o valor que o chamador leu de isPlaying(). Passar
-    // o resultado em vez de o reler dentro e' o que garante que a posicao e o gate
-    // vem do mesmo estado: com o atómico lido duas vezes, o intervalo entre as duas
-    // leituras produz ate' um bloco de audio com a posicao congelada e o gate aberto.
-    // Nao aloca, nao trava e nao le ficheiros. E' a unica funcao que escreve em
-    // posicao_.
+    // `playingSnapshot` tem de ser o valor lido de isPlaying(). passar o resultado
+    // em vez de reler garante que a posicao e o gate vem do mesmo estado: com duas
+    // leituras, o intervalo entre elas produz ate' um bloco com a posicao congelada
+    // e o gate aberto. nao aloca, nao trava, nao le ficheiros.
     [[nodiscard]] float advance(int numSamples, bool playingSnapshot) noexcept;
 
-    // Posicao corrente, para o display. Le o valor publicado pela thread de audio
+    // posicao corrente, para o display. le o valor publicado pela thread de audio,
     // e nao posicao_, que e' dela.
     [[nodiscard]] float positionFraction() const noexcept {
         return static_cast<float>(publishedPosition_.load(std::memory_order_relaxed));
     }
 
-    // Duracao de uma passagem em segundos: a duracao natural dividida pela taxa,
-    // com o piso e o tecto aplicados DEPOIS, sobre o valor efetivo. Chamada da
-    // interface para escrever no display; le atomicos e nao escreve.
+    // duracao de uma passagem em segundos: a natural dividida pela taxa, com piso
+    // e tecto aplicados DEPOIS, sobre o valor efetivo. chamada da interface para
+    // escrever no display; le atomicos e nao escreve.
     //
-    // O piso e o tecto valem sobre o efetivo, e nao sobre o natural: o piso
-    // existe porque abaixo de um grao nao ha audicao, e uma regiao curta a 4x
-    // dava uma volta de 25 ms que nao completa um grao de 100 ms — o clique que
-    // o piso existe para impedir. Com o clamp depois, a passagem dura sempre
-    // entre 0,1 e 30 s, qualquer que seja a taxa; em regiao extrema a taxa
-    // satura, e isso e' comportamento documentado, nao defeito.
+    // o clamp depois e' o que importa: uma regiao curta a 4x daria 25 ms, que nao
+    // completa um grao de 100 ms. em regiao extrema a taxa satura, e isso e'
+    // documentado.
     [[nodiscard]] double durationSeconds() const noexcept;
 
 private:
-    // Avanco por amostra, em fracao da regiao.
-    //
-    // **O numero de bytes cancela-se, e isso e' proposito.** A fracao por amostra
-    // e' 1 / (taxa * duracao), e a duracao natural e' bytes / taxa: o quociente
-    // da regiao inteira reduz a 1/bytes, que e' o consumo de um byte por amostra
-    // de saida. So o clamp precisa dos bytes, e so para decidir se a duracao
-    // natural cabe no tecto.
+    // avanco por amostra, em fracao da regiao. os bytes cancelam-se: a fracao e'
+    // 1 / (taxa * duracao) e a natural e' bytes / taxa, logo 1/bytes. so o clamp
+    // precisa dos bytes, para decidir se a natural cabe no tecto.
     [[nodiscard]] double fractionPerSample() const noexcept;
 
-    // Lado de cima da posicao. Abaixo de 1,0 porque 1,0 e' silencio.
+    // lado de cima da posicao. abaixo de 1,0 porque 1,0 e' silencio.
     [[nodiscard]] double upperBound() const noexcept;
 
-    // Pede ao bloco seguinte que reponha a posicao a zero. Nao escreve em
-    // posicao_: quem escreve e' advance(), e so' advance' escreve.
+    // pede ao bloco seguinte que reponha a posicao a zero. nao escreve em posicao_:
+    // quem escreve e' advance(), e so advance().
     void requestReset() noexcept;
 
     double sampleRate_ {44100.0};
 
-    // De uma thread so: posicao_ e' escrita exclusivamente por advance(), que so a
-    // thread de audio chama, e nao por mais nada. reset() e setRegionLength()
-    // pedem o reset por requestReset() e nao escrevem aqui.
+    // de uma thread so: escrita exclusivamente por advance(), que so a thread de
+    // audio chama. reset() e setRegionLength() pedem por requestReset() e nao
+    // escrevem aqui.
     double position_ {0.0};
     std::uint64_t appliedSeekGeneration_ {0};
 

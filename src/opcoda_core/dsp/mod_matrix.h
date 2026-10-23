@@ -7,9 +7,8 @@
 
 namespace opcoda::dsp {
 
-// Fontes e destinos da matriz, na ordem em que o estado as guarda. A ordem e'
-// contrato: os inteiros viajam no preset e no .opcoda, e trocar a ordem mudaria
-// o som de sessoes salvas.
+// fontes e destinos, na ordem em que o estado guarda. a ordem e' contrato: os
+// inteiros viajam no preset e no .opcoda.
 enum class ModSource : std::uint8_t {
     kNone = 0,
     kLfo,
@@ -41,8 +40,8 @@ enum class ModDest : std::uint8_t {
 };
 
 inline constexpr int kMaxModRoutes = 8;
-// Cada rota viaja em tres inteiros: fonte, destino e amount em milesimos. E' a
-// forma que o estado guarda; o APVTS nao ve nada disto como parametro.
+// tres inteiros por rota: fonte, destino e amount em milesimos. o APVTS nao ve
+// nada disto como parametro.
 inline constexpr int kModRouteWords = 3;
 
 struct ModRoute {
@@ -55,9 +54,8 @@ struct ModMatrix {
     std::array<ModRoute, kMaxModRoutes> routes {};
 };
 
-// Valores normalizados das fontes no bloco corrente. -1..+1 excepto envelope e
-// entropia, que sao unipolares 0..1 — a soma com amount negativo trata as duas
-// como "quanto ha", e nao como oscilacao.
+// valores das fontes no bloco corrente. -1..+1, excepto envelope e entropia, que
+// sao unipolares 0..1 — a soma trata as duas como "quanto ha", nao como oscilacao.
 struct ModSourceValues {
     float lfo {0.0f};
     float envelope {0.0f};
@@ -102,9 +100,8 @@ struct ModSourceValues {
     return std::isfinite(amount) ? std::clamp(amount, -1.0f, 1.0f) : 0.0f;
 }
 
-// Soma das rotas que apontam para `dest`, limitada a [-1, 1]. Duas rotas da
-// mesma fonte somam — e' o que permite ligar o LFO ao corte e a densidade ao
-// mesmo tempo sem duplicar o LFO.
+// soma das rotas que apontam para `dest`, presa a [-1, 1]. duas rotas da mesma
+// fonte somam: da' para ligar o lfo ao corte e a densidade sem duplicar o lfo.
 [[nodiscard]] inline float matrixOffset(const ModMatrix& matrix,
                                        ModDest dest,
                                        const ModSourceValues& values) noexcept {
@@ -132,8 +129,8 @@ using ModMatrixArray = std::array<int, kMaxModRoutes * kModRouteWords>;
     return words;
 }
 
-// Rota invalida vira rota vazia, e amount fora de faixa e' recortado: estado
-// corrompido tem de abrir em silencio, e nao lancar excecao nem modular a esmo.
+// rota invalida vira rota vazia e amount fora de faixa e' recortado: estado
+// corrompido abre em silencio, nao lanca excecao nem modula a esmo.
 [[nodiscard]] inline ModMatrix fromArray(const ModMatrixArray& words) noexcept {
     ModMatrix matrix;
     for (int i = 0; i < kMaxModRoutes; ++i) {
