@@ -64,7 +64,7 @@ Windows x64, e o conjunto fechado de **41 parâmetros automatizáveis** da tabel
 | Teclado e escala (1.2.0) | `scale` (choice), `root` (choice, 12 notas), `glide` (portamento entre notas) |
 | Nuvem de grãos (1.2.0) | `cloudsize` (largura temporal da nuvem), `pitchspread` (dispersão de afinação por grão), `grainjit` (jitter de duração) |
 
-Cortes declarados, não escondidos: **FM não entra** — grão é playback amostrado, não oscilador, e FM de verdade exigiria portadora por voz; o LFO no pitch cobre o musicalmente útil. **Seleção inteligente de blocos (§8) continua adiada** — a própria especificação manda adiar, e a entropia já modula o spray hoje. **CLAP continua pós-entrega**, como no objetivo.
+Cortes declarados, não escondidos: **FM não entra** — grão é playback amostrado, não oscilador, e FM de verdade exigiria portadora por voz; o LFO no pitch cobre o musicalmente útil. **Seleção inteligente de blocos (§8) continua adiada** — a própria especificação manda adiar, e o spray e' dispersao pura dos graos, independente da entropia. **CLAP continua pós-entrega**, como no objetivo.
 
 Dois desenhos ficam **fora da tabela por decisão, não por esquecimento**, e ambos têm o desenho completo escrito em `docs/19-parametrizacao-do-estudo-e-briefing.md`:
 

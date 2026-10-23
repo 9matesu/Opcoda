@@ -74,8 +74,9 @@ das durações com `grainjit = 1` e confirma zero com `grainjit = 0`.
    a nuvem diferente entre tomadas.
 6. **Sem alocação.** Tudo avaliado no momento em que o grão nasce, com estado
    pré-alocado no motor.
-7. **Entropia continua a modular o spray.** A nuvem não substitui a ligação
-   existente; soma-se a ela.
+7. **O spray é dispersão pura dos grãos**, independente da entropia local. A
+   nuvem soma-se a ele; a entropia só o modula quando roteada explicitamente
+   pela matriz de modulação.
 
 ## Critérios de aceite
 

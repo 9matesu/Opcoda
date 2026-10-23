@@ -70,7 +70,7 @@ Um grão começa a ler com a janela no índice zero, o que zera a amplitude nas
 bordas e evita o clique na sobreposição. O interpolador é linear, com passo
 limitado para impedir aliasing audível na afinação máxima de +24 semitons.
 
-A entropia local modula o spray: região de alta entropia espalha mais, região
+O spray e' dispersao pura dos graos, independente da entropia local; a entropia so' o modula quando roteada pela matriz: região
 repetitiva fica mais ancorada. É o Entropy-to-CV descrito na fundamentação.
 
 ## Verificação de limites no parser

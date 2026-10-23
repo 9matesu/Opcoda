@@ -1,165 +1,102 @@
 # Opcoda
 
-Sintetizador granular em tempo real (VST3 e Standalone, Windows x64) que
-transforma binários Portable Executable em som. CLAP fica para depois da entrega.
+Granular synthesizer (VST3 and Standalone, Windows x64) that turns Portable
+Executable files into sound in real time. Source audio is the byte stream of a
+`.exe`, `.dll`, `.bin` or `.sys` file.
 
-Trabalho de Graduação em Análise e Desenvolvimento de Sistemas, 5º semestre.
+Version 0.1.0. Research/graduation project (TCC); no commercial release yet.
+
+## What it does
+
+Opcoda reads a PE file as raw bytes, converts them to a normalized audio
+buffer, and plays it through an 8-voice granular engine. Density, grain size,
+position, pitch, filtering, LFO modulation and an ADSR gate are all available
+as automatable parameters. Three views (waveform, byte grid, entropy curve) show
+the region being played.
+
+## Requirements
+
+- Windows x64.
+- Visual Studio 2022/2026 Build Tools (MSVC x64).
+- CMake 3.28+.
+- JUCE 8.0.14 cloned at `I:\deps\JUCE` (override with `-DJUCE_DIR=`).
 
 ## Build
 
-Requer Visual Studio Build Tools 2026, CMake 3.28+ e JUCE 8.0.14 clonado em
-`I:\deps\JUCE`. O `cl.exe` depende do vcvars64, então o build passa pelo script:
+```powershell
+.\tools\build.ps1          # Debug + AddressSanitizer + tests
+.\tools\build.ps1 -Release # Release, builds VST3 and Standalone
+```
+
+The script loads `vcvars64.bat`; do not invoke CMake directly.
+
+After a release configure, single formats can be built with:
 
 ```powershell
-.\tools\build.ps1              # debug + AddressSanitizer + testes
-.\tools\build.ps1 -Release     # release, gera VST3 e Standalone
+cmake --build --preset vst3
+cmake --build --preset standalone
 ```
 
-## Estrutura
+Tests:
 
-```
-src/opcoda_core/    núcleo C++20 puro, sem JUCE
-  pe/               parser PE, conversão byte para amostra
-  entropy/          entropia de Shannon por janela
-  dsp/              motor granular, janelas, DC-blocker, limiter
-  rt/               fila SPSC, troca de amostra, guard de alocação
-src/opcoda_plugin/  AudioProcessor JUCE, VST3 e Standalone
-tests/              GoogleTest, 289 casos mais 8 do guard de alocação
-docs/               documentação acadêmica e técnica
-docs/atlas/         atlas da arquitetura, com diagramas e tabelas de rastreio
-specs/              especificações por feature, do spec-kit
+```powershell
+ctest --preset dev -C Debug
 ```
 
-O núcleo não depende de JUCE, e isso não é estilo: é o que permite rodar o
-AddressSanitizer, os testes de borda e o ensaio end-to-end com `notepad.exe`
-real sem o framework no caminho.
+## Install (VST3)
 
-## Usar
+```powershell
+.\tools\install-vst3.ps1   # elevated, installs to Common Files\VST3
+```
 
-O Standalone e o VST3 abrem com a interface de três faixas: arraste um `.exe`,
-`.dll`, `.bin` ou `.sys` para dentro da janela, ou use o ícone de pasta, e o
-material toca em até um segundo. Binário recusado mostra o código tipado, como
-`E_BAD_MZ`, e o material anterior continua tocando.
+The per-user VST3 path is not supported by Ableton.
 
-São **41 parâmetros** automatizáveis, agrupados por módulo: grão (tamanho,
-densidade, posição, spray, afinação, volume, janela, panorâmica, nível do grão,
-aleatoriedade de afinação, velocidade de varredura), envelope global (ataque,
-decaimento, sustentação, liberação e as curvas de cada estágio), dois filtros em
-série (tipo, corte e Q no segundo; tipo, corte, Q, inclinação, drive, keytrack e
-profundidade do envelope no primeiro), LFO (taxa, profundidade, destino, forma,
-sincronismo com o tempo do host, divisão e degraus), teclado (escala, tônica e
-glide) e nuvem de grãos (largura, dispersão de afinação e jitter de duração).
+## First sound
 
-O instrumento é **mono**, com prioridade à última nota, e o envelope é global na
-saída. As oito vozes do motor são slots de grão simultâneos, não vozes de nota.
-As notas ligam o motor, o pedal de sustain segura as notas soltas, e os CCs 74 e
-71 movem densidade e posição. A matriz de modulação tem 8 rotas e vive no estado
-do projeto, não na lista de parâmetros — logo não é automatizável pelo host.
+1. Build and run the Standalone (or load the VST3 in a host).
+2. Drag an `.exe`/`.dll`/`.bin`/`.sys` file into the window, or use the folder
+   icon. Audio starts within about one second.
+3. If the file is rejected, a typed error code (e.g. `E_BAD_MZ`) is shown and
+   the previous material keeps playing.
+4. Press Space to play the whole region without MIDI; use the keyboard or MIDI
+   to trigger grains.
 
-O display tem três vistas da região — forma de onda, grelha de bytes e curva de
-entropia — e cada grão ativo aparece onde está a ler o material, com uma cauda
-de 24 quadros que mostra a direção da varredura. Sem spray nem pitch a cauda
-lê-se como ponto, e isso é honesto: não há direção para mostrar. Na grelha, o
-grão marca a célula do byte e a janela ancora no início da região; rolar ou
-clicar corta o seguimento, porque quem lê bytes manda. Clicar num byte move a
-cabeça de leitura para ele; se o byte estiver fora da região, a região é puxada
-para lá primeiro, com o mesmo comprimento. O campo hexadecimal à direita escreve
-o endereço da região, e a tecla `A` (ou o duplo-clique) alterna entre a região
-exata e a seção PE mais próxima. A região entra no estado do projeto, pelo mesmo
-caminho do ficheiro carregado.
+## Parameters
 
-A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
-o knob `POSITION` e escreve o endereço no campo, e ambos têm foco e nome
-acessível. O 2.5.8 do WCAG 2.2 fica com exceção declarada, porque uma célula de
-um byte não tem 24 px de largura e a densidade é a função: ver
-`docs/10-acessibilidade-w3c.md`.
+41 automatable parameters, grouped by module: grain (size, density, position,
+spray, pitch, volume, window, pan, grain level, pitch random, scan rate),
+global envelope (attack, decay, sustain, release and per-stage curves), two
+series filters, LFO (rate, depth, target, wave, sync, division, steps),
+keyboard (scale, root, glide) and grain cloud (size, pitch spread, duration
+jitter). An 8-route modulation matrix is stored in project state and is not
+host-automatable.
 
-## Processo
+## Known limitations
 
-O desenvolvimento segue spec-kit. A constitution em `.specify/memory/constitution.md`
-define seis portões de qualidade (build, testes, tempo real, robustez,
-interface, documentação) que nenhuma tarefa fecha sem cumprir.
+- Standalone may open with wrong parameter values (e.g. 100 ms instead of 40 ms)
+  due to stale JUCE session state in `%APPDATA%\Opcoda\Opcoda.settings`; delete
+  that file to restore defaults.
+- Mono output, last-note priority. The 8 voices are grain slots, not note voices.
+- CLAP format is not provided.
+- Windows only.
 
-## Documentação
+## Documentation
 
-- `docs/01-titulo-e-tema.md` a `docs/05-fundamentacao.md`: tema, problema,
-  objetivos e base teórica
-- `docs/06-metodologia-arquitetura.md` a `docs/08-cronograma.md`: arquitetura,
-  testes e cronograma S1–S5
-- `docs/09-similares.md` a `docs/13-topicos-apresentacao.md`: análise de
-  similares, acessibilidade WCAG, BPMN e apresentação
-- `docs/14-relatorio-apoio.md` e `docs/15-artigo-tg.pdf`: artefatos para entrega
-- `docs/16-arquitetura-implementacao.md`: o que o código faz, incluindo os
-  defeitos encontrados e as decisões que mudaram
-- `docs/17-guia-de-build.md`: toolchain, presets, instalação e as guardas de
-  regressão do build
-- `docs/18-processo-sdd.md`: constitution, agentes de revisão e rastreabilidade
-- `docs/19-parametrizacao-do-estudo-e-briefing.md`: os 41 parâmetros, a matriz de
-  8 rotas e o desenho do estudo com produtores, em forma de briefing
-- `design/DESIGN-SYSTEM.md`: tokens visuais extraídos do Stitch
-- `docs/atlas/`: o atlas da arquitetura, com o inventário de ficheiros, os
-  diagramas de contexto, contentores e fluxo de dados, e as entradas e saídas
-  com a linha exacta de cada uma. O mesmo conteúdo está em
-  `docs/atlas/arquitetura.pdf`, gerado por `tools/build-atlas.ps1`
-- `specs/001-ingestao-pe/spec.md`: ingestão de PE, com as armadilhas encontradas
-- `specs/003-troca-material/spec.md`: troca entre interface e áudio
-- `specs/008-transporte-e-vistas/spec.md`: transporte de audição e as três leituras
-  do material, com a regra da posição 1,0 ser silêncio e as duas armadilhas do
-  display
+- `docs/USER_GUIDE.md` — installation, first steps, workflow.
+- `docs/SOUND_ENGINE.md` — audio architecture and signal flow.
+- `docs/PARAMETERS.md` — parameter reference.
+- `docs/DEVELOPMENT.md` — development environment, build, tests.
+- `docs/ROADMAP.md` — planned work.
+- `CHANGELOG.md` — change history.
 
-## Estado
+## License
 
-Núcleo completo e testado, plugin VST3 e Standalone com a interface de três
-faixas, MIDI por nota e CC, teclado virtual, e estado do host. 303 casos de teste
-e o guard de alocação verdes, contados no binário em 19/10/2026.
+No `LICENSE` file is present in the repository; legal status is undecided. The
+project depends on JUCE 8.0.14 (dual GPL/commercial) and GoogleTest 1.15.2
+(BSD-3-Clause). Do not redistribute without resolving licensing.
 
-O display tem **três vistas** do material carregado, porque são três perguntas
-diferentes sobre a mesma região:
+## Credits
 
-| Vista | Pergunta | Tecla |
-| --- | --- | --- |
-| forma de onda | que som é este | `1` |
-| grelha de bytes | que bytes são estes | `2` |
-| curva de entropia | o quanto o material é aleatório | `3` |
-
-O transporte (▶, ou `Espaço`) percorre a região inteira de início a fim **sem nota
-MIDI**. Com a região de 4 KB ou menos a duração tem um piso de 100 ms, porque
-abaixo do comprimento do maior grão uma passagem não dá para completar um grão. O
-knob POSITION é a âncora de busca: mexer nele durante a reprodução reposiciona.
-
-**Teclado.** A faixa ao fundo da janela é um teclado de cinco oitavas a partir de
-Dó3: toca-se com o rato e com as teclas do computador `A W S E D F T G Y H U J K`,
-e a tecla premida fica iluminada. O `K` sem foco no teclado leva lá o foco, por
-`Tab` também se chega. A nota define a altura (Dó4 é a razão 1,0), o módulo
-**KEYS** quantiza a nota a uma das doze escalas com tónica escolhida, e o GLIDE
-desliza entre notas no tempo declarado. A nota entra pela mesma `NoteTracker` do
-MIDI do host, com prioridade à última tecla e retorno à penúltima ao soltar, e o
-pedal de sustain segura a nota e a altura até subir.
-
-**Mapa de teclas.** `Espaço` liga e desliga a reprodução · `←` `→` movem o cursor um
-byte · `Shift` com as setas move dezasseis · `↑` `↓` movem uma linha · `PgUp` `PgDn`
-movem 1024 bytes · `Início` e `Fim` vão aos extremos · `Enter` ativa o byte sob o
-cursor · `Esc` volta o cursor à cabeça de leitura · `1` `2` `3` mudam de vista ·
-`A` alinha a região a uma secção PE · `L` abre o ficheiro · `K` dá o foco ao
-teclado.
-
-Há um defeito conhecido e **não corrigido**, visível no Standalone: alguns
-parâmetros arrancam em valores que não são os defaults declarados em
-`createParameterLayout`. Os valores mostram o que fica: `100 ms`,
-`13 /s`, `69 %`, onde os defaults são `40 ms`, `20 /s` e `50 %`. Foi confirmado
-em `c8006ae` compilado à parte, logo não vem da grelha.
-
-**A causa é o estado de sessão, não memória por inicializar.** O Standalone do
-JUCE 8 persiste o estado do plugin em `%APPDATA%\Opcoda\Opcoda.settings` e
-restaura-o no arranque; se esse ficheiro tiver parâmetros errados, o plugin abre
-com eles. **Apagar esse ficheiro traz os defaults de volta.** O mecanismo foi
-confirmado com o Dr. Memory, e o palpite inicial de memória não inicializada
-ficou refutado: nenhuma das leituras não inicializadas que ele reporta tem um
-frame do nosso código. O que ainda não está identificado é qual sessão escreveu
-os valores errados. Detalhe em `docs/16-arquitetura-implementacao.md`.
-
-O T2 (medição de p99 e xruns) e o T4 (arrasto, parâmetros e CCs) passaram a
-**executáveis** em 19/10/2026, quando ficou confirmado que a instalação do
-Ableton Live 12 nesta máquina é licenciada. Ficam agendados, não bloqueados. O
-método está em `docs/07-plano-testes.md` — e o T2 deixou de contar vozes, porque
-o instrumento é mono: mede por tamanho de grão e densidade.
+- Granular synthesis references: Granulator II (Robert Henke), Quanta 2.
+- Parser and audio architecture documented in `docs/16-arquitetura-implementacao.md`
+  and `docs/atlas/`.

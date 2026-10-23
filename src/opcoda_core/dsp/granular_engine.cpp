@@ -194,6 +194,7 @@ void GranularEngine::startGrain(int voice,
                                 int blockOffset,
                                 const LFOSettings& lfo) noexcept {
     Grain& grain = voices_[static_cast<std::size_t>(voice)];
+    (void)entropy;
 
     // Entropia local modula a dispersao: regiao compressada (H alto) espalha
     // mais, regiao repetitiva (H baixo) fica mais ancorada.
@@ -211,7 +212,10 @@ void GranularEngine::startGrain(int voice,
             : 0.0;
 
     const double base = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
-    const double spread = static_cast<double>(params.spray) * (0.5 + 0.5 * entropy / 8.0);
+    // Spray e' dispersao pura dos graos (posicao de leitura), como no
+    // Granulator II: nao depende da entropia local. A entropia so' entra por
+    // via da matriz de modulacao, quando o utilizador a roteia explicitamente.
+    const double spread = static_cast<double>(params.spray);
     grain.position =
         std::clamp(base + ((nextRandom(state) * 2.0 - 1.0) * spread) + lfoPosition, 0.0, 1.0);
 
