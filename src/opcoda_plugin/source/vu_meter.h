@@ -1,6 +1,7 @@
 #pragma once
 
 #include "palette.h"
+#include "vu_scale.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -47,12 +48,10 @@ public:
     VuMeter() { setInterceptsMouseClicks(false, false); }
 
     void setLevelDb(float peakDb) {
-        // Faixa util de -60 a 0 dB, mapeada direta em segmentos.
-        const auto level = juce::jlimit(0.0f, 1.0f, (peakDb + 60.0f) / 60.0f);
-        // O meter e' degrau: oito segmentos e nenhum meio-ponte entre eles.
-        // Quantizar antes do repaint evita acordar o paint a cada fraqueza de
-        // dB da leitura.
-        const auto lit = static_cast<int>(level * kSegments + 0.5f);
+        // A escala (silencio -> 0, -60 dB -> 0, 0 dB -> 8) mora em vu_scale.h,
+        // sem JUCE, para o teste a poder chamar. Quantizar antes do repaint
+        // evita acordar o paint a cada fraqueza de dB da leitura.
+        const auto lit = vuSegmentsForPeak(peakDb);
         if (lit != lit_) {
             lit_ = lit;
             repaint();
@@ -69,8 +68,8 @@ public:
         constexpr float kGapY {4.0f};
 
         const auto totalWidth =
-            static_cast<float>(kSegments) * kSegmentWidth +
-            static_cast<float>(kSegments - 1) * kGapX;
+            static_cast<float>(kVuSegments) * kSegmentWidth +
+            static_cast<float>(kVuSegments - 1) * kGapX;
         const auto totalHeight = kSegmentHeight * 2.0f + kGapY;
 
         const auto originX = juce::jmax(bounds.getX(), (bounds.getWidth() - totalWidth) * 0.5f);
@@ -78,7 +77,7 @@ public:
                                         (bounds.getHeight() - totalHeight) * 0.5f);
 
         for (int row = 0; row < 2; ++row) {
-            for (int segment = 0; segment < kSegments; ++segment) {
+            for (int segment = 0; segment < kVuSegments; ++segment) {
                 const auto x = originX +
                                static_cast<float>(segment) * (kSegmentWidth + kGapX);
                 const auto y = originY + static_cast<float>(row) * (kSegmentHeight + kGapY);
@@ -86,7 +85,7 @@ public:
 
                 g.setColour(juce::Colour {0xff334155});
                 if (segment < lit_) {
-                    g.setColour(segment >= kSegments - 1 ? palette::accentWarn : palette::ok);
+                    g.setColour(segment >= kVuSegments - 1 ? palette::accentWarn : palette::ok);
                 }
                 g.fillRoundedRectangle(cell, 1.0f);
             }
@@ -94,7 +93,6 @@ public:
     }
 
 private:
-    static constexpr int kSegments {8};
     int lit_ {0};
 };
 

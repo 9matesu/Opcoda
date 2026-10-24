@@ -1,6 +1,7 @@
 #include "plugin_processor.h"
 
 #include "factory_presets.h"
+#include "param_defaults.h"
 
 #include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/lfo.h"
@@ -134,61 +135,75 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
 
     // Os seis IDs originais nao mudam — sessoes salvas referenciam por ID — so
     // o nome exibido passa a ingles. Os 19 novos ja nascem com ID ingles.
+    //
+    // ID e default vem de param_defaults.h, a mesma tabela que os Knob::Spec do
+    // editor leem: nao ha uma segunda lista onde o lfodiv possa voltar a dizer
+    // "1/1" enquanto o layout diz "1/4".
     return {
-        range("grain", "Grain Size", 1.0f, 100.0f, 40.0f),
-        range("density", "Density", 1.0f, 200.0f, 20.0f),
-        range("position", "Position", 0.0f, 1.0f, 0.5f),
-        range("spray", "Spray", 0.0f, 1.0f, 0.0f),
-        range("pitch", "Pitch", -24.0f, 24.0f, 0.0f),
-        range("volume", "Volume", -60.0f, 0.0f, 0.0f),
-        choice("window", "Window", {"Hann", "Gaussian", "Hamming", "Blackman"}, 0),
-        range("pan", "Pan", -1.0f, 1.0f, 0.0f),
-        range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
-        range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
+        range(params::grain.id, "Grain Size", 1.0f, 100.0f, params::grain.value),
+        range(params::density.id, "Density", 1.0f, 200.0f, params::density.value),
+        range(params::position.id, "Position", 0.0f, 1.0f, params::position.value),
+        range(params::spray.id, "Spray", 0.0f, 1.0f, params::spray.value),
+        range(params::pitch.id, "Pitch", -24.0f, 24.0f, params::pitch.value),
+        range(params::volume.id, "Volume", -60.0f, 0.0f, params::volume.value),
+        choice(params::window.id, "Window", {"Hann", "Gaussian", "Hamming", "Blackman"},
+               params::window.index()),
+        range(params::pan.id, "Pan", -1.0f, 1.0f, params::pan.value),
+        range(params::grainlevel.id, "Grain Level", 0.0f, 1.0f, params::grainlevel.value),
+        range(params::pitchrand.id, "Pitch Random", 0.0f, 12.0f, params::pitchrand.value),
         // F021: a nuvem. Zero em todos devolve o motor anterior, amostra a
         // amostra — o espalhamento, a dispersao de afinacao e o jitter so
         // entram quando o knob sai do zero.
-        range("cloudsize", "Cloud Size", 0.0f, 1.0f, 0.0f),
-        range("pitchspread", "Pitch Spread", 0.0f, 24.0f, 0.0f),
-        range("grainjit", "Grain Jitter", 0.0f, 1.0f, 0.0f),
-        range("scanspeed", "Scan Speed", 0.25f, 4.0f, 1.0f),
-        range("attack", "Attack", 0.001f, 2.0f, 0.005f),
-        range("decay", "Decay", 0.001f, 2.0f, 0.1f),
-        range("sustain", "Sustain", 0.0f, 1.0f, 1.0f),
-        range("release", "Release", 0.001f, 2.0f, 0.05f),
+        range(params::cloudsize.id, "Cloud Size", 0.0f, 1.0f, params::cloudsize.value),
+        range(params::pitchspread.id, "Pitch Spread", 0.0f, 24.0f, params::pitchspread.value),
+        range(params::grainjit.id, "Grain Jitter", 0.0f, 1.0f, params::grainjit.value),
+        range(params::scanspeed.id, "Scan Speed", 0.25f, 4.0f, params::scanspeed.value),
+        range(params::attack.id, "Attack", 0.001f, 2.0f, params::attack.value),
+        range(params::decay.id, "Decay", 0.001f, 2.0f, params::decay.value),
+        range(params::sustain.id, "Sustain", 0.0f, 1.0f, params::sustain.value),
+        range(params::release.id, "Release", 0.001f, 2.0f, params::release.value),
         // F020: curvas por estagio. -1 exponencial, 0 linear, +1 logaritmica —
         // a forma e' phase^(2^(-3*curva)), documentada em dsp/curve.h.
-        range("atkcurve", "Attack Curve", -1.0f, 1.0f, 0.0f),
-        range("deccurve", "Decay Curve", -1.0f, 1.0f, 0.0f),
-        range("relcurve", "Release Curve", -1.0f, 1.0f, 0.0f),
-        choice("f1type", "Filter 1 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
-        logCutoff("f1cutoff", "Filter 1 Cutoff", 20000.0f),
-        range("f1q", "Filter 1 Q", 0.5f, 12.0f, 0.7071f),
+        range(params::atkcurve.id, "Attack Curve", -1.0f, 1.0f, params::atkcurve.value),
+        range(params::deccurve.id, "Decay Curve", -1.0f, 1.0f, params::deccurve.value),
+        range(params::relcurve.id, "Release Curve", -1.0f, 1.0f, params::relcurve.value),
+        choice(params::f1type.id, "Filter 1 Type",
+               {"Low-pass", "High-pass", "Band-pass", "Notch"}, params::f1type.index()),
+        logCutoff(params::f1cutoff.id, "Filter 1 Cutoff", params::f1cutoff.value),
+        range(params::f1q.id, "Filter 1 Q", 0.5f, 12.0f, params::f1q.value),
         // F020: caracter analogico do filtro 1. O drive em dB, o keytrack em
         // profundidade 0..1 (1 = uma oitava de corte por oitava de nota) e o
         // envelope com sinal, ate' 5 oitavas para cada lado.
-        choice("f1slope", "Filter 1 Slope", {"12 dB", "24 dB"}, 0),
-        range("f1drive", "Filter 1 Drive", 0.0f, 24.0f, 0.0f),
-        range("f1keytrack", "Filter 1 Keytrack", 0.0f, 1.0f, 0.0f),
-        range("f1env", "Filter 1 Env", -1.0f, 1.0f, 0.0f),
-        choice("f2type", "Filter 2 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
-        logCutoff("f2cutoff", "Filter 2 Cutoff", 20000.0f),
-        range("f2q", "Filter 2 Q", 0.5f, 12.0f, 0.7071f),
-        range("lforate", "LFO Rate", 0.0f, 20.0f, 1.0f),
-        range("lfodepth", "LFO Depth", 0.0f, 1.0f, 0.0f),
-        choice("lfotarget", "LFO Target", {"Pitch", "Density", "Cutoff", "Position"}, 0),
-        choice("lfowave", "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"}, 0),
+        choice(params::f1slope.id, "Filter 1 Slope", {"12 dB", "24 dB"},
+               params::f1slope.index()),
+        range(params::f1drive.id, "Filter 1 Drive", 0.0f, 24.0f, params::f1drive.value),
+        range(params::f1keytrack.id, "Filter 1 Keytrack", 0.0f, 1.0f,
+              params::f1keytrack.value),
+        range(params::f1env.id, "Filter 1 Env", -1.0f, 1.0f, params::f1env.value),
+        choice(params::f2type.id, "Filter 2 Type",
+               {"Low-pass", "High-pass", "Band-pass", "Notch"}, params::f2type.index()),
+        logCutoff(params::f2cutoff.id, "Filter 2 Cutoff", params::f2cutoff.value),
+        range(params::f2q.id, "Filter 2 Q", 0.5f, 12.0f, params::f2q.value),
+        range(params::lforate.id, "LFO Rate", 0.0f, 20.0f, params::lforate.value),
+        range(params::lfodepth.id, "LFO Depth", 0.0f, 1.0f, params::lfodepth.value),
+        choice(params::lfotarget.id, "LFO Target",
+               {"Pitch", "Density", "Cutoff", "Position"}, params::lfotarget.index()),
+        choice(params::lfowave.id, "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"},
+               params::lfowave.index()),
         // F018: teclado e escala. Os IDs nascem em ingles, como os 16 da emenda.
-        choice("scale", "Scale", {"Chromatic", "Major", "Natural Minor", "Harmonic Minor",
-                                  "Dorian", "Phrygian", "Lydian", "Mixolydian",
-                                  "Pentatonic Major", "Pentatonic Minor", "Blues",
-                                  "Whole Tone"}, 0),
-        choice("root", "Root", {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}, 0),
-        range("glide", "Glide", 0.0f, 2.0f, 0.0f),
-        choice("lfosync", "LFO Sync", {"Free", "Sync"}, 0),
-        choice("lfodiv", "LFO Div", {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64",
-                                     "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"}, 2),
-        intRange("lfosteps", "LFO Steps", 1, 16, 16),
+        choice(params::scale.id, "Scale",
+               {"Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Dorian",
+                "Phrygian", "Lydian", "Mixolydian", "Pentatonic Major",
+                "Pentatonic Minor", "Blues", "Whole Tone"}, params::scale.index()),
+        choice(params::root.id, "Root",
+               {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"},
+               params::root.index()),
+        range(params::glide.id, "Glide", 0.0f, 2.0f, params::glide.value),
+        choice(params::lfosync.id, "LFO Sync", {"Free", "Sync"}, params::lfosync.index()),
+        choice(params::lfodiv.id, "LFO Div",
+               {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4.", "1/8.",
+                "1/4T", "1/8T", "1/16T"}, params::lfodiv.index()),
+        intRange(params::lfosteps.id, "LFO Steps", 1, 16, params::lfosteps.index()),
     };
 }
 
@@ -720,7 +735,8 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
         }
     }
 
-    const auto decibels = (peak > 1.0e-6f) ? juce::Decibels::gainToDecibels(peak) : -1.0f;
+    const auto decibels =
+        (peak > 1.0e-6f) ? juce::Decibels::gainToDecibels(peak) : kSilenceDb;
 
     // relaxed e' suficiente: sao valores de leitura para um mostrador, e a
     // ordenacao que interessa e' dentro do proprio bloco, que ja terminou.

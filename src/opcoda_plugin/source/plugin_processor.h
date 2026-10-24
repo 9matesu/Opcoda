@@ -5,6 +5,7 @@
 #include "opcoda_core/rt/note_tracker.h"
 #include "opcoda_core/rt/spsc_ring.h"
 #include "opcoda_core/rt/transport.h"
+#include "vu_scale.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -179,7 +180,9 @@ bool snapByteRangeToSection();
     // campos, e para uma leitura de pico e contagem de vozes isso e' irrelevante
     // e vale a pena dizer explicitamente em vez de fingir que e' atómico.
     struct Telemetry {
-        std::atomic<float> peakDb {-1.0f};
+        // O sentinela de silencio mora em vu_scale.h, junto do fundo do medidor:
+        // os dois formam um contrato unico e o teste puro verifica-o.
+        std::atomic<float> peakDb {kSilenceDb};
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};

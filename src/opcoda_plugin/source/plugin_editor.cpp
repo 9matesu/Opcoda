@@ -1,6 +1,7 @@
 #include "plugin_editor.h"
 
 #include "factory_presets.h"
+#include "param_defaults.h"
 
 #include "opcoda_core/entropy/shannon_entropy.h"
 #include "opcoda_core/pe/byte_to_position.h"
@@ -40,9 +41,9 @@ constexpr int kFooterBandHeight {30};
 // Teclado curto: 56 px dao uma tecla branca legivel sem roubar altura ao rack.
 constexpr int kKeyboardHeight {56};
 
-// Os seis parametros da Tabela 8, e nada mais. Os modulos STATE FILTER e
-// MOD & OUTPUT do mock ficaram de fora porque biquad, envelope e dry/wet nao
-// existem no nucleo.
+// Os dez parametros do GRAIN, todos do nucleo. A ordem e' a do mock, mas cada
+// knob e' um parametro real: nao ha fachada, e a coluna de macros reaproveita
+// os mesmos IDs em vez de inventar valores paralelos.
 // Inteiro para uma caixa de valor.
 //
 // **juce::String {valor, 0} nao arredonda.** Em juce_String.cpp, writeDouble so
@@ -64,36 +65,40 @@ const auto cutoffText = [](float v) {
     return v >= 1000.0f ? juce::String {v / 1000.0f, 1} + " kHz" : asInteger(v) + " Hz";
 };
 
-// Os 28 parametros ja no codigo em seis modulos: os 25 da Tabela 8 e os tres da
-// F018. Os IDs dos seis originais nao mudam ÔÇö sessoes salvas referenciam por ID
-// ÔÇö so o titulo e o nome falado passam a ingles. As abas trocam a faixa visivel
-// em vez de empilhar: a 480 de largura dez knobs ja ficam a 46 px por celula, e
-// seis fileiras empilhadas pediam uma janela de 700 px que o kMinHeight nao
-// promete.
+// Os 41 parametros ja no codigo em sete modulos: os 25 da Tabela 8, os tres da
+// F018, os tres da F019, os tres da F020, os tres da F021 e os quatro de
+// filtro/curvas. Os IDs dos seis originais nao mudam — sessoes salvas
+// referenciam por ID — so o titulo e o nome falado passam a ingles. As abas
+// trocam a faixa visivel em vez de empilhar: a 720 de largura dez knobs ainda
+// cabem numa linha, e sete fileiras empilhadas pediam uma janela que o
+// kMinHeight nao promete.
 const std::array<Knob::Spec, 10> kGrainSpecs {
-    Knob::Spec {"grain", "SIZE", "Grain size, in milliseconds", 40.0f,
-                [](float v) { return asInteger(v) + " ms"; }},
-    Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
-                [](float v) { return asInteger(v) + " /s"; }},
-    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
-    Knob::Spec {"spray", "SPRAY", "Spray, start position spread", 0.0f, percent},
+    Knob::Spec {params::grain.id, "SIZE", "Grain size, in milliseconds",
+                params::grain.value, [](float v) { return asInteger(v) + " ms"; }},
+    Knob::Spec {params::density.id, "DENSITY", "Density, in grains per second",
+                params::density.value, [](float v) { return asInteger(v) + " /s"; }},
+    Knob::Spec {params::position.id, "POSITION", "Read position in the material",
+                params::position.value, percent},
+    Knob::Spec {params::spray.id, "SPRAY", "Spray, start position spread",
+                params::spray.value, percent},
     // Estas duas ja estavam certas: com uma casa decimal o writeDouble entra no
     // if e formata em fixo. Ficam como estava para nao mexer no que funciona.
-    Knob::Spec {"pitch", "PITCH", "Tuning, in semitones", 0.0f,
+    Knob::Spec {params::pitch.id, "PITCH", "Tuning, in semitones", params::pitch.value,
                 [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"window", "WINDOW", "Grain window shape", 0.0f, {},
+    Knob::Spec {params::window.id, "WINDOW", "Grain window shape", params::window.value, {},
                 {"Hann", "Gaussian", "Hamming", "Blackman"}},
-    Knob::Spec {"pan", "PAN", "Stereo pan, left to right", 0.0f,
+    Knob::Spec {params::pan.id, "PAN", "Stereo pan, left to right", params::pan.value,
                 [](float v) {
                     return v == 0.0f ? juce::String {"C"}
                          : v < 0.0f  ? asInteger(-v * 100.0f) + " L"
                                      : asInteger(v * 100.0f) + " R";
                 }},
-    Knob::Spec {"grainlevel", "LEVEL", "Per-grain level", 1.0f, percent},
-    Knob::Spec {"pitchrand", "P.RAND", "Random detune per grain, in semitones", 0.0f,
-                [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"scanspeed", "SCAN", "Playhead scan speed, times realtime", 1.0f,
-                [](float v) { return juce::String {v, 2} + "x"; }},
+    Knob::Spec {params::grainlevel.id, "LEVEL", "Per-grain level",
+                params::grainlevel.value, percent},
+    Knob::Spec {params::pitchrand.id, "P.RAND", "Random detune per grain, in semitones",
+                params::pitchrand.value, [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {params::scanspeed.id, "SCAN", "Playhead scan speed, times realtime",
+                params::scanspeed.value, [](float v) { return juce::String {v, 2} + "x"; }},
 };
 
 // F020: as tres curvas ficam ao lado dos tempos que moldam. O valor diz a forma
@@ -104,75 +109,87 @@ const auto curveText = [](float v) {
 };
 
 const std::array<Knob::Spec, 7> kEnvelopeSpecs {
-    Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds},
-    Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds},
-    Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent},
-    Knob::Spec {"release", "REL", "Release time", 0.05f, seconds},
-    Knob::Spec {"atkcurve", "ATK CRV", "Attack curve, exponential to logarithmic", 0.0f,
-                curveText},
-    Knob::Spec {"deccurve", "DEC CRV", "Decay curve, exponential to logarithmic", 0.0f,
-                curveText},
-    Knob::Spec {"relcurve", "REL CRV", "Release curve, exponential to logarithmic", 0.0f,
-                curveText},
+    Knob::Spec {params::attack.id, "ATK", "Attack time", params::attack.value, seconds},
+    Knob::Spec {params::decay.id, "DEC", "Decay time", params::decay.value, seconds},
+    Knob::Spec {params::sustain.id, "SUS", "Sustain level", params::sustain.value, percent},
+    Knob::Spec {params::release.id, "REL", "Release time", params::release.value, seconds},
+    Knob::Spec {params::atkcurve.id, "ATK CRV", "Attack curve, exponential to logarithmic",
+                params::atkcurve.value, curveText},
+    Knob::Spec {params::deccurve.id, "DEC CRV", "Decay curve, exponential to logarithmic",
+                params::deccurve.value, curveText},
+    Knob::Spec {params::relcurve.id, "REL CRV", "Release curve, exponential to logarithmic",
+                params::relcurve.value, curveText},
 };
 
 const std::array<Knob::Spec, 10> kFilterSpecs {
-    Knob::Spec {"f1type", "F1 TYPE", "Filter 1 type", 0.0f, {},
+    Knob::Spec {params::f1type.id, "F1 TYPE", "Filter 1 type", params::f1type.value, {},
                 {"Low-pass", "High-pass", "Band-pass", "Notch"}},
-    Knob::Spec {"f1cutoff", "F1 CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText},
-    Knob::Spec {"f1q", "F1 Q", "Filter 1 resonance", 0.7071f,
+    Knob::Spec {params::f1cutoff.id, "F1 CUT", "Filter 1 cutoff frequency",
+                params::f1cutoff.value, cutoffText},
+    Knob::Spec {params::f1q.id, "F1 Q", "Filter 1 resonance", params::f1q.value,
                 [](float v) { return juce::String {v, 2}; }},
     // F020: caracter analogico. O slope e' a inclinacao; o drive satura antes
     // do filtro; o keytrack segue a nota e o env abre com o envelope.
-    Knob::Spec {"f1slope", "F1 SLOPE", "Filter 1 slope", 0.0f, {}, {"12 dB", "24 dB"}},
-    Knob::Spec {"f1drive", "F1 DRIVE", "Filter 1 drive, in decibels", 0.0f,
-                [](float v) { return juce::String {v, 1} + " dB"; }},
-    Knob::Spec {"f1keytrack", "F1 KEY", "Filter 1 key tracking", 0.0f, percent},
-    Knob::Spec {"f1env", "F1 ENV", "Filter 1 envelope amount", 0.0f,
+    Knob::Spec {params::f1slope.id, "F1 SLOPE", "Filter 1 slope", params::f1slope.value, {},
+                {"12 dB", "24 dB"}},
+    Knob::Spec {params::f1drive.id, "F1 DRIVE", "Filter 1 drive, in decibels",
+                params::f1drive.value, [](float v) { return juce::String {v, 1} + " dB"; }},
+    Knob::Spec {params::f1keytrack.id, "F1 KEY", "Filter 1 key tracking",
+                params::f1keytrack.value, percent},
+    Knob::Spec {params::f1env.id, "F1 ENV", "Filter 1 envelope amount", params::f1env.value,
                 [](float v) {
                     const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
                     return juce::String {pct} + " %";
                 }},
-    Knob::Spec {"f2type", "F2 TYPE", "Filter 2 type", 0.0f, {},
+    Knob::Spec {params::f2type.id, "F2 TYPE", "Filter 2 type", params::f2type.value, {},
                 {"Low-pass", "High-pass", "Band-pass", "Notch"}},
-    Knob::Spec {"f2cutoff", "F2 CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText},
-    Knob::Spec {"f2q", "F2 Q", "Filter 2 resonance", 0.7071f,
+    Knob::Spec {params::f2cutoff.id, "F2 CUT", "Filter 2 cutoff frequency",
+                params::f2cutoff.value, cutoffText},
+    Knob::Spec {params::f2q.id, "F2 Q", "Filter 2 resonance", params::f2q.value,
                 [](float v) { return juce::String {v, 2}; }},
 };
 
 const std::array<Knob::Spec, 7> kModSpecs {
-    Knob::Spec {"lforate", "RATE", "LFO rate, in hertz", 1.0f,
+    Knob::Spec {params::lforate.id, "RATE", "LFO rate, in hertz", params::lforate.value,
                 [](float v) { return juce::String {v, 2} + " Hz"; }},
-    Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent},
-    Knob::Spec {"lfotarget", "TARGET", "LFO target parameter", 0.0f, {},
-                {"Pitch", "Density", "Cutoff", "Position"}},
-    Knob::Spec {"lfowave", "WAVE", "LFO waveform", 0.0f, {},
+    Knob::Spec {params::lfodepth.id, "DEPTH", "LFO depth", params::lfodepth.value, percent},
+    Knob::Spec {params::lfotarget.id, "TARGET", "LFO target parameter",
+                params::lfotarget.value, {}, {"Pitch", "Density", "Cutoff", "Position"}},
+    Knob::Spec {params::lfowave.id, "WAVE", "LFO waveform", params::lfowave.value, {},
                 {"Sine", "Tri", "Saw", "Square", "S&H"}},
     // F019: em Sync o RATE deixa de mandar e a divisao passa a mandar. Os dois
     // ficam visiveis no mesmo modulo porque sao a mesma pergunta ("a que
     // velocidade"), respondida em duas unidades.
-    Knob::Spec {"lfosync", "SYNC", "LFO follows the host tempo", 0.0f, {},
-                {"Free", "Sync"}},
-    Knob::Spec {"lfodiv", "DIV", "LFO division when synced", 0.0f, {},
+    Knob::Spec {params::lfosync.id, "SYNC", "LFO follows the host tempo",
+                params::lfosync.value, {}, {"Free", "Sync"}},
+    // O default e' o indice de "1/4", que e' o que o layout cria. Antes da
+    // tabela unica, o editor dizia 0.0 e o duplo-clique repunha "1/1".
+    Knob::Spec {params::lfodiv.id, "DIV", "LFO division when synced",
+                params::lfodiv.value, {},
                 {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4.", "1/8.",
                  "1/4T", "1/8T", "1/16T"}},
-    Knob::Spec {"lfosteps", "STEPS", "LFO steps per cycle", 16.0f,
+    Knob::Spec {params::lfosteps.id, "STEPS", "LFO steps per cycle",
+                params::lfosteps.value,
                 [](float v) { return juce::String {static_cast<int>(v + 0.5f)}; }},
 };
 
 // F021: a nuvem e' o mesmo motor com tres graus de liberdade no nascimento do
-// grao. Ficam num modulo proprio para o GRAIN nao passar de dez celulas a 480
-// px ÔÇö a partir dai o knob encolhe abaixo do que o dedo acerta.
+// grao. Ficam num modulo proprio para o GRAIN nao passar de dez celulas e o
+// knob encolher abaixo do que o dedo acerta.
 const std::array<Knob::Spec, 3> kCloudSpecs {
-    Knob::Spec {"cloudsize", "WIDTH", "Temporal width of the grain cloud", 0.0f,
+    Knob::Spec {params::cloudsize.id, "WIDTH", "Temporal width of the grain cloud",
+                params::cloudsize.value,
                 [](float v) { return asInteger(v * 500.0f) + " ms"; }},
-    Knob::Spec {"pitchspread", "SPREAD", "Pitch spread across the cloud, in semitones", 0.0f,
+    Knob::Spec {params::pitchspread.id, "SPREAD",
+                "Pitch spread across the cloud, in semitones", params::pitchspread.value,
                 [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"grainjit", "JITTER", "Grain duration jitter", 0.0f, percent},
+    Knob::Spec {params::grainjit.id, "JITTER", "Grain duration jitter",
+                params::grainjit.value, percent},
 };
 
 const std::array<Knob::Spec, 1> kOutSpecs {
-    Knob::Spec {"volume", "VOLUME", "Output volume, in decibels", 0.0f,
+    Knob::Spec {params::volume.id, "VOLUME", "Output volume, in decibels",
+                params::volume.value,
                 [](float v) {
                     return v <= -60.0f ? juce::String {"-inf"}
                                        : juce::String {v, 1} + " dB";
@@ -183,29 +200,33 @@ const std::array<Knob::Spec, 1> kOutSpecs {
 // escala; o glide interpola entre notas. Sao tres parametros novos e nenhum
 // dos 25 antigos mudou de sitio.
 const std::array<Knob::Spec, 3> kKeysSpecs {
-    Knob::Spec {"scale", "SCALE", "Scale applied to incoming notes", 0.0f, {},
+    Knob::Spec {params::scale.id, "SCALE", "Scale applied to incoming notes",
+                params::scale.value, {},
                 {"Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Dorian",
                  "Phrygian", "Lydian", "Mixolydian", "Pentatonic Major",
                  "Pentatonic Minor", "Blues", "Whole Tone"}},
-    Knob::Spec {"root", "ROOT", "Scale root note", 0.0f, {},
+    Knob::Spec {params::root.id, "ROOT", "Scale root note", params::root.value, {},
                 {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}},
-    Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
+    Knob::Spec {params::glide.id, "GLIDE", "Glide time between notes",
+                params::glide.value, seconds},
 };
 
 // Rack de macros do mock. Os seis nomes sao os do painel visual, mas cada um
 // aponta para um parametro real: nao ha parametro de fachada.
 const std::array<Knob::Spec, 6> kMacroSpecs {
-    Knob::Spec {"grain", "BYTES", "Grain size, in milliseconds", 40.0f,
-                [](float v) { return asInteger(v) + " ms"; }},
-    Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
-                [](float v) { return asInteger(v) + " /s"; }},
-    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
-    Knob::Spec {"f1drive", "CRUSH", "Filter 1 drive, in decibels", 0.0f,
-                [](float v) { return juce::String {v, 1} + " dB"; }},
-    Knob::Spec {"cloudsize", "SPACE", "Temporal width of the grain cloud", 0.0f,
+    Knob::Spec {params::grain.id, "BYTES", "Grain size, in milliseconds",
+                params::grain.value, [](float v) { return asInteger(v) + " ms"; }},
+    Knob::Spec {params::density.id, "DENSITY", "Density, in grains per second",
+                params::density.value, [](float v) { return asInteger(v) + " /s"; }},
+    Knob::Spec {params::position.id, "POSITION", "Read position in the material",
+                params::position.value, percent},
+    Knob::Spec {params::f1drive.id, "CRUSH", "Filter 1 drive, in decibels",
+                params::f1drive.value, [](float v) { return juce::String {v, 1} + " dB"; }},
+    Knob::Spec {params::cloudsize.id, "SPACE", "Temporal width of the grain cloud",
+                params::cloudsize.value,
                 [](float v) { return asInteger(v * 500.0f) + " ms"; }},
-    Knob::Spec {"pitchrand", "CORRUPT", "Random detune per grain, in semitones", 0.0f,
-                [](float v) { return juce::String {v, 1} + " st"; }},
+    Knob::Spec {params::pitchrand.id, "CORRUPT", "Random detune per grain, in semitones",
+                params::pitchrand.value, [](float v) { return juce::String {v, 1} + " st"; }},
 };
 
 } // namespace
@@ -737,8 +758,8 @@ void PluginEditor::buildMacroBand() {
 
 void PluginEditor::buildModuleTabs() {
     // Mesma lingua das abas de vista: palavra sem cromo, ativa em peso forte
-    // com filete. Seis abas curtas cabem a 480 (52 px cada mais 4 de vao dao
-    // 332 px); GRAIN continua a ser a mais larga.
+    // com filete. As seis larguras somam 362 px com os vaos e cabem a 720;
+    // GRAIN e OUT/KEYS sao as mais largas.
     const auto setup = [this](juce::TextButton& button, const char* title,
                               const char* spokenName, ParamModule module) {
         button.setButtonText(title);
@@ -1416,7 +1437,7 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     }
 
     setIfChanged(peakReadout_,
-                 peak < -0.5f ? juce::String {"PK -inf dB"}
+                 peak <= kVuFloorDb ? juce::String {"PK -inf dB"}
                               : juce::String {"PK "} + juce::String {peak, 1} + " dB");
 
     // A leitura de transporte: posicao da cabeca de reproducao em endereco, o

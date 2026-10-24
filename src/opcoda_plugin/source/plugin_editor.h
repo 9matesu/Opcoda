@@ -22,13 +22,15 @@
 
 namespace opcoda {
 
-// Editor em cinco faixas: header claro, display escuro, abas de modulo, faixa de
-// parametros e teclado.
+// Editor em sete faixas: header metalico, display escuro, linha de controlo
+// (vistas + zoom + abas), rack de macros, painel do modulo ativo, teclado e
+// rodape de estado.
 //
-// Os 31 parametros ja no codigo em seis modulos ÔÇö GRAIN, ENVELOPE, FILTER, MOD,
-// OUT e KEYS ÔÇö com os nomes exibidos em ingles e os IDs dos seis originais
-// intactos. Uma aba mostra a sua faixa; empilhar as seis pedia 700 px de janela
-// e a promessa e' 480x434.
+// Os 41 parametros ja no codigo em sete modulos — GRAIN, ENVELOPE, FILTER, MOD,
+// CLOUD, OUT e KEYS — com os nomes exibidos em ingles e os IDs dos seis
+// originais intactos. Seis abas mostram uma faixa de cada vez (OUT e KEYS
+// partilham a ultima); empilhar os sete pedia uma janela mais alta do que a
+// promessa de 720x640.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      private juce::ValueTree::Listener,
@@ -311,7 +313,7 @@ private:
     std::vector<std::unique_ptr<Knob>> macroKnobs_;
 
     // Seis abas: OUT e KEYS partilham uma, porque quatro parametros de saida e
-    // afinacao cabem juntos e sete abas a 480 px ficavam abaixo do alvo de toque.
+    // afinacao cabem juntos e sete abas encolhiam abaixo do alvo de toque.
     juce::TextButton moduleGrainButton_;
     juce::TextButton moduleEnvelopeButton_;
     juce::TextButton moduleFilterButton_;

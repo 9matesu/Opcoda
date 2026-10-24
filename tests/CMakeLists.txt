@@ -40,7 +40,15 @@ add_executable(opcoda_tests
     cloud_test.cpp
     factory_presets_test.cpp
     grain_trail_test.cpp
-    pe_mutation_test.cpp)
+    pe_mutation_test.cpp
+    param_defaults_test.cpp
+    vu_scale_test.cpp)
+
+# Os dois headers de UI testados aqui (param_defaults.h, vu_scale.h) sao puros,
+# sem JUCE: a pasta entra no include path para o binario do nucleo os poder ler
+# sem arrastar o framework para os testes.
+target_include_directories(opcoda_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/opcoda_plugin/source)
 
 target_link_libraries(opcoda_tests PRIVATE opcoda_core GTest::gtest_main)
 add_test(NAME opcoda_tests COMMAND opcoda_tests)

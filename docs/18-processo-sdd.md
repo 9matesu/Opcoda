@@ -36,7 +36,7 @@ organização de pastas: cada princípio é um critério verificável.
 | Portão | Critério |
 | --- | --- |
 | A · Build | compila em release sem warnings sob `/W4 /WX` |
-| B · Testes | 289 casos na suíte principal mais 8 do guard de alocação, incluindo o critério de 40 dB do T1. Contagem medida no binário em 19/10/2026 |
+| B · Testes | 345 casos na suíte principal mais 8 do guard de alocação, incluindo os critérios de 40 dB e de -60 dBFS abaixo de 20 Hz do T1. Contagem medida no binário em 23/10/2026 |
 | C · Tempo real | zero alocação no callback e na troca de material, com duas threads, e também durante a reprodução do transporte. **Desde 19/10/2026 o T2 mede também a fração dinâmica no Ableton**: p99 abaixo de metade do orçamento e zero xruns em 5 minutos, com buffers de 128, 256 e 512 a 44,1 e 48 kHz |
 | D · Robustez | 50 mutações de bit-flip e 10 casos de borda, todas com erro tipado |
 | E · Interface | contraste, teclado e nome acessível. **O 2.5.8 fechou em 06/10/2026** com a caret de teclado do `ByteDisplay`, e a exceção declarada foi retirada. A F023 reabre a verificação para os módulos novos |
@@ -136,7 +136,7 @@ guard de alocação não alcança — passa a ser medível antes da entrega.
 
 **Impacto nos portões.**
 
-- **B** sobe de 196 para 289 casos medidos, mais os novos de cada parâmetro:
+- **B** sobe de 196 para 345 casos medidos, mais os novos de cada parâmetro:
   unidade e borda por parâmetro novo, e os testes de curva do envelope, de
   escala e de tempo do LFO. A medição deixa de ser estimativa: o número sai do
   binário.

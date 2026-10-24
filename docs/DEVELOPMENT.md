@@ -36,7 +36,7 @@ Dois binários:
 
 | Binário | Conteúdo |
 | --- | --- |
-| `opcoda_tests` | 329 casos: parser, entropia, DSP, tempo real, interface, presets. |
+| `opcoda_tests` | 345 casos: parser, entropia, DSP, tempo real, interface, presets. |
 | `opcoda_alloc_guard_test` | Guard de alocação no callback de áudio. |
 
 Um filtro específico:
