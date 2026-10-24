@@ -75,7 +75,8 @@ automatizáveis continuam fechados. `OTIMIZAR` mede entropia e proporção de ze
 da região atual, concatena os blocos escolhidos e publica o material pela mesma
 fila da ingestão. A grelha destaca os blocos selecionados; com a mochila ativa o
 transporte percorre o material concatenado, mas o display continua a mostrar a
-região original.
+região original. Se uma tentativa falhar depois de uma seleção ativa, o material
+anterior continua a soar, as métricas ficam e o erro aparece escrito no painel.
 
 A grelha é operada com o rato. Quem só usa teclado move a cabeça de leitura com
 o knob `POSITION` e escreve o endereço no campo, e ambos têm foco e nome

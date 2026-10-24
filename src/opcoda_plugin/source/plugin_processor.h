@@ -362,7 +362,9 @@ bool snapByteRangeToSection();
 
     // Verdadeiro enquanto o material publicado veio da ultima otimizacao. Um
     // setByteRange ou um ingest novo desliga-o e volta a publicar a regiao crua.
-    [[nodiscard]] bool optimizationActive() const noexcept { return optimizationActive_; }
+    [[nodiscard]] bool optimizationActive() const noexcept {
+        return optimizationActive_.load(std::memory_order_acquire);
+    }
     [[nodiscard]] const optimization::Result& lastOptimization() const noexcept {
         return lastOptimizationResult_;
     }
@@ -465,7 +467,11 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // para o editor desenhar os blocos escolhidos sem recalcular entropias.
     optimization::Problem lastOptimizationProblem_;
     optimization::Result lastOptimizationResult_;
-    bool optimizationActive_ {false};
+    // Atómico porque releaseResources pode baixar a flag fora da message
+    // thread, enquanto o editor a lê a 60 Hz. O reset não limpa os vectores do
+    // problema e do resultado: eles só são escritos na message thread, e
+    // limpá-los aqui abria uma corrida com a leitura do painel.
+    std::atomic<bool> optimizationActive_ {false};
 
     // Inicio exato, sem alinhamento, da ultima regiao escolhida pelo utilizador.
     // E' o destino do duplo clique quando a regiao esta' alinhada numa secao, e

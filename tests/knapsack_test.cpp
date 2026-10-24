@@ -91,15 +91,29 @@ TEST(Knapsack, GrowsBlockToHonourMaxBlocks) {
 
 TEST(Knapsack, BuildsProblemForSubRegion) {
     auto bytes = highEntropy(8 * 1024);
+    std::fill(bytes.begin(), bytes.begin() + 1024, 0x00);
+
+    const auto whole = opcoda::optimization::buildProblem(
+        bytes.data(), bytes.size(), 0, bytes.size(), 1024, 0.5);
     const auto problem = opcoda::optimization::buildProblem(
         bytes.data(), bytes.size(), 1024, 5 * 1024, 1024, 0.5);
 
+    ASSERT_TRUE(whole.valid);
+    ASSERT_EQ(whole.blocks.size(), 8u);
     ASSERT_TRUE(problem.valid);
     ASSERT_EQ(problem.blocks.size(), 4u);
     for (std::size_t i = 0; i < problem.blocks.size(); ++i) {
         EXPECT_EQ(problem.blocks[i].offset, 1024u + i * 1024u);
         EXPECT_EQ(problem.blocks[i].length, 1024u);
     }
+
+    // O bloco 0 do ficheiro e' todo zero; o bloco 1 e' o ramal de alta
+    // entropia. Se a sub-regiao fosse medida a partir de data em vez de
+    // data + start, o valor seria 0 e este teste falhava.
+    EXPECT_NEAR(whole.blocks[0].value, 0.0, 1e-9);
+    EXPECT_GT(whole.blocks[1].value, 0.0);
+    EXPECT_NEAR(problem.blocks[0].value, whole.blocks[1].value, 1e-9);
+    EXPECT_NEAR(problem.blocks[0].weightKb, whole.blocks[1].weightKb, 1e-9);
 }
 
 TEST(Knapsack, KeepsLastPartialBlock) {
@@ -226,6 +240,9 @@ TEST(Knapsack, MultiRestartIsNotWorseThanSingleClimb) {
     expectConsistent(problem, single);
     expectConsistent(problem, multi);
     EXPECT_GE(multi.value, single.value - 1e-9);
+    // O primeiro restart usa a mesma semente e o mesmo hillClimb, por isso o
+    // valor sozinho nao prova que os restarts correram. As iteracoes provam.
+    EXPECT_GT(multi.iterations, single.iterations);
 }
 
 TEST(Knapsack, ConcatenatesSelectedBlocksInOrder) {

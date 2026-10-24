@@ -128,6 +128,19 @@ exatamente a soma dos tamanhos escolhidos.
   o destaque identifica os blocos escolhidos. O mapeamento fino do playhead
   para o bloco concatenado fica para uma iteração de UI.
 
+## Limitações declaradas
+
+- **Custo na message thread.** Com 512 blocos e os valores por omissão, a
+  subida fica abaixo de 20 ms e a multi-tentativas abaixo de 200 ms; `TMAX` no
+  máximo chega a cerca de 2 s e a interface espera. Não há thread de trabalho
+  nesta iteração.
+- **Fila de retorno cheia.** `drainIncomingQueue` ignora um `push` recusado,
+  comportamento anterior à F025. O buffer antigo permanece em `owned_` até
+  `releaseResources`; com o editor aberto, a fila é drenada a 60 Hz e o caso é
+  teórico.
+- **Falha com seleção ativa.** O material e as métricas anteriores ficam,
+  porque o que está a soar não mudou; o erro aparece em texto no painel.
+
 ## Testes
 
 | Teste | O que prova |

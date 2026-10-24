@@ -948,7 +948,13 @@ void PluginEditor::refreshOptimizationPanel() {
     if (owner_.optimizationActive()) {
         const auto& result = owner_.lastOptimization();
         const auto& problem = owner_.lastOptimizationProblem();
-        setIfChanged(optimizationStatus_, "MOCHILA ATIVA");
+        // Uma tentativa que falha depois de uma mochila ativa nao desliga o
+        // material que ja esta a soar; o erro tem de aparecer ao lado das
+        // metricas antigas, e nao so na barra de estado.
+        const auto error = owner_.lastError();
+        setIfChanged(optimizationStatus_,
+                     error.isNotEmpty() ? juce::String {"ATIVA / "} + error
+                                        : juce::String {"MOCHILA ATIVA"});
         setIfChanged(
             optimizationMetrics_,
             juce::String::formatted("v %.2f | p %.1f/%.1f KiB | %d b | %llu i | %.0f ms",

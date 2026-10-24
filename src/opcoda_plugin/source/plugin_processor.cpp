@@ -291,10 +291,7 @@ transport_.reset();
     owned_.clear();
     entropyCurves_.clear();
     live_.store(nullptr, std::memory_order_release);
-    optimizationActive_ = false;
-    lastOptimizationProblem_ = {};
-    lastOptimizationResult_ = {};
-    lastError_.clear();
+    optimizationActive_.store(false, std::memory_order_release);
 }
 
 bool PluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {

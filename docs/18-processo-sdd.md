@@ -191,7 +191,9 @@ material pela fila SPSC existente. A tabela continua fechada em 41.
 - **E** reabre para a aba OPT: método e campos têm nome acessível, o estado e
   as métricas são texto, e o erro não depende de cor.
 - **F** absorve `README`, `docs/07`, `docs/16`, `docs/19`, a spec
-  `025-selecao-por-mochila` e a contagem de testes.
+  `025-selecao-por-mochila` e a contagem de testes. O atlas continua no
+  instantâneo de `4cac7a5` e não lista `optimization/`; a regeneração fica
+  declarada como dívida e não bloqueia a F025.
 
 **Migração.** Nenhum ID de parâmetro muda e nenhum parâmetro novo entra na
 APVTS. As configurações do painel OPT vivem na sessão da interface, não no

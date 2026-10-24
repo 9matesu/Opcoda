@@ -151,6 +151,17 @@ material concatenado, mas o display continua a mostrar a região original. O
 destaque identifica os blocos escolhidos; o mapeamento do playhead para o
 bloco concatenado fica para uma iteração de UI.
 
+**Custo e fila de retorno.** A busca corre na message thread. Com 512 blocos e
+os valores por omissão, a subida de encosta fica abaixo de 20 ms e a
+multi-tentativas abaixo de 200 ms nesta máquina; `TMAX` no máximo chega a cerca
+de 2 s, e a interface espera. A fila de retorno tem quatro posições, e
+`drainIncomingQueue` ignora um `push` recusado desde antes da F025: o buffer
+antigo fica em `owned_` até `releaseResources`, em vez de ser libertado no ciclo
+seguinte. Uma falha depois de uma mochila ativa mantém o material e as métricas,
+porque o que está a soar não mudou; o erro aparece ao lado delas no painel. O
+`releaseResources` baixa a flag atómica e deixa o snapshot em memória; não o
+limpa fora da message thread, para o editor não ler vectores a meio de um reset.
+
 ## Guard de alocação
 
 O `operator new` global é substituído por uma versão que conta alocações
