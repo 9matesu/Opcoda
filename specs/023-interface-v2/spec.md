@@ -16,7 +16,9 @@ vistas. Funciona, passa os critérios de acessibilidade e não tem identidade.
 
 Com 41 parâmetros, o desenho atual também deixa de servir: uma faixa por módulo
 não comporta onze controles de grão, e a solução de acrescentar fileiras faria a
-janela crescer para além do mínimo de 480×434 que o plugin tem de suportar.
+janela crescer para além do mínimo de 480×434 que o plugin tinha de suportar. A
+revisão de 24/10/2026 substituiu esse mínimo por uma janela fixa de 1180×760
+(ver "Revisão de 24/10/2026").
 
 Esta feature faz três coisas ao mesmo tempo, e é por isso que é uma só:
 
@@ -33,15 +35,17 @@ escala sem perda e não acrescenta processo.
 
 ## Cenários
 
-### História 1 — Caber 41 parâmetros em 480×434 (P1)
+### História 1 — Caber 41 parâmetros numa janela fixa (P1)
 
 Como utilizador num portátil, quero ver todos os controles sem scroll horizontal
-nem janela maior que o ecrã.
+nem uma janela que mude de forma quando o host a redimensiona.
 
 **Por que P1**: é a razão de a interface ser redesenhada, e não apenas embelezada.
 
-**Teste independente**: `Ui.EveryParameterReachableAtMinimumSize` percorre os 41
-parâmetros por teclado e confirma que cada um recebe foco e é visível em 480×434.
+**Teste independente**: a suite automática cobre o núcleo; na interface, o
+critério verifica-se pelo build e pela captura de `tools/capture-ui.ps1`, porque
+os testes `Ui.*` desta spec ainda não estão implementados (ver "Estado dos
+testes de interface").
 
 ### História 2 — Ver o envelope (P1)
 
@@ -87,8 +91,10 @@ confirma as notas 60, 61, 62 a chegar ao motor.
    para desenho vetorial quando o recurso não abre.
 3. Knob: arco de valor, ponteiro, marca de origem, anel de foco visível, e valor
    em texto com fonte monoespaçada.
-4. Páginas por módulo: `GRAIN` (2 páginas), `ENVELOPE`, `FILTER` (2), `MOD`,
-   `KEYS`, `OUT`. Navegação por `Tab` e por setas dentro da página.
+4. Seis abas: `GRAIN`, `ENV`, `FILTER`, `MOD`, `CLOUD` e `KEYS`. Não há páginas
+   dentro do módulo, nem `MAIN` (repetia os onze parâmetros de grão), nem `OUT`
+   (o volume passou a knob mestre persistente na coluna escura). Navegação por
+   `Tab` e por setas dentro da faixa.
 5. Todos os controles mantêm nome acessível descritivo em inglês e foco visível,
    conforme `docs/10-acessibilidade-w3c.md`.
 
@@ -99,8 +105,9 @@ confirma as notas 60, 61, 62 a chegar ao motor.
 7. **Resposta do filtro**: magnitude dos dois biquads combinados, em 32 pontos
    log-espaçados de 20 Hz a 20 kHz, com a frequência de corte marcada.
 8. **Régua e marcas de seção** acima da waveform da F022.
-9. **Indicador de estado** no rodapé: material, região, taxa, e o modo de desenho
-   (software ou OpenGL, da F024).
+9. **Indicador de estado** no rodapé: material, região e taxa. O modo de desenho
+   saiu da interface: a F024 foi recusada na revisão de redesign de 23/10/2026 e
+   o renderizador de software é o único caminho.
 
 ### Interação
 
@@ -117,7 +124,14 @@ confirma as notas 60, 61, 62 a chegar ao motor.
 
 ## Critérios de aceite
 
-- [ ] os 41 parâmetros são alcançáveis por teclado em 480×434, sem scroll;
+- [ ] os 41 parâmetros são alcançáveis por teclado na janela fixa de 1180×760,
+      sem scroll;
+- [ ] o display mantém a forma de onda, a grelha hexadecimal e a entropia
+      clicáveis, e o topo do hex não segue os grãos;
+- [ ] o `HOLD` congela o transporte sem parar o áudio, e o medidor stereo lê o
+      pico por canal;
+- [ ] a aba ativa, o valor tocado e o foco são distinguíveis sem depender só da
+      cor;
 - [ ] a curva do envelope desenhada coincide com a do motor;
 - [ ] a resposta do filtro coincide com o biquad em ±0,5 dB;
 - [ ] no Ableton, o botão direito num knob mostra o menu do host com automação;
@@ -127,13 +141,109 @@ confirma as notas 60, 61, 62 a chegar ao motor.
 - [ ] nenhum controle depende só de cor;
 - [ ] a interface não aloca no thread de áudio (não toca nele).
 
+## Revisão de 24/10/2026 — instrumento de janela fixa
+
+A implementação fechou o desenho numa janela fixa de 1180×760, sem
+redimensionamento (`setResizable(false, false)`). O requisito de 480×434 da
+primeira versão desta spec deixa de valer: com o display como elemento
+dominante e dez knobs de grão numa linha, a escala mínima comprimia o texto e
+obrigava a páginas que duplicavam parâmetros. A janela fixa é a decisão de
+produto; o host não ganha uma asa de redimensionamento e o layout não tem um
+segundo caminho.
+
+As abas passam a seis: `GRAIN`, `ENV`, `FILTER`, `MOD`, `CLOUD` e `KEYS`. A aba
+`MAIN` saiu porque repetia os onze parâmetros de grão; a aba `OUT` saiu porque o
+volume é um knob mestre persistente na coluna escura à direita, ao lado do
+medidor stereo. Cada controle aparece uma vez.
+
+O display ganha a grelha hexadecimal contínua com 16 bytes por linha, coluna
+ASCII própria, barra de deslocamento e endereços de 8 dígitos; a faixa de
+entropia ocupa a base do display e é clicável e arrastável, assim como a
+grelha. O topo do hex é do utilizador: não segue os grãos, e a cabeça só
+centraliza uma vez, quando o material chega.
+
+O transporte tem play/pause e `HOLD` no mesmo grupo, no pé do display; o `HOLD`
+congela o avanço do transporte (`advance(held ? 0 : n, playing)`), não o áudio. O
+medidor de saída é stereo, com escala de 0 a -48 dB e segmentos
+verde→âmbar→vermelho; o pico por canal vem da telemetria atómica do callback.
+
+O render é vetorial 2-D, sem OpenGL (F024 recusada). Nenhuma animação ambiente:
+só o que responde a um gesto ou ao transporte.
+
+A segunda revisão, do mesmo dia, acrescenta o escopo pedido pelo som:
+
+- **Largura estéreo.** `STEREO` na linha de grão, mid/side na saída, 0 a 200 %,
+  com destino `Stereo Width` na matriz. O `mid` fica intocado; só o `side`
+  escala, e a rampa corre dentro do bloco.
+- **A matriz é parâmetro.** As 8 rotas viram 24 parâmetros automatizáveis
+  (`m1src`/`m1dst`/`m1amt` ...), editáveis na quarta vista do display (tecla 4)
+  por attachment, com o nó legado `MODMATRIX` a migrar no carregamento. A
+  tabela passa de 41 para 66.
+- **Roda acelerada.** Entalhes consecutivos multiplicam o passo (1,7× no hex,
+  até 32×; zoom até 8×); pausa devolve o passo de base.
+- **Ícones sem moldura.** O desligado é só o glifo mais fraco. As vistas e o zoom
+  ganham nome em rectângulos de 88×34 na rail de 96 px; os 30 px de 24/10 e a
+  tira de navegação de 26 px foram substituídos na revisão de 26/10.
+
+## Revisão de 26/10/2026 — abas de pasta, marcadores e correções
+
+- **Abas de pasta.** As seis abas de módulo passam a assentar na borda do painel
+  de parâmetros, com glifo em vez de palavra e 44 px de largura; a ativa funde-se
+  com o painel e leva o filete âmbar. O nome falado continua no tooltip e na
+  árvore de acessibilidade.
+- **Teclado C1–C7.** 43 teclas brancas, dó central em C4; a largura da tecla é
+  calculada da baía em `resized()`. O `PITCH` acompanha em ±48 semitons.
+- **Silhueta.** A onda deixa de ser riscada por coluna: reamostragem por pixel
+  mais um máximo corrido de ±2 px, corpo com gradiente quente e rms como faixa
+  cheia. O verde sai das camadas da onda.
+- **Clipping no drive.** `tanh` por grão e teto duro no barramento, de 1,0 até
+  0,40; o pico deixa de depender do nível de entrada a partir de 6 dB.
+- **Haas na largura.** Acima de 1,0 o canal direito atrasa até 12 ms; o atraso
+  é slew-limitado a 0,25 amostra por amostra.
+- **Marcadores.** Alt+clique alterna uma bandeira no endereço apontado, o clique
+  sobre a bandeira salta para ele, e a bandeira desenha-se também no mapa. São
+  estado de sessão, não parâmetros: não entram no `APVTS`.
+- **Roda exponencial.** O ganho por entalhe cresce com o gesto e satura (32× no
+  hex, 8× no zoom), em vez do passo fixo anterior.
+
+## Revisão de 26/10/2026 (2) — acabamento: foco, transporte e agulhas
+
+- **O clique não rouba o foco.** Todos os controlos recebem
+  `setMouseClickGrabsKeyboardFocus(false)`; o foco pertence ao teclado virtual e
+  um `MouseListener` global devolve-lho depois de qualquer clique. As teclas de
+  nota continuam a soar ao trocar de vista, e o anel laranja só aparece na
+  travessia por `Tab`.
+- **Transporte no pé do display.** Play/pause e `HOLD` passam para a linha de POS
+  e REG, com glifo e palavra; a tira de navegação de 32 px é apagada, o display
+  cresce para 380 px e as páginas do hex ficam no mesmo pé.
+- **`PLAY` não pisca.** A condição de activação deixa de consultar o playhead do
+  host; a leitura de `VOICES` sai do rodapé.
+- **Agulhas brancas.** Densidade, spray e posição em branco recto e opaco; a
+  silhueta do grão usa a janela escolhida (Hann, Gaussian, Hamming, Blackman),
+  inclina-se com o pitch, duplica-se com o pitch spread, muda de opacidade com o
+  level e desloca o ponto com o pan.
+- **Fim do material não é silêncio.** O grão que nasce na posição 1,0 é puxado
+  para trás pelo comprimento da janela; o clique no canto direito do mapa de
+  entropia deixa de calar o instrumento. Numa região curta com pitch alto o grão
+  não cabe e a janela encurta para metade do material, para a posição não ficar
+  morta.
+- **Escala do medidor.** Piso em -48 dB e rótulos de 12 em 12 dB, centrados no
+  traço e limitados à pista; o volume cede 18 px ao medidor.
+
+## Estado dos testes de interface
+
+Em 24/10/2026 a suite automática cobre `opcoda_core`; os testes `Ui.*` da tabela
+abaixo continuam por implementar. O portão da interface é o build (dev com
+AddressSanitizer e release com o guard de CRT) e a captura de
+`tools/capture-ui.ps1`, comparada a 1:1. Não se declara um teste que não corre.
+
 ## Não-objetivos
 
 - **WebView2 ou janela separada.** O editor é embutido no host; uma janela
   separada só faria sentido no Standalone e partiria a paridade entre formatos.
 - **Temas alternativos.** Um tema, bem feito.
-- **Redimensionamento livre.** Tamanho mínimo e máximo declarados, com escala
-  inteira.
+- **Redimensionamento.** A janela é fixa em 1180×760; o requisito de 480×434
+  foi substituído na revisão de 24/10/2026.
 - **Visualizador 3D.** É a F024.
 
 ## Testes

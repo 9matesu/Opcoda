@@ -56,8 +56,18 @@ public:
     [[nodiscard]] float controller(int index) const noexcept;
     void setController(int index, float normalised) noexcept;
 
-    [[nodiscard]] bool controllersChanged() const noexcept { return controllersChanged_; }
-    void clearControllersChanged() noexcept { controllersChanged_ = false; }
+    // um bit por controlador. o flag unico antigo dizia "algum CC mudou" e o
+    // plugin escrevia densidade e posicao a partir dos ultimos valores de ambos:
+    // mexer so' no mod wheel repunha a densidade a zero. quem consome pergunta
+    // pelo indice que lhe interessa.
+    [[nodiscard]] bool controllerDirty(int index) const noexcept {
+        return index >= 0 && index < kTrackedControllers
+               && (controllersDirty_ & (1u << index)) != 0;
+    }
+    [[nodiscard]] bool controllersChanged() const noexcept {
+        return controllersDirty_ != 0;
+    }
+    void clearControllersChanged() noexcept { controllersDirty_ = 0; }
 
 private:
     void pushHeld(int note) noexcept;
@@ -78,7 +88,7 @@ private:
     int activeNote_ {60};
     float activeVelocity_ {1.0f};
     float controllers_[kTrackedControllers] {0.0f};
-    bool controllersChanged_ {false};
+    std::uint32_t controllersDirty_ {0};
 };
 
 } // namespace opcoda::rt

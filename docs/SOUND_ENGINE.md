@@ -12,9 +12,10 @@ flowchart LR
   F --> G[Filtro 1]
   G --> H[Filtro 2]
   H --> I[DC blocker]
-  I --> J[Limiter]
-  J --> K[Envelope global]
-  K --> L[Saída estéreo]
+  I --> K[Envelope global]
+  K --> W[Largura estéreo]
+  W --> J[Limiter]
+  J --> L[Saída estéreo]
 ```
 
 O parser lê o cabeçalho PE, valida cada seção e recorta os limites ao tamanho
@@ -36,7 +37,22 @@ envelope do grão usa a janela escolhida em `WINDOW`.
 
 A leitura avança em fração do buffer, não em amostras absolutas. O passo é
 `semitons -> razão -> razão / comprimento da fonte`. Essa divisão impede que um
-grão percorra o arquivo inteiro em poucas amostras.
+grão percorra o arquivo inteiro em poucas amostras. A razão fica limitada a
+0,0625..16, o que cobre os ±48 semitons do `PITCH`.
+
+**A posição é puxada para trás quando não há material à frente.** Um grão
+precisa de `grainLength` amostras depois do ponto de partida; em `POSITION = 1,0`
+ele lia o fim do buffer e morria na primeira amostra, e o instrumento emudecia
+sem aviso. O início passa a ser `min(posição, 1 - min(grainLength * passo, 1))`,
+já com o passo calculado. É o que impede o clique no canto direito do mapa de
+entropia de calar o som.
+
+**E o grão nunca ocupa mais de metade do material.** Numa região curta com pitch
+alto, `grainLength * passo` passa de 1 e o tecto da posição cai para zero: todos
+os grãos nasciam no início e o knob de posição e o spray ficavam mortos. Nesse
+caso a janela é encurtada para `0,5 / passo` amostras (com o envelope reescalado,
+para a forma fechar na mesma) e a posição volta a ter mapa. Um grão curto é som;
+um grão impossível é silêncio.
 
 ## Spray
 
@@ -68,6 +84,38 @@ spray sorteia posições; a entropia descreve o material.
 O cálculo roda na thread de interface em `pe::reduceToColumns`. A thread de
 áudio recebe a curva pronta.
 
+## Largura estéreo
+
+O material é mono — vem de bytes. O `STEREO` parte do mid/side e, acima de 1,
+atrasa um canal para criar o spread que a fonte não tem:
+
+```
+abaixo de 1:  L = M + S·w,  R = M − S·w      (estreita até mono em 0)
+acima de 1:   R = R(t − d),  d = 0 a 12 ms proporcional a w − 1
+```
+
+O atraso é uma linha de 12 ms com leitura interpolada, e a rampa do atraso é
+por amostra, como a da largura: girar o knob não abre clique. Em 1,0 o atraso é
+zero e as duas metades somam sem alteração. A matriz entra antes desta etapa,
+portanto o destino `Stereo Width` também abre o Haas.
+
+## Drive e clipping
+
+O `DRIVE` do filtro 1 tem dois estágios. No grão, o ganho entra no `tanh`, que
+satura e nunca passa de 1,0. No barramento, depois da soma e do gate, um clip
+fecha o topo do curso: o teto é 1,0 até 6 dB e desce até 0,40 em 24 dB.
+
+```
+g = 10^(drive/20)
+y = tanh(x·g)
+depois da soma:  y = clamp(y, ±c),  c = 1,0 − 0,60·(drive − 6)/18
+```
+
+O teto é o que se ouve como clipping. Abaixo de 6 dB o clip não encosta e o
+drive é ganho com saturação; a partir daí o pico deixa de depender do nível de
+entrada, que é a diferença entre clip e volume. O limiter continua depois, como
+rede.
+
 ## Modulação
 
 ```mermaid
@@ -86,10 +134,14 @@ flowchart LR
   M --> L[Spray]
   M --> N[Filtros]
   M --> O[Pan e nível]
+  M --> P[Largura estéreo]
 ```
 
 A matriz soma as rotas por destino e limita o total a -1..+1. Cada destino usa
-sua própria escala, por exemplo ±12 semitons em pitch e ±5 oitavas em corte.
+sua própria escala, por exemplo ±12 semitons em pitch e ±5 oitavas em corte. A
+largura estéreo é multiplicativa: +1 oitava dobra o side, e o teto é o mesmo do
+knob `STEREO`. As oito rotas são parâmetros automatizáveis e a vista MATRIX
+(as teclas 1 a 4 do display) as edita.
 
 ## Tempo real
 

@@ -7,10 +7,10 @@ Executable (`.exe`, `.dll`, `.bin`, `.sys`) como matéria-prima sonora e organiz
 os bytes em grãos de 1 a 100 ms. Existe como VST3 e *standalone*, na versão
 0.1.0, ainda sem lançamento comercial.
 
-![Interface do Opcoda sem material carregado](docs/assets/screenshots/opcoda-ui.png)
+![Interface do Opcoda com um binário carregado](docs/assets/screenshots/opcoda-ui.png)
 
-A captura mostra o *standalone* no estado inicial, sem material carregado. Foi
-gerada com `tools/capture-ui.ps1`.
+A captura mostra o *standalone* com um binário carregado. Foi gerada com
+`tools/capture-ui.ps1`.
 
 <!-- o recorte -->
 
@@ -23,7 +23,8 @@ afinação, filtros, envelope, LFO e uma matriz de modulação.
 
 O recorte está na fonte. O material não vem de um sample comum; cada região do
 arquivo carrega uma assinatura estatística própria, e o instrumento expõe essa
-leitura em três vistas: forma de onda, grade de bytes e curva de entropia.
+leitura em quatro vistas: forma de onda, grade de bytes, curva de entropia e
+matriz de modulação.
 
 <!-- so o que ja roda -->
 
@@ -32,12 +33,16 @@ leitura em três vistas: forma de onda, grade de bytes e curva de entropia.
 - Ingestão de PE com validação de limites e erros tipados (`E_BAD_MZ`,
   `E_BAD_PE`, `E_TRUNCATED`, `E_OOB`, `E_TOO_MANY_SECTIONS`).
 - Motor granular de oito vozes, janelas Hann, Gauss, Hamming e Blackman.
-- 41 parâmetros automatizáveis: grão, envelope ADSR com curvas, dois filtros
-  biquad em série, LFO, teclado e nuvem de grãos.
+- 66 parâmetros automatizáveis: grão, largura estéreo, envelope ADSR com
+  curvas, dois filtros biquad em série, LFO, teclado, nuvem de grãos e uma
+  matriz de modulação de 8 rotas editável no display.
 - Matriz de modulação com oito rotas e oito fontes.
 - Presets de fábrica e arquivos `.opcoda` para carregar e salvar.
 - Transporte sem MIDI, teclado virtual e controle por MIDI.
-- Três vistas do material: forma de onda, grade hexadecimal e entropia.
+- Quatro vistas do material: forma de onda, grade hexadecimal, entropia e
+  matriz de modulação.
+- Interface fixa de 1180×760, com o display como elemento dominante, o
+  transporte no pé do display, medidor stereo de saída e *HOLD*.
 - Núcleo C++20 sem dependência de JUCE, testado com AddressSanitizer.
 
 <!-- ambiente de build -->
@@ -111,7 +116,7 @@ material anterior tocando.
 | `DENSITY` | Grãos por segundo, 1 a 200. |
 | `POSITION` | Ponto de leitura no material, 0 a 100%. |
 | `SPRAY` | Dispersão aleatória da posição de cada grão, 0 a 100%. |
-| `PITCH` | Transposição em semitons, -24 a +24. |
+| `PITCH` | Transposição em semitons, -48 a +48. |
 | `WINDOW` | Envelope do grão. |
 | `PAN` | Posição estéreo. |
 | `LEVEL` | Nível de cada grão. |
@@ -123,9 +128,10 @@ quando você roteia `Entropy` na matriz de modulação.
 
 A referência completa dos 41 parâmetros está em `docs/PARAMETERS.md`.
 
-Atalhos: `1`, `2` e `3` alternam as vistas; `Espaço` liga o transporte; `L`
-abre um arquivo; `K` leva o foco ao teclado; `A` alinha a região à seção PE mais
-próxima.
+Atalhos: `1` a `4` alternam as vistas (onda, hex, entropia, matriz);
+`Espaço` liga o transporte; `L` abre um arquivo; `K` leva o foco ao teclado; `A`
+alinha a região à seção PE mais próxima. O clique num controle não tira o foco
+do teclado: tocar notas continua a funcionar em qualquer vista.
 
 <!-- fluxo de audio -->
 

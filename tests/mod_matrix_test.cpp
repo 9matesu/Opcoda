@@ -135,3 +135,61 @@ TEST(Matrix, EngineAppliesRouteToFilterCutoff) {
     engine.processBlock(left.data(), right.data(), 256, params);
     EXPECT_NEAR(engine.f1CutoffHz(), 100.0f, 0.5f);
 }
+
+TEST(Matrix, WidthDestinationSurvivesTheWordRoundTrip) {
+    // o destino novo entrou no fim do enum: os indices antigos continuam
+    // validos, e o 13 tem de voltar como kWidth.
+    const auto matrix = matrixWith({route(ModSource::kLfo, ModDest::kWidth, 0.5f)});
+    const ModMatrixArray words = toArray(matrix);
+    EXPECT_EQ(words[1], static_cast<int>(ModDest::kWidth));
+
+    const auto restored = fromArray(words);
+    EXPECT_EQ(restored.routes[0].destination, ModDest::kWidth);
+    EXPECT_NEAR(restored.routes[0].amount, 0.5f, 1.0e-3f);
+}
+
+TEST(Matrix, EngineAppliesRouteToStereoWidth) {
+    // prova de ligacao do destino novo, a mesma que o corte tem: amount 1 a 1
+    // oitava leva a largura a 2.0, e com pan ao centro o unico efeito que resta
+    // e' o haas — canais iguais na origem, separados na saida. sem a rota, a
+    // saida continua mono.
+    std::vector<float> material(24000);
+    for (std::size_t i = 0; i < material.size(); ++i) {
+        material[i] = 0.3f * std::sin(static_cast<float>(i) * 0.05f);
+    }
+
+    const auto run = [&material](bool withRoute) {
+        GranularEngine engine;
+        engine.prepare(48000.0, 256);
+        engine.setSource(material.data(), material.size());
+        engine.setSounding(true);
+
+        GranularParams params;
+        params.grainSizeMs = 20.0f;
+        params.densityGrainsPerSec = 40.0f;
+        params.position = 0.5f;
+        params.widthStereo = 1.0f;
+        params.velocity = 1.0f;
+        if (withRoute) {
+            params.modMatrix =
+                matrixWith({route(ModSource::kVelocity, ModDest::kWidth, 1.0f)});
+        }
+
+        std::vector<float> left(256, 0.0f);
+        std::vector<float> right(256, 0.0f);
+        for (int block = 0; block < 48; ++block) {
+            engine.processBlock(left.data(), right.data(), 256, params);
+        }
+
+        float difference = 0.0f;
+        for (int i = 0; i < 256; ++i) {
+            difference = std::max(
+                difference, std::abs(left[static_cast<std::size_t>(i)] -
+                                     right[static_cast<std::size_t>(i)]));
+        }
+        return difference;
+    };
+
+    EXPECT_LT(run(false), 1.0e-3f);
+    EXPECT_GT(run(true), 0.01f);
+}

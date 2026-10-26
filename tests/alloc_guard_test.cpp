@@ -97,6 +97,10 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     params.modMatrix.routes[0] = {ModSource::kLfo, ModDest::kCutoff1, 0.5f};
     params.modMatrix.routes[1] = {ModSource::kEnvelope, ModDest::kPitch, 0.25f};
     params.modMatrix.routes[2] = {ModSource::kVelocity, ModDest::kDensity, 0.5f};
+    // largura stereo fora do atalho: 1.0 sai cedo, e o guard tem de medir o
+    // laco mid/side a valer. a rota a kWidth exerce o destino novo tambem.
+    params.widthStereo = 2.0f;
+    params.modMatrix.routes[3] = {ModSource::kCc71, ModDest::kWidth, 0.5f};
 
     const auto violations = allocationsInsideAudioWindow([&] {
         for (int block = 0; block < 50; ++block) {

@@ -63,16 +63,16 @@ target_sources(Opcoda
         source/plugin_editor.cpp
         source/plugin_editor.h
         source/look_and_feel.h
+        source/module_folder_tab.h
         source/knob.h
-        source/led.h
         source/animator.h
         source/display_panel.h
         source/hex_grid.cpp
         source/hex_grid.h
+        source/mod_matrix_view.cpp
+        source/mod_matrix_view.h
         source/byte_display.cpp
         source/byte_display.h
-        source/byte_address_field.cpp
-        source/byte_address_field.h
         source/fonts.h
         source/palette.h)
 

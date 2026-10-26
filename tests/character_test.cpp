@@ -151,7 +151,7 @@ TEST(Filter, SlopeTwentyFourAttenuatesTwiceInDbPerOctave) {
     EXPECT_LT(rmsTwentyFour, rmsTwelve * 0.15f);
 }
 
-TEST(Filter, DriveAddsHarmonicsWithoutClippingOutput) {
+TEST(Filter, DriveAddsHarmonicsAndStopsAtTheCeiling) {
     const auto source = sineSource(220.0f, 0.5f, 1.0f);
     auto clean = toneParams(20000.0f);
     clean.f1DriveDb = 0.0f;
@@ -161,8 +161,10 @@ TEST(Filter, DriveAddsHarmonicsWithoutClippingOutput) {
     const auto cleanOut = render(clean, source, 90, 70);
     const auto drivenOut = render(driven, source, 90, 70);
 
-    // a compensacao 1/g faz tanh(y) <= y: o pico nao sobe nem um pouco.
-    EXPECT_LE(peak(drivenOut.samples), peak(cleanOut.samples) * 1.001f);
+    // a 24 dB o teto do clip e' 0,40: o pico para *nele*, e o drive nao deixa o
+    // material passar do limite (o limiter fica depois, como rede). o EXPECT_NEAR
+    // tambem apanha o silencio, que passaria num EXPECT_LE.
+    EXPECT_NEAR(peak(drivenOut.samples), 0.40f, 0.02f);
 
     const double cleanFundamental = magnitudeAt(cleanOut.samples, 220.0);
     const double cleanThird = magnitudeAt(cleanOut.samples, 660.0);
@@ -218,4 +220,125 @@ TEST(Envelope, CurvesReachTheEngine) {
     EXPECT_NEAR(linear, 0.3f, 0.02f);
     EXPECT_GT(exponential, 0.8f);
     EXPECT_LT(logarithmic, 0.01f);
+}
+
+TEST(GranularEngine, GrainAtTheEndOfTheSourceStillSounds) {
+    // O canto direito do mapa de entropia levava POSITION a 1,0, e o grao morria
+    // na primeira amostra: o instrumento emudecia e parecia avariado. O inicio
+    // recua pelo comprimento da janela, e o ensaio fixa isso. O piso e' a ordem
+    // de grandeza do material, nao um valor que o silencio tambem satisfaz.
+    const auto source = sineSource(440.0f, 0.5f, 2.0f);
+
+    auto params = toneParams(20000.0f);
+    params.position = 1.0f;
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 40.0f;
+
+    const auto rendered = render(params, source, 24, 8);
+    ASSERT_FALSE(rendered.samples.empty());
+
+    const auto level = rms(rendered.samples);
+    EXPECT_GT(level, 0.02f) << "rms " << level;
+
+    for (const float value : rendered.samples) {
+        EXPECT_TRUE(std::isfinite(value));
+        EXPECT_LE(std::abs(value), 1.0f);
+    }
+}
+
+TEST(GranularEngine, GrainAtTheEndKeepsTheLevelOfTheMiddle) {
+    // Nao basta sair do silencio: o recuo nao pode ser um corte de nivel. O fim
+    // do material toca com o mesmo nivel do meio, nao apenas com metade.
+    const auto source = sineSource(440.0f, 0.5f, 2.0f);
+
+    auto params = toneParams(20000.0f);
+    params.grainSizeMs = 60.0f;
+    params.densityGrainsPerSec = 40.0f;
+
+    params.position = 0.5f;
+    const auto middle = rms(render(params, source, 24, 8).samples);
+
+    params.position = 1.0f;
+    const auto end = rms(render(params, source, 24, 8).samples);
+
+    ASSERT_GT(middle, 0.02f);
+    EXPECT_NEAR(end, middle, middle * 0.1f) << "middle " << middle << " end " << end;
+}
+
+TEST(GranularEngine, PositionStillChoosesTheMaterial) {
+    // O recuo do inicio podia ser um clamp que colava tudo na posicao 0: a saida
+    // ficava audivel e o knob morto. Material com dois tons, um em cada metade,
+    // mostra que a posicao ainda escolhe o que se le.
+    auto source = sineSource(220.0f, 0.5f, 1.0f);
+    const auto high = sineSource(880.0f, 0.5f, 1.0f);
+    source.insert(source.end(), high.begin(), high.end());
+
+    auto params = toneParams(20000.0f);
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 40.0f;
+
+    params.position = 0.2f;
+    const auto low = render(params, source, 24, 8).samples;
+    params.position = 0.8f;
+    const auto upper = render(params, source, 24, 8).samples;
+
+    const auto lowAtLow = magnitudeAt(low, 220.0);
+    const auto lowAtHigh = magnitudeAt(low, 880.0);
+    const auto highAtLow = magnitudeAt(upper, 220.0);
+    const auto highAtHigh = magnitudeAt(upper, 880.0);
+
+    EXPECT_GT(lowAtLow, lowAtHigh * 3.0);
+    EXPECT_GT(highAtHigh, highAtLow * 3.0);
+}
+
+TEST(GranularEngine, GrainLongerThanTheSourceStillSoundsAndMoves) {
+    // Regiao curta com pitch alto: o grao pediria mais material do que existe.
+    // Sem o tecto da metade do material, o unico inicio valido era zero e o knob
+    // de posicao e o spray ficavam mortos.
+    const auto source = sineSource(333.0f, 0.5f, 0.5f);
+
+    auto params = toneParams(20000.0f);
+    params.grainSizeMs = 100.0f;
+    params.pitchSemitones = 48.0f;
+    params.densityGrainsPerSec = 40.0f;
+
+    params.position = 0.0f;
+    const auto atStart = render(params, source, 24, 8).samples;
+    params.position = 1.0f;
+    const auto atEnd = render(params, source, 24, 8).samples;
+
+    const auto startLevel = rms(atStart);
+    const auto endLevel = rms(atEnd);
+    EXPECT_GT(startLevel, 0.01f) << "start " << startLevel;
+    EXPECT_GT(endLevel, 0.01f) << "end " << endLevel;
+
+    // e a posicao ainda muda o material lido, em vez de tudo nascer no mesmo byte.
+    double difference = 0.0;
+    const auto count = std::min(atStart.size(), atEnd.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        difference += std::abs(atStart[i] - atEnd[i]);
+    }
+    difference /= static_cast<double>(count);
+    EXPECT_GT(difference, 0.01) << "difference " << difference;
+}
+
+TEST(GranularEngine, NanSprayDoesNotPoisonTheReadIndex) {
+    // spray NaN atravessava o clamp da posicao (std::clamp nao sanea NaN) e ia
+    // parar a um static_cast para indice de leitura, que e' indefinido. o
+    // paramatro tem de ser saneado antes de tocar no buffer.
+    const auto source = sineSource(440.0f, 0.5f, 1.0f);
+
+    auto params = toneParams(20000.0f);
+    params.grainSizeMs = 40.0f;
+    params.densityGrainsPerSec = 40.0f;
+    params.spray = std::nanf("");
+
+    const auto rendered = render(params, source, 16, 4);
+    ASSERT_FALSE(rendered.samples.empty());
+    // o spray invalido e' lido como zero: o instrumento toca, em vez de morrer
+    // num indice indefinido.
+    EXPECT_GT(rms(rendered.samples), 0.02f);
+    for (const float value : rendered.samples) {
+        EXPECT_TRUE(std::isfinite(value));
+    }
 }

@@ -143,7 +143,12 @@ bool snapByteRangeToSection();
     // uma struct com lock: nao ha snapshot consistente entre campos, o que para
     // pico e contagem de vozes nao pesa.
     struct Telemetry {
-        std::atomic<float> peakDb {-1.0f};
+        std::atomic<float> peakDb {-100.0f};
+        // pico por canal: o medidor do canto inferior direito e' stereo, como o
+        // mestre de uma mesa. peakDb continua a ser o maximo dos dois, para quem
+        // so' quer o tecto.
+        std::atomic<float> peakLeftDb {-100.0f};
+        std::atomic<float> peakRightDb {-100.0f};
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};
@@ -153,6 +158,9 @@ bool snapByteRangeToSection();
         std::atomic<float> playheadFraction {0.0f};
         std::atomic<double> playDurationSeconds {0.0};
         std::atomic<bool> playing {false};
+        // HOLD congela a cabeca sem fechar o gate: os graos continuam a nascer
+        // na posicao actual. e' o latch do transporte, publicado para o botao.
+        std::atomic<bool> held {false};
     };
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
@@ -182,6 +190,18 @@ bool snapByteRangeToSection();
         } else {
             transport_.play();
         }
+    }
+
+    // HOLD: congela a cabeca do transporte sem fechar o gate. o motor continua a
+    // disparar graos, mas sempre na mesma posicao — o material fica em suspensao
+    // ate' se largar o latch. atomic porque o botao e' da interface e a leitura e'
+    // do callback.
+    void setTransportHold(bool hold) noexcept {
+        transportHold_.store(hold, std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] bool isTransportHeld() const noexcept {
+        return transportHold_.load(std::memory_order_relaxed);
     }
 
     // teclado virtual e teclas do computador. A interface empurra o evento e o
@@ -251,14 +271,15 @@ bool snapByteRangeToSection();
     void drainKeyboardNotes() noexcept;
 
     // -- F020: matriz de modulacao --
-    // as 8 rotas vivem no estado, no MODMATRIX ao lado dos PARAM: nao sao
-    // automatizaveis e viajam no preset. A interface escreve, o audio le uma copia
-    // por bloco.
-    // publicacao: 24 inteiros atomicos mais a geracao, que so' sobe depois das
-    // palavras. Um bloco que apanhe a troca ve' a matriz antiga inteira.
-    [[nodiscard]] dsp::ModMatrix modMatrix() const;
-    bool setModRoute(int index, dsp::ModRoute route);
-    void publishModMatrix();
+    // desde 24/10/2026 cada rota e' parametro (m1src/m1dst/m1amt ... m8*): o host
+    // automatiza, o preset leva e a vista MATRIX escreve por attachment. O audio
+    // le os 24 raws por bloco, por ponteiro pre-resolvido, sem alocar.
+    [[nodiscard]] dsp::ModMatrix readModMatrix() const noexcept;
+
+    // projeto gravado antes das rotas serem parametros traz o no MODMATRIX.
+    // copia as rotas para os parametros e remove o no. Roda na thread de
+    // mensagem, depois de replaceState.
+    void migrateLegacyModMatrix();
 
     // le BPM e ppq do host uma vez por bloco e guarda em atomicos. O nucleo nao
     // conhece o host; estes dois doubles sao tudo o que atravessa.
@@ -289,13 +310,14 @@ private:
     // recem-chegado e devolve o antigo a' interface, a unica que libera memoria.
     void drainIncomingQueue() noexcept;
 
-    // garante o no MODMATRIX no estado: construcao e depois de cada
-    // replaceState, porque projeto gravado antes da F020 nao traz o no.
-    void ensureModMatrixNode();
-
-    // le a matriz publicada para o snapshot deste bloco. Roda no audio, nao aloca
-    // e so' copia quando a geracao muda.
-    void refreshModMatrix() noexcept;
+    // ponteiros raw das 24 celulas da matriz, resolvidos uma vez na construcao.
+    // ler getRawParameterValue por id no bloco construiria juce::String no audio.
+    struct RouteRaw {
+        const std::atomic<float>* source {nullptr};
+        const std::atomic<float>* destination {nullptr};
+        const std::atomic<float>* amount {nullptr};
+    };
+    std::array<RouteRaw, dsp::kMaxModRoutes> routeRaw_ {};
 
     // le o MidiBuffer do bloco e atualiza o NoteTracker. Roda no audio, sem alocar
     // nem bloquear: o MidiBuffer ja' traz os contadores resolvidos.
@@ -360,6 +382,9 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     // posicao ja' resolvida e nao sabe que existe transporte.
     rt::Transport transport_;
 
+    // latch do transporte. escrito pela interface, lido no callback.
+    std::atomic<bool> transportHold_ {false};
+
     Telemetry telemetry_;
 
     static constexpr int kCcSustain = 64;
@@ -371,13 +396,6 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
     static constexpr int kModWheelController = 2;
 
     static constexpr const char* kModMatrixNode = "MODMATRIX";
-
-    // palavras publicadas (fonte, destino, amount) e o snapshot do bloco. As
-    // palavras so' pela interface, o snapshot so' pelo audio.
-    std::array<std::atomic<int>, dsp::kMaxModRoutes * dsp::kModRouteWords> modMatrixWords_ {};
-    std::atomic<std::uint32_t> modMatrixGeneration_ {0};
-    std::uint32_t modMatrixAppliedGeneration_ {0};
-    dsp::ModMatrix modMatrixSnapshot_ {};
 
     juce::AudioProcessorValueTreeState parameters_;
 };

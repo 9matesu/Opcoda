@@ -68,7 +68,20 @@ precisa começar na amostra certa.
 
 Um grão começa a ler com a janela no índice zero, o que zera a amplitude nas
 bordas e evita o clique na sobreposição. O interpolador é linear, com passo
-limitado para impedir aliasing audível na afinação máxima de +24 semitons.
+limitado a 0,0625..16 (quatro oitavas para cada lado) para impedir aliasing
+audível na afinação máxima de ±48 semitons.
+
+**O grão que nasce no fim morria na primeira amostra.** A posição 1,0 aponta para
+o último byte, e a janela precisa de `grainLength` amostras à frente; sem margem,
+o grão lia zeros e o instrumento calava-se — era o que acontecia ao clicar no
+canto direito do mapa de entropia, e parecia avaria. `startGrain` passou a puxar
+o início para trás pelo comprimento do grão, depois de conhecido o `readStep`:
+`position = min(position, 1 - min(grainLength * readStep, 1))`. A posição que o
+utilizador escolheu perde apenas o que a janela não teria como ler, e o fim do
+material deixa de ser um silêncio. Numa região curta com pitch alto o grão não
+cabe em sítio nenhum e o tecto caía para zero — todos os grãos no primeiro byte,
+knob de posição morto. Passa a haver um segundo limite: o grão nunca ocupa mais
+de metade do material, e a janela encurta com o envelope reescalado.
 
 O spray e' dispersao pura dos graos, independente da entropia local; a entropia so' o modula quando roteada pela matriz: região
 repetitiva fica mais ancorada. É o Entropy-to-CV descrito na fundamentação.
@@ -190,16 +203,16 @@ Cada arquivo tem uma responsabilidade só:
 | Arquivo | Responsabilidade |
 | --- | --- |
 | `palette.h` | os tokens do `design/DESIGN-SYSTEM.md`, em hex único |
-| `look_and_feel.h` | desenho do knob e do botão, ambos em `juce::Path` |
+| `look_and_feel.h` | desenho do knob, do botão e dos ícones, todos em `juce::Path` |
 | `animator.h` | meia-vida exponencial, a única forma de interpolação da interface |
-| `led.h` | indicador com brilho, quatro estados |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
-| `knob.h` | rótulo, `juce::Slider` rotativo e caixa de valor |
-| `display_panel.h` | fundo escuro e grade de 24 px |
-| `byte_display.h/.cpp` | as três vistas do material, a caret e a animação |
-| `hex_grid.h/.cpp` | a vista de bytes: endereços, 16 colunas e coluna ASCII |
-| `byte_address_field.h/.cpp` | campo hexadecimal do início da região, e as teclas que o movem |
-| `plugin_editor.h/.cpp` | as faixas, o teclado virtual e o layout |
+| `knob.h` | rótulo, `juce::Slider` rotativo, valor e dropdown dos *choices* |
+| `display_panel.h` | fundo escuro com gradiente, brilho de topo e sombra interna, sem grelha |
+| `byte_display.h/.cpp` | as três vistas do material, a caret, a faixa de entropia e o *preview* |
+| `hex_grid.h/.cpp` | a vista de bytes: endereços de 8 dígitos, 16 colunas, ASCII e barra de deslocamento |
+| `mod_matrix_view.h/.cpp` | a vista MATRIX: oito rotas com combos e barra bipolar, cada célula um attachment |
+| `output_meter.h` | medidor stereo de saída, com pico por canal e escala em dB |
+| `plugin_editor.h/.cpp` | o chassi fixo, as abas, o pé do display com o transporte, o teclado e o layout |
 
 **Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
 `Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
@@ -237,14 +250,17 @@ referência do `RangedAudioParameter`, não a da árvore inteira.
 
 O nome accessible de cada knob é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
-seria inútil para quem navega por leitor de tela. Os **41 parâmetros** vivem em
-sete módulos (GRAIN, ENVELOPE, FILTER, MOD, CLOUD, OUT, KEYS), com uma faixa
-visível de cada vez e páginas dentro do módulo quando os controles não cabem —
-o mínimo de 480×434 não comporta mais linhas; sete abas de 52 px mais 4 de vão
-dão 388 px e cabem nos 480. Os knobs de choice (window, tipos de filtro,
-inclinação do filtro, alvo, forma e sincronismo do LFO, escala e tônica) usam o
-mesmo `SliderParameterAttachment` — o JUCE entrega intervalo 0..N-1 com passo 1
-para `AudioParameterChoice` — e só o texto do valor muda para o rótulo.
+seria inútil para quem navega por leitor de tela. Os **66 parâmetros** vivem em
+seis módulos (GRAIN, ENV, FILTER, MOD, CLOUD, KEYS), com uma faixa visível de
+cada vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
+onze knobs de grão numa linha. A aba MAIN saiu porque repetia os onze parâmetros
+de grão; a aba OUT saiu porque o volume é um knob mestre persistente na coluna
+escura da direita, ao lado do medidor de saída. Cada controle aparece uma vez.
+Os knobs de choice (window, tipos de filtro, inclinação do filtro, alvo, forma e
+sincronismo do LFO, escala e tônica) usam o mesmo `SliderParameterAttachment` —
+o JUCE entrega intervalo 0..N-1 com passo 1 para `AudioParameterChoice` — e o
+caret ao lado do valor abre um `PopupMenu` com os rótulos reais; girar o knob
+continua a responder à roda e às setas.
 
 ### Três decisões que deram errado na primeira tentativa
 
@@ -264,15 +280,140 @@ display e das abas não comporta dois knobs com rótulo e valor, e eles
 despencam para poucos pixels. Cada módulo fica sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
 sem precisar de um segundo layout. Por isso as abas trocam a faixa em vez de
-empilhar: cinco fileiras pediriam ~700 px e o mínimo continua 480x434.
+empilhar: cinco fileiras pediriam ~700 px e não caberiam na janela fixa.
+
+### A janela fixa e as quatro vistas
+
+O chassi fecha em 1180×760 e não aceita redimensionamento (`setResizable(false,
+false)`). O display ocupa a faixa superior de 380 px, com uma rail vertical de
+96 px à direita para as vistas e o zoom; as seis abas de módulo encostam
+directamente no display, sem tira de navegação pelo meio; os knobs e a coluna
+mestra de 116 px preenchem o meio; o teclado de 84 px e o rodapé fecham o
+desenho. O layout foi escrito para estes números e não tem um caminho
+alternativo — a guarda de `resized()` contra o primeiro rectângulo 0×0 é a única
+excepção.
+
+A grelha hexadecimal é contínua, com 16 bytes por linha, endereços de 8 dígitos,
+coluna ASCII própria e uma barra de deslocamento de 10 px. O topo do hex é do
+utilizador: `topByte_` só muda por roda, clique ou teclado, e a cabeça de
+reprodução não arrasta a vista. A faixa de entropia, com 58 px, fecha o display
+e é clicável e arrastável; o mesmo gesto na grelha move a posição. A barra
+laranja marca apenas o endereço tocado; a região aparece como filete de 1 px no
+topo e na base.
+
+O transporte tem play/pause e `HOLD` no pé do display, ao lado das leituras de
+POS e REG, e o `HOLD` congela o avanço (`transport_.advance(held ? 0 :
+numSamples, playing)`), não o áudio. Tirar a tira de navegação devolveu 40 px ao
+display e 8 px ao painel, e deixou o transporte dentro do que ele governa: o
+olho que segue a cabeça de leitura não tem de atravessar a janela para carregar
+no play. O medidor stereo da coluna mestra lê `peakLeftDb` e `peakRightDb` da
+telemetria, sobe depressa e cai devagar, e usa a escala de 0 a -48 dB, com
+rótulos de 12 em 12 dB. O render é vetorial 2-D; não há OpenGL nem animação
+ambiente.
+
+A quarta vista é a **matriz de modulação** (`ModMatrixView`, tecla 4): oito
+linhas com fonte, destino e amount, cada célula um componente de verdade com
+attachment ao `m{n}src`/`m{n}dst`/`m{n}amt`. O trio de zoom esconde-se nela,
+porque escala não se aplica.
+
+A **largura estéreo** (`STEREO`, na linha de grão entre PAN e LEVEL) é mid/side
+na saída: `mid` fica intocado, `side` escala de 0 a 2, e a rampa corre dentro
+do bloco para a automação não zumbir. O destino `Stereo Width` da matriz usa a
+mesma escala multiplicativa do motor.
+
+A roda acelera por gesto: cada entalhe seguido dentro de 320 ms multiplica o
+passo por 1,7 no hex (até 32×) e o expoente do zoom nas vistas de onda e de
+entropia até 8×; uma pausa volta ao passo de base. Ícones de 30 px sem moldura:
+o desligado é só o glifo mais fraco, sem contorno de 1 px a fingir botão de web.
+
+### Abas de pasta, marcadores e as correções de 26/10/2026
+
+As seis abas de módulo deixaram a fileira solta e passaram a ser pastas
+assentes na borda do painel de parâmetros. O componente `ModuleFolderTab` põe
+o glifo no lugar da palavra; a aba ativa é da cor do painel, desce 6 px sobre
+ele e leva o filete âmbar, e as inativas ficam 2 px mais altas, com a linha de
+pé a lembrar o separador de arquivo. A largura caiu de 92 para 44 px; o nome
+falado continua no tooltip e no leitor de tela. O painel cedeu os 6 px da
+cauda, e a fileira de knobs ficou com o espaço que a palavra ocupava.
+
+O teclado cobre C1 a C7 — 43 teclas brancas, com o dó central em C4
+(`setOctaveForMiddleC(4)`). A largura da tecla é calculada em `resized()` a
+partir da baía, e não fixada: com uma constante, a última oitava ficava fora do
+vidro e a seta de scroll cortava o C7. O `PITCH` acompanha em ±48 semitons, e
+`applyModMatrix` limita no mesmo teto.
+
+O envelope da onda deixou de ser riscado por coluna. São duas passagens: uma
+reamostragem para um máximo e um mínimo por pixel (`resampleEnvelope`) e um
+máximo corrido de ±2 px sobre o resultado. A primeira mata o zigzag sub-pixel
+que abria riscos verticais no preenchimento; a segunda fecha as valas de 1 px
+que faziam o material aleatório parecer um pente. O corpo é uma silhueta com
+gradiente quente, o rms é uma faixa cheia por dentro dela, e `waveLow` saiu de
+todas as camadas da onda — o verde lia-se como ruído de outra tela.
+
+O `DRIVE` ganhou o clipping descrito em `SOUND_ENGINE.md` — `tanh` por grão e
+teto duro no barramento, de 1,0 a 0,40 — e a largura estéreo ganhou o Haas:
+acima de 1,0 o canal direito atrasa até 12 ms, que é o spread que o material
+mono não tem. O atraso e a largura rampam no mesmo laço, com a derivada do
+atraso limitada a um quarto de amostra por amostra: a rampa de bloco inteiro
+fazia o ponteiro andar para trás e o canal direito tocava ao contrário.
+
+Os marcadores (`bookmarks_`) são endereços absolutos, não parâmetros: alt+clique
+acrescenta ou tira a bandeira no endereço apontado, o clique sobre a bandeira
+salta para ele, e a bandeira também se desenha no mapa. Vivem na sessão e morrem
+com o material novo — não são estado do projeto, e por isso não entram no
+`APVTS`.
+
+### A rodada de acabamento de 26/10/2026
+
+**O transporte desceu para o pé do display e a tira de navegação desapareceu.**
+Play/pause e `HOLD` passaram a ser botões de 74×20, com glifo e palavra, na
+mesma linha de POS e REG e dos quatro botões de página do hex; o `PLAY` troca
+para `PAUSE` quando corre. A tira de 32 px que os alojava foi apagada, o display
+cresceu de 340 para 380 px e o painel ganhou 8 px. A rail de vistas foi de 36
+para 96 px: os quatro botões passaram a rectângulos de 88×34 com ícone e nome
+(`WAVE`, `HEX`, `ENTROPY`, `MATRIX`), e o trio de zoom, `IN`/`FIT`/`OUT`, usa o
+mesmo desenho.
+
+**O clique deixou de roubar o foco.** Todos os controlos recebem
+`setMouseClickGrabsKeyboardFocus(false)`, o foco pertence ao teclado virtual, e
+um `MouseListener` global devolve-lho depois de qualquer clique que o leve para
+fora. As setas, `PageUp`/`PageDown`, `Home`, `End` e `Enter` passaram a ser
+tratadas pelo editor e encaminhadas para o cursor do display, de modo que trocar
+de vista ou arrastar um knob não cala as teclas de nota. O `keyStateChanged`
+encaminha a tecla que sobe para o teclado quando este perdeu o foco, e nenhuma
+nota fica presa. O anel de foco laranja sobreviveu apenas à travessia por `Tab`:
+o `ByteDisplay` trocou-o por um caret branco.
+
+**O botão de play não pisca mais.** A condição de activação incluía
+`hostTransportIsKnownToBeStopped()`; no standalone, o playhead alterna entre
+"parado" e "desconhecido" e o botão apagava e acendia ao ritmo do callback.
+Ficou só `hasSource() && hasPlayableRegion()`: o transporte que o botão comanda é
+o do instrumento. A leitura de `VOICES` saiu do rodapé — era ela que tremia — e o
+número continua na telemetria, sem caixa onde piscar.
+
+**As agulhas do visor são brancas, rectas e opacas.** O `preview` do display
+deixou de desenhar barrinhas laranja arredondadas: a densidade vira um comb de
+2,5 px de espessura com 3 a 16 dentes, o spray um banho com dois filetes, a
+posição uma linha de 2,6 px a toda a altura e o grão a silhueta da janela
+escolhida — Hann, Gaussian, Hamming ou Blackman, com as mesmas expressões do
+motor. O pitch inclina a silhueta, o pitch spread desenha duas cópias mais
+fracas, o level manda na opacidade e o pan desloca o ponto do topo. O desenho é
+limitado à área visível, para a silhueta não aparecer meio cortada na posição 0.
+
+**A escala do medidor saiu do aperto.** O piso desceu de -60 para -48 dB e os
+rótulos passaram a 0, -12, -24, -36 e -48, com 8 px de corpo, centrados no traço
+e limitados dentro da pista. O volume da coluna mestra cedeu 18 px ao medidor:
+com a pista antiga, 0 e -6 dB ficavam a 8 px de distância e os números
+encostavam uns aos outros.
 
 ### O display F008
 
 As abas de seção, a curva de entropia e a telemetria entraram na F008. O
 `ingest` deixou de descartar o `PeImage`: publica em `SourceInfo` o nome, o
 tamanho e, por seção, o nome, o offset, o tamanho em disco e a entropia. A curva
-de entropia em janelas foi acrescentada depois e já não está: ver "A grelha de
-bytes", que substituiu o componente que a desenhava.
+de entropia em janelas foi acrescentada depois, saiu com o componente antigo e
+voltou na revisão de 24/10/2026 como faixa clicável na base do display; ver "A
+grelha de bytes".
 
 O `PeImage` continua a ser local ao `ingest`, mas **os bytes crus não**: são
 guardados, porque a grelha precisa de os mostrar e porque o `Processor` precisa
@@ -362,57 +503,57 @@ A fração é um `float` de 24 bits de mantissa, que é a resolução real do
 parâmetro: distingue cada byte até uma região de 16 MB, e acima disso o cursor
 salta vários bytes. Não há correção possível sem mudar o tipo do parâmetro.
 
-**A grelha não desenha mais nada.** Os limites de seção aparecem no gutter, na
-linha onde a seção começa, com uma barra de 2 px a toda a altura da linha. Isso
-substitui as `SectionTabs`, que ocupavam 18 px para dizer a mesma coisa em menos
-sítio, e substitui a curva de entropia: o rodapé mede agora a entropia da janela
-de 256 bytes onde está a cabeça de leitura, que custa um histograma por tique em
-vez de 320 no `ingest`. A curva de entropia do ficheiro inteiro e o respetivo
-campo em `SourceInfo` saíram com o componente que os desenhava.
+**A grelha e a faixa de entropia partilham o display.** O gutter marca o início
+de cada seção com uma barra de 2 px; a faixa de 58 px na base mostra a entropia
+por coluna do ficheiro inteiro, com barras largas e um contorno laranja na
+região. A entropia da janela já não se lê no rodapé: o rodapé diz POS e REG, e
+o medidor stereo ocupa a coluna mestra. O cache de colunas do hex e o
+da entropia reutilizam `pe::reduceToColumns`, e nenhum dos dois aloca no
+callback.
 
-**A região é mostrada com dois sinais**, fundo laranja a 22 % e um filete de 1 px
-em cima e em baixo da linha. O fundo diz a quem vê cor, o filete diz a quem não
-vê, que é o que o critério 1.4.1 pede.
+**A região é um filete, não um fundo.** O topo e a base da linha da região levam
+1 px laranja; o preenchimento laranja a 3 px e o véu ficam reservados para o
+endereço tocado, que é o único que a barra marca. A distinção não depende de
+cor: o endereço tem também a barra de 3 px.
 
 ### Os dois caminhos de teclado
 
-A grelha é operada só com o rato. As células são pintadas e não são componentes,
-e um `Component` só não tem filhos acessíveis: não há como dar nome a 200
-células. O caminho de teclado não é a mesma coisa desenhada outra vez, são dois
-controlos com nome e valor próprios:
+A grelha é operada pelo rato e pelo teclado do display. As células são pintadas
+e não são componentes, e um `Component` só não tem filhos acessíveis: não há
+como dar nome a 200 células. O caminho de teclado não é a mesma coisa desenhada
+outra vez, são dois controlos com nome e valor próprios:
 
 - **POSITION**, o knob, que é um `juce::Slider` de verdade, move a cabeça de
   leitura;
-- **`ByteAddressField`**, o campo hexadecimal, escreve o endereço da região. Aceita
-  `1F4`, `0x1F4` e `000001F4`; Enter confirma, Esc volta ao valor anterior, sair
-  do campo confirma, as setas sobem e descem um byte e PageUp/PageDown saltam
-  dezasseis.
+- **o display**, com ou sem foco, responde a PageUp/PageDown (uma página),
+  Home/End (início e fim do ficheiro) e `A` (alinha a região à seção). O editor
+  encaminha as setas para o cursor, porque o foco vive no teclado virtual; os
+  quatro botões de página, no pé do display, chamam os mesmos métodos e só
+  aparecem no modo hex.
 
-O `ALINHAR` substitui a tecla Enter que o seletor antigo usava para alternar
-entre a região exata e a seção mais próxima. O duplo clique na grelha continua a
-fazer a mesma coisa, e o duplo clique passa pelo mesmo teste de célula que o
-clique simples: um segundo clique no vão entre colunas não alinha nada, em vez de
-alinhar a seção a partir de um byte vizinho.
+O duplo clique na grelha e a tecla `A` alinham a região à seção mais próxima; o
+duplo clique passa pelo mesmo teste de célula que o clique simples: um segundo
+clique no vão entre colunas não alinha nada, em vez de alinhar a seção a partir
+de um byte vizinho.
 
-O alvo de clique é 24 px de altura e cerca de 17 de largura. O critério 2.5.8
-pede 24 por 24, e a cláusula de espaçamento também não salva: um círculo de 24 px
-centrado em duas células vizinhas da mesma linha sobrepõe-se. Está declarado como
-exceção em `docs/10-acessibilidade-w3c.md`.
+O alvo de clique é a linha de 26 px. Nas células ASCII a largura é de cerca de
+14 px, abaixo dos 24 px do critério 2.5.8; o caso está declarado como exceção em
+`docs/10-acessibilidade-w3c.md`.
 
 **O endereço mede-se pelo ficheiro carregado.** Um PE acima de 4 GB tem endereços
 com mais de oito dígitos, e a coluna é alargada em vez de cortar o número a
-meio. Abaixo de 520 px de largura a coluna ASCII é omitida: perder os caracteres
-é perder contexto, e perder colunas de hexadecimal parte os endereços ao meio. É
-o que faz o critério 1.4.10 de refluxo — a janela estreita perde informação em
-vez de a truncar.
+meio. A janela fixa não tem refluxo: a coluna ASCII ocupa 26 % da largura e não
+é omitida, porque perder os caracteres é perder contexto. O que se preserva é a
+regra de não partir o endereço; acima de oito dígitos a gutter cresce.
 
 ### O que o `ingest` deixou de publicar
 
 O `PeImage` continua a ser local ao `ingest`, e os bytes crus continuam guardados
 porque a grelha precisa deles e o seletor precisava deles. O que saiu foi
-`SourceInfo::entropyCurve` e o respetivo `buildEntropyCurve`: a curva do ficheiro
-inteiro tinha um componente que a desenhava, e o rodapé passou a medir a janela da
-cabeça de leitura.
+`SourceInfo::entropyCurve` e o respetivo `buildEntropyCurve`; a faixa de
+entropia do display calcula as colunas a partir dos bytes crus e guarda-as em
+cache, reutilizando `pe::reduceToColumns`. O rodapé deixou de medir a entropia da
+janela: diz POS e REG.
 
 ### Defeito observado que não é desta alteração
 
@@ -645,30 +786,33 @@ ser a fonte única da verdade: o host é notificado, o knob segue, e o estado do
 projeto fica certo sem caminho paralelo. Os dois valores fazem parte dos
 `NoteTracker` para poderem ser testados sem JUCE.
 
-### A matriz de modulação não é parâmetro
+### A matriz de modulação é parâmetro
 
-As oito rotas da F020 vivem no estado (`MODMATRIX`, ao lado dos `PARAM`), e não
-na tabela. A consequência é a que a constitution declara: **o host não as vê,
-não as automatiza, e elas viajam no preset e no `.opcoda`** porque o XML é o
-mesmo. Como parâmetros custariam 24 (8 × fonte/destino/amount) e a tabela
-passaria de 41; o desenho para as tornar automatizáveis está em `docs/19`.
+Desde 24/10/2026 as oito rotas da F020 são **parâmetro** (`m1src`/`m1dst`/
+`m1amt` ... `m8amt`), e não o nó `MODMATRIX` que antes vivia ao lado dos
+`PARAM`. A consequência é a que a constituição pede: o host vê as 24 células,
+automatiza, e elas viajam no preset e no `.opcoda` porque o XML é o mesmo. A
+vista MATRIX do display (tecla 4) edita por attachment: dois
+`ComboBoxParameterAttachment` e um `SliderParameterAttachment` por rota, e o
+audio lê os 24 valores crus por bloco.
 
 Três caminhos foram considerados para atravessar a fronteira das threads:
 
 1. ler a árvore no callback — proibido: `ValueTree` bloqueia e aloca;
 2. um `SpinLock` com o callback à espera — proibido: o callback pode esperar;
-3. **24 inteiros atómicos mais um contador de geração** — escolhido.
+3. **ler os raws por ponteiro pre-resolvido na construção** — escolhido. A
+   primeira versão usava 24 inteiros atómicos e um contador de geração; o
+   snapshot inteiro por geração trocou-se por 24 leituras de `std::atomic`
+   soltas, a mesma tolerância que os 41 parâmetros de som já tinham. Ler os
+   raws por id no bloco construiria `juce::String` no thread de audio, e é por
+   isso que os ponteiros ficam em `routeRaw_`.
 
-A thread de interface escreve as 24 palavras e só depois sobe a geração
-(`release`). A thread de áudio lê a geração (`acquire`) e, se mudou, copia as
-palavras para um snapshot. Um bloco que apanhe a troca fica com a matriz antiga
-inteira ou a nova inteira, nunca metade de cada, porque a geração só sobe depois
-das palavras. A cópia é de 24 inteiros, sem alocação e sem bloqueio.
+Projetos gravados antes trazem o nó `MODMATRIX`; `migrateLegacyModMatrix`
+copia as rotas para os parâmetros e remove o nó, depois de cada `replaceState`.
 
-`amount` viaja em milésimos, um inteiro. A conversão é `toArray`/`fromArray`, a
-mesma que o ensaio de ida e volta exercita; rota com fonte ou destino inválido é
-lida como rota vazia, e `amount` fora de faixa é recortado — estado corrompido
-abre em silêncio.
+`amount` é `AudioParameterFloat` de -1 a +1. O audio recorta com
+`sanitizeModAmount` — rota com fonte ou destino inválido é lida como rota
+vazia, e estado corrompido abre em silêncio.
 
 A matriz é aplicada a uma **cópia** dos parâmetros por bloco. Sem a cópia, a
 soma das rotas acumulava de bloco para bloco e o corte derivava; com ela, cada

@@ -111,6 +111,29 @@ TEST(NoteTracker, ControllersAreClampedAndFlagged) {
     EXPECT_FLOAT_EQ(tracker.controller(0), 0.0f);
 }
 
+TEST(NoteTracker, OnlyTheControllerThatMovedIsDirty) {
+    // o bug que isto guarda: mexer so' no mod wheel marcava densidade e posicao
+    // como alteradas, e o processador escrevia os dois com o ultimo valor (zero).
+    NoteTracker tracker;
+    tracker.setController(2, 0.4f);
+    EXPECT_TRUE(tracker.controllerDirty(2));
+    EXPECT_FALSE(tracker.controllerDirty(0));
+    EXPECT_FALSE(tracker.controllerDirty(1));
+    EXPECT_TRUE(tracker.controllersChanged());
+
+    tracker.setController(0, 0.8f);
+    EXPECT_TRUE(tracker.controllerDirty(0));
+    EXPECT_TRUE(tracker.controllerDirty(2));
+
+    tracker.clearControllersChanged();
+    EXPECT_FALSE(tracker.controllerDirty(0));
+    EXPECT_FALSE(tracker.controllerDirty(2));
+    EXPECT_FALSE(tracker.controllersChanged());
+
+    EXPECT_FALSE(tracker.controllerDirty(-1));
+    EXPECT_FALSE(tracker.controllerDirty(NoteTracker::kTrackedControllers));
+}
+
 TEST(NoteTracker, OutOfRangeControllerIndexIsIgnored) {
     // indice invalido nao pode escrever em memoria fora do array.
     NoteTracker tracker;

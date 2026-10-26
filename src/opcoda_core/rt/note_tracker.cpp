@@ -135,7 +135,7 @@ void NoteTracker::reset() noexcept {
     for (auto& value : controllers_) {
         value = 0.0f;
     }
-    controllersChanged_ = false;
+    controllersDirty_ = 0;
 }
 
 float NoteTracker::controller(int index) const noexcept {
@@ -150,7 +150,7 @@ void NoteTracker::setController(int index, float normalised) noexcept {
         return;
     }
     controllers_[index] = std::clamp(normalised, 0.0f, 1.0f);
-    controllersChanged_ = true;
+    controllersDirty_ |= (1u << index);
 }
 
 } // namespace opcoda::rt

@@ -1,5 +1,5 @@
-# Captura a janela do Standalone do Opcoda numa vista e largura.
-# Uso: powershell -File tools/capture-ui.ps1 -ShotName 02-hex-900 [-Width 480] [-Height 434] [-PosX 60] [-PosY 60]
+# Captura a janela do Standalone do Opcoda numa vista.
+# Uso: powershell -File tools/capture-ui.ps1 -ShotName 02-hex
 # Requer: build-release pronto para a vista desejada. Nao commitar as
 # capturas (vao para I:/temp/).
 #
@@ -14,7 +14,8 @@ param(
     [int]$Width = 0,
     [int]$Height = 0,
     [int]$PosX = 60,
-    [int]$PosY = 60
+    [int]$PosY = 60,
+    [int]$SettleMs = 1200
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,14 +27,8 @@ using System;
 using System.Runtime.InteropServices;
 public static class Win32 {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
   [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool repaint);
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr p);
-  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool c);
-  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
   public struct RECT { public int Left, Top, Right, Bottom; }
 }
 "@
@@ -58,38 +53,38 @@ for ($i = 0; $i -lt 40 -and $h -eq [IntPtr]::Zero; $i++) {
     if ($null -ne $proc) { $h = $proc.MainWindowHandle }
 }
 if ($h -eq [IntPtr]::Zero) { throw "janela nao abriu" }
+
+# O handle aparece antes do primeiro paint do editor. Sem esta espera a captura
+# de um arranque sem material apanha o fundo cinzento por pintar e os filhos ja'
+# desenhados; com material o restauro atrasa o primeiro frame e o defeito nao
+# aparecia.
+Start-Sleep -Milliseconds $SettleMs
+
 if ($Width -gt 0 -and $Height -gt 0) {
     [Win32]::MoveWindow($h, $PosX, $PosY, $Width, $Height, $true) | Out-Null
     Start-Sleep -Milliseconds 900
 }
-[Win32]::SetForegroundWindow($h) | Out-Null
-Start-Sleep -Milliseconds 900
 
 $r = New-Object Win32+RECT
 [Win32]::GetWindowRect($h, [ref]$r) | Out-Null
 $w = $r.Right - $r.Left; $hh = $r.Bottom - $r.Top
-# Traz para frente a forca: SetForegroundWindow sozinho e' vetado quando outro
-# processo tem o foco (o Chrome, aqui). Anexar o input da thread do foreground
-# a nossa permite o SetForegroundWindow passar. Sem isto, CopyFromScreen
-# fotografava o Chrome por cima da janela.
-$fg = [Win32]::GetForegroundWindow()
-if ($fg -ne $h) {
-    $fgThread = [Win32]::GetWindowThreadProcessId($fg, [IntPtr]::Zero)
-    $myThread = [Win32]::GetCurrentThreadId()
-    [Win32]::AttachThreadInput($fgThread, $myThread, $true) | Out-Null
-    [Win32]::ShowWindow($h, 9) | Out-Null
-    [Win32]::BringWindowToTop($h) | Out-Null
-    [Win32]::SetForegroundWindow($h) | Out-Null
-    [Win32]::AttachThreadInput($fgThread, $myThread, $false) | Out-Null
-    Start-Sleep -Milliseconds 900
-}
+# PrintWindow com PW_RENDERFULLCONTENT: pinta a janela directamente no bitmap,
+# esteja ela em frente ou atras. O CopyFromScreen fotografava o que estivesse
+# por cima (o IDE, o Chrome) porque SetForegroundWindow e' vetado quando outro
+# processo tem o foco. O flag 2 e' o que obriga janelas aceleradas (GL/DX) a
+# repintar no bitmap.
 $bmp = New-Object System.Drawing.Bitmap($w, $hh)
 $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-$gfx.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
+$hdc = $gfx.GetHdc()
+$captured = [Win32]::PrintWindow($h, $hdc, 2)
+$gfx.ReleaseHdc($hdc)
+if (-not $captured) {
+    $gfx.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
+}
 $path = Join-Path $OutDir ($ShotName + ".png")
 $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
 $gfx.Dispose(); $bmp.Dispose()
-Write-Output "ok: $path (${w}x${hh})"
+Write-Output "ok: $path (${w}x${hh}) printwindow=$captured"
 
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 # Stop-Process nem sempre mata o Standalone (segura o device de audio);

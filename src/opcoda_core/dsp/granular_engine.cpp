@@ -58,6 +58,11 @@ void GranularEngine::prepare(double sampleRate, int maximumBlockSize) noexcept {
     fillWindow(WindowType::kHann, windowA_.data(), activeWindowLength_);
     activeWindowType_ = WindowType::kHann;
 
+    // o haas guarda 12 ms; a capacidade e' o que a taxa permite dentro do array
+    // fixo, e o prepare e' o unico lugar onde o nucleo preenche memoria.
+    haasCapacity_ =
+        std::clamp(static_cast<int>(sampleRate_ * 0.012), 1, kHaasMaxSamples - 2);
+
     reset();
 }
 
@@ -112,6 +117,13 @@ void GranularEngine::reset() noexcept {
     glideRemaining_ = 0.0;
     syncPhaseOffset_ = 0.0;
     syncEngaged_ = false;
+    // a rampa da largura tambem recomeca: sem isto o primeiro bloco pos-reset
+    // parte do valor anterior em vez do declarado.
+    lastWidth_ = 1.0f;
+    haasWritePos_ = 0;
+    haasDelay_ = 0.0f;
+    haasBuffer_.fill(0.0f);
+    lastClipCeiling_ = 1.0f;
     dcBlockerLeft_.prepare();
     dcBlockerRight_.prepare();
     limiterLeft_.prepare();
@@ -195,7 +207,10 @@ void GranularEngine::startGrain(int voice,
     const double base = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
     // spray = dispersao da posicao de leitura. nao olha para entropia; se o
     // utilizador quiser, roteia entropia -> spray na matriz.
-    const double spread = static_cast<double>(params.spray);
+    const double spread =
+        std::isfinite(static_cast<double>(params.spray))
+            ? std::clamp(static_cast<double>(params.spray), 0.0, 1.0)
+            : 0.0;
     grain.position =
         std::clamp(base + ((nextRandom(state) * 2.0 - 1.0) * spread) + lfoPosition, 0.0, 1.0);
 
@@ -264,6 +279,33 @@ void GranularEngine::startGrain(int voice,
     // no primeiro semitom fora da oitava central.
     const double rate = std::clamp(ratio, 0.0625, 16.0);
     grain.readStep = (sourceCount_ > 0) ? rate / static_cast<double>(sourceCount_) : 0.0;
+
+    // **um grao que nasce no fim morre na primeira amostra.** a posicao 1,0 aponta
+    // para o ultimo byte e o grao precisa de `grainLength` amostras a' frente; sem
+    // margem o instrumento cala-se e parece avariado (era o clique no canto direito
+    // do mapa de entropia). puxar o inicio para tras pelo comprimento do grao
+    // garante material para a janela inteira sem mudar o ponto que o utilizador
+    // escolheu mais do que o necessario.
+    //
+    // e o grao nunca ocupa mais de metade do material: sem esse tecto, uma regiao
+    // curta com pitch alto pedia mais material do que existe, o tecto da posicao
+    // ficava em zero e todos os graos nasciam no inicio -- o knob de posicao e o
+    // spray ficavam mortos. encurtar a janela, com a escala do envelope, mantem o
+    // mapa a escolher o sitio.
+    if (sourceCount_ > 0 && grain.readStep > 0.0) {
+        const auto maxSpanSamples = static_cast<int>(std::min(
+            static_cast<double>(kMaxGrainSamples),
+            std::floor(0.5 / grain.readStep)));
+        if (maxSpanSamples > 0 && grainLength > maxSpanSamples) {
+            grainLength = maxSpanSamples;
+            windowScale = static_cast<double>(activeWindowLength_) /
+                          static_cast<double>(grainLength);
+        }
+
+        const double span = static_cast<double>(grainLength) * grain.readStep;
+        const double ceiling = 1.0 - std::min(span, 1.0);
+        grain.position = std::clamp(grain.position, 0.0, std::max(0.0, ceiling));
+    }
 
     grain.remaining = grainLength;
     grain.windowIndex = 0;
@@ -439,14 +481,14 @@ void GranularEngine::processBlock(float* left,
     }
     f1cutoff = std::clamp(f1cutoff, 20.0f, 20000.0f);
 
-    // drive do filtro 1: ganho, tanh, ganho inverso. o 1/g segura o pico; dividir
-    // por tanh(g) levantaria o material baixo.
+    // drive do filtro 1: ganho e tanh. o pico fica no 1.0 do tanh e o clip do
+    // barramento desce-o depois; como o tanh agora nao e' normalizado por 1/g, o
+    // knob tambem levanta o material que ainda nao satura.
     const float driveDb = std::isfinite(params.f1DriveDb)
                               ? std::clamp(params.f1DriveDb, 0.0f, 24.0f)
                               : 0.0f;
     const bool driveOn = driveDb > 0.01f;
     const float driveGain = driveOn ? std::pow(10.0f, driveDb / 20.0f) : 1.0f;
-    const float driveInv = driveOn ? 1.0f / driveGain : 1.0f;
     const bool slope24 = params.f1Slope != 0;
     if (f1type != lastF1Type_ || f1cutoff != lastF1Cutoff_ ||
         params.f1q != lastF1Q_ || f2type != lastF2Type_ ||
@@ -523,9 +565,10 @@ void GranularEngine::processBlock(float* left,
             const float envelope = activeWindow_[windowIndex];
 
             float driven = sample * envelope * grain.gain;
-            // drive antes do filtro. 1/g segura o pico; o knob nao vira volume.
+            // drive antes do filtro: ganho e tanh. o clip que fecha o topo do
+            // curso vive no barramento, depois da soma (applyDriveClip).
             if (driveOn) {
-                driven = std::tanh(driven * driveGain) * driveInv;
+                driven = std::tanh(driven * driveGain);
             }
 
             // filtros por voz, antes do pan: cada grao tem a sua historia.
@@ -588,6 +631,12 @@ void GranularEngine::processBlock(float* left,
 
     // gate antes do limiter: a saturacao nao depende da nota.
     applyGate(left, right, numSamples, params);
+    // clip do drive no barramento, depois do gate e antes da largura: corta o que
+    // a soma dos graos ja' empurrou acima do tecto. a largura vem depois e pode
+    // levantar o pico outra vez; o limiter e' o ultimo guarda.
+    applyDriveClip(left, right, numSamples, params.f1DriveDb);
+    // largura depois do gate e antes do limiter: o limite ve a imagem final.
+    applyStereoWidth(left, right, numSamples, params.widthStereo);
 
     limiterLeft_.processBlock(left, numSamples);
     limiterRight_.processBlock(right, numSamples);
@@ -600,6 +649,111 @@ void GranularEngine::processBlock(float* left,
     // publica depois de escrever todas as vozes, para a interface ler o bloco
     // fechado. 60 Hz de display nao precisa de mais.
     telemetry_.publish(voices_);
+}
+
+// -- clip do drive --
+void GranularEngine::applyDriveClip(float* left, float* right, int numSamples,
+                                    float driveDb) noexcept {
+    const float db = std::isfinite(driveDb) ? std::clamp(driveDb, 0.0f, 24.0f) : 0.0f;
+    // abaixo de 6 dB o teto e' 1.0 e o clip nao se ouve; a partir daí desce ate'
+    // 0.35 aos 24 dB. o teto desliza dentro do bloco para a automacao nao
+    // estalar no limite do buffer.
+    const float target =
+        db > 6.0f
+            ? 1.0f - 0.60f * std::clamp((db - 6.0f) / 18.0f, 0.0f, 1.0f)
+            : 1.0f;
+
+    const float start = std::clamp(lastClipCeiling_, 0.0f, 1.0f);
+    if (target >= 0.9999f && start >= 0.9999f) {
+        lastClipCeiling_ = 1.0f;
+        return;
+    }
+
+    const float inc = (target - start) / static_cast<float>(numSamples);
+    float ceiling = start;
+    for (int i = 0; i < numSamples; ++i) {
+        left[i] = std::clamp(left[i], -ceiling, ceiling);
+        right[i] = std::clamp(right[i], -ceiling, ceiling);
+        ceiling += inc;
+    }
+    lastClipCeiling_ = target;
+}
+
+// -- largura stereo --
+void GranularEngine::applyStereoWidth(float* left, float* right, int numSamples,
+                                      float targetWidth) noexcept {
+    const float width = std::isfinite(targetWidth)
+                            ? std::clamp(targetWidth, 0.0f, 2.0f)
+                            : 1.0f;
+    if (numSamples <= 0 || haasCapacity_ < 1) {
+        lastWidth_ = width;
+        return;
+    }
+
+    // alvo do atraso do haas: so' acima de 1.0, 0..12 ms. e' o spread artificial
+    // que material mono (bytes, um canal so') nao tem. abaixo de 1.0 o atraso
+    // volta a zero com a mesma rampa da largura, sem degrau.
+    const float targetDelay =
+        width > 1.0f
+            ? std::min(static_cast<float>(width - 1.0f) * 0.012f *
+                           static_cast<float>(sampleRate_),
+                       static_cast<float>(haasCapacity_ - 1))
+            : 0.0f;
+
+    const float startWidth = std::clamp(lastWidth_, 0.0f, 2.0f);
+    const float widthInc = (width - startWidth) / static_cast<float>(numSamples);
+    const float startDelay =
+        std::clamp(haasDelay_, 0.0f, static_cast<float>(haasCapacity_ - 1));
+
+    // o atraso nao pode rampar mais depressa do que um quarto de amostra por
+    // amostra: com a rampa do bloco inteiro (12 ms em 128 amostras) o ponteiro
+    // de leitura andava para tras ~3 amostras por amostra e o canal direito
+    // tocava ao contrario. o slew deixa o gesto da roda atravessar 1.0 num
+    // deslize de ~50 ms, que e' o que se ouve como abertura, nao como chirp.
+    constexpr float kDelaySlewPerSample {0.25f};
+
+    float w = startWidth;
+    float d = startDelay;
+    const float capacity = static_cast<float>(haasCapacity_);
+    for (int i = 0; i < numSamples; ++i) {
+        // mid/side com a largura do instante. o mid fica intocado, por isso o
+        // centro nao anda.
+        if (std::abs(w - 1.0f) > 1.0e-4f) {
+            const float mid = 0.5f * (left[i] + right[i]);
+            const float side = 0.5f * (left[i] - right[i]);
+            left[i] = mid + side * w;
+            right[i] = mid - side * w;
+        }
+
+        // haas no canal direito: escreve o valor seco, le o atrasado
+        // interpolado. a d = 0 a leitura devolve o proprio valor, e o gesto da
+        // roda atravessa 1.0 sem clique.
+        haasBuffer_[static_cast<std::size_t>(haasWritePos_)] = right[i];
+        if (d > 0.01f) {
+            auto readAbs = static_cast<float>(haasWritePos_) - d;
+            while (readAbs < 0.0f) {
+                readAbs += capacity;
+            }
+            auto index = static_cast<int>(readAbs);
+            if (index >= haasCapacity_) {
+                index -= haasCapacity_;
+            }
+            const auto next = index + 1 == haasCapacity_ ? 0 : index + 1;
+            const float frac = readAbs - std::floor(readAbs);
+            right[i] = haasBuffer_[static_cast<std::size_t>(index)] *
+                           (1.0f - frac) +
+                       haasBuffer_[static_cast<std::size_t>(next)] * frac;
+        }
+        haasWritePos_ = haasWritePos_ + 1 == haasCapacity_ ? 0 : haasWritePos_ + 1;
+
+        w += widthInc;
+        d = std::clamp(d + std::clamp((targetDelay - d), -kDelaySlewPerSample,
+                                      kDelaySlewPerSample),
+                       0.0f, static_cast<float>(haasCapacity_ - 1));
+    }
+
+    lastWidth_ = width;
+    haasDelay_ = d;
 }
 
 // -- envelope no mix --
@@ -753,7 +907,8 @@ void GranularEngine::applyModMatrix(GranularParams& params, float lfoValue) noex
 
     const float pitch = offset(ModDest::kPitch);
     if (pitch != 0.0f) {
-        params.pitchSemitones = std::clamp(params.pitchSemitones + pitch * 12.0f, -24.0f, 24.0f);
+        params.pitchSemitones =
+            std::clamp(params.pitchSemitones + pitch * 12.0f, -48.0f, 48.0f);
     }
 
     const float density = offset(ModDest::kDensity);
@@ -812,6 +967,13 @@ void GranularEngine::applyModMatrix(GranularParams& params, float lfoValue) noex
     const float drive = offset(ModDest::kDrive);
     if (drive != 0.0f) {
         params.f1DriveDb = std::clamp(params.f1DriveDb + drive * 24.0f, 0.0f, 24.0f);
+    }
+
+    const float width = offset(ModDest::kWidth);
+    if (width != 0.0f) {
+        // multiplicativo, como densidade e corte: +1 oitava dobra o side. o teto
+        // de 2 e' o mesmo do knob; a base de 0 e' o mono.
+        params.widthStereo = std::clamp(params.widthStereo * octaves(width, 1.0f), 0.0f, 2.0f);
     }
 }
 

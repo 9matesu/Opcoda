@@ -31,7 +31,7 @@ void checkRanges(const FactoryPreset& p) {
     in(p.density, 1.0f, 200.0f, "density");
     in(p.position, 0.0f, 1.0f, "position");
     in(p.spray, 0.0f, 1.0f, "spray");
-    in(p.pitch, -24.0f, 24.0f, "pitch");
+    in(p.pitch, -48.0f, 48.0f, "pitch");
     in(p.volume, -60.0f, 0.0f, "volume");
     in(p.window, 0.0f, 3.0f, "window");
     in(p.pan, -1.0f, 1.0f, "pan");

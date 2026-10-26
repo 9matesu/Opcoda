@@ -36,6 +36,7 @@ enum class ModDest : std::uint8_t {
     kPan,
     kGrainLevel,
     kDrive,
+    kWidth,
     kCount,
 };
 

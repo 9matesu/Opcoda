@@ -22,8 +22,10 @@ namespace opcoda {
 // docs/10-acessibilidade-w3c.md. o corpo e' so o fundo: quem opera e tem o foco
 // continua a ser o Slider.
 //
-// o rotulo curto e' o do mock. o nome acessivel e' a descricao completa em
-// portugues: "SIZE" sozinho e' inutil para quem navega por leitor de tela.
+// **parametros de escolha levam dropdown.** girar um knob de quatro a doze
+// posicoes e' pior que escolher numa lista: o caret ao lado do valor abre o menu
+// com os rotulos reais, e o slider continua a responder a roda e as setas para
+// quem prefere o gesto continuo.
 class Knob : public juce::Component, private juce::Slider::Listener {
 public:
     struct Spec {
@@ -44,20 +46,17 @@ public:
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_.setText(spec.title, juce::dontSendNotification);
         title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(fonts().sans(9.0f, true));
+        title_.setFont(fonts().sans(12.0f, true));
         title_.setColour(juce::Label::textColourId, palette::textSub);
         addAndMakeVisible(title_);
 
-        // valor em texto puro: a moldura valBox era ruido repetido seis vezes.
         value_.setJustificationType(juce::Justification::centred);
-        value_.setFont(fonts().sans(10.0f));
+        value_.setFont(fonts().sans(13.0f));
         value_.setColour(juce::Label::textColourId, palette::textDark);
         value_.setInterceptsMouseClicks(false, false);
 
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-        // os seis parametros usam range linear: uma curva de resposta seria outra
-        // fonte da verdade sem ganho.
         slider_.setVelocityBasedMode(false);
         slider_.setDoubleClickReturnValue(true, spec.defaultValue);
         slider_.setName(spec.spokenName);
@@ -66,45 +65,72 @@ public:
 
         setName(spec.spokenName);
         addAndMakeVisible(value_);
+
         format_ = spec.format;
         choiceLabels_ = spec.choiceLabels;
+
+        if (!choiceLabels_.isEmpty()) {
+            menuButton_.setButtonText("");
+            menuButton_.setName(juce::String {spec.spokenName} + ": escolher valor");
+            menuButton_.setTooltip("Escolher " + juce::String {spec.title} + " na lista");
+            menuButton_.getProperties().set("uiIcon", "chevron");
+            menuButton_.getProperties().set("uiLook", "icon");
+            menuButton_.onClick = [this] { showChoiceMenu(); };
+            addAndMakeVisible(menuButton_);
+        }
 
         slider_.addListener(this);
         // valor inicial vem do parametro e nao do zero do slider: quem cria o
         // editor depois do estado do host ja entra com o valor carregado.
         showValue(slider_.getValue());
 
-        setSize(56, 82);
+        setSize(100, 140);
+    }
+
+    // teclas de chapa clara e carvao escura: os rotulos do knob trocam de tinta
+    // quando o knob vive no mestre, que e' uma tira escura. textSub sobre carvao
+    // seria texto invisivel.
+    void setOnDark(bool on) {
+        title_.setColour(juce::Label::textColourId,
+                         on ? palette::textOnDarkSub : palette::textSub);
+        value_.setColour(juce::Label::textColourId,
+                         on ? palette::ivory : palette::textDark);
+        repaint();
     }
 
     void resized() override {
         auto area = getLocalBounds();
-        title_.setBounds(area.removeFromTop(13));
+        const bool tight = getHeight() < 112;
+        const int titleHeight = tight ? 14 : 17;
+        title_.setBounds(area.removeFromTop(titleHeight));
         area.removeFromTop(1);
-        area.removeFromBottom(18);
 
-        // teto de diametro: sem ele o knob cresce ate encher a celula numa janela
-        // alta e vira um disco.
-        constexpr int maxDiameter {62};
+        const int valueHeight = tight ? 18 : 22;
+        auto valueRow = area.removeFromBottom(valueHeight);
+        value_.setBounds(valueRow.reduced(2, 0));
+
+        if (choiceLabels_.isEmpty()) {
+            value_.setBounds(valueRow.reduced(2, 0));
+        } else {
+            // o caret ocupa a ponta direita do valor; o texto recua para nao
+            // ficar debaixo dele.
+            menuButton_.setBounds(valueRow.removeFromRight(18).withSizeKeepingCentre(16, 16));
+            value_.setBounds(valueRow.reduced(2, 0));
+        }
+
+        // teto de diametro: 96 px de slider, que dao disco visual de ~91 px. acima
+        // disso o arco encosta na celula e a escala perde a leitura.
+        constexpr int maxDiameter {96};
         const auto diameter = juce::jmax(
             16, juce::jmin(maxDiameter, juce::jmin(area.getWidth(), area.getHeight())));
         slider_.setBounds(area.withSizeKeepingCentre(diameter, diameter));
-
-        // titulo e valor ficam sempre nas pontas: encolher a janela encolhe o
-        // knob sem empurrar o texto para fora.
-        value_.setBounds(getLocalBounds().withTop(getHeight() - 18).reduced(2, 0));
     }
 
     void paint(juce::Graphics& g) override {
-        // sem cartao: o knob mora direto no chassis, sem caixa nem borda. rotulo,
-        // disco e valor nao precisam de moldura; o corpo do disco vem do
-        // LookAndFeel.
         static_cast<void>(g);
     }
 
 private:
-    // o attachment liga o slider ao parametro e trata do undo. precisa da
-    // referencia do parametro, e nao da arvore: o undo e' por parametro.
     static std::unique_ptr<juce::SliderParameterAttachment> makeAttachment(
         juce::AudioProcessorValueTreeState& state, const Spec& spec, juce::Slider& slider) {
         auto* parameter = state.getParameter(spec.paramId);
@@ -121,12 +147,34 @@ private:
         }
     }
 
+    void showChoiceMenu() {
+        if (choiceLabels_.isEmpty()) {
+            return;
+        }
+
+        const auto current = juce::jlimit(0, choiceLabels_.size() - 1,
+                                           juce::roundToInt(slider_.getValue()));
+        juce::PopupMenu menu;
+        for (int i = 0; i < choiceLabels_.size(); ++i) {
+            menu.addItem(i + 1, choiceLabels_[i], true, i == current);
+        }
+
+        menu.showMenuAsync(
+            juce::PopupMenu::Options().withTargetComponent(&menuButton_)
+                .withMinimumWidth(140),
+            [this](int result) {
+                if (result > 0) {
+                    // sendNotificationSync e nao setValue: o attachment escreve
+                    // no parametro e o host fica a saber, como no gesto do knob.
+                    slider_.setValue(static_cast<double>(result - 1),
+                                     juce::sendNotificationSync);
+                }
+            });
+    }
+
     void showValue(double value) {
         juce::String text;
         if (!choiceLabels_.isEmpty()) {
-            // isfinite antes do roundToInt: float fora de faixa para int e' UB
-            // formal, e NaN nao passa pelo jlimit. NaN mostra o primeiro rotulo
-            // em vez de um acesso selvagem.
             const auto index = std::isfinite(value)
                                    ? juce::jlimit(0, choiceLabels_.size() - 1,
                                                   juce::roundToInt(value))
@@ -143,6 +191,7 @@ private:
     juce::Slider slider_;
     juce::Label title_;
     juce::Label value_;
+    juce::TextButton menuButton_;
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
     juce::StringArray choiceLabels_;

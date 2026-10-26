@@ -2,7 +2,13 @@
 
 **Feature Branch**: `024-visualizadores-opengl`
 **Criada**: 2026-10-19
-**Status**: Draft
+**Status**: Recusada em 23/10/2026, antes da implementação. A revisão de redesign
+(`I:\Opcoda_Redesign_Especificacao.docx`, secção 8) assenta o render vetorial 2D
+como baseline e dispensa o OpenGL: o contexto com `setContinuousRepainting`
+repintava a janela inteira a 60 Hz contra o critério de *idle* da secção 9, e a
+combinação contexto + chapa creme produzia ecrã preto. O orçamento de desenho
+passa a ser cumprido por invalidação de região no pintor de software. Esta spec
+fica como registro da alternativa avaliada; nenhum requisito está em vigor.
 **Objetivos atendidos**: OE7 (interface)
 **Ensaios**: portões A, B e E
 

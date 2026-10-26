@@ -37,6 +37,8 @@ add_executable(opcoda_tests
     scale_test.cpp
     character_test.cpp
     mod_matrix_test.cpp
+    stereo_width_test.cpp
+    output_range_test.cpp
     cloud_test.cpp
     factory_presets_test.cpp
     grain_trail_test.cpp

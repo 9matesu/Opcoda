@@ -41,14 +41,16 @@ afirmação passou a ser falsa; a correção está registada em `docs/07-plano-t
 | Emenda + specs | 20/10 | constitution 1.2.0, registro no `docs/18`, specs F018–F024, `docs/19` | tabela de 41 parâmetros fechada |
 | Validação do build atual | 21/10 | instalar o bundle, T4, ida e volta do estado, baseline do T2 | método do T2 provado antes da reescrita |
 | Núcleo | 27/10 | F018 teclado e afinação · F019 LFO rítmico · F020 analógico e matriz · F021 nuvem | testes por parâmetro, guard verde |
-| Interface | 31/10 | F022 waveform PCM sobre a F017 · F023 LookAndFeel v2 e visualizadores · F024 OpenGL | UI v2 com queda para software |
+| Interface | 31/10 | F022 waveform PCM sobre a F017 · F023 LookAndFeel v2 e visualizadores · F024 recusada na revisão de redesign (o software é o baseline) | UI v2 em software, com invalidação por região |
 | S5 | 03/11 | congelar, sincronizar docs, reescrever artigo e monografia, empacotar | pacote x64 e T2/T4 finais |
 
 O `docs/08` não é um compromisso de data que se renova sozinho. Se o T2 ou o T4
 revelarem defeito, a etapa volta ao estado "por fazer" a partir do achado, e a
 tabela acima é o ponto honesto para registar isso. A ordem de corte, se alguma
-frente atrasar, é F024 → F021 → o caráter do filtro na F020 → a multi-resolução
-da F022.
+frente atrasar, é F021 → o caráter do filtro na F020 → a multi-resolução
+da F022. A F024 saiu da fila: a revisão de redesign de 23/10/2026 recusou o
+contexto OpenGL — repintava a janela inteira a 60 Hz e dava ecrã preto com a
+chapa creme — e o renderizador de software tornou-se o único caminho.
 
 ## Contingências
 

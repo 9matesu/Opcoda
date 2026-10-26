@@ -22,84 +22,68 @@ PluginProcessor::PluginProcessor()
     // um sinal que o plugin nunca usa, e faria o host trata-lo como efeito.
 : juce::AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters_(*this, nullptr, "Opcoda", createParameterLayout()) {
-    // F020: a matriz nasce no estado, ao lado dos PARAM, e nao na tabela: o host nao
-    // a ve' como parametro, nao a automatiza, e ela viaja no preset e no .opcoda
-    // porque o XML e' o mesmo.
-    ensureModMatrixNode();
-    publishModMatrix();
-    // a tabela fecha em 41. A matriz nao entra aqui: se uma rota virar parametro, o
-    // host passa a automatiza-la e este assert em Debug avisa.
-    jassert(getParameters().size() == 41);
+    // 41 parametros de som mais a largura stereo e as 24 celulas da matriz
+    // (8 rotas por fonte, destino e amount).
+    jassert(getParameters().size() == 66);
+
+    // ponteiros raw das celulas: ler por id no bloco construiria juce::String
+    // no thread de audio, e o guard de alocacao barra. Um null aqui e' erro de
+    // contracto entre o layout e este resolvedor; melhor morrer em Debug do que
+    // desreferenciar no primeiro bloco.
+    for (int i = 0; i < dsp::kMaxModRoutes; ++i) {
+        const auto n = juce::String {i + 1};
+        const auto source = parameters_.getRawParameterValue(("m" + n + "src").toRawUTF8());
+        const auto destination =
+            parameters_.getRawParameterValue(("m" + n + "dst").toRawUTF8());
+        const auto amount = parameters_.getRawParameterValue(("m" + n + "amt").toRawUTF8());
+        jassert(source != nullptr && destination != nullptr && amount != nullptr);
+        routeRaw_[static_cast<std::size_t>(i)] = {source, destination, amount};
+    }
+
+    migrateLegacyModMatrix();
 }
 
-void PluginProcessor::ensureModMatrixNode() {
-    if (parameters_.state.getChildWithName(kModMatrixNode).isValid()) {
+dsp::ModMatrix PluginProcessor::readModMatrix() const noexcept {
+    dsp::ModMatrix matrix;
+    for (int i = 0; i < dsp::kMaxModRoutes; ++i) {
+        const auto& raw = routeRaw_[static_cast<std::size_t>(i)];
+        const auto source =
+            dsp::sanitizeModSource(static_cast<int>(raw.source->load(std::memory_order_relaxed) + 0.5f));
+        const auto destination =
+            dsp::sanitizeModDest(static_cast<int>(raw.destination->load(std::memory_order_relaxed) + 0.5f));
+        const auto amount =
+            dsp::sanitizeModAmount(raw.amount->load(std::memory_order_relaxed));
+        if (source != dsp::ModSource::kNone && destination != dsp::ModDest::kNone) {
+            matrix.routes[static_cast<std::size_t>(i)] = {source, destination, amount};
+        }
+    }
+    return matrix;
+}
+
+void PluginProcessor::migrateLegacyModMatrix() {
+    const auto node = parameters_.state.getChildWithName(kModMatrixNode);
+    if (!node.isValid()) {
         return;
     }
-    juce::ValueTree node {kModMatrixNode};
-    for (int i = 0; i < dsp::kMaxModRoutes; ++i) {
-        juce::ValueTree route {"ROUTE"};
-        route.setProperty("source", 0, nullptr);
-        route.setProperty("dest", 0, nullptr);
-        route.setProperty("amount", 0, nullptr);
-        node.appendChild(route, nullptr);
-    }
-    parameters_.state.appendChild(node, nullptr);
-}
 
-dsp::ModMatrix PluginProcessor::modMatrix() const {
-    dsp::ModMatrixArray words {};
-    const auto node = parameters_.state.getChildWithName(kModMatrixNode);
     const int count = juce::jmin(node.getNumChildren(), dsp::kMaxModRoutes);
     for (int i = 0; i < count; ++i) {
         const auto child = node.getChild(i);
-        const auto base = static_cast<std::size_t>(i * dsp::kModRouteWords);
-        words[base] = static_cast<int>(child.getProperty("source"));
-        words[base + 1] = static_cast<int>(child.getProperty("dest"));
-        words[base + 2] = static_cast<int>(child.getProperty("amount"));
+        const auto n = juce::String {i + 1};
+        const auto set = [this](const char* id, float plain) {
+            if (auto* parameter = parameters_.getParameter(id)) {
+                parameter->setValueNotifyingHost(parameter->convertTo0to1(plain));
+            }
+        };
+        set(("m" + n + "src").toRawUTF8(),
+            static_cast<float>(static_cast<int>(child.getProperty("source"))));
+        set(("m" + n + "dst").toRawUTF8(),
+            static_cast<float>(static_cast<int>(child.getProperty("dest"))));
+        set(("m" + n + "amt").toRawUTF8(),
+            static_cast<float>(static_cast<int>(child.getProperty("amount"))) / 1000.0f);
     }
-    return dsp::fromArray(words);
-}
 
-bool PluginProcessor::setModRoute(int index, dsp::ModRoute route) {
-    if (index < 0 || index >= dsp::kMaxModRoutes) {
-        return false;
-    }
-    ensureModMatrixNode();
-    const auto node = parameters_.state.getChildWithName(kModMatrixNode);
-    if (!node.isValid() || index >= node.getNumChildren()) {
-        return false;
-    }
-    auto child = node.getChild(index);
-    child.setProperty("source", static_cast<int>(route.source), nullptr);
-    child.setProperty("dest", static_cast<int>(route.destination), nullptr);
-    child.setProperty("amount",
-                      static_cast<int>(std::lround(dsp::sanitizeModAmount(route.amount) * 1000.0f)),
-                      nullptr);
-    publishModMatrix();
-    return true;
-}
-
-void PluginProcessor::publishModMatrix() {
-    const auto words = dsp::toArray(modMatrix());
-    for (std::size_t i = 0; i < words.size(); ++i) {
-        modMatrixWords_[i].store(words[i], std::memory_order_relaxed);
-    }
-    // release depois das palavras: quem ve' a geracao nova ve' as palavras novas.
-    modMatrixGeneration_.fetch_add(1, std::memory_order_release);
-}
-
-void PluginProcessor::refreshModMatrix() noexcept {
-    const auto generation = modMatrixGeneration_.load(std::memory_order_acquire);
-    if (generation == modMatrixAppliedGeneration_) {
-        return;
-    }
-    dsp::ModMatrixArray words {};
-    for (std::size_t i = 0; i < words.size(); ++i) {
-        words[i] = modMatrixWords_[i].load(std::memory_order_relaxed);
-    }
-    modMatrixSnapshot_ = dsp::fromArray(words);
-    modMatrixAppliedGeneration_ = generation;
+    parameters_.state.removeChild(node, nullptr);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout() {
@@ -129,12 +113,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
 
     // os seis IDs originais nao mudam — sessao salva referencia por ID — so' o nome
     // exibido passou a ingles. Os novos ja' nascem com ID ingles.
-    return {
+    juce::AudioProcessorValueTreeState::ParameterLayout layout {
         range("grain", "Grain Size", 1.0f, 100.0f, 40.0f),
         range("density", "Density", 1.0f, 200.0f, 20.0f),
         range("position", "Position", 0.0f, 1.0f, 0.5f),
         range("spray", "Spray", 0.0f, 1.0f, 0.0f),
-        range("pitch", "Pitch", -24.0f, 24.0f, 0.0f),
+        range("pitch", "Pitch", -48.0f, 48.0f, 0.0f),
         range("volume", "Volume", -60.0f, 0.0f, 0.0f),
         choice("window", "Window", {"Hann", "Gaussian", "Hamming", "Blackman"}, 0),
         range("pan", "Pan", -1.0f, 1.0f, 0.0f),
@@ -184,7 +168,33 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         choice("lfodiv", "LFO Div", {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64",
                                      "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"}, 2),
         intRange("lfosteps", "LFO Steps", 1, 16, 16),
+        // largura stereo na saida: 0 colapsa para mono, 1 e' o material, 2 dobra o
+        // side. faixa linear; o 1.0 cai no centro, que e' onde o knob nasce.
+        range("width", "Stereo Width", 0.0f, 2.0f, 1.0f),
     };
+
+    // matriz de modulacao: 8 rotas com fonte, destino e amount, cada celula um
+    // parametro proprio. Os indices seguem dsp::ModSource e dsp::ModDest, com o
+    // Off primeiro; a ordem e' contrato do estado.
+    const juce::StringArray sources {"Off", "LFO", "Envelope", "Velocity", "Key",
+                                     "Mod Wheel", "CC74", "CC71", "Entropy"};
+    const juce::StringArray destinations {
+        "Off",  "Pitch",  "Density", "Position", "Spray",     "Grain Size",
+        "Cut 1", "Q 1",   "Cut 2",   "Q 2",      "Pan",       "Grain Level",
+        "Drive", "Stereo Width"};
+    for (int i = 1; i <= dsp::kMaxModRoutes; ++i) {
+        const auto n = juce::String {i};
+        const auto srcId = ("m" + n + "src");
+        const auto dstId = ("m" + n + "dst");
+        const auto amtId = ("m" + n + "amt");
+        const auto srcName = ("Route " + n + " Source");
+        const auto dstName = ("Route " + n + " Destination");
+        const auto amtName = ("Route " + n + " Amount");
+        layout.add(choice(srcId.toRawUTF8(), srcName.toRawUTF8(), sources, 0));
+        layout.add(choice(dstId.toRawUTF8(), dstName.toRawUTF8(), destinations, 0));
+        layout.add(range(amtId.toRawUTF8(), amtName.toRawUTF8(), -1.0f, 1.0f, 0.0f));
+    }
+    return layout;
 }
 
 dsp::GranularParams PluginProcessor::currentParams() const noexcept {
@@ -210,6 +220,7 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.volumeDb = value("volume");
     params.window = dsp::sanitizeWindowType(static_cast<dsp::WindowType>(choiceIndex("window")));
     params.pan = value("pan");
+    params.widthStereo = value("width");
     params.grainLevel = value("grainlevel");
     params.pitchRandomSemitones = value("pitchrand");
     params.cloudSize = value("cloudsize");
@@ -255,13 +266,13 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.hostBpm = hostBpm_.load(std::memory_order_relaxed);
     params.hostPpq = hostPpq_.load(std::memory_order_relaxed);
 
-    // F020: fontes que o motor nao mede sozinho. A matriz vem do snapshot publicado
-    // pela interface; velocidade e CCs saem do NoteTracker, que ja' corre no audio.
+    // F020: fontes que o motor nao mede sozinho. A matriz le os 24 raws por bloco;
+    // velocidade e CCs saem do NoteTracker, que ja' corre no audio.
     params.velocity = notes_.velocity();
     params.modWheel = notes_.controller(kModWheelController);
     params.cc74 = notes_.controller(kDensityController);
     params.cc71 = notes_.controller(kPositionController);
-    params.modMatrix = modMatrixSnapshot_;
+    params.modMatrix = readModMatrix();
     return params;
 }
 
@@ -630,6 +641,12 @@ void PluginProcessor::applyPendingControllerChanges() {
     if (!notes_.controllersChanged()) {
         return;
     }
+
+    // so' os controladores que receberam CC neste bloco. escrever os dois sempre
+    // fazia o mod wheel repor densidade e posicao no ultimo valor conhecido (0 no
+    // arranque) e sujava a automacao do host com um valor que ninguem pediu.
+    const auto densityDirty = notes_.controllerDirty(kDensityController);
+    const auto positionDirty = notes_.controllerDirty(kPositionController);
     notes_.clearControllersChanged();
 
     const auto set = [this](const char* id, float value) {
@@ -638,8 +655,12 @@ void PluginProcessor::applyPendingControllerChanges() {
         }
     };
 
-    set("density", notes_.controller(kDensityController));
-    set("position", notes_.controller(kPositionController));
+    if (densityDirty) {
+        set("density", notes_.controller(kDensityController));
+    }
+    if (positionDirty) {
+        set("position", notes_.controller(kPositionController));
+    }
 }
 
 void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) {
@@ -651,9 +672,6 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     readNotes(midi);
     drainKeyboardNotes();
     updateHostTransport();
-    // sem isto o snapshot so' mudava quando a interface tocasse no motor, e o preset
-    // carregado soava com as rotas anteriores.
-    refreshModMatrix();
 
 const auto numSamples = buffer.getNumSamples();
 
@@ -662,13 +680,16 @@ const auto numSamples = buffer.getNumSamples();
     // booleano local e nao duas leituras do atomico: um stop no meio daria posicao
     // de um estado e gate de outro, e o audio sairia de uma regiao ja' largada.
     const auto playing = transport_.isPlaying();
+    const auto held = transportHold_.load(std::memory_order_relaxed);
 
     auto params = currentParams();
     // scan Speed nao e' parametro do motor, e' taxa do transporte. Um store relaxado
     // por bloco e' o custo, e setRate ja' recorta NaN para 1.
     transport_.setRate(static_cast<double>(*parameters_.getRawParameterValue("scanspeed")));
     if (playing) {
-        params.position = transport_.advance(numSamples, playing);
+        // advance(0) le' e aplica a ancora sem andar. e' o HOLD: a cabeca fica
+        // onde esta', o gate continua aberto e os graos continuam a nascer.
+        params.position = transport_.advance(held ? 0 : numSamples, playing);
     }
 
     // o OR com as notas faz o botao soar sem MIDI: o motor so' precisa de gate
@@ -687,18 +708,36 @@ const auto numSamples = buffer.getNumSamples();
 // leitura e' sobre o bloco que acabou de ser escrito.
 void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept {
     float peak = 0.0f;
+    float peakLeft = 0.0f;
+    float peakRight = 0.0f;
+
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel) {
         const auto samples = buffer.getReadPointer(channel);
+        float channelPeak = 0.0f;
         for (int i = 0; i < buffer.getNumSamples(); ++i) {
-            peak = std::max(peak, std::abs(samples[i]));
+            channelPeak = std::max(channelPeak, std::abs(samples[i]));
+        }
+        peak = std::max(peak, channelPeak);
+        if (channel == 0) {
+            peakLeft = channelPeak;
+        } else if (channel == 1) {
+            peakRight = channelPeak;
         }
     }
 
-    const auto decibels = (peak > 1.0e-6f) ? juce::Decibels::gainToDecibels(peak) : -1.0f;
+    const auto toDb = [](float value) {
+        // -100 dB e' o silencio. o -1 antigo era um sentinela de "sem leitura",
+        // mas o medidor lia-o como um nivel quase cheio e ficava todo acesso
+        // mesmo com a saida muda.
+        return (value > 1.0e-6f) ? juce::Decibels::gainToDecibels(value) : -100.0f;
+    };
+    const auto decibels = toDb(peak);
 
     // relaxado chega: sao valores de mostrador, e a ordenacao que interessa e' dentro
     // do bloco, que ja' terminou.
     telemetry_.peakDb.store(decibels, std::memory_order_relaxed);
+    telemetry_.peakLeftDb.store(toDb(peakLeft), std::memory_order_relaxed);
+    telemetry_.peakRightDb.store(toDb(peakRight), std::memory_order_relaxed);
     telemetry_.activeVoices.store(engine_.lastActiveVoices(), std::memory_order_relaxed);
 
     // sounding e' o mesmo OU que o motor recebeu, nao notes_.sounding(): o rodape
@@ -706,6 +745,8 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
     const auto audible = notes_.sounding() || transport_.isPlaying();
     telemetry_.sounding.store(audible, std::memory_order_relaxed);
     telemetry_.playing.store(transport_.isPlaying(), std::memory_order_relaxed);
+    telemetry_.held.store(transportHold_.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
     telemetry_.playheadFraction.store(transport_.positionFraction(),
                                       std::memory_order_relaxed);
 }
@@ -782,11 +823,10 @@ bool PluginProcessor::loadStateXml(const juce::XmlElement& xml) {
 
     parameters_.replaceState(juce::ValueTree::fromXml(xml));
 
-    // replaceState copia os filhos: estado antigo, sem MODMATRIX, apagaria o no.
-    // recriar mantem o estado completo, e republicar garante que soa a matriz do
-    // ficheiro (ou vazia, se nao veio).
-    ensureModMatrixNode();
-    publishModMatrix();
+    // estado gravado antes das rotas serem parametros traz o no MODMATRIX: copia
+    // as rotas para os parametros e remove o no. Estado novo nao tem o no e a
+    // migracao sai no primeiro if.
+    migrateLegacyModMatrix();
 
 // o ficheiro e' reingerido pela mesma via do arrasto: ler, converter, publicar.
 // nao ha caminho paralelo.

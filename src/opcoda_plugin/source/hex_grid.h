@@ -14,24 +14,21 @@
 namespace opcoda {
 
 // grelha de bytes do binario em formato de hex dump: endereco a esquerda,
-// dezasseis bytes por linha e a coluna ascii. substitui o seletor de 30 px -- um
-// ficheiro de 12 MB nao cabe num mapa, e cada linha ja traz o endereco.
+// dezasseis bytes por linha e a coluna ascii.
+//
+// **a janela e' estavel.** o desenho so' se move quando a pessoa rola, clica na
+// barra ou usa as teclas de pagina. a versao anterior seguia os graos e a cabeca
+// de leitura ao mesmo tempo, e as duas regras empurravam a janela para sitios
+// diferentes a cada bloco: o hex subia e descia sozinho. agora ha' uma unica
+// fonte do topo visivel, topByte_, escrita por gestos.
 //
 // o clique escreve POSITION, nao um ByteRange: se o byte estiver fora da regiao,
 // quem a puxa e' o editor, antes de escrever a posicao.
 //
-// **A grelha so se opera com o rato, e isso ja deixou de ser um problema de
+// **a grelha so se opera com o rato, e isso ja deixou de ser um problema de
 // acessibilidade.** as celulas sao pintadas e nao sao componentes, e nao ha como
-// dar nome a 200 celulas.
-//
-// o caminho de teclado vive no ByteDisplay, que contem esta grelha e tem uma
-// caret de navegacao com nome e valor. As setas, `Inicio`, `Fim`, `Enter` e `Esc`
-// operam o display inteiro, e a excecao ao 2.5.8 foi retirada de
-// docs/10-acessibilidade-w3c.md.
-//
-// o ByteAddressField nao serve de alternativa: consome as quatro teclas de
-// navegacao de proposito, para o caret nao responder a setas conforme o cursor
-// esteja ou nao no fim do texto.
+// dar nome a 200 celulas. o caminho de teclado vive no ByteDisplay, que contem
+// esta grelha e tem uma caret de navegacao com nome e valor.
 class HexGrid : public juce::Component {
 public:
     HexGrid();
@@ -43,8 +40,8 @@ public:
     // duplo clique: alterna entre a regiao exacta e a secao PE mais proxima.
     std::function<void()> onSnapRequested;
 
-    // o utilizador rolou ou clicou numa celula: corta o seguimento dos graos,
-    // porque a partir daqui quem manda e' a pessoa.
+    // o utilizador rolou ou clicou numa celula. hoje so' serve para o editor
+    // saber que a janela e' dele; a grelha nao se move sozinha.
     std::function<void()> onUserScrolled;
 
     // bytes crus. o ponteiro e' para o vector do Processor e vive enquanto ele;
@@ -58,29 +55,25 @@ public:
 
     void setRegion(std::uint64_t start, std::uint64_t end);
 
-    // cabeca de leitura. se sair da vista, a vista move-se para la: um cursor
-    // que o utilizador nao ve nao diz nada.
+    // cabeca de leitura. nao move a janela: quem move a janela e' a pessoa.
     void setReadHead(std::uint64_t address);
 
-    // publica porque quem tem o foco do teclado e' o campo de endereco, e as
-    // teclas de pagina precisam de mexer aqui.
+    // rolagem publica: teclado, botoes de navegacao e roda.
     void scrollToAddress(std::uint64_t address);
     void scrollByLines(int lines);
+    void scrollToFraction(float fraction);
 
     // retangulo da celula em coordenadas locais, ou vazio se a linha nao estiver
-    // na janela.
-    //
-    // existe para o ByteDisplay desenhar os graos na celula, e nao numa fracao da
-    // largura: a regiao pode ser 0,1% de um ficheiro de 51 MB, e a fracao 0,5 cai
-    // numa linha que ninguem esta' a ver.
+    // na janela. existe para o ByteDisplay desenhar os graos na celula.
     [[nodiscard]] juce::Rectangle<float> cellRectForAddress(std::uint64_t address) const;
 
-    // verdadeiro quando a linha do endereco esta' dentro da janela visivel.
     [[nodiscard]] bool isAddressVisible(std::uint64_t address) const noexcept;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
     void mouseDoubleClick(const juce::MouseEvent& event) override;
     void mouseWheelMove(const juce::MouseEvent& event,
                         const juce::MouseWheelDetails& wheel) override;
@@ -93,29 +86,29 @@ private:
         float cellAdvance {0.0f};
         float gutterWidth {0.0f};
         float asciiWidth {0.0f};
+        float asciiCharWidth {0.0f};
         int gutterDigits {8};
         int rows {1};
         bool showAscii {true};
+        bool showRail {false};
         juce::Rectangle<float> bytes;
         juce::Rectangle<float> gutter;
         juce::Rectangle<float> ascii;
+        juce::Rectangle<float> rail;
     };
 
     void rebuildMetrics();
     void clampViewport();
     [[nodiscard]] std::uint64_t rowAddress(int row) const;
     [[nodiscard]] std::uint64_t highestTop() const noexcept;
+    [[nodiscard]] juce::Rectangle<float> thumbRect() const noexcept;
+    void paintScrollRail(juce::Graphics& g);
 
-    // desenho e clique leem a mesma geometria: o separador de grupo acerta nos
-    // dois, senao o byte marcado deixaria de ser o byte clicado.
     [[nodiscard]] juce::Rectangle<float> cellRect(std::uint64_t column, int row) const;
 
-    // endereco com as casas que o tamanho pede. oito e' o minimo, para um PE com
-    // mais de 4 GB nao ser cortado.
     [[nodiscard]] juce::String formatAddress(std::uint64_t address) const;
 
-    // endereco sob um ponto, ou uint64 max quando o ponto nao e' celula. o max e'
-    // um endereco que nenhum ficheiro tem.
+    // endereco sob um ponto, ou uint64 max quando o ponto nao e' celula.
     [[nodiscard]] std::uint64_t addressAt(juce::Point<float> position) const;
 
     void paintColumnHeader(juce::Graphics& g);
@@ -124,17 +117,18 @@ private:
     void paintBytes(juce::Graphics& g, int row);
     void paintAscii(juce::Graphics& g, int row);
 
-    // secao que contem o endereco, ou nullptr.
     [[nodiscard]] const PluginProcessor::SourceInfo::SectionInfo* sectionAt(
         std::uint64_t address) const;
 
     static constexpr std::uint64_t kBytesPerRow {16};
     static constexpr std::uint64_t kGroupGapColumns {8};
-    static constexpr float kRowHeight {24.0f};
-    static constexpr float kHeaderHeight {14.0f};
-    static constexpr float kPadding {6.0f};
-    static constexpr float kGroupGap {8.0f};
-    static constexpr float kInnerGap {10.0f};
+    static constexpr float kRowHeight {26.0f};
+    static constexpr float kHeaderHeight {16.0f};
+    static constexpr float kPadding {8.0f};
+    static constexpr float kGroupGap {12.0f};
+    static constexpr float kInnerGap {14.0f};
+    static constexpr float kRailWidth {10.0f};
+    static constexpr float kRailGap {10.0f};
 
     const std::vector<std::uint8_t>* bytes_ {nullptr};
     std::vector<PluginProcessor::SourceInfo::SectionInfo> sections_;
@@ -147,9 +141,15 @@ private:
     // que e' como se le um hex dump.
     std::uint64_t topByte_ {0};
 
-    juce::Font font_ {fonts().sans(11.0f)};
+    bool draggingRail_ {false};
+
+    juce::Font font_ {fonts().sans(12.0f)};
     Metrics metrics_;
     double wheelAccumulator_ {0.0};
+    // velocidade da roda: cada entalhe seguido multiplica o passo; pausa volta
+    // ao de base. ver mouseWheelMove.
+    double wheelBoost_ {1.0};
+    std::uint32_t lastWheelMs_ {0};
 };
 
 } // namespace opcoda

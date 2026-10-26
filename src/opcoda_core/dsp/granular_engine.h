@@ -60,6 +60,9 @@ struct GranularParams {
     // nivel do grao, depois do volume. volume = saida; level = quanto cada grao
     // contribui.
     float grainLevel {1.0f};
+    // largura stereo na saida, mid/side. 1.0 e' o material como veio; 0 colapsa
+    // para mono; 2 dobra o side. o mid fica intocado, por isso o centro nao anda.
+    float widthStereo {1.0f};
     // detune por grao, 0..12 st. zero desliga.
     float pitchRandomSemitones {0.0f};
     // nuvem: cloud 0..1 vira 0..500 ms de atraso; pitch spread 0..24 st;
@@ -233,7 +236,19 @@ public:
     void prepare(double sampleRate, int maximumBlockSize) noexcept;
     void reset() noexcept;
 
-    void setSampleRate(double sampleRate) noexcept { sampleRate_ = sampleRate; }
+    void setSampleRate(double sampleRate) noexcept {
+        if (!std::isfinite(sampleRate) || sampleRate <= 0.0) {
+            return;
+        }
+        sampleRate_ = sampleRate;
+        // a capacidade do haas e' derivada da taxa: sem isto ficava presa a'
+        // taxa do prepare, e encolher a capacidade com o ponteiro de escrita
+        // adiantado escrevia fora do array.
+        haasCapacity_ = std::clamp(static_cast<int>(sampleRate_ * 0.012), 1,
+                                   kHaasMaxSamples - 2);
+        haasWritePos_ = 0;
+        haasDelay_ = 0.0f;
+    }
     [[nodiscard]] double sampleRate() const noexcept { return sampleRate_; }
 
     // thread de audio apenas, chamado de drainIncomingQueue. a interface manda
@@ -321,6 +336,17 @@ private:
                     const LFOSettings& lfo) noexcept;
     void applyGate(float* left, float* right, int numSamples,
                    const GranularParams& params) noexcept;
+    // mid/side na saida, com rampa do bloco anterior para o alvo: sem a rampa a
+    // automacao ouve-se como ziper no limite do bloco. acima de 1.0 o canal
+    // direito atrasa (haas), que e' o spread que material mono nao tem.
+    void applyStereoWidth(float* left, float* right, int numSamples,
+                          float targetWidth) noexcept;
+
+    // teto duro do drive, no barramento: cada grao ja' passou pelo tanh, mas a
+    // soma de oito vozes pode passar do tecto, e e' aqui que ele morde. a largura
+    // vem depois e pode voltar a levantar o pico; o limiter fecha a cadeia.
+    void applyDriveClip(float* left, float* right, int numSamples,
+                        float driveDb) noexcept;
     // glide em semitons, uma vez por bloco. linear no tempo: a distancia nao
     // muda a duracao.
     void updateGlide(const GranularParams& params, int numSamples) noexcept;
@@ -395,6 +421,16 @@ private:
     int lastGrainLength_ {0};
 
     int lastActiveVoices_ {0};
+    float lastWidth_ {1.0f};
+    // teto do clip do drive, com rampa entre blocos para a automacao nao estalar.
+    float lastClipCeiling_ {1.0f};
+    // linha de atraso do haas, no canal direito. array fixo; a capacidade
+    // efetiva depende da taxa e sai em prepare().
+    static constexpr int kHaasMaxSamples {4096};
+    std::array<float, kHaasMaxSamples> haasBuffer_ {};
+    int haasWritePos_ {0};
+    float haasDelay_ {0.0f};
+    int haasCapacity_ {1};
 
     GrainTelemetry telemetry_ {};
 
