@@ -8,14 +8,16 @@
 
 namespace opcoda {
 
-// aba de pasta: senta por cima do painel de parametros, e a activa funde-se com
-// o fundo dele. icone em vez de palavra — o nome vive no tooltip e no leitor de
-// tela, que e' onde um rotulo de 8 px seria inutil.
+// tecla de navegacao de modulo, sentada por cima do painel de parametros.
 //
-// a lingua e' a das pastas de arquivo: a activa e' da cor do painel, um pixel
-// mais alta que as inactivas, sem vinco no pe; as inactivas ficam rebaixadas,
-// com a linha de pe e a tinta fraca. o cromo em segundo plano fica por conta
-// disto, sem animacao.
+// **icone e nome, rectangular.** era uma pasta de 44 px com o glifo so', e o nome
+// vivia no tooltip: com seis modulos, um glifo de 13 px nao dizia "envelope" a
+// ninguem. agora a tecla divide a largura toda com as vizinhas e le-se como o que
+// e' -- navegacao, na mesma lingua das teclas da rail.
+//
+// a lingua continua a das pastas: a activa e' da cor do painel e funde-se com ele
+// pela cauda de 6 px; as inactivas ficam rebaixadas, com a linha de pe e a tinta
+// fraca.
 class ModuleFolderTab : public juce::Button {
 public:
     ModuleFolderTab(const char* icon, const juce::String& spokenName)
@@ -24,6 +26,15 @@ public:
         setTooltip(spokenName);
         getProperties().set("uiIcon", icon);
         setClickingTogglesState(true);
+    }
+
+    void resized() override {
+        // a largura do nome depende da fonte e do texto, nao do rectangulo: o
+        // par glifo+nome e' centrado como um bloco. mede-se aqui e nao em paint,
+        // que corre a cada rato por cima.
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText(nameFont(), getButtonText(), 0.0f, 0.0f);
+        textWidth_ = glyphs.getBoundingBox(0, -1, false).getWidth();
     }
 
     void paintButton(juce::Graphics& g, bool highlighted, bool down) override {
@@ -59,21 +70,34 @@ public:
                        bounds.getRight() - 4.0f, bounds.getBottom() - 1.0f, 2.0f);
         }
 
-        // glifo: o desenho e' o rotulo. activa em carvao sobre a chapa clara;
-        // inactiva na tinta sub, que e' o que ela ja' era em palavra.
         juce::Colour ink = on ? palette::charcoalDeep : palette::textSub;
         if (!on && (highlighted || down)) {
             ink = palette::textDark;
         }
+
+        // glifo em cima do nome? nao: lado a lado, centrados em bloco. a altura
+        // da tecla da' para os dois e a leitura faz-se de uma vez.
+        constexpr float kGlyph {15.0f};
+        constexpr float kGap {7.0f};
+        const auto total = kGlyph + kGap + textWidth_;
+        const auto left = bounds.getCentreX() - total * 0.5f;
+        const auto glyphBox =
+            juce::Rectangle<float> {left, bounds.getCentreY() - kGlyph * 0.5f, kGlyph, kGlyph};
         const auto kind = getProperties()["uiIcon"].toString();
-        const auto iconArea =
-            juce::Rectangle<float> {bounds.getX(), bounds.getY(), bounds.getWidth(),
-                                    height}
-                .withSizeKeepingCentre(bounds.getWidth() * 0.42f, height * 0.42f);
-        if (!OpcodaLookAndFeel::paintGlyph(g, kind, iconArea, ink, on)) {
-            g.setFont(fonts().sans(10.0f, on));
+        if (!OpcodaLookAndFeel::paintGlyph(g, kind, glyphBox, ink, on)) {
+            // sem glifo desenhado, o nome toma conta: nenhuma tecla fica vazia.
+            g.setFont(nameFont());
             g.setColour(ink);
-            g.drawText(getButtonText(), bounds, juce::Justification::centred, false);
+            g.drawText(getButtonText(),
+                       juce::Rectangle<float> {left, bounds.getY(), total, height},
+                       juce::Justification::centredLeft, false);
+        } else {
+            g.setFont(nameFont());
+            g.setColour(ink);
+            g.drawText(getButtonText(),
+                       juce::Rectangle<float> {left + kGlyph + kGap, bounds.getY(),
+                                               textWidth_, height},
+                       juce::Justification::centredLeft, false);
         }
 
         if (hasKeyboardFocus(true)) {
@@ -83,6 +107,13 @@ public:
             g.drawRoundedRectangle(bounds.reduced(1.0f), 5.0f, 1.5f);
         }
     }
+
+private:
+    static juce::Font nameFont() {
+        return fonts().sans(9.5f, true).withExtraKerningFactor(0.14f);
+    }
+
+    float textWidth_ {0.0f};
 };
 
 } // namespace opcoda

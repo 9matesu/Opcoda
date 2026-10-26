@@ -2,6 +2,8 @@
 
 #include "byte_display.h"
 #include "display_panel.h"
+#include "envelope_view.h"
+#include "filter_view.h"
 #include "knob.h"
 #include "look_and_feel.h"
 #include "module_folder_tab.h"
@@ -15,6 +17,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -53,6 +56,12 @@ public:
     bool keyPressed(const juce::KeyPress& key) override;
     bool keyStateChanged(bool isKeyDown) override;
 
+    // devolve o foco ao teclado virtual. o standalone chama isto quando fecha o
+    // ecra de configuracao: sem ele as teclas seguintes ficavam a falar com a
+    // janela e o instrumento parecia surdo por causa de uma janela que ja' nao
+    // esta' a' vista.
+    void focusPlayKeyboard();
+
     // o clique nao rouba o foco ao teclado: sem isto, trocar de vista calava as
     // teclas do computador e o instrumento parecia avariado.
     void mouseDown(const juce::MouseEvent& event) override;
@@ -87,6 +96,14 @@ private:
                       float velocity) override;
     void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
                        float velocity) override;
+
+    // acende no teclado do editor as teclas que o MIDI do host esta' a premir.
+    // o estado do teclado continua a ser a unica fonte do desenho: o MIDI entra
+    // por ele com a guarda ligada, para nao voltar a disparar a nota no motor.
+    void mirrorIncomingNotes();
+    bool mirroringNotes_ {false};
+    std::uint64_t mirroredLow_ {0};
+    std::uint64_t mirroredHigh_ {0};
 
     void timerCallback() override;
     void refresh();
@@ -128,8 +145,11 @@ private:
 
     bool ingestFirst(const juce::StringArray& files) {
         for (const auto& file : files) {
-            if (juce::File(file).existsAsFile() && owner_.ingest(file)) {
-                return true;
+            if (juce::File(file).existsAsFile()) {
+                pushUndoSnapshot();
+                if (owner_.ingest(file)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -143,6 +163,12 @@ private:
 
     DisplayPanel display_;
     ByteDisplay grid_;
+
+    // visualizadores dos modulos ENV e FILTER: o grafico ocupa a esquerda do
+    // painel de parametros e os knobs recuam para a direita quando a aba deles
+    // esta' aberta.
+    EnvelopeView envelopeView_;
+    FilterView filterView_;
 
     // tira vertical a' direita do ecra: vistas e zoom, icones empilhados.
     juce::TextButton viewWaveButton_;
@@ -164,7 +190,6 @@ private:
 
     void updateViewButtons();
 
-    juce::Label title_;
     juce::Label status_;
     juce::Label positionReadout_;
     juce::Label offsetReadout_;
@@ -197,6 +222,28 @@ private:
                                     const juce::Identifier& property) override;
     void loadPresetFromFile();
     void savePresetToFile();
+
+    // -- desfazer (Ctrl+Z) --
+    // um retrato do estado por gesto, nao por evento: um arrasto de knob dispara
+    // dezenas de mudancas e um retrato de cada uma enchia a pilha de passos que
+    // ninguem distingue. o retrato que se guarda e' o do inicio do gesto, por isso
+    // desfazer devolve o valor de antes e nao o penultimo tick.
+    void pushUndoSnapshot();
+    void settleUndo();
+    void undoLast();
+    void applyUndoSnapshot(const juce::XmlElement& xml);
+
+    std::vector<std::unique_ptr<juce::XmlElement>> undo_;
+    std::unique_ptr<juce::XmlElement> settledState_;
+    std::uint32_t lastChangeMs_ {0};
+    bool undoPending_ {false};
+    bool restoringUndo_ {false};
+
+    // o evento de parametro pode chegar de uma thread que nao a de interface: a
+    // automacao do host escreve por setValueNotifyingHost e o listener do
+    // ValueTree corre na thread de quem escreveu. tirar o retrato ali' alocava
+    // XML fora da interface; fica a marcacao e o retrato sai no timer.
+    std::atomic<bool> undoFromAudio_ {false};
 
     // sete modulos visiveis. OUT existe no enum porque o volume precisa de um
     // Knob; nao tem aba, e o knob mora no master.

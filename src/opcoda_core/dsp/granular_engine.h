@@ -281,12 +281,26 @@ public:
     // agendamento de graos.
     [[nodiscard]] float gateLevel() const noexcept { return envelopeLevel_; }
 
+    // fase e progresso do estagio corrente, para a interface desenhar o ponto
+    // vivo do ADSR. so' o nivel nao chegava: com ele o ponto sabia a altura mas
+    // nao onde estava em largura, e saltava de estagio sem transicao.
+    // o indice segue EnvelopePhase (0 idle, 1 attack, 2 decay, 3 sustain,
+    // 4 release); devolve-se int para o enum continuar privado.
+    [[nodiscard]] int envelopePhaseIndex() const noexcept {
+        return static_cast<int>(envelopePhase_);
+    }
+    [[nodiscard]] float envelopeStagePhase() const noexcept { return stagePhase_; }
+
     // semitons do glide, para o teste. em producao ninguem le.
     [[nodiscard]] double glideSemitones() const noexcept { return glideSemitones_; }
 
     // corte do filtro 1 no ultimo calculo, ja' com lfo, keytrack e envelope.
     // para o ensaio de keytrack.
     [[nodiscard]] float f1CutoffHz() const noexcept { return lastF1Cutoff_; }
+
+    // o mesmo para o filtro 2: e' a segunda curva do visualizador e tem de mostrar
+    // o corte modulado, nao o do knob.
+    [[nodiscard]] float f2CutoffHz() const noexcept { return lastF2Cutoff_; }
 
     // atraso, spread e duracao do ultimo grao. o ensaio da nuvem mede o que o
     // motor aplicou, nao o que o gerador devia ter dado.

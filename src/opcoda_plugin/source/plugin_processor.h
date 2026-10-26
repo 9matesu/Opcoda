@@ -95,6 +95,10 @@ bool loadPresetFromFile(const juce::File& file);
     [[nodiscard]] juce::String lastError() const noexcept { return lastError_; }
     [[nodiscard]] juce::String sourceName() const noexcept { return sourceName_; }
 
+    // caminho do binario activo. quem desfaz compara-o para saber se basta repor
+    // parametros ou se tem de recarregar o material.
+    [[nodiscard]] const juce::String& sourcePath() const noexcept { return sourcePath_; }
+
     // metadados do material carregado, para a faixa de arquivo do editor. Escrito
     // no ingest e lido na interface: mesma thread, nenhum campo precisa de atomico.
     struct SourceInfo {
@@ -161,9 +165,32 @@ bool snapByteRangeToSection();
         // HOLD congela a cabeca sem fechar o gate: os graos continuam a nascer
         // na posicao actual. e' o latch do transporte, publicado para o botao.
         std::atomic<bool> held {false};
+
+        // envelope e filtros, para os visualizadores dos modulos ENV e FILTER: o
+        // ponto do ADSR e a resposta mostram o que o audio esta' a fazer, nao o
+        // que o knob pediu. o corte vem ja' com keytrack, envelope e lfo.
+        std::atomic<float> envelopeLevel {0.0f};
+        std::atomic<float> envelopeStage {0.0f};
+        std::atomic<int> envelopePhase {0};
+        std::atomic<float> cutoff1Hz {0.0f};
+        std::atomic<float> cutoff2Hz {0.0f};
     };
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }
+
+    // teclas fisicamente premidas, em dois uint64 (128 notas): o teclado do
+    // editor acende o que chega do MIDI do host, nao so' o que se toca com o
+    // rato. dois atomicos e nao um de 128 bits, que nao existe; a leitura pode
+    // apanhar as duas metades de instantes diferentes e isso nao se ve.
+    struct PressedNotes {
+        std::uint64_t low {0};
+        std::uint64_t high {0};
+    };
+
+    [[nodiscard]] PressedNotes pressedNotes() const noexcept {
+        return {pressedLow_.load(std::memory_order_relaxed),
+                pressedHigh_.load(std::memory_order_relaxed)};
+    }
 
     // onde esta' cada grao: o callback publica uma vez por bloco, o editor le a
     // 60 Hz e desenha sobre a forma de onda.
@@ -321,7 +348,11 @@ private:
 
     // le o MidiBuffer do bloco e atualiza o NoteTracker. Roda no audio, sem alocar
     // nem bloquear: o MidiBuffer ja' traz os contadores resolvidos.
-void readNotes(const juce::MidiBuffer& midi) noexcept;
+    void readNotes(const juce::MidiBuffer& midi) noexcept;
+
+    // publica o bitmask de teclas premidas. roda no audio, so' quando entraram
+    // eventos: um bloco sem MIDI nao tem o que mudar.
+    void publishPressedNotes() noexcept;
 
     void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
 
@@ -384,6 +415,10 @@ void readNotes(const juce::MidiBuffer& midi) noexcept;
 
     // latch do transporte. escrito pela interface, lido no callback.
     std::atomic<bool> transportHold_ {false};
+
+    // teclas premidas, escrito pelo audio e lido pela interface.
+    std::atomic<std::uint64_t> pressedLow_ {0};
+    std::atomic<std::uint64_t> pressedHigh_ {0};
 
     Telemetry telemetry_;
 

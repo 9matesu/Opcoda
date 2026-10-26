@@ -230,6 +230,50 @@ A segunda revisão, do mesmo dia, acrescenta o escopo pedido pelo som:
 - **Escala do medidor.** Piso em -48 dB e rótulos de 12 em 12 dB, centrados no
   traço e limitados à pista; o volume cede 18 px ao medidor.
 
+## Revisão de 26/10/2026 (3) — a janela do standalone e o ecrã de ajustes
+
+- **Barra própria.** `StandaloneWindow` desenha a barra com o `OpcodaLookAndFeel`
+  (36 px, grafite, marca, minimizar e fechar planos) em vez da barra do Windows, e
+  a janela passa a 1182×798, sem redimensionar.
+- **Sem menu Save/Load/About.** O estado do standalone vive em
+  `%APPDATA%\Opcoda\Opcoda.settings`; o menu herdado do JUCE oferecia operações
+  que o projeto não tem.
+- **`SettingsScreen` no lugar do `AudioDeviceSelectorComponent`.** Folha de
+  820×580 sobre véu de 62 %, páginas `AUDIO` e `MIDI`, aplicação imediata sem
+  `APPLY`, erro do pedido em vermelho ao lado do `CLOSE`. O instrumento continua a
+  tocar e as teclas de nota continuam a chegar ao editor com o ecrã aberto.
+
+## Revisão de 26/10/2026 (4) — marca na barra, abas com nome, ADSR e filtro
+
+- **A marca saiu do header.** O nome sobe para a barra da janela, ao lado da
+  marca, e o preset e a origem passam a um bloco único centrado no header. No
+  VST3, onde não há barra da janela, o editor fica sem assinatura visível.
+- **O ícone é texto.** A caixa laranja leva "Op" na fonte do nome; a mesma função
+  desenha a barra, o cabeçalho dos ajustes e o ícone da barra de tarefas.
+- **Abas de módulo retangulares, com nome.** Seis teclas de 165 px que dividem a
+  chapa, com glifo e palavra; o requisito 4 passa a nomear as abas como
+  `GRAIN`, `ENV`, `FILTER`, `MOD`, `CLOUD` e `KEYS`, visíveis, e não só no
+  tooltip.
+- **Envelope desenhado nos dois sentidos.** O visor mostra a forma que o motor
+  aplica (as três curvas da F020), com pegas de canto para os tempos e o sustain,
+  pegas de meio de segmento para as curvas, e o ponto vivo alimentado pelo
+  `Telemetry` — nível, fase e progresso do estágio. Os knobs ficam secundários,
+  numa fila à direita.
+- **Resposta dos dois filtros desenhada.** Magnitude a partir dos mesmos
+  coeficientes do áudio, 96 pontos de 20 Hz a 20 kHz, eixo de +18 a −48 dB; o
+  slope de 24 dB é a magnitude ao quadrado. As pegas mudam corte e Q; a linha
+  fina mostra a resposta com o corte já modulado.
+- **`Ctrl+Z` na interface.** Um retrato do estado por gesto (32 passos, 400 ms de
+  silêncio entre gestos), com `replaceState` quando o material não mudou e
+  `loadStateXml` quando mudou. Sem refazer; no *host*, o desfazer continua a ser
+  o do *host*.
+- **O MIDI do host acende o teclado.** Bitmask de 128 teclas publicado pelo áudio
+  em blocos com MIDI, espelhado no `MidiKeyboardState` com guarda para a nota não
+  ser disparada duas vezes. O pedal não acende a tecla.
+
+Requisito 6 emendado: o visor do envelope repinta a 60 Hz, e só quando o valor
+visível muda — o anterior dizia 30 Hz como teto de atualização.
+
 ## Estado dos testes de interface
 
 Em 24/10/2026 a suite automática cobre `opcoda_core`; os testes `Ui.*` da tabela

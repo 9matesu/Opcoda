@@ -73,6 +73,10 @@ target_sources(Opcoda
         source/mod_matrix_view.h
         source/byte_display.cpp
         source/byte_display.h
+        source/envelope_view.cpp
+        source/envelope_view.h
+        source/filter_view.cpp
+        source/filter_view.h
         source/fonts.h
         source/palette.h)
 
@@ -93,3 +97,30 @@ target_compile_definitions(Opcoda PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0)
+
+# -- aplicacao do standalone --
+# O JUCE deixa trocar a app do formato Standalone com
+# JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP. Sem isso compila a StandaloneFilterApp:
+# barra da janela do sistema, botao "Options" com Save/Load/About e o
+# AudioDeviceSelectorComponent dentro de um DialogWindow. O Opcoda troca as tres
+# por uma janela e um ecra com a chapa do instrumento.
+#
+# **so' o alvo Standalone compila estes ficheiros.** o VST3 nao tem janela nem
+# gestor de dispositivos, e a macro nao pode chegar-lhe: a app propria define
+# juce_CreateApplication, que o wrapper do standalone declara extern.
+target_sources(Opcoda_Standalone
+    PRIVATE
+        source/standalone/standalone_app.cpp
+        source/standalone/standalone_window.cpp
+        source/standalone/standalone_window.h
+        source/standalone/settings_screen.cpp
+        source/standalone/settings_screen.h)
+
+target_compile_definitions(Opcoda_Standalone
+    PRIVATE
+        JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
+
+target_link_libraries(Opcoda_Standalone
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_gui_extra)

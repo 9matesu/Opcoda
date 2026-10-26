@@ -587,9 +587,37 @@ void PluginProcessor::updateHostTransport() noexcept {
 
 void PluginProcessor::drainKeyboardNotes() noexcept {
     rt::NoteTracker::Event event {};
+    bool changed = false;
     while (keyboardNotes_.pop(event)) {
         notes_.handle(event);
+        changed = true;
     }
+
+    // o teclado virtual tambem mexe no bitmask: as teclas que ele acende sao as
+    // mesmas que o MIDI do host acende, e a interface nao precisa de saber a
+    // origem.
+    if (changed) {
+        publishPressedNotes();
+    }
+}
+
+void PluginProcessor::publishPressedNotes() noexcept {
+    // 128 perguntas por bloco com MIDI, sobre uma pilha de 16: barato e sem
+    // estado paralelo para dessincronizar.
+    std::uint64_t low = 0;
+    std::uint64_t high = 0;
+    for (int note = 0; note < 64; ++note) {
+        if (notes_.isHeld(note)) {
+            low |= std::uint64_t {1} << note;
+        }
+    }
+    for (int note = 64; note < 128; ++note) {
+        if (notes_.isHeld(note)) {
+            high |= std::uint64_t {1} << (note - 64);
+        }
+    }
+    pressedLow_.store(low, std::memory_order_relaxed);
+    pressedHigh_.store(high, std::memory_order_relaxed);
 }
 
 void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
@@ -635,6 +663,8 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
         // nada falhasse.
         notes_.handle({kind, message.getNoteNumber(), message.getControllerValue()});
     }
+
+    publishPressedNotes();
 }
 
 void PluginProcessor::applyPendingControllerChanges() {
@@ -749,6 +779,15 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
                           std::memory_order_relaxed);
     telemetry_.playheadFraction.store(transport_.positionFraction(),
                                       std::memory_order_relaxed);
+
+    // envelope e cortes vivos: os visualizadores dos modulos ENV e FILTER leem
+    // daqui. o corte 2 so' existe depois do primeiro bloco filtrado; zero e'
+    // "ainda nao sei" e a vista cai no valor do knob.
+    telemetry_.envelopeLevel.store(engine_.gateLevel(), std::memory_order_relaxed);
+    telemetry_.envelopeStage.store(engine_.envelopeStagePhase(), std::memory_order_relaxed);
+    telemetry_.envelopePhase.store(engine_.envelopePhaseIndex(), std::memory_order_relaxed);
+    telemetry_.cutoff1Hz.store(engine_.f1CutoffHz(), std::memory_order_relaxed);
+    telemetry_.cutoff2Hz.store(engine_.f2CutoffHz(), std::memory_order_relaxed);
 }
 
 

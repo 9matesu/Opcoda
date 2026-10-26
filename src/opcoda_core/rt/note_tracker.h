@@ -49,6 +49,12 @@ public:
     // ganho por si: quem decide a profundidade e' a rota.
     [[nodiscard]] float velocity() const noexcept { return activeVelocity_; }
 
+    // tecla fisicamente premida (o pedal nao conta: a tecla ja' subiu). a
+    // interface pergunta pelas 128 para acender o teclado; o gate pergunta pela
+    // ultima. publica porque o bitmask do processador e' a mesma pergunta feita
+    // 128 vezes.
+    [[nodiscard]] bool isHeld(int note) const noexcept;
+
     void reset() noexcept;
 
     // ultimo valor de um indice rastreado, 0..1. 0 se o indice nao for rastreado,
@@ -72,7 +78,6 @@ public:
 private:
     void pushHeld(int note) noexcept;
     void removeHeld(int note) noexcept;
-    [[nodiscard]] bool isHeld(int note) const noexcept;
     void pushSustained(int note) noexcept;
 
     // teclas fisicamente premidas e notas que ja' foram largadas mas o pedal

@@ -54,6 +54,16 @@ src/opcoda_plugin/source/animator.h,h,logic,no,Animacao com delta medido
 src/opcoda_plugin/source/display_panel.h,h,logic,no,Painel do display
 src/opcoda_plugin/source/factory_presets.h,h,config,no,Seis presets de fabrica
 src/opcoda_plugin/source/fonts.h,h,config,no,Fontes embebidas
+src/opcoda_plugin/source/envelope_view.cpp,cpp,logic,no,ADSR desenhado com pegas
+src/opcoda_plugin/source/envelope_view.h,h,logic,no,Estados das pegas do envelope
+src/opcoda_plugin/source/filter_view.cpp,cpp,logic,no,Resposta dos dois biquads
+src/opcoda_plugin/source/filter_view.h,h,logic,no,Estados das pegas do filtro
+src/opcoda_plugin/source/module_folder_tab.h,h,logic,no,Aba retangular com glifo e nome
+src/opcoda_plugin/source/standalone/standalone_app.cpp,cpp,entry,yes,Arranque do standalone
+src/opcoda_plugin/source/standalone/standalone_window.cpp,cpp,entry,yes,Janela propria e barra
+src/opcoda_plugin/source/standalone/standalone_window.h,h,entry,no,Corpo e posicao da janela
+src/opcoda_plugin/source/standalone/settings_screen.cpp,cpp,logic,no,Ecra de audio e MIDI
+src/opcoda_plugin/source/standalone/settings_screen.h,h,logic,no,Estados do ecra de ajustes
 tools/build.ps1,powershell,config,yes,Unico ponto de entrada do build
 tools/build-atlas.ps1,powershell,config,yes,Pipeline do atlas
 tools/render-mermaid.ps1,powershell,config,yes,Render dos diagramas

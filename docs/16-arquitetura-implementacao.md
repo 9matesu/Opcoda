@@ -915,3 +915,146 @@ arquivo de verdade.
 O `notepad.exe` da máquina tem 200 KB, sete seções e byte médio de 96 em
 `.text`, ou seja, offset de −0,245 em amostra normalizada: material que o
 DC-blocker tem o que remover e que a leitura sintética não reproduzia.
+
+## A janela própria do standalone (26/10/2026)
+
+O `StandaloneFilterWindow` do JUCE trazia o botão *Options* dentro da barra do
+sistema, um menu com Save/Load/About e o `AudioDeviceSelectorComponent` num
+`DialogWindow`. Três coisas erradas de uma vez: a barra do sistema ficava com o
+desenho do Windows, o menu oferecia um Save que neste projeto não existe (o
+estado do plugin é do *host*; no standalone, do `Opcoda.settings`) e o seletor de
+placa, quando aberto, tapava o instrumento com a grelha de etiquetas do sistema.
+
+`StandaloneWindow` substitui-a: `DocumentWindow` com barra de 36 px desenhada
+pelo `OpcodaLookAndFeel` — grafite um tom abaixo do chassis, marca à esquerda,
+minimizar e fechar em teclas planas de 34 px — e um corpo que tem o editor e, por
+cima dele, o `SettingsScreen`. A janela mede 1182×798: os 1180×760 do editor, mais
+a moldura de 1 px de cada lado e a barra; não é redimensionável, e a posição fica
+em `windowX`/`windowY` do mesmo `Opcoda.settings`, reposta no arranque.
+
+O `SettingsScreen` é uma folha de 820×580 sobre um véu de carvão a 62 %, com duas
+páginas — `AUDIO` (driver, saída, taxa, buffer) e `MIDI` (entradas em linhas de
+estado) —, CPU e latência no pé e o erro do último pedido de dispositivo escrito
+à esquerda do `CLOSE`, em vermelho de erro. Não há `APPLY`: a mudança aplica-se ao
+escolher, e um pedido que falhe deixa o dispositivo anterior a tocar. O véu não
+tapa o instrumento de propósito, e as teclas que o ecrã não usa (o mapa
+`A W S E...`) são entregues ao editor, para se poder escolher a placa com uma nota
+presa; fechar é um clique fora, `Escape` ou `CLOSE`, e o foco volta ao teclado
+virtual.
+
+O ícone da barra de tarefas é aplicado ao *peer* depois de a janela estar no
+desktop: `DocumentWindow::setIcon` guarda só uma cópia para o título, e este
+LookAndFeel não desenha título. O menu de contexto do display perdeu o cromo do
+sistema: carvão, itens de 11 px com realce âmbar e separadores de 1 px.
+
+## A marca, os visualizadores e o desfazer (26/10/2026)
+
+### A marca saiu do header e o ícone passou a ser texto
+
+O nome do instrumento morava no header do editor, na mesma fila do preset e do
+ficheiro. Três blocos numa linha de 64 px empurravam o grupo para a esquerda: o
+vazio ficava todo de um lado e o olho lia o título antes do que se opera. O nome
+saiu de lá e subiu para a barra da janela, ao lado da marca, na fonte do título a
+17 px; o preset e a origem ficaram num bloco único, centrado, e a largura do nome
+do ficheiro passou a ser fixa em 250 px para a linha não saltar a cada ingestão.
+
+O ícone deixou de ser três grãos num quadrado de 16 px — a 16 px ninguém lê três
+grãos — e passou a ser o texto "Op" dentro da caixa laranja, na mesma Inter
+Display SemiBold do nome. `OpcodaLookAndFeel::paintMark` desenha a marca e tira o
+corpo da letra da altura da caixa, de sorte que a mesma função serve a barra da
+janela (22 px), o cabeçalho do ecrã de ajustes (16 px) e o ícone da barra de
+tarefas (224 px). Uma assinatura, um desenho. No VST3 não há barra da janela: o
+editor fica sem assinatura, e é o preço de tirar o nome da única superfície que
+existe nas duas formas.
+
+Duas correções vieram de arrasto. O fundo da tecla `bar` era um banho de carvão a
+45 % e deixava a chapa aparecer por trás; sobre a barra da janela o texto ficava
+com duas sombras. A mistura passou a ser feita na cor, não na transparência. E o
+glifo de ajustes tinha os três cursos com 0,11 de lado de intervalo — a 14 px os
+puxadores fundiam-se num borrão; com 0,32 de intervalo e traço de 1,1 px os três
+leem-se.
+
+### As abas de módulo passaram a retângulos com nome
+
+A pasta de 44 px com o glifo só, e o nome no tooltip, foi economia errada: seis
+módulos com glifos de 13 px não se distinguem sem os ler, e o tooltip só chega
+depois da dúvida. As seis teclas passaram a dividir a largura da chapa — 165 px
+cada, com 6 px de folga — e a levar glifo e nome, como as teclas da rail. O par
+glifo+nome é medido em `resized()`, com `GlyphArrangement`, e centrado como bloco;
+medir em `paint` seria medir a cada quadro. A linguagem de pasta ficou: a ativa é
+da cor do painel, desce a cauda de 6 px sobre ele e leva o filete âmbar; as
+inativas ficam 2 px mais altas, com a linha de pé e a tinta fraca.
+
+Isto substitui a largura de 44 px registrada em "Abas de pasta, marcadores e as
+correções de 26/10/2026".
+
+### O envelope e o filtro desenhados
+
+Dois módulos deixaram de ser sete e dez knobs com o nome da função. `ENV` e
+`FILTER` abrem com um ecrã afundado à esquerda, de 42 % do painel (entre 300 e
+460 px), e os knobs recuam para a direita, menores: sete numa fila no envelope,
+cinco mais cinco no filtro, para o nome de cada um caber.
+
+No envelope, o eixo do tempo é comprimido pela raiz do valor — com ataque de
+5 ms e decay de 2 s, a rampa linear faria do ataque meio pixel — e o patamar de
+sustain leva 20 % da largura móvel. Os três segmentos amostram a mesma
+`dsp::curveShape` que o motor usa, 40 pontos cada, e é por isso que a forma
+desenhada é a que se ouve, e não uma parábola de enfeite. Três pegas de canto
+mudam ataque, decay/sustain e release; três pegas a meio de cada segmento dobram
+a curva do estágio. O arrasto horizontal dos tempos é relativo
+(`valor · e^0,012·dx`), porque em escala absoluta um ataque curto não sai do
+sítio. O ponto vivo vem do áudio — `gateLevel`, fase do estágio e progresso do
+estágio —, publicado no `Telemetry` uma vez por bloco, e não de um cronômetro da
+interface: o ponto mostra o envelope que está a soar, com o atraso de um bloco.
+
+No filtro, a curva sai de `dsp::makeBiquadCoeffs` com o tipo, o corte e o Q dos
+knobs, avaliada em 96 pontos log-espaçados de 20 Hz a 20 kHz e em dB entre +18 e
+−48; 24 dB é a mesma magnitude ao quadrado, que é o que o motor faz ao passar o
+biquad duas vezes. As duas pegas mudam corte (x) e Q (y). A pega do filtro 2 é um
+aro vazado: com os dois cortes no mesmo sítio — 20 kHz nos dois é o estado de
+fábrica — a pega cheia do filtro 1 escondia a do filtro 2. Uma linha fina desenha
+a resposta com o corte já modulado por keytrack, envelope e LFO, que é o que o
+áudio está a fazer.
+
+O custo é repintura a 60 Hz com 96 pontos e dois biquads por ponto, no thread de
+interface, e só quando o visor está aberto; nenhuma conta nova entrou no
+`processBlock`. Fica de fora: envelope por voz (o motor aplica o ADSR ao mix, e o
+desenho mostra o mix), automação das curvas por gesto no visor (as curvas são
+parâmetros, automatizáveis pelo host como os outros) e o teste `Ui.*`
+correspondente, que continua não implementado.
+
+### O desfazer da interface
+
+`Ctrl+Z` desfaz pelo editor, com um retrato do estado por gesto: 32 passos, e o
+que separa dois gestos é 400 ms de silêncio nos eventos de parâmetro. O retrato é
+o `stateXml()` inteiro — parâmetros, caminho do binário e região — e o passo
+guardado é sempre o de antes do gesto começar, por isso desfazer devolve o valor
+anterior e não o penúltimo tique de um arrasto.
+
+Na reposição, o caminho é escolhido pelo custo: se o binário e a região do
+retrato são os atuais, basta `replaceState` nos parâmetros; se mudaram, o retrato
+é aplicado por `loadStateXml` e o material é relido. A guarda `restoringUndo_`
+impede que a própria reposição entre na pilha. Não há refazer, a pilha morre com
+o editor, e no Ableton quem trata do `Ctrl+Z` é o host — a pilha local existe para
+o *standalone*, que não tem outra.
+
+### O MIDI do host acende o teclado
+
+O teclado virtual mostrava o que se tocava com o rato e com as teclas do
+computador, não o que chegava do *host*. O áudio publica agora um bitmask de 128
+teclas premidas, em dois `uint64` (um `atomic` de 128 bits não existe), e só o
+publica em blocos que trouxeram MIDI; a interface lê a 60 Hz e espelha no
+`MidiKeyboardState` o que mudou. O pedal não entra no bitmask: a tecla que subiu
+com o pedal em baixo continua a soar e não pode continuar acesa. O espelho escreve
+no estado com uma guarda (`mirroringNotes_`) para o listener não devolver a nota ao
+motor, que já a recebeu pelo `MidiBuffer` — sem ela, cada nota do *host* soaria
+duas vezes. `NoteTracker::isHeld` passou a público para a pergunta ser a mesma nos
+dois lados, e tem ensaio próprio.
+
+### O que ficou por provar
+
+A verificação destes três desenhos foi por captura de ecrã e por build, não por
+teste: os testes `Ui.*` da F023 continuam não implementados, e o alvo `tests/` é
+núcleo puro sem JUCE. O que ganhou ensaio foi o que está do lado do núcleo — o
+`isHeld` do `NoteTracker` —, e o resto do caminho, do bitmask ao espelho, foi
+lido e não medido.

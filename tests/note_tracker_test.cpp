@@ -82,6 +82,21 @@ TEST(NoteTracker, SustainDoesNotHideStillHeldKeys) {
     EXPECT_FALSE(tracker.sounding());
 }
 
+TEST(NoteTracker, IsHeldFollowsTheKeysNotThePedal) {
+    // o teclado do editor acende o que esta' fisicamente premido. com o pedal em
+    // baixo a nota continua a soar mas a tecla ja' subiu -- e a tecla nao pode
+    // ficar acesa, senao o desenho diz o contrario do que a mao fez.
+    NoteTracker tracker;
+    tracker.handle(sustain(true));
+    tracker.handle(noteOn(60));
+    EXPECT_TRUE(tracker.isHeld(60));
+    EXPECT_FALSE(tracker.isHeld(61));
+
+    tracker.handle(noteOff(60));
+    EXPECT_FALSE(tracker.isHeld(60)) << "a tecla subiu: nao esta' premida";
+    EXPECT_TRUE(tracker.sounding()) << "o pedal mantem o som";
+}
+
 TEST(NoteTracker, AllNotesOffClearsSustain) {
     NoteTracker tracker;
     tracker.handle(sustain(true));

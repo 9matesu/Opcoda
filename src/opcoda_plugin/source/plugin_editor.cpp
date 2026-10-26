@@ -34,8 +34,7 @@ constexpr int kTransportGap {5};
 
 constexpr int kTabHeight {28};
 constexpr int kTabGap {6};
-// abas de pasta: icone so', sem palavra. a cauda desce sobre o painel.
-constexpr int kFolderTabWidth {44};
+// a cauda desce sobre o painel: e' o que faz da tecla activa uma pasta aberta.
 constexpr int kFolderTabTail {6};
 
 constexpr int kKeyboardHeight {84};
@@ -45,6 +44,11 @@ constexpr int kMaxCellWidth {156};
 constexpr int kKnobContentHeight {148};
 constexpr int kFooterHeight {24};
 constexpr int kStatusHeight {16};
+
+// desfazer: o silencio que separa dois gestos. abaixo disto, as mudancas sao o
+// mesmo arrasto ou o mesmo clique e valem um passo so'.
+constexpr std::uint32_t kGestureGapMs {400};
+constexpr std::size_t kMaxUndoSteps {32};
 
 // parafuso de chapa: tres circulos e uma fenda. quatro por janela chegam para
 // dizer "isto e' um aparelho" sem virar decoracao.
@@ -63,7 +67,11 @@ juce::String asInteger(float value) {
 }
 
 const auto percent = [](float v) { return asInteger(v * 100.0f) + " %"; };
-const auto seconds = [](float v) { return asInteger(v * 1000.0f) + " ms"; };
+const auto seconds = [](float v) {
+    // abaixo de um segundo o numero em ms le-se melhor; acima disso, 2000 ms
+    // vira "2.00 s" e a casa decimal aparece onde importa.
+    return v < 0.9995f ? asInteger(v * 1000.0f) + " ms" : juce::String {v, 2} + " s";
+};
 const auto cutoffText = [](float v) {
     return v >= 1000.0f ? juce::String {v / 1000.0f, 1} + " kHz" : asInteger(v) + " Hz";
 };
@@ -198,12 +206,16 @@ void setIfChanged(juce::Label& label, const juce::String& text) {
 PluginEditor::PluginEditor(PluginProcessor& processor)
     : juce::AudioProcessorEditor(&processor),
       owner_(processor),
-      keyboard_(keyboardState_, juce::MidiKeyboardComponent::horizontalKeyboard) {
+      keyboard_(keyboardState_, juce::MidiKeyboardComponent::horizontalKeyboard),
+      envelopeView_(processor.parameters()),
+      filterView_(processor.parameters()) {
     setLookAndFeel(&lookAndFeel_);
     setOpaque(true);
 
-    makePlainLabel(title_, "Opcoda", palette::textDark, fonts().sans(24.0f, true));
     makePlainLabel(status_, "", palette::textOnDark, fonts().sans(11.0f));
+
+    addChildComponent(envelopeView_);
+    addChildComponent(filterView_);
 
     buildHeader();
     buildNavigation();
@@ -246,6 +258,10 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     addMouseListener(this, true);
 
     refresh();
+
+    // o estado de partida do primeiro gesto. sem ele o primeiro Ctrl+Z nao tinha
+    // para onde voltar.
+    settledState_ = owner_.stateXml();
 }
 
 PluginEditor::~PluginEditor() {
@@ -336,9 +352,93 @@ void PluginEditor::valueTreePropertyChanged(juce::ValueTree& changed,
                                             const juce::Identifier&) {
     // so' PARAM suja: sourcePath e a regiao mudam no ingest e nao dizem nada sobre o
     // som em relacao ao preset.
-    if (changed.hasType("PARAM") && !applyingPreset_) {
+    if (!changed.hasType("PARAM")) {
+        return;
+    }
+
+    if (!applyingPreset_) {
         presetDirty_ = true;
     }
+
+    if (!restoringUndo_) {
+        pushUndoSnapshot();
+    }
+}
+
+void PluginEditor::pushUndoSnapshot() {
+    // **nem sempre vem da thread de interface.** a automacao do host escreve por
+    // `setValueNotifyingHost` e o listener do ValueTree corre na thread de quem
+    // escreveu. tirar o retrato fora da interface alocava XML no caminho de quem
+    // nao pode esperar: fica a marcacao, e o timer tira o retrato onde e' seguro.
+    if (!juce::MessageManager::existsAndIsCurrentThread()) {
+        undoFromAudio_.store(true, std::memory_order_relaxed);
+        return;
+    }
+
+    // a mudanca chegou: vale como continuacao do gesto se o ultimo evento foi ha'
+    // menos de 400 ms. o retrato guardado e' o de antes do gesto comecar.
+    const auto now = juce::Time::getMillisecondCounter();
+    const bool newGesture = !undoPending_ || now - lastChangeMs_ > kGestureGapMs;
+
+    if (newGesture && settledState_ != nullptr) {
+        undo_.push_back(std::make_unique<juce::XmlElement>(*settledState_));
+        if (undo_.size() > kMaxUndoSteps) {
+            undo_.erase(undo_.begin());
+        }
+    }
+
+    lastChangeMs_ = now;
+    undoPending_ = true;
+}
+
+void PluginEditor::settleUndo() {
+    // o gesto acabou quando os eventos param: so' entao o estado corrente e' o
+    // ponto de partida do proximo desfazer.
+    if (!undoPending_ || juce::Time::getMillisecondCounter() - lastChangeMs_ < kGestureGapMs) {
+        return;
+    }
+    undoPending_ = false;
+    settledState_ = owner_.stateXml();
+}
+
+void PluginEditor::applyUndoSnapshot(const juce::XmlElement& xml) {
+    // o binario e a regiao viajam no retrato. quando sao os mesmos, repor so' os
+    // parametros chega e nao toca no disco; quando mudaram, tem de se recarregar
+    // pela mesma via do arrasto.
+    const auto& range = owner_.byteRange();
+    const bool sameMaterial = xml.getStringAttribute("sourcePath") == owner_.sourcePath()
+                              && xml.getStringAttribute("byteStart")
+                                     == juce::String(range.start)
+                              && xml.getStringAttribute("byteEnd") == juce::String(range.end);
+
+    restoringUndo_ = true;
+    if (sameMaterial) {
+        owner_.parameters().replaceState(juce::ValueTree::fromXml(xml));
+    } else {
+        static_cast<void>(owner_.loadStateXml(xml));
+    }
+    restoringUndo_ = false;
+}
+
+void PluginEditor::undoLast() {
+    if (undo_.empty()) {
+        return;
+    }
+
+    auto step = std::move(undo_.back());
+    undo_.pop_back();
+    if (step == nullptr) {
+        return;
+    }
+
+    applyUndoSnapshot(*step);
+
+    // o passo que acabou de ser reposto passa a ser o "antes" do proximo gesto;
+    // sem isto, o Ctrl+Z seguinte guardava outra vez o estado ja' desfeito e a
+    // pilha andava para tras so' uma vez.
+    settledState_ = std::move(step);
+    undoPending_ = false;
+    refresh();
 }
 
 void PluginEditor::loadPresetFromFile() {
@@ -393,8 +493,7 @@ void PluginEditor::makePlainLabel(juce::Label& label,
 }
 
 void PluginEditor::buildHeader() {
-    for (auto* component : {static_cast<juce::Component*>(&title_),
-                            static_cast<juce::Component*>(&loadButton_),
+    for (auto* component : {static_cast<juce::Component*>(&loadButton_),
                             static_cast<juce::Component*>(&fileName_),
                             static_cast<juce::Component*>(&formatTag_),
                             static_cast<juce::Component*>(&fileSize_),
@@ -754,12 +853,42 @@ void PluginEditor::buildKeyboard() {
 
 void PluginEditor::handleNoteOn(juce::MidiKeyboardState*, int, int midiNoteNumber,
                                 float velocity) {
+    // a nota veio do MIDI do host espelhada para o teclado: o motor ja' a recebeu
+    // pelo MidiBuffer, e empurra-la outra vez disparava-a duas vezes.
+    if (mirroringNotes_) {
+        return;
+    }
     owner_.pushKeyboardNote(midiNoteNumber, velocity, true);
 }
 
 void PluginEditor::handleNoteOff(juce::MidiKeyboardState*, int, int midiNoteNumber,
                                  float velocity) {
+    if (mirroringNotes_) {
+        return;
+    }
     owner_.pushKeyboardNote(midiNoteNumber, velocity, false);
+}
+
+void PluginEditor::mirrorIncomingNotes() {
+    const auto pressed = owner_.pressedNotes();
+    if (pressed.low == mirroredLow_ && pressed.high == mirroredHigh_) {
+        return;
+    }
+    mirroredLow_ = pressed.low;
+    mirroredHigh_ = pressed.high;
+
+    mirroringNotes_ = true;
+    for (int note = 0; note < 128; ++note) {
+        const auto bits = note < 64 ? pressed.low : pressed.high;
+        const bool down = ((bits >> (note % 64)) & std::uint64_t {1}) != 0;
+        const bool shown = keyboardState_.isNoteOn(1, note);
+        if (down && !shown) {
+            keyboardState_.noteOn(1, note, 0.9f);
+        } else if (!down && shown) {
+            keyboardState_.noteOff(1, note, 0.0f);
+        }
+    }
+    mirroringNotes_ = false;
 }
 
 void PluginEditor::paint(juce::Graphics& g) {
@@ -856,17 +985,8 @@ void PluginEditor::paint(juce::Graphics& g) {
                              bay.getRight());
     }
 
-    // separadores do header. a chapa e' uma so', mas os grupos leem-se.
-    const auto separator = [&g](int x) {
-        g.setColour(palette::alpha(palette::faceplateDark, 0.50f));
-        g.drawVerticalLine(x, 16.0f, static_cast<float>(kHeaderHeight) - 16.0f);
-    };
-    if (!title_.getBounds().isEmpty()) {
-        separator(title_.getBounds().getRight() + 12);
-    }
-    if (!presetNextButton_.getBounds().isEmpty()) {
-        separator(presetNextButton_.getBounds().getRight() + 12);
-    }
+    // separadores do header sairam com o titulo: o bloco do preset e da origem e'
+    // um grupo unico e centrado, e um filete no meio dele so' o partia.
 
     // parafusos nos cantos da janela.
     const auto w = static_cast<float>(getWidth());
@@ -900,29 +1020,42 @@ void PluginEditor::resized() {
     auto area = getLocalBounds();
 
     // -- header: marca, preset, origem --
-    auto header = area.removeFromTop(kHeaderHeight).reduced(kBodyMargin + 2, 0);
-    int x = header.getX();
+    auto header = area.removeFromTop(kHeaderHeight);
 
-    title_.setBounds(x, header.getY() + 14, 182, 36);
-    x += 182 + 16;
+    // -- header: preset e origem num bloco unico, centrado --
+    // a marca nao vive aqui: quem diz o nome e' a barra da janela (standalone) e
+    // um titulo repetido a' esquerda era o que empurrava este bloco para o canto,
+    // deixando um vazio grande a' direita.
+    {
+        constexpr int kArrow {22};
+        constexpr int kName {172};
+        constexpr int kLoad {30};
+        constexpr int kFile {250};
+        constexpr int kFormat {76};
+        constexpr int kSize {62};
+        constexpr int kPresetToFile {22};
 
-    presetPrevButton_.setBounds(x, header.getY() + 19, 22, 26);
-    x += 22 + 3;
-    presetNameButton_.setBounds(x, header.getY() + 17, 160, 30);
-    x += 160 + 3;
-    presetNextButton_.setBounds(x, header.getY() + 19, 22, 26);
-    x += 22 + 18;
+        const int presetWidth = kArrow + 3 + kName + 3 + kArrow;
+        const int fileWidth = kLoad + 8 + kFile + 8 + kFormat + 6 + kSize;
+        int x = header.getX() + (header.getWidth() - (presetWidth + kPresetToFile + fileWidth)) / 2;
 
-    loadButton_.setBounds(x, header.getY() + 19, 30, 26);
-    const int nameX = x + 30 + 8;
+        presetPrevButton_.setBounds(x, header.getY() + 19, kArrow, 26);
+        x += kArrow + 3;
+        presetNameButton_.setBounds(x, header.getY() + 17, kName, 30);
+        x += kName + 3;
+        presetNextButton_.setBounds(x, header.getY() + 19, kArrow, 26);
+        x += kArrow + kPresetToFile;
 
-    int stripEdge = header.getRight();
-    fileSize_.setBounds(stripEdge - 62, header.getY() + 19, 62, 26);
-    stripEdge -= 62 + 6;
-    formatTag_.setBounds(stripEdge - 76, header.getY() + 19, 76, 26);
-    stripEdge -= 76 + 8;
-    fileName_.setBounds(nameX, header.getY() + 16,
-                        juce::jmax(90, stripEdge - nameX), 32);
+        loadButton_.setBounds(x, header.getY() + 19, kLoad, 26);
+        x += kLoad + 8;
+        // a largura do nome e' fixa: com um ficheiro carregado ou sem ele, o bloco
+        // fica no mesmo sitio. a linha nao salta a' passagem de cada ingest.
+        fileName_.setBounds(x, header.getY() + 16, kFile, 32);
+        x += kFile + 8;
+        formatTag_.setBounds(x, header.getY() + 19, kFormat, 26);
+        x += kFormat + 6;
+        fileSize_.setBounds(x, header.getY() + 19, kSize, 26);
+    }
 
     // -- corpo --
     auto body = area.reduced(kBodyMargin, kBodyTopGap);
@@ -998,13 +1131,18 @@ void PluginEditor::resized() {
     // desce sobre o painel e a activa funde-se com ele.
     moduleRowBounds_ = body.removeFromTop(kTabHeight);
     {
-        int tx = moduleRowBounds_.getX() + 2;
-        for (auto* button : {&moduleGrainButton_, &moduleEnvelopeButton_,
-                             &moduleFilterButton_, &moduleModButton_,
-                             &moduleCloudButton_, &moduleKeysButton_}) {
-            button->setBounds(tx, moduleRowBounds_.getY(), kFolderTabWidth,
-                              kTabHeight + kFolderTabTail);
-            tx += kFolderTabWidth + kTabGap;
+        // seis teclas rectangulares a dividir a largura toda: icone e nome, como
+        // as teclas da rail. a largura vem da fila, nao de um numero fixo, para a
+        // navegacao ocupar a chapa em vez de deixar um vazio a' direita.
+        juce::Button* tabs[] = {&moduleGrainButton_, &moduleEnvelopeButton_,
+                                &moduleFilterButton_, &moduleModButton_,
+                                &moduleCloudButton_, &moduleKeysButton_};
+        constexpr int kCount {6};
+        const int width = (moduleRowBounds_.getWidth() - kTabGap * (kCount - 1)) / kCount;
+        int tx = moduleRowBounds_.getX();
+        for (auto* button : tabs) {
+            button->setBounds(tx, moduleRowBounds_.getY(), width, kTabHeight + kFolderTabTail);
+            tx += width + kTabGap;
         }
     }
 
@@ -1046,7 +1184,51 @@ void PluginEditor::resized() {
         knobs_[i]->setVisible(inModule || i == masterKnobIndex_);
     }
 
-    if (count > 0) {
+    // ENV e FILTER trazem o visualizador: o grafico fica com a esquerda e os
+    // knobs recuam para a direita, menores. e' a hierarquia que o Ableton usa no
+    // dispositivo -- a forma primeiro, os numeros ao lado.
+    envelopeView_.setVisible(activeModule_ == ParamModule::envelope);
+    filterView_.setVisible(activeModule_ == ParamModule::filter);
+
+    const bool hasVisual = envelopeView_.isVisible() || filterView_.isVisible();
+
+    if (count > 0 && hasVisual) {
+        auto knobArea = parameterPanelBounds_.reduced(10, 6);
+
+        // o grafico leva 42 % da largura, entre 300 e 460 px: abaixo de 300 a
+        // curva do filtro perde a leitura das decadas, acima de 460 nao sobra
+        // celula de knob que caiba o nome.
+        const int graphWidth =
+            juce::jlimit(300, 460, static_cast<int>(knobArea.getWidth() * 0.42f));
+        const auto graph = knobArea.removeFromLeft(graphWidth);
+        knobArea.removeFromLeft(12);
+
+        if (activeModule_ == ParamModule::envelope) {
+            envelopeView_.setBounds(graph);
+        } else {
+            filterView_.setBounds(graph);
+        }
+
+        // FILTER tem dez knobs: duas filas de cinco, para o nome de cada um caber
+        // com a curva a' vista.
+        const int rows = activeModule_ == ParamModule::filter ? 2 : 1;
+        const int perRow = juce::jmax(1, static_cast<int>(count) / rows);
+        const int rowHeight = knobArea.getHeight() / rows;
+        const int cellWidth = knobArea.getWidth() / perRow;
+
+        for (int row = 0; row < rows; ++row) {
+            for (int k = 0; k < perRow; ++k) {
+                const auto index = first + static_cast<std::size_t>(row * perRow + k);
+                if (index >= first + count) {
+                    break;
+                }
+                knobs_[index]->setBounds(
+                    juce::Rectangle<int> {knobArea.getX() + k * cellWidth,
+                                          knobArea.getY() + row * rowHeight, cellWidth, rowHeight}
+                        .reduced(2, 0));
+            }
+        }
+    } else if (count > 0) {
         const auto knobArea = parameterPanelBounds_.reduced(10, 6);
         const int cellWidth = juce::jmin(
             kMaxCellWidth, knobArea.getWidth() / static_cast<int>(count));
@@ -1096,7 +1278,19 @@ void PluginEditor::timerCallback() {
 
     grid_.tickAnimation(delta);
     refresh();
+    mirrorIncomingNotes();
+
+    // retrato que ficou pendente de uma mudanca vinda da thread de audio: sai
+    // agora, antes do settle, para o "antes" guardado ser o estado certo.
+    if (undoFromAudio_.exchange(false, std::memory_order_relaxed)) {
+        pushUndoSnapshot();
+    }
+    settleUndo();
     meter_.tick(delta);
+}
+
+void PluginEditor::focusPlayKeyboard() {
+    keyboard_.grabKeyboardFocus();
 }
 
 bool PluginEditor::keyPressed(const juce::KeyPress& key) {
@@ -1104,6 +1298,13 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
     // display), a tecla de nota ainda tem de soar: o teclado virtual le o mapa
     // A W S E D F T G Y H U J K e nao depende do foco para isso.
     if (!keyboard_.hasKeyboardFocus(true) && keyboard_.keyPressed(key)) {
+        return true;
+    }
+
+    // desfazer. vem depois das notas e antes de tudo o resto: Ctrl+Z nao e' nota
+    // e nao pode cair no mapa do teclado.
+    if (key.getKeyCode() == 'Z' && key.getModifiers().isCommandDown()) {
+        undoLast();
         return true;
     }
 
@@ -1347,8 +1548,8 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     const auto rateText =
         juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
         + " kHz";
-    if (title_.getTooltip() != rateText) {
-        title_.setTooltip(rateText);
+    if (status_.getTooltip() != rateText) {
+        status_.setTooltip(rateText);
     }
 
     updateFooterVisibility();
@@ -1358,6 +1559,19 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices> grains {};
     const auto grainCount = owner_.grainTelemetry().read(grains);
     grid_.setGrains(grains, grainCount);
+
+    // os visualizadores de ENV e FILTER mostram o que o audio esta' a fazer: o
+    // nivel e a fase do envelope, e o corte ja' modulado por keytrack, envelope e
+    // lfo. so' se alimenta o que esta' a' vista.
+    if (envelopeView_.isVisible()) {
+        envelopeView_.setLive(telemetry.envelopeLevel.load(std::memory_order_relaxed),
+                              telemetry.envelopeStage.load(std::memory_order_relaxed),
+                              telemetry.envelopePhase.load(std::memory_order_relaxed));
+    }
+    if (filterView_.isVisible()) {
+        filterView_.setLive(telemetry.cutoff1Hz.load(std::memory_order_relaxed),
+                            telemetry.cutoff2Hz.load(std::memory_order_relaxed));
+    }
 }
 
 float PluginEditor::readPosition() const {
@@ -1398,6 +1612,7 @@ void PluginEditor::moveRegionTo(std::uint64_t address) {
     // janela. O Processor valida e recorta o fim se preciso.
     const auto range = owner_.byteRange();
     const auto length = juce::jmax<std::uint64_t>(range.length(), 64);
+    pushUndoSnapshot();
     static_cast<void>(owner_.setByteRange(address, address + length));
 }
 
@@ -1411,6 +1626,7 @@ void PluginEditor::chooseFile() {
             | juce::FileBrowserComponent::canSelectFiles,
         [this](const juce::FileChooser& finished) {
             if (finished.getResults().size() > 0) {
+                pushUndoSnapshot();
                 owner_.ingest(finished.getResults().getReference(0).getFullPathName());
                 refresh();
             }

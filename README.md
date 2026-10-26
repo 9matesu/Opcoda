@@ -43,6 +43,9 @@ matriz de modulação.
   matriz de modulação.
 - Interface fixa de 1180×760, com o display como elemento dominante, o
   transporte no pé do display, medidor stereo de saída e *HOLD*.
+- Visualizadores de envelope e de resposta dos filtros no painel dos módulos
+  `ENV` e `FILTER`, com pegas que escrevem os mesmos parâmetros dos knobs.
+- Desfazer por `Ctrl+Z` no Standalone, um passo por gesto.
 - Núcleo C++20 sem dependência de JUCE, testado com AddressSanitizer.
 
 <!-- ambiente de build -->
@@ -106,6 +109,11 @@ O Ableton Live ignora o caminho VST3 por usuário.
 Se o arquivo for recusado, a interface mostra o código do erro e mantém o
 material anterior tocando.
 
+No *standalone*, a placa escolhe-se em `SETTINGS`, na barra da janela: duas
+páginas (`AUDIO` e `MIDI`), aplicadas ao escolher, sem botão de confirmar. O
+instrumento continua a tocar por baixo do painel, e as teclas de nota ainda
+chegam ao teclado virtual — dá para segurar uma nota e trocar de placa a ouvir.
+
 <!-- knobs da tela -->
 
 ## Controles
@@ -130,8 +138,22 @@ A referência completa dos 41 parâmetros está em `docs/PARAMETERS.md`.
 
 Atalhos: `1` a `4` alternam as vistas (onda, hex, entropia, matriz);
 `Espaço` liga o transporte; `L` abre um arquivo; `K` leva o foco ao teclado; `A`
-alinha a região à seção PE mais próxima. O clique num controle não tira o foco
-do teclado: tocar notas continua a funcionar em qualquer vista.
+alinha a região à seção PE mais próxima; `Ctrl+Z` desfaz o último gesto de
+parâmetro (no Standalone; no *host*, o desfazer é o do *host*). O clique num
+controle não tira o foco do teclado: tocar notas continua a funcionar em qualquer
+vista, e o MIDI que chega do *host* acende as teclas do teclado virtual.
+
+As abas `GRAIN`, `ENV`, `FILTER`, `MOD`, `CLOUD` e `KEYS` mostram ícone e nome. Em
+`ENV` e `FILTER`, o painel abre com o desenho do que se ouve — a forma do ADSR
+com o ponto vivo do envelope, e a resposta dos dois biquads com o corte já
+modulado — e os knobs ficam à direita, menores. As pegas do desenho mudam os
+mesmos parâmetros: no envelope, os cantos dão ataque, decay/sustain e release, e
+as pegas de meio de segmento dobram as curvas; no filtro, cada pega dá corte (na
+horizontal) e Q (na vertical).
+
+| `ENV`: ADSR desenhado, com o ponto vivo | `FILTER`: resposta dos dois biquads |
+| --- | --- |
+| ![Envelope com o ponto vivo no patamar do sustain](docs/assets/screenshots/opcoda-env.png) | ![Resposta dos filtros com as pegas de corte e Q](docs/assets/screenshots/opcoda-filter.png) |
 
 <!-- fluxo de audio -->
 
@@ -183,7 +205,10 @@ também guarda o material, a região e a matriz de modulação.
 ## Estado do projeto
 
 Implementado e testado: parser PE, motor granular, filtros, LFO, envelope,
-matriz, presets, transporte, teclado e as três vistas.
+matriz, presets, transporte, teclado e as quatro vistas. Os visualizadores de
+envelope e de filtro, o desfazer e o espelho do MIDI no teclado foram verificados
+por build e captura de ecrã; os testes `Ui.*` da F023 continuam não
+implementados.
 
 Pendente ou não verificado:
 

@@ -43,6 +43,12 @@ Gerado a partir de `assets/inventory.csv`. Contagens a partir do commit
 | `src/opcoda_plugin/source/factory_presets.h` | cpp | config | nao | seis presets de fabrica |
 | `src/opcoda_plugin/source/fonts.h` | cpp | config | nao | fontes embebidas |
 | `src/opcoda_plugin/source/palette.h` | cpp | config | nao | paleta |
+| `src/opcoda_plugin/source/envelope_view.cpp` | cpp | logica | nao | ADSR desenhado, com pegas que escrevem os parametros |
+| `src/opcoda_plugin/source/filter_view.cpp` | cpp | logica | nao | resposta dos dois biquads, com pegas de corte e Q |
+| `src/opcoda_plugin/source/module_folder_tab.h` | cpp | logica | nao | aba retangular com glifo e nome |
+| `src/opcoda_plugin/source/standalone/standalone_app.cpp` | cpp | entrada | sim | arranque do standalone |
+| `src/opcoda_plugin/source/standalone/standalone_window.cpp` | cpp | entrada | sim | janela propria, barra e corpo |
+| `src/opcoda_plugin/source/standalone/settings_screen.cpp` | cpp | logica | nao | ecra de audio e MIDI, sobre veu |
 | `tools/build.ps1` | powershell | config | sim | unico ponto de entrada do build |
 | `tools/build-atlas.ps1` | powershell | config | sim | pipeline do atlas |
 | `tools/render-mermaid.ps1` | powershell | config | sim | render SVG e PNG dos diagramas |

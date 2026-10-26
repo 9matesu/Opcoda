@@ -26,6 +26,42 @@ namespace opcoda {
 //
 // os knobs sao juce::Slider de verdade: e' o que da foco por teclado, setas e
 // AccessibilityHandler (docs/10-acessibilidade-w3c.md).
+// Tecla da barra da janela do standalone. O V4 desenha estes botoes com as cores
+// do sistema (vermelho, amarelo, verde) sobre uma barra opaca; aqui o cromo e' da
+// chapa: fundo transparente, glifo de traco 1,4 px, hover em banho. o fechar fica
+// ferrugem no hover, porque e' a unica tecla que faz desaparecer o instrumento.
+class OpcodaWindowButton final : public juce::Button {
+public:
+    explicit OpcodaWindowButton(int type)
+        : juce::Button(type == juce::DocumentWindow::closeButton ? "close" : "minimise"),
+          type_(type) {}
+
+    void paintButton(juce::Graphics& g, bool over, bool down) override {
+        const auto bounds = getLocalBounds().toFloat();
+        const auto close = type_ == juce::DocumentWindow::closeButton;
+
+        if (over || down) {
+            g.setColour(close ? palette::alpha(palette::error, down ? 0.92f : 0.70f)
+                              : palette::alpha(palette::ivory, down ? 0.16f : 0.09f));
+            g.fillRoundedRectangle(bounds.reduced(3.0f, 4.0f), 3.0f);
+        }
+
+        g.setColour(close && (over || down) ? palette::charcoalDeep
+                                            : palette::alpha(palette::ivory, 0.62f));
+        const auto c = bounds.getCentre();
+        constexpr float arm {4.5f};
+        if (close) {
+            g.drawLine(c.x - arm, c.y - arm, c.x + arm, c.y + arm, 1.4f);
+            g.drawLine(c.x + arm, c.y - arm, c.x - arm, c.y + arm, 1.4f);
+        } else {
+            g.drawLine(c.x - arm, c.y, c.x + arm, c.y, 1.4f);
+        }
+    }
+
+private:
+    int type_;
+};
+
 class OpcodaLookAndFeel : public juce::LookAndFeel_V4 {
 public:
     OpcodaLookAndFeel() {
@@ -41,6 +77,23 @@ public:
         setColour(juce::TextButton::buttonOnColourId, palette::accent);
         setColour(juce::TextButton::textColourOffId, palette::textOnDark);
         setColour(juce::TextButton::textColourOnId, palette::charcoalDeep);
+
+        // menus e avisos: o JUCE trazia aqui o azul do sistema. o standalone so'
+        // mostra menus de escolha e a caixa de aviso; ambos passam a ser carvao.
+        setColour(juce::PopupMenu::backgroundColourId, palette::charcoalDeep);
+        setColour(juce::PopupMenu::textColourId, palette::textOnDark);
+        setColour(juce::PopupMenu::headerTextColourId, palette::textOnDarkSub);
+        setColour(juce::PopupMenu::highlightedBackgroundColourId,
+                  palette::alpha(palette::ivory, 0.09f));
+        setColour(juce::PopupMenu::highlightedTextColourId, palette::ivory);
+
+        setColour(juce::AlertWindow::backgroundColourId, palette::charcoal);
+        setColour(juce::AlertWindow::textColourId, palette::textOnDark);
+        setColour(juce::AlertWindow::outlineColourId, palette::knobEdge);
+
+        setColour(juce::TooltipWindow::backgroundColourId, palette::charcoalDeep);
+        setColour(juce::TooltipWindow::textColourId, palette::textOnDark);
+        setColour(juce::TooltipWindow::outlineColourId, palette::alpha(palette::ivory, 0.14f));
     }
 
     // knob de equipamento: corpo escuro, aro de marcas, arco de valor e ponteiro.
@@ -135,19 +188,52 @@ public:
         const auto isIcon = look == "icon";
         const auto isRail = look == "rail";
         const auto isBar = look == "bar";
+        const auto isRow = look == "row";
         const auto isTransport = button.getProperties()["uiIcon"].toString() == "transport";
         const auto on = button.getToggleState();
 
-        if (isBar) {
+        if (isRow) {
+            // linha de lista (entradas MIDI no ecra de configuracao): sem moldura.
+            // o estado vive num quadrado a' esquerda e o hover e' um banho de
+            // carvao a 7%, para a lista nao competir com os knobs do painel.
+            if (highlighted && !down) {
+                g.setColour(palette::alpha(palette::charcoalDeep, 0.07f));
+                g.fillRoundedRectangle(bounds, 2.0f);
+            }
+            const auto box = juce::Rectangle<float> {bounds.getX() + 2.0f,
+                                                    bounds.getCentreY() - 5.5f, 11.0f, 11.0f};
+            if (on) {
+                g.setColour(palette::accent);
+                g.fillRoundedRectangle(box, 1.5f);
+            }
+            g.setColour(on ? palette::alpha(palette::charcoalDeep, 0.85f)
+                           : palette::alpha(palette::charcoal, 0.45f));
+            g.drawRoundedRectangle(box, 1.5f, 1.2f);
+            if (on) {
+                // visto a carvao dentro do quadrado laranja: a cor sozinha nao
+                // diz "ligado" a quem nao distingue laranja de creme.
+                juce::Path tick;
+                tick.startNewSubPath(box.getX() + 2.6f, box.getCentreY());
+                tick.lineTo(box.getX() + 4.6f, box.getBottom() - 3.2f);
+                tick.lineTo(box.getRight() - 2.3f, box.getY() + 3.4f);
+                g.setColour(palette::charcoalDeep);
+                g.strokePath(tick, juce::PathStrokeType {1.7f, juce::PathStrokeType::curved,
+                                                         juce::PathStrokeType::rounded});
+            }
+        } else if (isBar) {
             // tecla larga: retangulo de chapa com icone e nome. e' a lingua das
             // vistas e do transporte, onde o glifo sozinho nao chegava para dizer
             // o que a tecla faz.
-            auto fill = on ? palette::alpha(palette::accent, 0.18f)
-                           : palette::alpha(palette::charcoal, 0.45f);
+            //
+            // **fundo opaco.** era um banho a 45 % e a chapa de baixo aparecia
+            // por tras: sobre a barra da janela o texto ficava com duas sombras.
+            // a mistura passa a ser feita na cor, nao na transparencia.
+            auto fill = on ? palette::charcoal.interpolatedWith(palette::accent, 0.30f)
+                           : palette::charcoal;
             if (down) {
                 fill = palette::charcoalDeep;
             } else if (highlighted && !on) {
-                fill = palette::alpha(palette::ivory, 0.09f);
+                fill = palette::charcoal.interpolatedWith(palette::ivory, 0.10f);
             }
             g.setColour(fill);
             g.fillRoundedRectangle(bounds, 2.5f);
@@ -236,6 +322,9 @@ public:
         juce::Colour ink = palette::textOnDark;
         if (!button.isEnabled()) {
             ink = palette::textMuted;
+        } else if (look == "row") {
+            // lista sobre creme: as duas posicoes tem de ler no mesmo fundo.
+            ink = on ? palette::textDark : palette::textSub;
         } else if (look == "tab" || look == "icon" || look == "rail") {
             ink = on ? palette::ivory : (look == "rail" ? palette::textOnDarkSub
                                                         : palette::textSub);
@@ -243,6 +332,19 @@ public:
             ink = on ? palette::ivory : palette::textOnDarkSub;
         } else if (kind == "transport" && on) {
             ink = palette::charcoalDeep;
+        }
+
+        if (look == "row") {
+            // nome a' esquerda depois do quadrado de estado, com o mesmo recuo
+            // em todas as linhas da lista.
+            g.setFont(fonts().sans(11.0f, on));
+            g.setColour(ink);
+            g.drawText(button.getButtonText(), bounds.withTrimmedLeft(20.0f).reduced(2.0f, 0.0f),
+                       juce::Justification::centredLeft, true);
+            if (button.hasKeyboardFocus(true)) {
+                drawFocusRing(g, bounds.reduced(1.0f));
+            }
+            return;
         }
 
         if (look == "bar") {
@@ -270,6 +372,134 @@ public:
         g.setFont(fonts().sans(look == "icon" ? 9.5f : 10.5f, on || look.isEmpty()));
         g.setColour(ink);
         g.drawText(button.getButtonText(), bounds, juce::Justification::centred, false);
+    }
+
+    // -- cromo da janela do standalone --
+    // a barra nao e' do JUCE: grafite um tom abaixo do chassis, a marca a'
+    // esquerda e duas teclas de janela sem o fundo cinzento do V4.
+    //
+    // **a assinatura mudou de sitio.** o nome estava no header do editor, na
+    // mesma fila do preset e do ficheiro, e empurrava esse bloco para o canto.
+    // aqui a barra diz o nome com a fonte do titulo, e o editor fica so' com o
+    // que e' operavel.
+    void drawDocumentWindowTitleBar(juce::DocumentWindow&, juce::Graphics& g, int w, int h,
+                                    int, int, const juce::Image*, bool) override {
+        g.fillAll(palette::chassisDark);
+        g.setColour(palette::alpha(palette::ivory, 0.08f));
+        g.drawHorizontalLine(h - 1, 0.0f, static_cast<float>(w));
+
+        constexpr float kSide {22.0f};
+        const auto mark = juce::Rectangle<float> {12.0f,
+                                                  (static_cast<float>(h) - kSide) * 0.5f,
+                                                  kSide, kSide};
+        paintMark(g, mark);
+
+        g.setColour(palette::textOnDark);
+        g.setFont(fonts().sans(17.0f, true));
+        g.drawText("Opcoda",
+                   juce::Rectangle<int> {juce::roundToInt(mark.getRight()) + 9, 0, 170, h},
+                   juce::Justification::centredLeft, false);
+    }
+
+    juce::Button* createDocumentWindowButton(int buttonType) override {
+        return new OpcodaWindowButton(buttonType);
+    }
+
+    void positionDocumentWindowButtons(juce::DocumentWindow&, int titleBarX, int titleBarY,
+                                       int titleBarW, int titleBarH, juce::Button* minimiseButton,
+                                       juce::Button* maximiseButton, juce::Button* closeButton,
+                                       bool positionTitleBarButtonsOnLeft) override {
+        // empilhadas a' direita, 34 px cada e 3 px de folga ao canto (as teclas
+        // da interface medem o mesmo). o lado esquerdo existe para nao deixar a
+        // assinatura da funcao a mentir.
+        constexpr int kButton {34};
+        constexpr int kPad {4};
+        auto x = positionTitleBarButtonsOnLeft ? titleBarX + kPad
+                                               : titleBarX + titleBarW - kButton - kPad;
+
+        const auto place = [&](juce::Button* b) {
+            if (b == nullptr) {
+                return;
+            }
+            b->setBounds(x, titleBarY + 3, kButton, titleBarH - 6);
+            x += positionTitleBarButtonsOnLeft ? kButton : -kButton;
+        };
+
+        if (positionTitleBarButtonsOnLeft) {
+            place(closeButton);
+            place(minimiseButton);
+            place(maximiseButton);
+        } else {
+            place(closeButton);
+            place(maximiseButton);
+            place(minimiseButton);
+        }
+    }
+
+    // -- menus: a ultima superficie que ainda vinha do sistema --
+    // o menu de escolha do WINDOW e a lista de dispositivos passam por aqui. e'
+    // carvao de cima a baixo, com o visto em laranja em vez do risco do V4.
+    juce::Font getPopupMenuFont() override {
+        return fonts().sans(11.5f);
+    }
+
+    void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override {
+        g.fillAll(palette::charcoalDeep);
+        g.setColour(palette::alpha(palette::ivory, 0.14f));
+        g.drawRect(0, 0, width, height, 1);
+    }
+
+    void drawPopupMenuItem(juce::Graphics& g, const juce::Rectangle<int>& area, bool isSeparator,
+                           bool isActive, bool isHighlighted, bool isTicked, bool hasSubMenu,
+                           const juce::String& text, const juce::String& shortcutKeyText,
+                           const juce::Drawable*, const juce::Colour* textColour) override {
+        if (isSeparator) {
+            g.setColour(palette::alpha(palette::ivory, 0.10f));
+            g.fillRect(area.withSizeKeepingCentre(area.getWidth() - 12, 1));
+            return;
+        }
+
+        if (isHighlighted) {
+            g.setColour(palette::alpha(palette::ivory, 0.09f));
+            g.fillRoundedRectangle(area.reduced(3, 1).toFloat(), 2.0f);
+        }
+
+        if (isTicked) {
+            // quadrado laranja, a mesma marca das listas de dispositivos.
+            g.setColour(palette::accent);
+            g.fillRoundedRectangle(juce::Rectangle<float> {static_cast<float>(area.getX() + 7),
+                                                          static_cast<float>(area.getCentreY()) -
+                                                              2.5f,
+                                                          5.0f, 5.0f},
+                                   1.0f);
+        }
+
+        auto ink = isActive ? (isHighlighted ? palette::ivory : palette::textOnDark)
+                            : palette::textMuted;
+        if (textColour != nullptr) {
+            ink = *textColour;
+        }
+
+        g.setColour(ink);
+        g.setFont(fonts().sans(11.5f, isTicked));
+        g.drawText(text, area.withTrimmedLeft(20).withTrimmedRight(hasSubMenu ? 18 : 8),
+                   juce::Justification::centredLeft, true);
+
+        if (hasSubMenu) {
+            const auto x = static_cast<float>(area.getRight() - 12);
+            const auto y = static_cast<float>(area.getCentreY());
+            juce::Path chevron;
+            chevron.addTriangle(x - 2.0f, y - 3.5f, x + 2.0f, y, x - 2.0f, y + 3.5f);
+            g.setColour(ink);
+            g.fillPath(chevron);
+        }
+
+        if (shortcutKeyText.isNotEmpty()) {
+            g.setFont(fonts().sans(9.5f));
+            g.setColour(palette::textOnDarkSub);
+            g.drawText(shortcutKeyText, area.withTrimmedRight(10),
+                       juce::Justification::centredRight, true);
+        }
     }
 
 private:
@@ -347,6 +577,21 @@ private:
     }
 
 public:
+    // a marca: a caixa laranja com as duas letras da casa, na fonte do nome.
+    //
+    // **o icone e' o texto.** tres graos num quadrado de 16 px nao se leem como
+    // nada; "Op" le-se, e' a mesma fonte do titulo e aguenta o tamanho do icone
+    // da barra de tarefas sem virar borrao. o tamanho da letra vem da caixa, para
+    // a mesma funcao servir a barra (22 px), o ecra de ajustes (16) e o icone da
+    // janela (256).
+    static void paintMark(juce::Graphics& g, juce::Rectangle<float> box) {
+        g.setColour(palette::accent);
+        g.fillRoundedRectangle(box, box.getWidth() * 0.17f);
+        g.setColour(palette::chassisDark);
+        g.setFont(fonts().sans(box.getHeight() * 0.56f, true));
+        g.drawText("Op", box, juce::Justification::centred, false);
+    }
+
     // devolve true quando desenhou um glifo. o texto so' fica para as teclas que
     // nao tem icone. publico porque as abas de pasta desenham o proprio glifo.
     static bool paintGlyph(juce::Graphics& g,
@@ -519,6 +764,35 @@ public:
             g.drawEllipse(rightX - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
             g.drawLine(leftX + r, y1, rightX - r, c.y, 1.3f);
             g.drawLine(leftX + r, y2, rightX - r, c.y, 1.3f);
+            return true;
+        }
+
+        if (kind == "close") {
+            // cruz de 9 px, o mesmo traco das teclas da barra da janela.
+            const auto arm = side * 0.16f;
+            g.setColour(ink);
+            g.drawLine(c.x - arm, c.y - arm, c.x + arm, c.y + arm, 1.5f);
+            g.drawLine(c.x + arm, c.y - arm, c.x - arm, c.y + arm, 1.5f);
+            return true;
+        }
+
+        if (kind == "settings") {
+            // tres cursos com o puxador em posicoes diferentes: a leitura de
+            // "ajustes" num aparelho, sem engrenagem. o espaco entre os cursos e'
+            // um terco do lado: a versao anterior encostava-os e a 14 px os tres
+            // puxadores fundiam-se num borrao.
+            const auto w = side * 0.40f;
+            const auto gap = side * 0.32f;
+            const float handles[] {-0.5f, 0.15f, -0.3f};
+            for (int i = 0; i < 3; ++i) {
+                const auto y = c.y + (static_cast<float>(i) - 1.0f) * gap;
+                g.setColour(palette::alpha(ink, 0.80f));
+                g.drawLine(c.x - w, y, c.x + w, y, 1.1f);
+                g.setColour(ink);
+                g.fillRoundedRectangle(juce::Rectangle<float> {c.x + handles[i] * w - 1.3f,
+                                                               y - 1.6f, 2.6f, 3.2f},
+                                       0.8f);
+            }
             return true;
         }
 
