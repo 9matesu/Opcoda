@@ -42,7 +42,8 @@ add_executable(opcoda_tests
     cloud_test.cpp
     factory_presets_test.cpp
     grain_trail_test.cpp
-    pe_mutation_test.cpp)
+    pe_mutation_test.cpp
+    opt_test.cpp)
 
 target_link_libraries(opcoda_tests PRIVATE opcoda_core GTest::gtest_main)
 add_test(NAME opcoda_tests COMMAND opcoda_tests)

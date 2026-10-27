@@ -25,6 +25,14 @@ add_library(opcoda_core STATIC
     src/opcoda_core/pe/byte_to_position.cpp
     src/opcoda_core/pe/column_reduction.cpp
     src/opcoda_core/entropy/shannon_entropy.cpp
+    # otimizacao: PCV sobre blocos (spec 025)
+    src/opcoda_core/opt/tsp_types.cpp
+    src/opcoda_core/opt/tsp_instance.cpp
+    src/opcoda_core/opt/tsp_tour.cpp
+    src/opcoda_core/opt/tsp_neighborhood.cpp
+    src/opcoda_core/opt/tsp_solvers.cpp
+    src/opcoda_core/opt/tsp_bruteforce.cpp
+    src/opcoda_core/opt/experiment_log.cpp
     src/opcoda_core/dsp/biquad.cpp
     src/opcoda_core/dsp/lfo.cpp
     src/opcoda_core/dsp/dc_blocker.cpp
@@ -48,6 +56,12 @@ endif()
 if(OPCODA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+
+    # executor de console para o protocolo experimental da spec 025
+    add_executable(opcoda_experiment tools/experiment_runner/main.cpp)
+    target_link_libraries(opcoda_experiment PRIVATE opcoda_core)
+    set_target_properties(opcoda_experiment PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                         "${CMAKE_BINARY_DIR}/tools")
 endif()
 
 if(OPCODA_BUILD_PLUGIN)
