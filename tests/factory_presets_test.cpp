@@ -52,11 +52,23 @@ void checkRanges(const FactoryPreset& p) {
     in(p.lfodepth, 0.0f, 1.0f, "lfodepth");
     in(p.lfotarget, 0.0f, 3.0f, "lfotarget");
     in(p.lfowave, 0.0f, 4.0f, "lfowave");
+    in(p.cloudsize, 0.0f, 1.0f, "cloudsize");
+    in(p.pitchspread, 0.0f, 24.0f, "pitchspread");
+    in(p.grainjit, 0.0f, 1.0f, "grainjit");
+    in(p.width, 0.0f, 2.0f, "width");
+    in(p.glide, 0.0f, 2.0f, "glide");
+    in(p.f1slope, 0.0f, 1.0f, "f1slope");
+    in(p.f1drive, 0.0f, 24.0f, "f1drive");
+    in(p.f1keytrack, 0.0f, 1.0f, "f1keytrack");
+    in(p.f1env, -1.0f, 1.0f, "f1env");
+    in(p.atkcurve, -1.0f, 1.0f, "atkcurve");
+    in(p.deccurve, -1.0f, 1.0f, "deccurve");
+    in(p.relcurve, -1.0f, 1.0f, "relcurve");
 }
 
 TEST(FactoryPresets, AllValuesWithinLayoutRanges) {
     const auto& presets = factoryPresets();
-    ASSERT_EQ(presets.size(), 6u);
+    ASSERT_EQ(presets.size(), 10u);
     for (const auto& preset : presets) {
         checkRanges(preset);
     }
@@ -103,6 +115,18 @@ TEST(FactoryPresets, InitIsAllDefaults) {
     EXPECT_FLOAT_EQ(init.lfodepth, 0.0f);
     EXPECT_FLOAT_EQ(init.lfotarget, 0.0f);
     EXPECT_FLOAT_EQ(init.lfowave, 0.0f);
+    EXPECT_FLOAT_EQ(init.cloudsize, 0.0f);
+    EXPECT_FLOAT_EQ(init.pitchspread, 0.0f);
+    EXPECT_FLOAT_EQ(init.grainjit, 0.0f);
+    EXPECT_FLOAT_EQ(init.width, 1.0f);
+    EXPECT_FLOAT_EQ(init.glide, 0.0f);
+    EXPECT_FLOAT_EQ(init.f1slope, 0.0f);
+    EXPECT_FLOAT_EQ(init.f1drive, 0.0f);
+    EXPECT_FLOAT_EQ(init.f1keytrack, 0.0f);
+    EXPECT_FLOAT_EQ(init.f1env, 0.0f);
+    EXPECT_FLOAT_EQ(init.atkcurve, 0.0f);
+    EXPECT_FLOAT_EQ(init.deccurve, 0.0f);
+    EXPECT_FLOAT_EQ(init.relcurve, 0.0f);
 }
 
 } // namespace

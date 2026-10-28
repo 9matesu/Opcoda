@@ -40,7 +40,7 @@ Gerado a partir de `assets/inventory.csv`. Contagens a partir do commit
 | `src/opcoda_plugin/source/led.h` | cpp | logica | nao | LED de estado |
 | `src/opcoda_plugin/source/animator.h` | cpp | logica | nao | animacao com delta medido |
 | `src/opcoda_plugin/source/display_panel.h` | cpp | logica | nao | painel do display |
-| `src/opcoda_plugin/source/factory_presets.h` | cpp | config | nao | seis presets de fabrica |
+| `src/opcoda_plugin/source/factory_presets.h` | cpp | config | nao | dez presets de fabrica |
 | `src/opcoda_plugin/source/fonts.h` | cpp | config | nao | fontes embebidas |
 | `src/opcoda_plugin/source/palette.h` | cpp | config | nao | paleta |
 | `src/opcoda_plugin/source/envelope_view.cpp` | cpp | logica | nao | ADSR desenhado, com pegas que escrevem os parametros |

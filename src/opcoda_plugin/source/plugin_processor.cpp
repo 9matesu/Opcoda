@@ -830,6 +830,23 @@ void PluginProcessor::applyFactoryPreset(int index) {
     set("lfodepth", preset.lfodepth);
     set("lfotarget", preset.lfotarget);
     set("lfowave", preset.lfowave);
+    // nuvem, largura, glide e o caracter do filtro 1. sem estes, os presets
+    // tonais que dependem do corte (Keys, Bass) abriam com o filtro aberto e a
+    // largura a 100 %, que e' o Init disfarcado.
+    set("cloudsize", preset.cloudsize);
+    set("pitchspread", preset.pitchspread);
+    set("grainjit", preset.grainjit);
+    set("width", preset.width);
+    set("glide", preset.glide);
+    set("f1slope", preset.f1slope);
+    set("f1drive", preset.f1drive);
+    set("f1keytrack", preset.f1keytrack);
+    set("f1env", preset.f1env);
+    // as tres curvas. sem elas o Pluck decai em rampa e soa a teclado, nao a
+    // corda: e' a curva negativa que faz o nivel cair depressa e arrastar a cauda.
+    set("atkcurve", preset.atkcurve);
+    set("deccurve", preset.deccurve);
+    set("relcurve", preset.relcurve);
 }
 
 // nao-const porque copyState e' nao-const no JUCE: copiar o estado mexe no undo

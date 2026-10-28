@@ -197,9 +197,11 @@ Detalhes em `docs/SOUND_ENGINE.md`.
 
 ## Presets
 
-A interface oferece seis presets de fábrica: Init, Cloud, Shimmer, Pulse, Drone
-e Grit. O menu de preset carrega e salva arquivos `.opcoda`. O estado do projeto
-também guarda o material, a região e a matriz de modulação.
+A interface oferece dez presets de fábrica: Init, Cloud, Shimmer, Pulse, Drone,
+Grit, Pad, Keys, Pluck e Bass. Os seis primeiros são texturais; os quatro últimos
+são pontos de partida tonais, com o filtro 1 a responder à nota. O menu de preset
+carrega e salva arquivos `.opcoda`. O estado do projeto também guarda o material,
+a região e a matriz de modulação.
 
 <!-- limites -->
 

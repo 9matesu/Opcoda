@@ -61,9 +61,13 @@ desliza entre notas no tempo definido. O pedal de sustain segura a nota.
 
 ## Presets
 
-O seletor no topo lista seis presets de fábrica: Init, Cloud, Shimmer, Pulse,
-Drone e Grit. As setas `<` e `>` percorrem a lista. O menu salva e carrega
-arquivos `.opcoda`. O asterisco ao lado do nome indica alteração não salva.
+O seletor no topo lista dez presets de fábrica. Os seis primeiros são
+texturais: Init, Cloud, Shimmer, Pulse, Drone e Grit. Os quatro últimos partem
+para o som convencional — Pad, Keys, Pluck e Bass — e distinguem-se sobretudo
+pela sobreposição de grãos, `DENSITY` × `SIZE`, e pelo trabalho do envelope e do
+filtro 1, que carrega o keytrack e o envelope onde o timbre precisa de nota. As
+setas `<` e `>` percorrem a lista. O menu salva e carrega arquivos `.opcoda`. O
+asterisco ao lado do nome indica alteração não salva.
 
 O estado do projeto guarda o material, a região, os parâmetros e a matriz de
 modulação.
