@@ -1,7 +1,6 @@
 #include "hex_grid.h"
 
-#include "opcoda_core/pe/byte_range.h"
-#include "opcoda_core/pe/byte_to_position.h"
+#include "opcoda_core/disasm/x86_disasm.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,10 +10,6 @@
 namespace opcoda {
 namespace {
 
-// bytes nulos com um tom a parte: mostra o preenchimento da secao sem ler as
-// duas colunas.
-constexpr std::uint8_t kZeroByte {0};
-
 juce::String toHex2(std::uint8_t byte) {
     return juce::String::formatted("%02X", static_cast<unsigned>(byte));
 }
@@ -22,6 +17,67 @@ juce::String toHex2(std::uint8_t byte) {
 // caractere visivel do byte, ou ponto -- como o Ghidra.
 char toAscii(std::uint8_t byte) {
     return (byte >= 0x20 && byte < 0x7F) ? static_cast<char>(byte) : '.';
+}
+
+// -- cores do desmontador --
+// um disassembler colore por classe de simbolo: o mnemonico diz a accao, o
+// registo diz onde, o numero diz quanto. tres tintas chegam; o resto e' pontuacao.
+
+bool isNumberToken(const juce::String& token) {
+    if (token.isEmpty()) {
+        return false;
+    }
+    if (juce::CharacterFunctions::isDigit(token[0])) {
+        return true;
+    }
+    if ((token[0] == '-' || token[0] == '+') && token.length() > 1 &&
+        juce::CharacterFunctions::isDigit(token[1])) {
+        return true;
+    }
+    return token.contains("0x");
+}
+
+bool isRegisterToken(const juce::String& token) {
+    static const juce::StringArray registers {
+        "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "rip",
+        "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "eip",
+        "ax",  "bx",  "cx",  "dx",  "si",  "di",  "bp",  "sp",  "ip",
+        "al",  "ah",  "bl",  "bh",  "cl",  "ch",  "dl",  "dh",
+        "sil", "dil", "bpl", "spl",
+        "cs",  "ds",  "es",  "fs",  "gs",  "ss",
+        "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"};
+    if (registers.contains(token)) {
+        return true;
+    }
+    if (token.startsWith("xmm") || token.startsWith("ymm") || token.startsWith("zmm")) {
+        return true;
+    }
+    // r8..r15 nas quatro larguras: r8, r8d, r8w, r8b.
+    return token.startsWithChar('r') && token.length() >= 2 && token.length() <= 4 &&
+           juce::CharacterFunctions::isDigit(token[1]);
+}
+
+bool isPunctuation(juce::juce_wchar c) {
+    static const juce::String marks {",[]+*:()"};
+    return marks.containsChar(c);
+}
+
+juce::Colour asmInkFor(const juce::String& token, bool first) {
+    if (first) {
+        // "db" e' o que o desmontador escreve quando nao reconhece o opcode:
+        // fica apagado de proposito, para nao se confundir com codigo lido.
+        return (token == "db" || token == "bad") ? palette::textMuted : palette::accentWarn;
+    }
+    if (token.length() == 1 && isPunctuation(token[0])) {
+        return palette::alpha(palette::textOnDarkSub, 0.65f);
+    }
+    if (isNumberToken(token)) {
+        return palette::okBright;
+    }
+    if (isRegisterToken(token)) {
+        return palette::textOnDark;
+    }
+    return palette::textOnDarkSub;
 }
 
 } // namespace
@@ -35,10 +91,10 @@ HexGrid::HexGrid() {
 
     setName("Grelha de bytes do binario");
     setHelpText(
-        "Cada celula e' um byte do ficheiro, com o endereco a esquerda e o "
-        "caractere a direita. Clique num byte, na coluna ASCII ou na barra de "
-        "rolagem para saltar. Com a roda do rato desloca-se o ficheiro; Shift "
-        "rola mais depressa.");
+        "Cada celula e' um byte do ficheiro, com o endereco a esquerda, o "
+        "caractere ASCII e a instrucao ASM a direita. Clique num byte, na "
+        "coluna ASCII ou na barra de rolagem para saltar. Com a roda do rato "
+        "desloca-se o ficheiro; Shift rola mais depressa.");
 }
 
 void HexGrid::setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize) {
@@ -48,6 +104,17 @@ void HexGrid::setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fi
     // ficheiro novo recomeca no inicio. o offset da viewport e' apenas nosso: sem
     // isto, o ficheiro seguinte abria a meio do anterior.
     topByte_ = 0;
+    rebuildMetrics();
+    clampViewport();
+    repaint();
+}
+
+void HexGrid::setDisassemblyEnabled(bool enabled) {
+    if (asmEnabled_ == enabled) {
+        return;
+    }
+    asmEnabled_ = enabled;
+    asmTopByte_ = 0;
     rebuildMetrics();
     clampViewport();
     repaint();
@@ -175,49 +242,59 @@ void HexGrid::rebuildMetrics() {
     }
 
     // a grelha ocupa a largura do ecra em vez de se encostar a' esquerda. o
-    // endereco leva ~19%, os bytes ~55% e o ASCII ~26%; as celulas esticam para
-    // preencher o que sobra. e' o que torna um dump de 16 bytes legivel numa
-    // janela de 1180 em vez de deixar metade do ecra vazio.
+    // endereco leva ~16%, os bytes ~40%, o ASCII ~15% e o ASM o resto; as
+    // celulas esticam para preencher o que sobra. e' o que torna um dump de 16
+    // bytes legivel numa janela de 1180 em vez de deixar metade do ecra vazio.
     const auto visibleRows = static_cast<std::uint64_t>(metrics_.rows) * kBytesPerRow;
     metrics_.showRail = fileSize_ > visibleRows;
     const auto railSpace = metrics_.showRail ? kRailWidth + kRailGap : 0.0f;
     const auto contentWidth = area.getWidth() - railSpace;
 
-    metrics_.showAscii = contentWidth >= 760.0f;
+    metrics_.showAscii = contentWidth >= 700.0f;
+    metrics_.showAsm = asmEnabled_ && contentWidth >= 880.0f;
 
-    const auto gutterWidth = juce::jlimit(148.0f, 220.0f, contentWidth * 0.19f);
+    const auto gutterWidth = juce::jlimit(120.0f, 172.0f, contentWidth * 0.16f);
     const auto asciiWidth = metrics_.showAscii
-                                ? juce::jlimit(230.0f, 340.0f, contentWidth * 0.26f)
+                                ? juce::jlimit(150.0f, 216.0f, contentWidth * 0.15f)
                                 : 0.0f;
-    const auto gaps = metrics_.showAscii ? 2.0f * kInnerGap : kInnerGap;
-    const auto bytesWidth = contentWidth - gutterWidth - asciiWidth - gaps;
+    const auto asmWidth = metrics_.showAsm
+                              ? juce::jlimit(200.0f, 430.0f, contentWidth * 0.26f)
+                              : 0.0f;
+    const auto gaps = (metrics_.showAscii ? 1 : 0) + (metrics_.showAsm ? 1 : 0);
+    const auto bytesWidth = contentWidth - gutterWidth - asciiWidth - asmWidth -
+                            static_cast<float>(gaps) * kInnerGap;
 
     metrics_.gutterWidth = gutterWidth;
-    metrics_.cellAdvance = juce::jmax(22.0f, (bytesWidth - kGroupGap) /
-                                                   static_cast<float>(kBytesPerRow));
+    metrics_.cellAdvance = juce::jmax(22.0f, bytesWidth / static_cast<float>(kBytesPerRow));
     metrics_.cellWidth = juce::jmax(17.0f, metrics_.cellAdvance - 5.0f);
     metrics_.asciiCharWidth = metrics_.showAscii ? asciiWidth / 16.0f : 0.0f;
     metrics_.asciiWidth = asciiWidth;
+    metrics_.asmWidth = asmWidth;
 
     const auto bodyTop = area.getY() + kHeaderHeight;
+    const auto gridHeight = static_cast<float>(metrics_.rows) * kRowHeight;
 
-    metrics_.gutter = {area.getX(), bodyTop, metrics_.gutterWidth,
-                       static_cast<float>(metrics_.rows) * kRowHeight};
+    metrics_.gutter = {area.getX(), bodyTop, metrics_.gutterWidth, gridHeight};
     metrics_.bytes = {metrics_.gutter.getRight() + kInnerGap, bodyTop,
-                      static_cast<float>(kBytesPerRow) * metrics_.cellAdvance,
-                      static_cast<float>(metrics_.rows) * kRowHeight};
-    metrics_.ascii =
-        metrics_.showAscii
-            ? juce::Rectangle<float> {metrics_.bytes.getRight() + kInnerGap, bodyTop,
-                                      metrics_.asciiWidth,
-                                      static_cast<float>(metrics_.rows) * kRowHeight}
-            : juce::Rectangle<float> {};
-    metrics_.rail =
-        metrics_.showRail
-            ? juce::Rectangle<float> {area.getRight() - kRailWidth + 1.0f, bodyTop,
-                                      kRailWidth - 1.0f,
-                                      static_cast<float>(metrics_.rows) * kRowHeight}
-            : juce::Rectangle<float> {};
+                      static_cast<float>(kBytesPerRow) * metrics_.cellAdvance, gridHeight};
+
+    auto nextX = metrics_.bytes.getRight();
+    if (metrics_.showAscii) {
+        metrics_.ascii = {nextX + kInnerGap, bodyTop, asciiWidth, gridHeight};
+        nextX = metrics_.ascii.getRight();
+    } else {
+        metrics_.ascii = {};
+    }
+    if (metrics_.showAsm) {
+        metrics_.asmColumn = {nextX + kInnerGap, bodyTop, asmWidth, gridHeight};
+    } else {
+        metrics_.asmColumn = {};
+    }
+
+    metrics_.rail = metrics_.showRail
+                        ? juce::Rectangle<float> {area.getRight() - kRailWidth + 1.0f, bodyTop,
+                                                  kRailWidth - 1.0f, bodyHeight}
+                        : juce::Rectangle<float> {};
 }
 
 std::uint64_t HexGrid::addressAt(juce::Point<float> position) const {
@@ -233,8 +310,9 @@ std::uint64_t HexGrid::addressAt(juce::Point<float> position) const {
         return none;
     }
 
-    // as dezasseis celulas sao testadas uma a uma: a divisao pela largura da
-    // coluna tem de desfazer o vao do grupo e erra o indice na segunda metade.
+    // as dezasseis celulas sao testadas uma a uma: o bloco e' continuo, mas o
+    // teste por celula dispensa aritmetica de vao e cobre o caso do clique
+    // entre celulas.
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
         const auto cell = cellRect(column, row);
         if (position.x < cell.getX() || position.x >= cell.getRight()) {
@@ -400,6 +478,9 @@ void HexGrid::paint(juce::Graphics& g) {
     }
 
     paintColumnHeader(g);
+    paintReadingColumns(g);
+
+    rebuildAsmIfNeeded();
 
     for (int row = 0; row < metrics_.rows; ++row) {
         if (rowAddress(row) >= fileSize_) {
@@ -427,26 +508,45 @@ void HexGrid::paintColumnHeader(juce::Graphics& g) {
         g.drawText("ASCII", metrics_.ascii.withY(top).withHeight(kHeaderHeight),
                    juce::Justification::centredLeft, false);
     }
+    if (metrics_.showAsm) {
+        g.drawText("ASM", metrics_.asmColumn.withY(top).withHeight(kHeaderHeight),
+                   juce::Justification::centredLeft, false);
+    }
+}
+
+void HexGrid::paintReadingColumns(juce::Graphics& g) {
+    // as duas colunas de leitura sao superficies proprias: caixa opaca com
+    // contorno, pintada uma vez. antes eram faixas translucidas por linha, e a
+    // grade da parede de digitos aparecia por dentro delas.
+    const auto draw = [&g](juce::Rectangle<float> column) {
+        const auto box = column.expanded(5.0f, 0.0f);
+        g.setColour(palette::display);
+        g.fillRoundedRectangle(box, 4.0f);
+        g.setColour(palette::alpha(palette::displayBorder, 0.55f));
+        g.drawRoundedRectangle(box, 4.0f, 1.0f);
+    };
+
+    if (metrics_.showAscii) {
+        draw(metrics_.ascii);
+    }
+    if (metrics_.showAsm) {
+        draw(metrics_.asmColumn);
+    }
 }
 
 void HexGrid::paintRow(juce::Graphics& g, int row) {
     const auto top = metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight;
     const auto area = getLocalBounds().toFloat().reduced(kPadding);
 
-    // listras alternadas muito fracas: numa parede de digitos, seguir uma linha
-    // ate' ao ASCII e' o que custa. o contraste e' baixo de proposito para nao
-    // competir com o laranja do endereco tocado.
-    if (row % 2 == 1) {
-        g.setColour(palette::alpha(palette::ivory, 0.022f));
-        g.fillRect(juce::Rectangle<float> {area.getX(), top, area.getWidth(), kRowHeight});
-    }
-
-    g.setColour(palette::alpha(palette::displayBorder, 0.55f));
-    g.drawHorizontalLine(juce::roundToInt(top), area.getX(), area.getRight());
+    // a grade vive no endereco e nos bytes. as colunas de leitura tem caixa
+    // propria e nenhuma linha passa por tras delas.
+    g.setColour(palette::alpha(palette::displayBorder, 0.45f));
+    g.drawHorizontalLine(juce::roundToInt(top), area.getX(), metrics_.bytes.getRight());
 
     paintGutter(g, row);
     paintBytes(g, row);
     paintAscii(g, row);
+    paintAsm(g, row);
 }
 
 void HexGrid::paintGutter(juce::Graphics& g, int row) {
@@ -479,24 +579,6 @@ void HexGrid::paintGutter(juce::Graphics& g, int row) {
 void HexGrid::paintBytes(juce::Graphics& g, int row) {
     const auto address = rowAddress(row);
 
-    // as colunas da regiao vem de pe::regionColumnsInRow, nao do paint. a
-    // aritmetica tem casos de bordo -- a regiao a comecar a meio da linha -- e
-    // dentro de um paint() nao ha onde os testar.
-    const auto span = pe::regionColumnsInRow(address, kBytesPerRow,
-                                             {regionStart_, regionEnd_});
-
-    // a regiao e' um filete, nao uma faixa: o laranja fica reservado ao endereco
-    // tocado, para a marcacao nao competir com ele.
-    if (!span.empty()) {
-        const auto left = cellRect(span.firstColumn, row).getX();
-        const auto right = cellRect(span.lastColumn - 1, row).getRight();
-        const auto bandTop = metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight;
-        g.setColour(palette::alpha(palette::accent, 0.55f));
-        g.fillRect(juce::Rectangle<float> {left, bandTop, right - left, 1.0f});
-        g.fillRect(juce::Rectangle<float> {left, bandTop + kRowHeight - 1.0f,
-                                           right - left, 1.0f});
-    }
-
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
         const auto byteAddress = address + column;
         if (byteAddress >= fileSize_ || bytes_ == nullptr) {
@@ -507,30 +589,16 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
         const auto touched = byteAddress == readHead_;
 
-        // so' o endereco selecionado leva laranja: uma barra de 3 px na margem
-        // esquerda e um banho fraco na celula. o byte anterior levava uma barra
-        // branca a toda a altura, e tres marcas claras na mesma linha nao se
-        // distinguiam.
+        // a parede de digitos le-se toda no mesmo marfim: sem listras, sem
+        // apagar o que esta' fora da regiao. o ambar fica para o byte da
+        // cabeca de leitura, que e' a selecao.
         if (touched) {
-            g.setColour(palette::alpha(palette::accent, 0.16f));
-            g.fillRect(cell);
-            g.setColour(palette::accent);
-            g.fillRect(juce::Rectangle<float> {cell.getX() - 1.0f, cell.getY(), 3.0f,
-                                                kRowHeight});
-        }
-
-        juce::Colour ink = palette::textOnDark;
-        if (byte == kZeroByte) {
-            ink = palette::alpha(palette::textOnDark, 0.55f);
-        } else if (!(byteAddress >= regionStart_ && byteAddress < regionEnd_)) {
-            ink = palette::alpha(palette::textOnDark, 0.32f);
-        }
-        if (touched) {
-            ink = palette::accentSoft;
+            g.setColour(palette::alpha(palette::accent, 0.18f));
+            g.fillRoundedRectangle(cell.reduced(1.0f, 3.0f), 2.0f);
         }
 
         g.setFont(touched ? fonts().sans(13.5f, true) : font_);
-        g.setColour(ink);
+        g.setColour(touched ? palette::accentSoft : palette::textOnDark);
         g.drawText(toHex2(byte), cell, juce::Justification::centredLeft, false);
     }
 }
@@ -545,15 +613,7 @@ void HexGrid::paintAscii(juce::Graphics& g, int row) {
                                            static_cast<float>(row) * kRowHeight)
                           .withHeight(kRowHeight);
 
-    // a coluna ASCII leva fundo proprio: 16 caracteres seguidos sem entrelinha
-    // eram uma parede. o fundo separa-a da parede de digitos hex.
-    g.setColour(palette::alpha(palette::display, 0.85f));
-    g.fillRect(band);
-    g.setColour(palette::alpha(palette::displayBorder, 0.75f));
-    g.fillRect(juce::Rectangle<float> {band.getX(), band.getY(), 1.0f, kRowHeight});
-
-    const auto inRegionRow =
-        !pe::regionColumnsInRow(address, kBytesPerRow, {regionStart_, regionEnd_}).empty();
+    // o fundo da coluna vive em paintReadingColumns; aqui so' o texto.
     g.setFont(font_);
 
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
@@ -564,27 +624,179 @@ void HexGrid::paintAscii(juce::Graphics& g, int row) {
 
         const auto character = toAscii((*bytes_)[static_cast<std::size_t>(byteAddress)]);
         const auto touched = byteAddress == readHead_;
-        const auto inRegion = byteAddress >= regionStart_ && byteAddress < regionEnd_;
-
-        auto ink = (inRegionRow && inRegion) ? palette::textOnDark
-                                             : palette::alpha(palette::textOnDark, 0.40f);
-        if (touched) {
-            ink = palette::accentSoft;
-        }
 
         const auto cell = juce::Rectangle<float> {
             band.getX() + static_cast<float>(column) * metrics_.asciiCharWidth, band.getY(),
             metrics_.asciiCharWidth, kRowHeight};
 
-        g.setColour(ink);
+        g.setColour(touched ? palette::accentSoft
+                            : palette::alpha(palette::textOnDark, 0.72f));
         g.drawText(juce::String::charToString(static_cast<juce::juce_wchar>(character)),
                    cell, juce::Justification::centred, false);
     }
 }
 
+void HexGrid::rebuildAsmIfNeeded() {
+    if (!metrics_.showAsm || bytes_ == nullptr || fileSize_ == 0) {
+        asmItems_.clear();
+        asmTopByte_ = 0;
+        asmRows_ = 0;
+        return;
+    }
+
+    if (asmTopByte_ == topByte_ && asmRows_ == metrics_.rows) {
+        return;
+    }
+
+    // a varredura comeca no topo da janela e corre duas linhas alem do fundo:
+    // a instrucao que comecou na ultima linha visivel precisa de aparecer, e a
+    // que cruzou a fronteira do topo sai cortada, como em qualquer dump.
+    const auto span = static_cast<std::uint64_t>(metrics_.rows + 2) * kBytesPerRow;
+    const auto fromTop = juce::jmin(topByte_, fileSize_ - 1);
+    const auto window = juce::jmin(span, fileSize_ - fromTop);
+
+    asmItems_.clear();
+    asmItems_.reserve(static_cast<std::size_t>(window / 2 + 1));
+
+    std::uint64_t address = fromTop;
+    std::uint64_t consumed = 0;
+    while (consumed < window) {
+        const auto decoded =
+            disasm::decode(bytes_->data() + static_cast<std::size_t>(fromTop + consumed),
+                           static_cast<std::size_t>(window - consumed));
+        if (decoded.length == 0) {
+            break;
+        }
+
+        AsmItem item;
+        item.address = address;
+        item.length = decoded.length;
+        item.text = juce::String::fromUTF8(decoded.text.data(),
+                                           static_cast<int>(decoded.text.size()));
+        if (decoded.hasTarget) {
+            const auto destination = static_cast<std::int64_t>(address) +
+                                     static_cast<std::int64_t>(decoded.length) + decoded.target;
+            if (destination >= 0 &&
+                destination < static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max()) *
+                                      16) {
+                item.hasTarget = true;
+                item.target = static_cast<std::uint64_t>(destination);
+            }
+        }
+        asmItems_.push_back(std::move(item));
+
+        address += decoded.length;
+        consumed += decoded.length;
+    }
+
+    asmTopByte_ = topByte_;
+    asmRows_ = metrics_.rows;
+}
+
+void HexGrid::paintAsm(juce::Graphics& g, int row) {
+    if (!metrics_.showAsm) {
+        return;
+    }
+
+    const auto address = rowAddress(row);
+    const auto band = metrics_.asmColumn.withY(metrics_.asmColumn.getY() +
+                                               static_cast<float>(row) * kRowHeight)
+                          .withHeight(kRowHeight);
+
+    // o fundo da coluna vive em paintReadingColumns; aqui so' a instrucao.
+    const AsmItem* started {nullptr};
+    const AsmItem* previous {nullptr};
+    for (const auto& item : asmItems_) {
+        if (item.address < address) {
+            previous = &item;
+            continue;
+        }
+        if (item.address >= address + kBytesPerRow) {
+            break;
+        }
+        if (started == nullptr) {
+            started = &item;
+        }
+    }
+
+    if (started == nullptr) {
+        if (previous != nullptr && previous->address + previous->length > address) {
+            // a instrucao comeca na linha de cima e continua aqui: os bytes
+            // aparecem na coluna deles, e o texto fica so' uma marca.
+            g.setFont(fonts().mono(11.0f));
+            g.setColour(palette::alpha(palette::textOnDarkSub, 0.55f));
+            g.drawText("...", band.reduced(4.0f, 0.0f), juce::Justification::centredLeft,
+                       false);
+        }
+        return;
+    }
+
+    auto text = started->text;
+    if (started->hasTarget) {
+        text += " 0x" + juce::String::toHexString(
+                           static_cast<std::int64_t>(started->target));
+    }
+
+    paintAsmText(g, text, band.reduced(4.0f, 0.0f));
+}
+
+void HexGrid::paintAsmText(juce::Graphics& g,
+                           const juce::String& text,
+                           juce::Rectangle<float> area) const {
+    if (text.isEmpty()) {
+        return;
+    }
+
+    const auto font = fonts().mono(11.5f);
+
+    // token a token, com a tinta da classe. a pontuacao (virgula, parenteses
+    // rectos, sinais) corre separada para poder ficar apagada.
+    juce::AttributedString run;
+    run.setJustification(juce::Justification::centredLeft);
+    run.setWordWrap(juce::AttributedString::none);
+
+    const auto length = static_cast<int>(text.length());
+    bool first = true;
+    for (int i = 0; i < length;) {
+        const auto c = text[i];
+        if (juce::CharacterFunctions::isWhitespace(c)) {
+            run.append(juce::String::charToString(c), font, palette::textOnDarkSub);
+            ++i;
+            continue;
+        }
+
+        if (isPunctuation(c)) {
+            run.append(juce::String::charToString(c), font,
+                       palette::alpha(palette::textOnDarkSub, 0.65f));
+            ++i;
+            continue;
+        }
+
+        int end = i;
+        while (end < length && !juce::CharacterFunctions::isWhitespace(text[end]) &&
+               !isPunctuation(text[end])) {
+            ++end;
+        }
+
+        const auto token = text.substring(i, end);
+        run.append(token, font, asmInkFor(token, first));
+        first = false;
+        i = end;
+    }
+
+    juce::TextLayout layout;
+    layout.createLayout(run, area.getWidth());
+
+    // a linha de 26 px centra o texto: o layout nasce no topo.
+    const auto textHeight = 14.0f;
+    layout.draw(g, area.withHeight(textHeight).withY(area.getY() +
+                                                     (area.getHeight() - textHeight) * 0.5f));
+}
+
 juce::Rectangle<float> HexGrid::cellRect(std::uint64_t column, int row) const {
-    const auto x = metrics_.bytes.getX() + static_cast<float>(column) * metrics_.cellAdvance +
-                   (column >= kGroupGapColumns ? kGroupGap : 0.0f);
+    // bloco unico: os 16 bytes correm seguidos, sem o vao que partia a linha em
+    // dois grupos de oito.
+    const auto x = metrics_.bytes.getX() + static_cast<float>(column) * metrics_.cellAdvance;
     return {x, metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight, metrics_.cellWidth,
             kRowHeight};
 }

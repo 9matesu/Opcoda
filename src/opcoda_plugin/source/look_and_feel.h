@@ -375,29 +375,25 @@ public:
     }
 
     // -- cromo da janela do standalone --
-    // a barra nao e' do JUCE: grafite um tom abaixo do chassis, a marca a'
+    // a barra nao e' do JUCE: grafite um tom abaixo do chassis, o nome a'
     // esquerda e duas teclas de janela sem o fundo cinzento do V4.
     //
     // **a assinatura mudou de sitio.** o nome estava no header do editor, na
     // mesma fila do preset e do ficheiro, e empurrava esse bloco para o canto.
     // aqui a barra diz o nome com a fonte do titulo, e o editor fica so' com o
     // que e' operavel.
+    //
+    // **sem marca.** a caixa laranja com "Op" saiu da barra: a identidade vem do
+    // icone da janela e do nome escrito, e a caixa era uma segunda assinatura.
     void drawDocumentWindowTitleBar(juce::DocumentWindow&, juce::Graphics& g, int w, int h,
                                     int, int, const juce::Image*, bool) override {
         g.fillAll(palette::chassisDark);
         g.setColour(palette::alpha(palette::ivory, 0.08f));
         g.drawHorizontalLine(h - 1, 0.0f, static_cast<float>(w));
 
-        constexpr float kSide {22.0f};
-        const auto mark = juce::Rectangle<float> {12.0f,
-                                                  (static_cast<float>(h) - kSide) * 0.5f,
-                                                  kSide, kSide};
-        paintMark(g, mark);
-
         g.setColour(palette::textOnDark);
         g.setFont(fonts().sans(17.0f, true));
-        g.drawText("Opcoda",
-                   juce::Rectangle<int> {juce::roundToInt(mark.getRight()) + 9, 0, 170, h},
+        g.drawText("Opcoda", juce::Rectangle<int> {14, 0, 220, h},
                    juce::Justification::centredLeft, false);
     }
 

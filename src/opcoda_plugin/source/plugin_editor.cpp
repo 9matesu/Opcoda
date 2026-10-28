@@ -19,11 +19,12 @@ constexpr int kBodyTopGap {8};
 constexpr int kScreenBezel {6};
 constexpr int kDisplayHeight {380};
 
-// tira vertical a' direita do ecra. teclas rectangulares com glifo e nome: 88x34
-// de area util, acima do hit target do WCAG 2.5.8 (24) com folga para a mao.
-constexpr int kRailWidth {96};
-constexpr int kRailButtonWidth {88};
-constexpr int kRailButtonHeight {34};
+// tira vertical a' direita do ecra. teclas simples: so' o glifo, 44x38, acima
+// do hit target do WCAG 2.5.8 (24) com folga para a mao. o nome vive no
+// tooltip e no leitor de ecra; a tira nao alarga para o escrever.
+constexpr int kRailWidth {62};
+constexpr int kRailButtonWidth {44};
+constexpr int kRailButtonHeight {38};
 constexpr int kRailGap {5};
 
 // transporte dentro do pe' do ecra. o play e o hold passaram para aqui quando a
@@ -49,18 +50,6 @@ constexpr int kStatusHeight {16};
 // mesmo arrasto ou o mesmo clique e valem um passo so'.
 constexpr std::uint32_t kGestureGapMs {400};
 constexpr std::size_t kMaxUndoSteps {32};
-
-// parafuso de chapa: tres circulos e uma fenda. quatro por janela chegam para
-// dizer "isto e' um aparelho" sem virar decoracao.
-void paintScrew(juce::Graphics& g, juce::Point<float> centre) {
-    const auto r = 3.0f;
-    g.setColour(palette::alpha(palette::charcoalDeep, 0.55f));
-    g.fillEllipse(centre.x - r, centre.y - r, r * 2.0f, r * 2.0f);
-    g.setColour(palette::alpha(palette::faceplateDark, 0.95f));
-    g.drawEllipse(centre.x - r, centre.y - r, r * 2.0f, r * 2.0f, 1.0f);
-    g.setColour(palette::alpha(palette::ivory, 0.35f));
-    g.drawLine(centre.x - 1.6f, centre.y, centre.x + 1.6f, centre.y, 0.8f);
-}
 
 juce::String asInteger(float value) {
     return juce::String {juce::roundToInt(value)};
@@ -559,7 +548,6 @@ void PluginEditor::buildNavigation() {
     struct ViewSpec {
         juce::TextButton* button;
         const char* icon;
-        const char* label;
         const char* spokenName;
         const char* hint;
         ByteDisplay::ViewMode mode;
@@ -568,19 +556,18 @@ void PluginEditor::buildNavigation() {
     // quatro vistas, quatro perguntas sobre o mesmo material. a rail e' empilhada:
     // a largura do ecra fica para o ecra.
     const ViewSpec views[] = {
-        {&viewWaveButton_, "wave", "WAVE", "Forma de onda do material", "Tecla 1",
+        {&viewWaveButton_, "wave", "Forma de onda do material", "Tecla 1",
          ByteDisplay::ViewMode::waveform},
-        {&viewHexButton_, "hex", "HEX", "Grelha de bytes do material", "Tecla 2",
+        {&viewHexButton_, "hex", "Grelha de bytes do material", "Tecla 2",
          ByteDisplay::ViewMode::hex},
-        {&viewEntropyButton_, "entropy", "ENTROPY", "Curva de entropia do material",
-         "Tecla 3", ByteDisplay::ViewMode::entropy},
-        {&viewMatrixButton_, "matrix", "MATRIX", "Matriz de modulacao", "Tecla 4",
+        {&viewEntropyButton_, "entropy", "Curva de entropia do material", "Tecla 3",
+         ByteDisplay::ViewMode::entropy},
+        {&viewMatrixButton_, "matrix", "Matriz de modulacao", "Tecla 4",
          ByteDisplay::ViewMode::matrix},
     };
 
     for (const auto& view : views) {
-        setupIcon(*view.button, view.icon, "bar", view.spokenName, view.hint);
-        view.button->setButtonText(view.label);
+        setupIcon(*view.button, view.icon, "rail", view.spokenName, view.hint);
         view.button->setClickingTogglesState(true);
         const auto mode = view.mode;
         view.button->onClick = [this, mode] {
@@ -590,12 +577,9 @@ void PluginEditor::buildNavigation() {
         };
     }
 
-    setupIcon(zoomInButton_, "zoomIn", "bar", "Aproximar a forma de onda", "Tecla +");
-    setupIcon(zoomOutButton_, "zoomOut", "bar", "Afastar a forma de onda", "Tecla -");
-    setupIcon(zoomFitButton_, "fit", "bar", "Enquadrar a regiao inteira", "Tecla 0");
-    zoomInButton_.setButtonText("IN");
-    zoomOutButton_.setButtonText("OUT");
-    zoomFitButton_.setButtonText("FIT");
+    setupIcon(zoomInButton_, "zoomIn", "rail", "Aproximar a forma de onda", "Tecla +");
+    setupIcon(zoomOutButton_, "zoomOut", "rail", "Afastar a forma de onda", "Tecla -");
+    setupIcon(zoomFitButton_, "fit", "rail", "Enquadrar a regiao inteira", "Tecla 0");
     zoomInButton_.onClick = [this] { grid_.zoomIn(); };
     zoomOutButton_.onClick = [this] { grid_.zoomOut(); };
     zoomFitButton_.onClick = [this] { grid_.fitView(); };
@@ -987,14 +971,6 @@ void PluginEditor::paint(juce::Graphics& g) {
 
     // separadores do header sairam com o titulo: o bloco do preset e da origem e'
     // um grupo unico e centrado, e um filete no meio dele so' o partia.
-
-    // parafusos nos cantos da janela.
-    const auto w = static_cast<float>(getWidth());
-    const auto h = static_cast<float>(getHeight());
-    paintScrew(g, {8.0f, 8.0f});
-    paintScrew(g, {w - 8.0f, 8.0f});
-    paintScrew(g, {8.0f, h - 8.0f});
-    paintScrew(g, {w - 8.0f, h - 8.0f});
 
     // -- alvo de arrasto --
     if (dragHovered_) {
@@ -1432,6 +1408,9 @@ void PluginEditor::refresh() {
     setIfChanged(fileName_, info.name.isNotEmpty() ? info.name
                                                    : juce::String {"Sem binario"});
     setIfChanged(formatTag_, info.formatTag);
+    // a coluna ASM do hex so' desmonta material de 64 bits: em PE32 a leitura
+    // seria mentira comprimento afora.
+    grid_.setDisassemblyEnabled(info.formatTag.contains("64-bit"));
     setIfChanged(fileSize_,
                  info.sizeBytes > 0
                      ? juce::String {info.sizeBytes / (1024.0 * 1024.0), 2} + " MB"

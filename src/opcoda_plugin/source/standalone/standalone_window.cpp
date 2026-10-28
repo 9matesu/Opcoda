@@ -2,6 +2,8 @@
 
 #include "../plugin_editor.h"
 
+#include "OpcodaAssets.h"
+
 #include <juce_audio_utils/juce_audio_utils.h>
 
 namespace opcoda {
@@ -157,9 +159,19 @@ void StandaloneWindow::saveWindowPosition() {
 }
 
 juce::Image StandaloneWindow::makeWindowIcon() {
-    // o icone e' a marca: chapa laranja com "Op" na fonte do nome. a mesma
-    // funcao desenha a barra da janela e o cabecalho dos ajustes, por isso a
-    // barra de tarefas, a janela e o ecra dizem a mesma coisa.
+    // o icone e' o material: a onda que os bytes fazem, sobre a chapa preta. vem
+    // do PNG gerado por tools/make-icon.ps1 e embebido no binario, por isso a
+    // janela, a barra de tarefas e o ficheiro no explorer mostram a mesma onda.
+    int iconSize {0};
+    if (auto* data = OpcodaAssets::getNamedResource("opcodaicon256_png", iconSize)) {
+        const auto image = juce::ImageFileFormat::loadFrom(
+            data, static_cast<std::size_t>(iconSize));
+        if (image.isValid()) {
+            return image;
+        }
+    }
+
+    // o PNG nao embarcou: a marca segura o lugar.
     constexpr int kSize {256};
     juce::Image icon(juce::Image::ARGB, kSize, kSize, true);
     juce::Graphics g(icon);

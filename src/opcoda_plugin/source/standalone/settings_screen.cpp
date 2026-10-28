@@ -205,16 +205,13 @@ void SettingsScreen::paint(juce::Graphics& g) {
                              panel.getRight());
     }
 
-    // marca: o quadrado laranja com "Op", a mesma da barra da janela.
-    const auto mark = juce::Rectangle<float> {panel.getX() + kInset, panel.getY() + 18.0f, 16.0f,
-                                              16.0f};
-    OpcodaLookAndFeel::paintMark(g, mark);
-
+    // o cabecalho diz o que o ecra e'. sem marca: a caixa "Op" saiu do header do
+    // editor e da barra da janela, e aqui era uma terceira.
     g.setColour(palette::textOnDark);
     g.setFont(fonts().sans(11.0f, true).withExtraKerningFactor(0.20f));
     g.drawText("SETTINGS",
-               juce::Rectangle<int> {juce::roundToInt(mark.getRight()) + 10, panel_.getY(), 240,
-                                     kHeaderHeight},
+               juce::Rectangle<int> {juce::roundToInt(panel.getX()) + kInset, panel_.getY(),
+                                     240, kHeaderHeight},
                juce::Justification::centredLeft, false);
 
     // filete do rodape: separa a unica accao do ecra.

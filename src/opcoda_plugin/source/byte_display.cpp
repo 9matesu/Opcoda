@@ -1,4 +1,4 @@
-#include "byte_display.h"
+﻿#include "byte_display.h"
 
 #include "opcoda_core/pe/byte_to_position.h"
 
@@ -87,7 +87,7 @@ void ByteDisplay::setSource(const std::vector<std::uint8_t>* bytes,
 
     cacheValid_ = false;
     overviewValid_ = false;
-    hexColumnsValid_ = false;
+    entropyCacheValid_ = false;
     hexHeadScrolled_ = false;
 
     hex_.setSource(bytes, fileSize);
@@ -193,7 +193,7 @@ void ByteDisplay::setRegion(std::uint64_t start, std::uint64_t end) {
         cacheValid_ = false;
     }
     overviewValid_ = false;
-    hexColumnsValid_ = false;
+    entropyCacheValid_ = false;
 
     viewStart_ = 0.0f;
     viewLength_ = 1.0f;
@@ -271,23 +271,9 @@ int ByteDisplay::entropyBucket(float bits) noexcept {
     return bits < 6.0f ? 1 : 2;
 }
 
-juce::Rectangle<float> ByteDisplay::entropyBandBounds() const noexcept {
-    if (mode_ != ViewMode::hex) {
-        return {};
-    }
-    const auto full = getLocalBounds().toFloat().reduced(kPadding);
-    if (full.getHeight() < kEntropyBandHeight + 40.0f) {
-        return {};
-    }
-    return {full.getX(), full.getBottom() - kEntropyBandHeight, full.getWidth(),
-            kEntropyBandHeight};
-}
-
 void ByteDisplay::layoutHex() {
-    const auto band = entropyBandBounds();
-    hex_.setBounds(band.isEmpty() ? getLocalBounds()
-                                  : getLocalBounds().withTrimmedBottom(
-                                        juce::roundToInt(kEntropyBandHeight + kPadding + 6.0f)));
+    // sem faixa em baixo: o hex ocupa o ecra todo.
+    hex_.setBounds(getLocalBounds());
 }
 
 void ByteDisplay::resized() {
@@ -332,6 +318,41 @@ void ByteDisplay::rebuildColumnsIfNeeded() {
     cacheValid_ = true;
 }
 
+void ByteDisplay::rebuildEntropyColumnsIfNeeded() {
+    const auto wanted = columnCountForWidth();
+    if (entropyCacheValid_ && entropyColumnCount_ == wanted &&
+        entropyRegionStart_ == regionStart_ && entropyRegionEnd_ == regionEnd_ &&
+        entropyViewStart_ == viewStart_ && entropyViewLength_ == viewLength_) {
+        return;
+    }
+
+    entropyColumns_.clear();
+
+    if (bytes_ != nullptr && !bytes_->empty() && regionEnd_ > regionStart_) {
+        const auto [viewStart, viewEnd] = viewByteRange();
+        const auto viewBytes = viewEnd - viewStart;
+        if (viewBytes > 0) {
+            // a entropia de Shannon de uma coluna de um byte e' zero por
+            // definicao. no zoom fundo a particao de um byte por coluna
+            // desabava a curva toda para a base e a vista morria exatamente
+            // quando era para ler mais. cada coluna leva agora um minimo de
+            // 256 bytes: o teto do eixo (log2(256) = 8) continua alcancavel.
+            const auto maxColumns = std::max<std::uint64_t>(1, viewBytes / kEntropyColumnBytes);
+            const auto count = std::min<std::uint64_t>(wanted, maxColumns);
+            static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(), viewStart,
+                                                  viewEnd, static_cast<std::uint32_t>(count),
+                                                  entropyColumns_));
+        }
+    }
+
+    entropyColumnCount_ = wanted;
+    entropyRegionStart_ = regionStart_;
+    entropyRegionEnd_ = regionEnd_;
+    entropyViewStart_ = viewStart_;
+    entropyViewLength_ = viewLength_;
+    entropyCacheValid_ = true;
+}
+
 void ByteDisplay::rebuildOverviewIfNeeded() {
     if (overviewValid_ && overviewRegionStart_ == regionStart_ &&
         overviewRegionEnd_ == regionEnd_) {
@@ -347,30 +368,6 @@ void ByteDisplay::rebuildOverviewIfNeeded() {
     overviewRegionStart_ = regionStart_;
     overviewRegionEnd_ = regionEnd_;
     overviewValid_ = true;
-}
-
-void ByteDisplay::rebuildHexColumnsIfNeeded() {
-    const auto band = entropyBandBounds();
-    if (band.isEmpty() || bytes_ == nullptr || fileSize_ == 0) {
-        hexColumnsValid_ = false;
-        return;
-    }
-
-    const auto wanted = static_cast<std::uint32_t>(
-        std::clamp(band.getWidth() / 10.0f, 24.0f, 512.0f));
-
-    if (hexColumnsValid_ && hexColumnsFileSize_ == fileSize_ &&
-        hexColumnsWidth_ == wanted) {
-        return;
-    }
-
-    hexColumns_.clear();
-    static_cast<void>(pe::reduceToColumns(bytes_->data(), bytes_->size(), 0, fileSize_,
-                                          wanted, hexColumns_));
-
-    hexColumnsFileSize_ = fileSize_;
-    hexColumnsWidth_ = wanted;
-    hexColumnsValid_ = true;
 }
 
 std::pair<std::uint64_t, std::uint64_t> ByteDisplay::viewByteRange() const noexcept {
@@ -658,7 +655,7 @@ void ByteDisplay::paint(juce::Graphics& g) {
     switch (mode_) {
         case ViewMode::waveform: paintWaveform(g); break;
         case ViewMode::entropy: paintEntropy(g); break;
-        case ViewMode::hex: paintEntropyBand(g); break;
+        case ViewMode::hex: break;     // a vista HEX e' o filho, pintado por cima.
         case ViewMode::matrix: break;  // a vista MATRIX e' o filho, pintado por cima.
     }
 
@@ -670,67 +667,6 @@ void ByteDisplay::paint(juce::Graphics& g) {
 
     if (mode_ != ViewMode::hex && mode_ != ViewMode::matrix) {
         paintSectionTicks(g);
-    }
-}
-
-void ByteDisplay::paintEntropyBand(juce::Graphics& g) {
-    const auto band = entropyBandBounds();
-    if (band.isEmpty()) {
-        return;
-    }
-
-    rebuildHexColumnsIfNeeded();
-    if (hexColumns_.empty()) {
-        return;
-    }
-
-    // calha do mapa, separada do hex por um filete.
-    g.setColour(palette::display);
-    g.fillRoundedRectangle(band, 3.0f);
-    g.setColour(palette::alpha(palette::displayBorder, 0.95f));
-    g.drawRoundedRectangle(band, 3.0f, 1.0f);
-    g.setColour(palette::alpha(palette::brass, 0.35f));
-    g.drawHorizontalLine(juce::roundToInt(band.getY()) - 4,
-                         band.getX(), band.getRight());
-
-    g.setFont(fonts().sans(8.5f, true));
-    g.setColour(palette::textOnDarkSub);
-    g.drawText("ENTROPY  0-8 bits/byte", band.reduced(8.0f, 3.0f).withHeight(11.0f),
-               juce::Justification::centredLeft, false);
-
-    const auto plot = band.reduced(8.0f, 0.0f).withTrimmedTop(16.0f).withTrimmedBottom(5.0f);
-    if (plot.getHeight() <= 0.0f) {
-        return;
-    }
-
-    const juce::Colour inks[3] {palette::accentSoft, palette::accentWarn, palette::accent};
-    const auto count = hexColumns_.size();
-    const auto barStep = plot.getWidth() / static_cast<float>(count);
-    const auto barWidth = juce::jmax(2.0f, barStep - 2.0f);
-
-    for (std::size_t i = 0; i < count; ++i) {
-        const auto bits = std::clamp(hexColumns_[i].entropyBits, 0.0f, 8.0f);
-        const auto height = bits / 8.0f * plot.getHeight();
-        if (height <= 0.5f) {
-            continue;
-        }
-        const auto x = plot.getX() + static_cast<float>(i) * barStep;
-        g.setColour(palette::alpha(inks[entropyBucket(bits)], 0.9f));
-        g.fillRect(juce::Rectangle<float> {x, plot.getBottom() - height, barWidth, height});
-    }
-
-    // regiao: um filete, nao uma faixa. o material que soa e' o que interessa.
-    if (fileSize_ > 0 && regionEnd_ > regionStart_) {
-        const auto left = plot.getX() + static_cast<float>(regionStart_) /
-                                             static_cast<float>(fileSize_) * plot.getWidth();
-        const auto right = plot.getX() + static_cast<float>(
-                                              std::min(regionEnd_, fileSize_)) /
-                                              static_cast<float>(fileSize_) * plot.getWidth();
-        g.setColour(palette::accent);
-        g.drawRect(juce::Rectangle<float> {left, plot.getY(),
-                                           juce::jmax(2.0f, right - left),
-                                           plot.getHeight()},
-                   1.0f);
     }
 }
 
@@ -873,16 +809,16 @@ void ByteDisplay::paintOverChildren(juce::Graphics& g) {
     }
 
     if (mode_ == ViewMode::hex) {
+        // os graos assinalam as celulas que estao a tocar; a cabeca de
+        // reproducao nao tem assento no hex: a janela e' da pessoa.
         paintGrainsInHex(g);
-        // no hex a cabeca de reproducao vive na faixa de entropia: sobre as
-        // linhas de bytes seria mais uma barra clara no meio do texto.
-        paintPlayhead(g, entropyBandBounds());
-    } else {
-        paintReadHead(g, area);
-        paintPlayhead(g, area);
+        return;
     }
 
-    if (hasKeyboardFocus(true) && mode_ != ViewMode::hex) {
+    paintReadHead(g, area);
+    paintPlayhead(g, area);
+
+    if (hasKeyboardFocus(true)) {
         const auto screen = fractionOf(caret_);
         if (screen >= 0.0f && screen <= 1.0f) {
             const auto caretX = area.getX() + screen * area.getWidth();
@@ -1043,7 +979,10 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
     // interna; pintar outro rectangulo aqui desenhava uma moldura por dentro da
     // moldura, e a onda deixava de ser seamless. o que fica e' so' o material.
     const auto centreY = plot.getCentreY();
-    const auto halfHeight = plot.getHeight() * 0.5f;
+    // 47 % de meia altura deixa uma folga de 3 % em cima e em baixo: com o
+    // envelope a encostar ao limite, o filete de contorno era cortado e so' os
+    // entalhes do ruido apareciam -- a forma lia-se como um bloco cinzento.
+    const auto halfHeight = plot.getHeight() * 0.47f;
     const auto [viewStartByte, viewEndByte] = viewByteRange();
 
     if (sampleDotsVisible()) {
@@ -1052,10 +991,12 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
         // envelope reamostrado por pixel. varias colunas caem no mesmo pixel em
         // zoom-out; iterar as colunas cruas fazia o path ziguezaguear meio pixel
         // e o preenchimento abria riscos verticais.
-        resampleEnvelope(std::max(2, static_cast<int>(std::ceil(plot.getWidth()))));
+        resampleEnvelope(std::max(2, static_cast<int>(std::ceil(plot.getWidth())) * 2));
         const auto pixels = static_cast<int>(pixelMax_.size());
         const auto xAt = [&](int i) {
-            return plot.getX() + static_cast<float>(i) + 0.5f;
+            return plot.getX() +
+                   (static_cast<float>(i) + 0.5f) * plot.getWidth() /
+                       static_cast<float>(pixels);
         };
 
         juce::Path swing;
@@ -1068,34 +1009,17 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
         }
         swing.closeSubPath();
 
-        // sombra projectada: 2 px abaixo, quase preta. da' corpo ao envelope.
-        {
-            auto shadow = swing;
-            shadow.applyTransform(juce::AffineTransform::translation(0.0f, 2.0f));
-            g.setColour(palette::alpha(juce::Colours::black, 0.42f));
-            g.fillPath(shadow);
-        }
-
-        // **silhueta solida.** a versao de linha fina lia-se como osciloscopio
-        // de poucos dados: dentro do envelope escuro, o sample nao tinha massa.
-        // aqui o envelope enche com um gradiente vertical quente — brasa nas
-        // bordas, nucleo claro no centro — e o contorno de marfim fecha a forma.
-        juce::ColourGradient body {
-            palette::alpha(palette::accent, 0.62f), plot.getCentreX(), plot.getY(),
-            palette::alpha(palette::accent, 0.62f), plot.getCentreX(), plot.getBottom(),
-            false};
-        body.addColour(0.22f, palette::alpha(palette::accentWarn, 0.88f));
-        body.addColour(0.50f, palette::alpha(palette::accentSoft, 0.98f));
-        body.addColour(0.78f, palette::alpha(palette::accentWarn, 0.88f));
-        g.setGradientFill(body);
+        // **uma so' tinta.** a versao anterior empilhava gradiente quente,
+        // sombra projectada e um nucleo de rms: tres camadas sobre a mesma
+        // forma, e o ruido virava uma nuvem laranja sem contorno. aqui a
+        // silhueta e' uma chapada de marfim com um filete mais opaco a fechar
+        // a forma -- e' o que se le como "a onda", como no Ableton.
+        g.setColour(palette::alpha(palette::ivory, 0.15f));
         g.fillPath(swing);
 
-        // contorno: marfim fino, sem halo largo. a forma e' o que le, nao o glow.
-        g.setColour(palette::alpha(palette::ivory, 0.50f));
-        g.strokePath(swing, juce::PathStrokeType {1.1f, juce::PathStrokeType::curved,
+        g.setColour(palette::alpha(palette::ivory, 0.78f));
+        g.strokePath(swing, juce::PathStrokeType {1.0f, juce::PathStrokeType::curved,
                                                   juce::PathStrokeType::rounded});
-
-        paintRmsSilhouette(g, plot, centreY, halfHeight, 1.0f);
     }
 
     g.setColour(palette::alpha(juce::Colours::white, 0.12f));
@@ -1161,11 +1085,11 @@ void ByteDisplay::paintSampleDots(juce::Graphics& g,
             line.lineTo(x, y);
         }
     }
-    g.setColour(palette::accentSoft);
+    g.setColour(palette::alpha(palette::ivory, 0.70f));
     g.strokePath(line, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
                                              juce::PathStrokeType::rounded});
 
-    g.setColour(palette::alpha(palette::accentSoft, 0.95f));
+    g.setColour(palette::alpha(palette::ivory, 0.90f));
     for (auto byte = viewStartByte; byte < last; ++byte) {
         const auto x = xOf(byte);
         const auto y = yOf((*bytes_)[static_cast<std::size_t>(byte)]);
@@ -1353,10 +1277,8 @@ void ByteDisplay::paintOverview(juce::Graphics& g) {
 void ByteDisplay::paintEntropyLine(
     juce::Graphics& g,
     const std::vector<pe::Column>& columns,
-    float columnWidth,
-    float originX,
-    const std::function<float(std::size_t)>& topOf,
-    const std::function<float(std::size_t)>& bottomOf) {
+    const std::function<float(std::size_t)>& xAt,
+    const std::function<float(std::size_t)>& yAt) {
     juce::Path low;
     juce::Path mid;
     juce::Path high;
@@ -1364,16 +1286,15 @@ void ByteDisplay::paintEntropyLine(
     std::size_t lastInBucket[3] {columns.size(), columns.size(), columns.size()};
 
     for (std::size_t i = 0; i < columns.size(); ++i) {
-        const auto x = originX + static_cast<float>(i) * columnWidth;
+        const auto x = xAt(i);
         const auto b = entropyBucket(columns[i].entropyBits);
 
         auto& path = b == 0 ? low : b == 1 ? mid : high;
         if (path.isEmpty() || lastInBucket[b] + 1 != i) {
-            path.startNewSubPath(x, topOf(i));
+            path.startNewSubPath(x, yAt(i));
         } else {
-            path.lineTo(x, topOf(i));
+            path.lineTo(x, yAt(i));
         }
-        path.lineTo(x, bottomOf(i));
         lastInBucket[b] = i;
     }
 
@@ -1399,7 +1320,6 @@ void ByteDisplay::resampleEnvelope(int pixels) {
     if (pixelMax_.size() != count) {
         pixelMax_.assign(count, 0.0f);
         pixelMin_.assign(count, 0.0f);
-        pixelRms_.assign(count, 0.0f);
     }
 
     const auto columns = columns_.size();
@@ -1422,16 +1342,13 @@ void ByteDisplay::resampleEnvelope(int pixels) {
 
         float peakMax = 0.0f;
         float peakMin = 0.0f;
-        float sum = 0.0f;
         for (auto i = begin; i < end; ++i) {
             peakMax = std::max(peakMax, std::clamp(columns_[i].maximum, -1.0f, 1.0f));
             peakMin = std::min(peakMin, std::clamp(columns_[i].minimum, -1.0f, 1.0f));
-            sum += std::clamp(columns_[i].rms, 0.0f, 1.0f);
         }
 
         pixelMax_[px] = peakMax;
         pixelMin_[px] = peakMin;
-        pixelRms_[px] = sum / static_cast<float>(end - begin);
     }
 
     // hull: um maximo corrido de +-2 px fecha as valas de um pixel. sem isto, o
@@ -1454,44 +1371,9 @@ void ByteDisplay::resampleEnvelope(int pixels) {
     }
 }
 
-void ByteDisplay::paintRmsSilhouette(juce::Graphics& g,
-                                      const juce::Rectangle<float>& plotArea,
-                                      float centreY,
-                                      float halfHeight,
-                                      float columnWidth) {
-    // nucleo de rms: uma faixa cheia, nao um traco por coluna. a linha fina a
-    // zigzaguear lia-se como pente — com material aleatorio virava uma textura
-    // de riscos, e a silhueta desaparecia por dentro dela. a faixa e' o corpo
-    // do sample por dentro da forma.
-    if (pixelRms_.empty() || columnWidth <= 0.0f) {
-        return;
-    }
-    const auto pixels = static_cast<int>(pixelRms_.size());
-    const auto xAt = [&](int i) {
-        return plotArea.getX() + (static_cast<float>(i) + 0.5f) * columnWidth;
-    };
-
-    juce::Path core;
-    core.startNewSubPath(xAt(0), centreY - pixelRms_[0] * halfHeight);
-    for (int i = 1; i < pixels; ++i) {
-        core.lineTo(xAt(i), centreY - pixelRms_[static_cast<std::size_t>(i)] * halfHeight);
-    }
-    for (int i = pixels; i-- > 0;) {
-        core.lineTo(xAt(i), centreY + pixelRms_[static_cast<std::size_t>(i)] * halfHeight);
-    }
-    core.closeSubPath();
-
-    juce::ColourGradient relief {
-        palette::alpha(palette::accentSoft, 0.30f), plotArea.getCentreX(), plotArea.getY(),
-        palette::alpha(palette::accentSoft, 0.30f), plotArea.getCentreX(),
-        plotArea.getBottom(), false};
-    relief.addColour(0.5f, palette::alpha(palette::accentSoft, 0.62f));
-    g.setGradientFill(relief);
-    g.fillPath(core);
-}
-
 void ByteDisplay::paintEntropy(juce::Graphics& g) {
-    if (columns_.empty()) {
+    rebuildEntropyColumnsIfNeeded();
+    if (entropyColumns_.empty()) {
         return;
     }
 
@@ -1526,15 +1408,25 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
                                                     plot.getWidth(), kAxisHeight - 2.0f},
                juce::Justification::centredRight, false);
 
-    const auto columnWidth = plot.getWidth() / static_cast<float>(columns_.size());
+    const auto count = entropyColumns_.size();
+    const auto columnWidth = plot.getWidth() / static_cast<float>(count);
+
+    // colunas em centros, com as pontas esticadas ate' as bordas do ecra: no
+    // zoom fundo ficam poucas colunas e o desenho tem de cobrir a largura toda
+    // na mesma.
+    const auto xAt = [&](std::size_t i) {
+        return plot.getX() + (static_cast<float>(i) + 0.5f) * columnWidth;
+    };
+    const auto yAt = [&](std::size_t i) { return yFor(entropyColumns_[i].entropyBits); };
 
     juce::Path curve;
-    curve.startNewSubPath(plot.getX(), plot.getBottom());
-    for (std::size_t i = 0; i < columns_.size(); ++i) {
-        const auto x = plot.getX() + static_cast<float>(i) * columnWidth;
-        curve.lineTo(x, yFor(columns_[i].entropyBits));
+    curve.startNewSubPath(plot.getX(), yAt(0));
+    for (std::size_t i = 0; i < count; ++i) {
+        curve.lineTo(xAt(i), yAt(i));
     }
+    curve.lineTo(plot.getRight(), yAt(count - 1));
     curve.lineTo(plot.getRight(), plot.getBottom());
+    curve.lineTo(plot.getX(), plot.getBottom());
     curve.closeSubPath();
 
     // o preenchimento e' um veu, nao uma parede. a 0,42 a curva desaparecia dentro
@@ -1546,8 +1438,7 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
     g.setGradientFill(veil);
     g.fillPath(curve);
 
-    const auto yAt = [&](std::size_t i) { return yFor(columns_[i].entropyBits); };
-    paintEntropyLine(g, columns_, columnWidth, plot.getX(), yAt, yAt);
+    paintEntropyLine(g, entropyColumns_, xAt, yAt);
 
     paintBookmarks(g, plot);
     paintOverview(g);
@@ -1574,14 +1465,8 @@ void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>&
 
     const auto region = std::clamp(playheadFraction_.value(), 0.0f, 1.0f);
 
-    // no hex a area e' a faixa de entropia, que mostra o ficheiro inteiro: a
-    // fraccao da regiao tem de passar por endereco antes de virar x.
     float screen = -1.0f;
-    if (mode_ == ViewMode::hex && fileSize_ > 0 && regionEnd_ > regionStart_) {
-        const auto address = pe::byteForPosition(
-            static_cast<double>(region), pe::ByteRange {regionStart_, regionEnd_});
-        screen = static_cast<float>(address) / static_cast<float>(fileSize_);
-    } else if (viewLength_ > 0.0f) {
+    if (viewLength_ > 0.0f) {
         screen = (region - viewStart_) / viewLength_;
     }
 
@@ -1598,22 +1483,6 @@ void ByteDisplay::paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>&
     g.setColour(palette::alpha(palette::accentSoft, 0.55f));
     g.fillRect(juce::Rectangle<float> {x - 0.5f, area.getY() + 5.0f, 1.0f,
                                         area.getHeight() - 5.0f});
-}
-
-std::uint64_t ByteDisplay::bandAddressAt(float x) const {
-    constexpr auto none = std::numeric_limits<std::uint64_t>::max();
-    const auto band = entropyBandBounds();
-    if (band.isEmpty() || fileSize_ == 0) {
-        return none;
-    }
-    const auto plot = band.reduced(8.0f, 0.0f);
-    if (x < plot.getX() || x > plot.getRight()) {
-        return none;
-    }
-    const auto fraction = (x - plot.getX()) / juce::jmax(1.0f, plot.getWidth());
-    const auto address = static_cast<std::uint64_t>(
-        static_cast<double>(fraction) * static_cast<double>(fileSize_ - 1));
-    return std::min(address, fileSize_ - 1);
 }
 
 std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
@@ -1655,18 +1524,8 @@ void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
     grabKeyboardFocus();
 
     if (mode_ == ViewMode::hex) {
-        // a faixa de entropia e' do pai; o hex e' filho e trata do resto.
-        if (entropyBandBounds().contains(event.position)) {
-            const auto address = bandAddressAt(event.position.x);
-            if (address != std::numeric_limits<std::uint64_t>::max() &&
-                onAddressActivated != nullptr) {
-                caretMoved_ = false;
-                hexBandDrag_ = true;
-                // a banda e' o mapa: saltar nela leva o hex para o sitio escolhido.
-                hex_.scrollToAddress(address);
-                onAddressActivated(address);
-            }
-        }
+        // o hex e' filho e trata do clique; o pai nao tem faixa nenhuma para
+        // oferecer.
         return;
     }
 
@@ -1728,13 +1587,6 @@ void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
 
 void ByteDisplay::mouseDrag(const juce::MouseEvent& event) {
     if (mode_ == ViewMode::hex) {
-        if (hexBandDrag_) {
-            const auto address = bandAddressAt(event.position.x);
-            if (address != std::numeric_limits<std::uint64_t>::max()) {
-                pendingScrub_ = address;
-                hex_.scrollToAddress(address);
-            }
-        }
         return;
     }
 
@@ -1761,7 +1613,6 @@ void ByteDisplay::mouseDrag(const juce::MouseEvent& event) {
 void ByteDisplay::mouseUp(const juce::MouseEvent&) {
     panning_ = false;
     overviewDrag_ = false;
-    hexBandDrag_ = false;
 }
 
 void ByteDisplay::mouseDoubleClick(const juce::MouseEvent& event) {
@@ -1780,14 +1631,7 @@ void ByteDisplay::mouseDoubleClick(const juce::MouseEvent& event) {
 void ByteDisplay::mouseWheelMove(const juce::MouseEvent& event,
                                  const juce::MouseWheelDetails& wheel) {
     if (mode_ == ViewMode::hex) {
-        if (entropyBandBounds().contains(event.position)) {
-            // a faixa acelera como o hex: o boost devolve o passo deste gesto.
-            const auto lines = 3.0f * nextWheelBoost();
-            hex_.scrollByLines(wheel.deltaY > 0.0f
-                                   ? -static_cast<int>(lines)
-                                   : static_cast<int>(lines));
-        }
-        return;
+        return;  // a grelha tem a sua propria roda, com o passo em linhas.
     }
     if (mode_ == ViewMode::matrix) {
         return;  // os combos da matriz tem a sua propria roda.

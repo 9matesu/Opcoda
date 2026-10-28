@@ -51,11 +51,14 @@ namespace opcoda {
 // banho de profundidade. sem grelha por baixo, o material le-se como audio e nao
 // como um grafico.
 //
-// a vista HEX ocupa a largura toda e leva uma faixa de entropia em baixo, com
-// barras largas e clicaveis. a versao anterior gastava 30 % da largura numa
-// coluna de barras de 3 px: o hex ficava estreito e as barras nao se liam.
+// a vista HEX e' o HexGrid, que vive como filho e ocupa o ecra todo: endereco,
+// bytes, ASCII e a coluna ASM. a faixa de entropia que morava por baixo saiu --
+// o mapa do ficheiro inteiro ja' vive no overview, e a faixa partia o ecra em
+// duas metades que competiam pela mesma largura.
 //
-// o hex e' o HexGrid, que vive como filho e tem geometria verificada por captura.
+// a vista ENTROPY leva colunas proprias com um minimo de 256 bytes cada: a
+// entropia de Shannon de uma coluna menor nunca chega ao topo do eixo, e no
+// zoom fundo a curva desabava toda para zero.
 class ByteDisplay : public juce::Component {
 public:
     enum class ViewMode {
@@ -123,6 +126,10 @@ public:
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
 
+    // a coluna ASM do hex so' faz sentido em material de 64 bits; o editor liga
+    // a chave quando o formato do material o diz.
+    void setDisassemblyEnabled(bool enabled) { hex_.setDisassemblyEnabled(enabled); }
+
     // liga as 24 celulas da matriz aos parametros do APVTS. uma vez, no
     // construtor do editor, depois de a arvore existir.
     void attachModParameters(juce::AudioProcessorValueTreeState& state) {
@@ -176,6 +183,10 @@ private:
     void rebuildColumnsIfNeeded();
     [[nodiscard]] std::uint32_t columnCountForWidth() const noexcept;
 
+    // colunas da vista ENTROPY: com o minimo de bytes por coluna, o eixo de
+    // 8 bits continua honesto em qualquer zoom.
+    void rebuildEntropyColumnsIfNeeded();
+
     void applyModeVisibility();
 
     void paintWaveform(juce::Graphics& g);
@@ -183,29 +194,14 @@ private:
 
     void paintEntropyLine(juce::Graphics& g,
                           const std::vector<pe::Column>& columns,
-                          float columnWidth,
-                          float originX,
-                          const std::function<float(std::size_t)>& topOf,
-                          const std::function<float(std::size_t)>& bottomOf);
+                          const std::function<float(std::size_t)>& xAt,
+                          const std::function<float(std::size_t)>& yAt);
 
     [[nodiscard]] static int entropyBucket(float bits) noexcept;
 
-    // a faixa de entropia do hex: barras largas, uma por ~8 px, sobre o
-    // ficheiro inteiro. clicavel e arrastavel, como a regua de um editor.
-    void paintEntropyBand(juce::Graphics& g);
-    [[nodiscard]] juce::Rectangle<float> entropyBandBounds() const noexcept;
-    void rebuildHexColumnsIfNeeded();
-    [[nodiscard]] std::uint64_t bandAddressAt(float x) const;
-
-    void paintRmsSilhouette(juce::Graphics& g,
-                            const juce::Rectangle<float>& plotArea,
-                            float centreY,
-                            float halfHeight,
-                            float columnWidth);
-
-    // reamostra o envelope a' resolucao da tela: um maximo, um minimo e um rms
-    // por pixel. com uma coluna por byte em zoom-out o path fazia zigzag
-    // sub-pixel e o preenchimento abria riscos verticais.
+    // reamostra o envelope a' resolucao da tela: um maximo e um minimo por
+    // pixel. com uma coluna por byte em zoom-out o path fazia zigzag sub-pixel
+    // e o preenchimento abria riscos verticais.
     void resampleEnvelope(int pixels);
 
     // bandeiras dos marcadores: triangulo no topo e fio ate' a base, nas vistas
@@ -259,8 +255,10 @@ private:
     static constexpr float kAxisInset {22.0f};
     static constexpr float kRulerHeight {16.0f};
     static constexpr float kOverviewHeight {30.0f};
-    static constexpr float kEntropyBandHeight {58.0f};
     static constexpr std::uint64_t kMinViewBytes {64};
+    // a entropia de uma coluna de menos de 256 bytes nunca chega a 8 bits: com
+    // menos que isto o eixo da vista mente e o zoom desinfla a curva.
+    static constexpr std::uint64_t kEntropyColumnBytes {256};
 
     HexGrid hex_;
     ModMatrixView matrix_;
@@ -271,7 +269,6 @@ private:
     // envelope reamostrado por pixel, reaproveitado entre repaints.
     std::vector<float> pixelMax_;
     std::vector<float> pixelMin_;
-    std::vector<float> pixelRms_;
     std::vector<float> hullMax_;
     std::vector<float> hullMin_;
 
@@ -285,7 +282,6 @@ private:
     bool caretMoved_ {false};
 
     std::uint64_t pendingScrub_ {std::numeric_limits<std::uint64_t>::max()};
-    bool hexBandDrag_ {false};
     float playheadVisible_ {false};
 
     ViewMode mode_ {ViewMode::waveform};
@@ -328,12 +324,15 @@ private:
     bool overviewValid_ {false};
     void rebuildOverviewIfNeeded();
 
-    // cache da faixa de entropia do hex: ficheiro inteiro, refeita so' quando a
-    // fonte ou a largura mudam.
-    std::vector<pe::Column> hexColumns_ {};
-    std::uint64_t hexColumnsFileSize_ {0};
-    std::uint32_t hexColumnsWidth_ {0};
-    bool hexColumnsValid_ {false};
+    // cache da vista ENTROPY: refeita quando a regiao, a largura ou o zoom
+    // mudam. independente do cache da onda, que quer resolucao maxima.
+    std::vector<pe::Column> entropyColumns_ {};
+    std::uint64_t entropyRegionStart_ {0};
+    std::uint64_t entropyRegionEnd_ {0};
+    std::uint32_t entropyColumnCount_ {0};
+    float entropyViewStart_ {-1.0f};
+    float entropyViewLength_ {-1.0f};
+    bool entropyCacheValid_ {false};
 
     void paintRuler(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
     void paintOverview(juce::Graphics& g);

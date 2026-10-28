@@ -208,14 +208,16 @@ Cada arquivo tem uma responsabilidade só:
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
 | `knob.h` | rótulo, `juce::Slider` rotativo, valor e dropdown dos *choices* |
 | `display_panel.h` | fundo escuro com gradiente, brilho de topo e sombra interna, sem grelha |
-| `byte_display.h/.cpp` | as três vistas do material, a caret, a faixa de entropia e o *preview* |
-| `hex_grid.h/.cpp` | a vista de bytes: endereços de 8 dígitos, 16 colunas, ASCII e barra de deslocamento |
+| `byte_display.h/.cpp` | as três vistas do material, a caret e o *preview* |
+| `hex_grid.h/.cpp` | a vista de bytes: endereços de 8 dígitos, 16 colunas num bloco só, ASCII, ASM com cores por símbolo e barra de deslocamento |
 | `mod_matrix_view.h/.cpp` | a vista MATRIX: oito rotas com combos e barra bipolar, cada célula um attachment |
 | `output_meter.h` | medidor stereo de saída, com pico por canal e escala em dB |
 | `plugin_editor.h/.cpp` | o chassi fixo, as abas, o pé do display com o transporte, o teclado e o layout |
 
 **Não há `assets.h` nem ficheiro de arte.** Desde 06/10/2026 o knob e o botão são
-`Path` desenhados em código, e `resources/` foi apagado. A peça fotografada
+`Path` desenhados em código, e `resources/` guarda só matéria-prima de duas
+espécies: as duas Inter Display em `resources/fonts` e os PNG do ícone em
+`resources/icons`. A peça fotografada
 `knob-md.png` eram 186×192 píxeis para pintar um disco de 62, e `button-large.png`
 obrigava a desenhar a peça quadrada ao lado do texto porque esticar um bisel de 2 px
 o deixava com 1 px de um lado e 4 px do outro. Com `Path` o corpo escala, o bisel
@@ -286,20 +288,23 @@ empilhar: cinco fileiras pediriam ~700 px e não caberiam na janela fixa.
 
 O chassi fecha em 1180×760 e não aceita redimensionamento (`setResizable(false,
 false)`). O display ocupa a faixa superior de 380 px, com uma rail vertical de
-96 px à direita para as vistas e o zoom; as seis abas de módulo encostam
+62 px à direita para as vistas e o zoom; as seis abas de módulo encostam
 directamente no display, sem tira de navegação pelo meio; os knobs e a coluna
 mestra de 116 px preenchem o meio; o teclado de 84 px e o rodapé fecham o
 desenho. O layout foi escrito para estes números e não tem um caminho
 alternativo — a guarda de `resized()` contra o primeiro rectângulo 0×0 é a única
 excepção.
 
-A grelha hexadecimal é contínua, com 16 bytes por linha, endereços de 8 dígitos,
-coluna ASCII própria e uma barra de deslocamento de 10 px. O topo do hex é do
-utilizador: `topByte_` só muda por roda, clique ou teclado, e a cabeça de
-reprodução não arrasta a vista. A faixa de entropia, com 58 px, fecha o display
-e é clicável e arrastável; o mesmo gesto na grelha move a posição. A barra
-laranja marca apenas o endereço tocado; a região aparece como filete de 1 px no
-topo e na base.
+A grelha hexadecimal é contínua, com 16 bytes por linha num bloco só (o vão de
+12 px que partia a linha em dois grupos de oito saiu), endereços de 8 dígitos,
+coluna ASCII própria, coluna ASM e uma barra de deslocamento de 10 px. O topo do
+hex é do utilizador: `topByte_` só muda por roda, clique ou teclado, e a cabeça de
+reprodução não arrasta a vista. O mesmo gesto na grelha move a posição. A parede
+de dígitos lê-se toda no mesmo marfim; o âmbar fica para o byte da cabeça de
+leitura, que é a selecção. O endereço e os bytes levam uma linha de separação que
+morre na margem das caixas de leitura, e as colunas ASCII e ASM são superfícies
+opacas próprias — antes eram faixas translúcidas por linha e a grade aparecia por
+dentro delas.
 
 O transporte tem play/pause e `HOLD` no pé do display, ao lado das leituras de
 POS e REG, e o `HOLD` congela o avanço (`transport_.advance(held ? 0 :
@@ -343,12 +348,15 @@ vidro e a seta de scroll cortava o C7. O `PITCH` acompanha em ±48 semitons, e
 `applyModMatrix` limita no mesmo teto.
 
 O envelope da onda deixou de ser riscado por coluna. São duas passagens: uma
-reamostragem para um máximo e um mínimo por pixel (`resampleEnvelope`) e um
-máximo corrido de ±2 px sobre o resultado. A primeira mata o zigzag sub-pixel
-que abria riscos verticais no preenchimento; a segunda fecha as valas de 1 px
-que faziam o material aleatório parecer um pente. O corpo é uma silhueta com
-gradiente quente, o rms é uma faixa cheia por dentro dela, e `waveLow` saiu de
-todas as camadas da onda — o verde lia-se como ruído de outra tela.
+reamostragem para um máximo e um mínimo por pixel (`resampleEnvelope`, ao dobro
+da largura em pixéis) e um máximo corrido de ±2 px sobre o resultado. A primeira
+mata o zigzag sub-pixel que abria riscos verticais no preenchimento; a segunda
+fecha as valas de 1 px que faziam o material aleatório parecer um pente. A forma
+é uma só tinta — marfim a 15 % no corpo e um filete a 78 % no contorno —, e a
+meia altura é 47 % do gráfico: com o envelope a encostar ao limite, o filete era
+cortado e só os entalhes do ruído apareciam. O gradiente quente, a sombra
+projectada e o núcleo de rms saíram; eram três camadas sobre a mesma forma, e o
+ruído virava uma nuvem sem contorno.
 
 O `DRIVE` ganhou o clipping descrito em `SOUND_ENGINE.md` — `tanh` por grão e
 teto duro no barramento, de 1,0 a 0,40 — e a largura estéreo ganhou o Haas:
@@ -1058,3 +1066,109 @@ teste: os testes `Ui.*` da F023 continuam não implementados, e o alvo `tests/` 
 núcleo puro sem JUCE. O que ganhou ensaio foi o que está do lado do núcleo — o
 `isHeld` do `NoteTracker` —, e o resto do caminho, do bitmask ao espelho, foi
 lido e não medido.
+
+### O ícone, a grelha de bytes e o zoom da entropia (27/10/2026)
+
+O ícone é a onda que os bytes fazem: silhueta espelhada laranja (`palette::accent`,
+`#D8792F`) sobre a chapa preta do display (`#0D0C0A`), cantos arredondados, e mais
+nada — sem linha de entropia, sem cabeça de leitura, sem marcadores. A forma vem de
+uma tabela fixa de 32 amplitudes que imita o que o display mostra num `.exe`: o
+início baixo dos cabeçalhos, o pico do cabeçalho PE, o corpo de código denso e a
+cauda de dados a morrer. O `tools/make-icon.ps1` desenha os PNG a partir dessa
+tabela, e o build tem dois caminhos para o mesmo desenho: o `ICON_BIG` e o
+`ICON_SMALL` no `juce_add_plugin` fazem o `juceaide` montar o `.ico` (16, 32, 48 e
+256) e injectá-lo no executável, e o PNG de 256 vai por *binary data* para o
+`makeWindowIcon` do standalone, que é o ícone da janela e da barra de tarefas. O
+alvo de dados chama-se `OpcodaAssets` e tem espaço de nomes próprio: os dois alvos
+de *binary data* declaram `namedResourceListSize` no mesmo espaço e a redefinição
+partia a compilação de quem incluía os dois cabeçalhos.
+
+A grelha hexadecimal perdeu a faixa de entropia de 58 px. A faixa era um segundo
+mapa do ficheiro inteiro, e o ficheiro inteiro já vive no *overview* do pé do
+display; o que ela fazia, na prática, era partir o ecrã em duas metades que
+competiam pela mesma largura. Sem ela, o hex ocupa o ecrã todo, os 16 bytes correm
+num bloco contínuo — o vão a meio da linha sugeria dois grupos que não existem — e
+entram duas colunas: ASCII e ASM.
+
+A coluna ASM desmonta a partir do topo da janela. A instrução que cruzou a
+fronteira do topo sai cortada e a que continua na linha de baixo mostra só `...`,
+como em qualquer *dump*; não há tentativa de adivinhar o alinhamento antes do topo.
+A coluna só aparece em material de 64 bits, decidido pelo `formatTag` do parser:
+em PE32 os comprimentos seriam mentira a partir da primeira instrução com opcode de
+32 bits.
+
+O descodificador é novo e vive no núcleo, em `src/opcoda_core/disasm`: C++20 puro,
+sem JUCE, sem excepção, sem alocação — o texto sai num `std::array<char, 80>` e o
+comprimento nunca passa de 15 nem lê para além do buffer. Cobre o conjunto inteiro
+(aritmética, mov, lea, cmp, test, shifts, grupos 3 e 5), o controlo de fluxo
+(call, jmp, jcc, loop, ret), os `cmov`/`setcc`, o `movsxd`, o `movzx`/`movsx` e os
+movimentos SSE mais comuns. AVX (VEX e EVEX) e os escapes `0F 38`/`0F 3A` caem em
+`db` e a leitura volta a sincronizar no próximo opcode que reconhece; o
+comentário do cabeçalho diz isso mesmo, porque uma coluna de orientação não se
+pode vender como desmontador de referência. O ensaio prende o que interessa: 12
+casos de comprimento e mnemónica exactos, e duas varreduras — 4000 buffers
+aleatórios onde o comprimento tem de caber no buffer, e uma varredura linear que
+tem de avançar sempre, para o desenho nunca ficar preso num comprimento zero.
+
+A vista de entropia tinha o zoom quebrado, e a causa era aritmética. A entropia de
+Shannon de uma coluna de um byte é zero por definição: com o zoom fundo, a
+redução passava a uma coluna por byte e a curva inteira desabava para a base,
+exactamente quando a pessoa se aproximava para ler mais. A meio zoom o problema
+era mais discreto e igualmente falso: uma coluna de 14 bytes nunca chega a 8 bits,
+e o eixo de 0 a 8 mentia para baixo em todo o gráfico. A vista passou a ter
+colunas próprias, com um mínimo de 256 bytes cada (`log2(256) = 8`, o topo do eixo
+continua alcançável em qualquer zoom) e cache separada do cache da forma de onda,
+que quer resolução máxima para o envelope. A curva desenha-se pelos centros das
+colunas com as pontas esticadas até às bordas do gráfico: com três colunas o
+desenho continua a cobrir a largura toda, em vez de morrer a meio.
+
+O que ficou por provar nesta ronda: a coluna ASM, nos ficheiros com AVX no
+caminho quente, mostra `db` e volta a sincronizar; isso é orientação ao olho, não
+engenharia reversa.
+
+### Superfícies de leitura, onda de uma tinta e ASM com cor (27/10/2026)
+
+A grelha de bytes tinha três desenhos a competir na mesma linha. A grade do
+endereço e dos bytes corria de margem a margem, e as colunas ASCII e ASM eram
+faixas translúcidas pintadas por linha: a linha atravessava-as por dentro, e o
+resultado lia-se como uma tabela com buracos em vez de três superfícies. Agora a
+grade morre na margem do bloco de bytes, e ASCII e ASM são caixas opacas com
+contorno arredondado, pintadas uma vez em `paintReadingColumns`, por baixo das
+linhas. Nenhuma linha lhes passa por trás.
+
+As linhas de bytes também perderam a cor. Saíram as listras alternadas, o
+escurecimento do que estava fora da região e os dois filetes laranja que
+delimitavam a região; a parede de dígitos lê-se toda no mesmo marfim, e o âmbar
+fica reservado ao byte da cabeça de leitura — a selecção. Quem diz onde começa e
+acaba cada secção é o nome da secção no endereço, e o mapa do ficheiro no pé do
+display.
+
+A coluna ASM passou a ler-se como um desmontador. A monoespacada vem do sistema
+(`Font::getDefaultMonospacedFontName()`, Consolas no Windows) porque a largura
+fixa é a informação: o mnemónico alinha na vertical de linha para linha. O texto
+é decomposto em símbolos e cada classe leva a sua tinta — mnemónico em âmbar,
+registos em marfim, números e destinos em verde-pálido, pontuação apagada, e
+`db`/`bad` em cinza, para o que o descodificador não reconheceu não se confundir
+com código lido. A fonte embebida continua a ser só a Inter Display: uma coluna
+de texto não justifica juntar um TTF ao binário.
+
+A forma de onda perdeu as camadas. Havia gradiente quente, sombra projectada,
+contorno de marfim e um núcleo de rms sobre a mesma silhueta; em material de
+ruído, tudo junto lia-se como uma nuvem laranja sem borda. Ficou uma tinta só: o
+corpo a 15 % de marfim e um filete a 78 % a fechar a forma, como o envelope de um
+clip no Ableton. A reamostragem passou a correr ao dobro da largura em pixéis, e a
+meia altura desceu para 47 % do gráfico — com o envelope a encostar ao limite, o
+filete era cortado pelo topo e só os entalhes apareciam. O `pixelRms_` e o
+`paintRmsSilhouette` saíram com o resto.
+
+A rail de vistas voltou a ser uma tira de teclas simples: 44×38, só o glifo, sem
+o nome ao lado. A largura caiu de 96 para 62 px e os 34 px foram para o display. O
+nome falado continua no tooltip e no leitor de ecrã, e o alvo não desceu abaixo
+dos 24 px do WCAG 2.5.8. O mesmo desenho serve as quatro vistas e o trio de zoom.
+
+A marca "Op" saiu de toda a interface: da barra da janela (que passa a dizer só
+"Opcoda") e do cabeçalho dos ajustes. A caixa laranja era uma segunda assinatura
+ao lado do nome e do ícone da janela, e a identidade já vem dos dois. Os quatro
+parafusos decorativos dos cantos do chassi também saíram — `paintScrew` e as
+quatro chamadas.
+

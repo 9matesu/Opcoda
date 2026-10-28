@@ -23,8 +23,8 @@ afinação, filtros, envelope, LFO e uma matriz de modulação.
 
 O recorte está na fonte. O material não vem de um sample comum; cada região do
 arquivo carrega uma assinatura estatística própria, e o instrumento expõe essa
-leitura em quatro vistas: forma de onda, grade de bytes, curva de entropia e
-matriz de modulação.
+leitura em quatro vistas: forma de onda, grade de bytes com desmontagem, curva de
+entropia e matriz de modulação.
 
 <!-- so o que ja roda -->
 
@@ -39,8 +39,16 @@ matriz de modulação.
 - Matriz de modulação com oito rotas e oito fontes.
 - Presets de fábrica e arquivos `.opcoda` para carregar e salvar.
 - Transporte sem MIDI, teclado virtual e controle por MIDI.
-- Quatro vistas do material: forma de onda, grade hexadecimal, entropia e
-  matriz de modulação.
+- Quatro vistas do material: forma de onda, grade hexadecimal com as colunas
+  ASCII e ASM, entropia e matriz de modulação. A coluna ASM desmonta material
+  64 bits com um decodificador próprio no núcleo, sem biblioteca externa, e
+  escreve com cor por classe de símbolo numa fonte monoespaçada.
+- Forma de onda de uma tinta só: o corpo e o contorno delimitam o envelope em
+  qualquer zoom, e a rail de vistas é de teclas simples, só com o glifo.
+- Curva de entropia em janelas de pelo menos 256 bytes, para que o eixo de 0 a 8
+  bits continue verdadeiro em qualquer zoom.
+- Ícone próprio: a onda que os bytes fazem, laranja sobre preto, dentro do
+  executável e na barra de tarefas.
 - Interface fixa de 1180×760, com o display como elemento dominante, o
   transporte no pé do display, medidor stereo de saída e *HOLD*.
 - Visualizadores de envelope e de resposta dos filtros no painel dos módulos
@@ -154,6 +162,10 @@ horizontal) e Q (na vertical).
 | `ENV`: ADSR desenhado, com o ponto vivo | `FILTER`: resposta dos dois biquads |
 | --- | --- |
 | ![Envelope com o ponto vivo no patamar do sustain](docs/assets/screenshots/opcoda-env.png) | ![Resposta dos filtros com as pegas de corte e Q](docs/assets/screenshots/opcoda-filter.png) |
+
+| `HEX`: bytes, ASCII e ASM | `ENTROPY` a 25 % de zoom |
+| --- | --- |
+| ![Grade de bytes com a coluna ASM a desmontar o código](docs/assets/screenshots/opcoda-hex.png) | ![Curva de entropia com zoom, em janelas de 256 bytes](docs/assets/screenshots/opcoda-entropy.png) |
 
 <!-- fluxo de audio -->
 

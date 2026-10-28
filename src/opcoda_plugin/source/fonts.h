@@ -12,9 +12,12 @@ namespace opcoda {
 // e' o corte da familia com altura de x para texto pequeno, e le-se melhor a 10 px
 // do que a Inter.
 //
-// **sem monoespacada.** a JetBrains Mono saiu porque os numeros pareciam
-// apertados. os numeros vao na mesma Inter, alinhados a direita em caixa de
-// largura fixa: nao ha `tnum` no JUCE para travar a largura dos digitos.
+// **a monoespacada voltou, so' para o desmontador.** a JetBrains Mono tinha
+// saido porque os numeros do mostrador pareciam apertados, e continuam na
+// Inter: a coluna ASM e' o unico lugar onde a largura fixa e' a informacao
+// (mnemonicos e operandos alinham na vertical). vem do sistema, como reserva
+// declarada, para nao juntar um binario de fonte ao programa por causa de uma
+// coluna de texto.
 //
 // **a fonte vem por Typeface::Ptr e nao por nome**, para nao depender de busca por
 // nome e depois por estilo. se faltar um ficheiro, a fonte do sistema serve e
@@ -35,6 +38,13 @@ struct Fonts {
             return juce::Font {juce::FontOptions {face}.withHeight(height)};
         }
         return fallbackSans(height, strong);
+    }
+
+    // coluna ASM: avanco fixo, o que faz a instrucao alinhar linha a linha.
+    [[nodiscard]] juce::Font mono(float height, bool strong = false) const {
+        return juce::Font {juce::FontOptions {juce::Font::getDefaultMonospacedFontName(),
+                                              height,
+                                              strong ? juce::Font::bold : juce::Font::plain}};
     }
 
 private:

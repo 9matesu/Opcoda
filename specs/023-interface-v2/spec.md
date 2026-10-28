@@ -274,6 +274,61 @@ A segunda revisão, do mesmo dia, acrescenta o escopo pedido pelo som:
 Requisito 6 emendado: o visor do envelope repinta a 60 Hz, e só quando o valor
 visível muda — o anterior dizia 30 Hz como teto de atualização.
 
+## Revisão de 27/10/2026 (5) — o ícone da onda, o hex sem faixa e o zoom da entropia
+
+- **O ícone é a onda, não o texto.** A caixa laranja com "Op" sai; o ícone passa a
+  ser a silhueta espelhada que os bytes desenham, laranja sobre preto, sem entropia
+  nem cabeça de leitura. Uma tabela de 32 amplitudes alimenta o `tools/make-icon.ps1`
+  (PNG) e o `ICON_BIG`/`ICON_SMALL` do CMake, que injectam o `.ico` no executável;
+  o mesmo PNG vai por *binary data* para a janela e a barra de tarefas. Isto emenda
+  o segundo ponto da revisão (4).
+- **A faixa de entropia do hex foi removida.** O mapa do ficheiro inteiro já vive
+  no *overview*; a faixa partia o ecrã em duas metades a competir pela largura. O
+  hex passa a ocupar o ecrã todo.
+- **Os 16 bytes correm num bloco só.** O vão de 12 px a meio da linha saiu: partia
+  a linha em dois grupos de oito que não correspondem a nada.
+- **Coluna ASM.** Desmontagem linear a partir do topo da janela, só em material de
+  64 bits (`formatTag`), com um descodificador próprio no núcleo
+  (`src/opcoda_core/disasm`): sem alocação, sem excepção, comprimento entre 1 e 15.
+  AVX e os escapes raros caem em `db` e re-sincronizam — é orientação, não
+  engenharia reversa.
+- **O zoom da entropia foi corrigido.** A entropia de uma coluna de um byte é
+  zero, e no zoom fundo a curva desabava toda para a base; a meio zoom o eixo de
+  0–8 bits mentia para baixo. As colunas da vista passam a levar um mínimo de 256
+  bytes, em cache própria, e a curva desenha-se por centros com as pontas
+  esticadas às bordas do gráfico.
+
+Requisito 5 emendado: a vista de bytes tem três colunas fixas — bytes, ASCII e
+ASM — e a de entropia só desenha janelas de 256 bytes ou mais.
+
+## Revisão de 27/10/2026 (6) — superfícies de leitura, onda de uma tinta e ASM com cor
+
+- **ASCII e ASM são superfícies próprias.** A grade do endereço e dos bytes deixa
+  de atravessar as colunas de leitura: morre na margem do bloco de bytes, e as duas
+  colunas passam a caixas opacas com contorno, pintadas uma vez por baixo das
+  linhas. Antes eram faixas translúcidas por linha e a grade via-se por dentro.
+- **As linhas de bytes perdem a cor.** Saem as listras alternadas, o
+  escurecimento fora da região e os filetes laranja da região; a parede de dígitos
+  lê-se toda no mesmo marfim e o âmbar fica reservado ao byte da cabeça de leitura,
+  que é a selecção. A região continua marcada pelo nome da secção no endereço e
+  pelo mapa do pé do display.
+- **O ASM lê-se como um desmontador.** Monoespacada do sistema (a largura fixa é a
+  informação), com cor por classe de símbolo: mnemónico em âmbar, registos em
+  marfim, números e destinos em verde-pálido, pontuação apagada, `db`/`bad` em
+  cinza. A fonte embebida continua a ser só a Inter Display.
+- **A onda é uma tinta só.** O gradiente quente, a sombra projectada, o contorno
+  de marfim e o núcleo de rms eram quatro camadas sobre a mesma silhueta e, em
+  ruído, liam-se como uma nuvem. Fica o corpo a 15 % de marfim e um filete a 78 %
+  a fechar a forma, com a reamostragem ao dobro da largura em pixéis e a meia
+  altura a 47 % do gráfico para o contorno não ser cortado pelo topo. Emenda o
+  ponto «Silhueta» da revisão de 26/10.
+- **Rail de teclas simples.** 44×38, só o glifo, rail de 62 px; o nome vive no
+  tooltip e no leitor de ecrã. Os 34 px ganhos vão para o display. Emenda os
+  rectângulos de 88×34 da revisão de 26/10.
+- **Sem marca e sem parafusos.** A caixa "Op" sai da barra da janela (que passa a
+  dizer só "Opcoda") e do cabeçalho dos ajustes; os quatro parafusos decorativos
+  dos cantos saem. Emenda a revisão (4).
+
 ## Estado dos testes de interface
 
 Em 24/10/2026 a suite automática cobre `opcoda_core`; os testes `Ui.*` da tabela

@@ -16,12 +16,28 @@ juce_add_binary_data(OpcodaFonts
         ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
         ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
 
+# O icone da janela vai por BinaryData: o standalone carrega o mesmo PNG que
+# alimenta o .ico do executavel, e a janela, a barra de tarefas e o ficheiro no
+# explorer mostram a mesma onda. Gerado por tools/make-icon.ps1.
+#
+# **espaco proprio, nao o BinaryData.** os dois alvos de binary data declaram
+# namedResourceListSize no mesmo espaco de nomes e a redefinicao parte a
+# compilacao de quem inclui os dois cabecalhos.
+juce_add_binary_data(OpcodaAssets
+    HEADER_NAME OpcodaAssets.h
+    NAMESPACE OpcodaAssets
+    SOURCES
+        ${CMAKE_SOURCE_DIR}/resources/icons/opcoda-icon-256.png)
+
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
     PLUGIN_MANUFACTURER_CODE Opc0
     PLUGIN_CODE Opcg
     FORMATS VST3 Standalone
     PRODUCT_NAME "Opcoda"
+    # O .ico do executavel: juceaide reamostra 16/32/48/256 a partir do grande.
+    ICON_BIG "${CMAKE_SOURCE_DIR}/resources/icons/opcoda-icon-512.png"
+    ICON_SMALL "${CMAKE_SOURCE_DIR}/resources/icons/opcoda-icon-32.png"
     # O Opcoda e' granular: gera som a partir do binario e nao recebe audio.
     # Sem IS_SYNTH o bundle sai com Sub Categories ["Fx"] e o Ableton lista o
     # plugin em Audio Effects, com uma pista de entrada inutil na cadeia.
@@ -83,6 +99,7 @@ target_sources(Opcoda
 target_link_libraries(Opcoda
     PRIVATE
         OpcodaFonts
+        OpcodaAssets
         opcoda_core
         juce::juce_audio_processors
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois

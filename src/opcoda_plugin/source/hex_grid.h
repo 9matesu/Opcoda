@@ -14,7 +14,13 @@
 namespace opcoda {
 
 // grelha de bytes do binario em formato de hex dump: endereco a esquerda,
-// dezasseis bytes por linha e a coluna ascii.
+// dezasseis bytes por linha, a coluna ASCII e a coluna ASM.
+//
+// **a coluna ASM e' orientacao, nao engenharia reversa.** o desmontador minimo
+// do nucleo (opcoda_core/disasm) cobre o conjunto inteiro e o controlo de
+// fluxo; AVX cai em "db" e a leitura re-sincroniza no proximo opcode que
+// reconhece. A varredura comeca no topo da janela: a instrucao que cruzou a
+// fronteira sai cortada, como em qualquer dump.
 //
 // **a janela e' estavel.** o desenho so' se move quando a pessoa rola, clica na
 // barra ou usa as teclas de pagina. a versao anterior seguia os graos e a cabeca
@@ -47,6 +53,10 @@ public:
     // bytes crus. o ponteiro e' para o vector do Processor e vive enquanto ele;
     // o conteudo muda e o editor avisa com setSource.
     void setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize);
+
+    // a coluna ASM so' faz sentido em codigo de 64 bits; o editor liga-a quando
+    // o formato do material diz "[64-bit PE]".
+    void setDisassemblyEnabled(bool enabled);
 
     void setSections(const std::vector<PluginProcessor::SourceInfo::SectionInfo>& sections) {
         sections_ = sections;
@@ -87,17 +97,31 @@ private:
         float gutterWidth {0.0f};
         float asciiWidth {0.0f};
         float asciiCharWidth {0.0f};
+        float asmWidth {0.0f};
         int gutterDigits {8};
         int rows {1};
         bool showAscii {true};
+        bool showAsm {false};
         bool showRail {false};
         juce::Rectangle<float> bytes;
         juce::Rectangle<float> gutter;
         juce::Rectangle<float> ascii;
+        juce::Rectangle<float> asmColumn;
         juce::Rectangle<float> rail;
     };
 
+    // instrucao da varredura linear da janela visivel. o cache refaz-se quando
+    // o topo muda; sao poucas centenas de bytes por passada.
+    struct AsmItem {
+        std::uint64_t address {0};
+        std::uint32_t length {0};
+        juce::String text;
+        std::uint64_t target {0};
+        bool hasTarget {false};
+    };
+
     void rebuildMetrics();
+    void rebuildAsmIfNeeded();
     void clampViewport();
     [[nodiscard]] std::uint64_t rowAddress(int row) const;
     [[nodiscard]] std::uint64_t highestTop() const noexcept;
@@ -112,20 +136,25 @@ private:
     [[nodiscard]] std::uint64_t addressAt(juce::Point<float> position) const;
 
     void paintColumnHeader(juce::Graphics& g);
+    // caixas das colunas ASCII e ASM, pintadas uma vez por baixo das linhas: a
+    // grade de enderecos e a parede de digitos param na margem delas.
+    void paintReadingColumns(juce::Graphics& g);
     void paintRow(juce::Graphics& g, int row);
     void paintGutter(juce::Graphics& g, int row);
     void paintBytes(juce::Graphics& g, int row);
     void paintAscii(juce::Graphics& g, int row);
+    void paintAsm(juce::Graphics& g, int row);
+    // uma instrucao com cores por classe de simbolo, na monoespacada.
+    void paintAsmText(juce::Graphics& g, const juce::String& text,
+                      juce::Rectangle<float> area) const;
 
     [[nodiscard]] const PluginProcessor::SourceInfo::SectionInfo* sectionAt(
         std::uint64_t address) const;
 
     static constexpr std::uint64_t kBytesPerRow {16};
-    static constexpr std::uint64_t kGroupGapColumns {8};
     static constexpr float kRowHeight {26.0f};
     static constexpr float kHeaderHeight {16.0f};
     static constexpr float kPadding {8.0f};
-    static constexpr float kGroupGap {12.0f};
     static constexpr float kInnerGap {14.0f};
     static constexpr float kRailWidth {10.0f};
     static constexpr float kRailGap {10.0f};
@@ -136,6 +165,11 @@ private:
     std::uint64_t regionStart_ {0};
     std::uint64_t regionEnd_ {0};
     std::uint64_t readHead_ {0};
+
+    bool asmEnabled_ {false};
+    std::vector<AsmItem> asmItems_;
+    std::uint64_t asmTopByte_ {0};
+    int asmRows_ {0};
 
     // sempre multiplo de kBytesPerRow: mantem o endereco de cada linha redondo,
     // que e' como se le um hex dump.
