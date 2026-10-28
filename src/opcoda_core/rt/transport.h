@@ -31,12 +31,10 @@ public:
 
     // piso de duracao, e nao por arredondamento.
     //
-    // abaixo do maior grao que o motor produz nao da para completar um grao: sai um
-    // clique e nao uma audicao. esse comprimento e' GranularEngine::kMaxGrainMs,
-    // 100 ms. o static_assert em transport.cpp prende os dois numeros.
-    //
-    // o piso nao salva a regiao de 4 KB (85 ms), que fica esticada para 100 ms. e' a
-    // diferenca entre "quase o tempo certo" e "clique".
+    // a regiao minima dura 100 ms -- o suficiente para o clique soar como audicao
+    // e nao como estalo. o piso nao acompanha o tamanho do grao: desde 27/10/2026
+    // o knob vai a 2 s, e uma regiao de 4 KB (85 ms) continua a ser esticada para
+    // 100 ms, nao para o comprimento de um grao.
     static constexpr double kMinSeconds {0.1};
 
     // os atomicos tem de ser lock-free. um atomic com mutex interno dentro da
@@ -113,8 +111,8 @@ public:
     // escrever no display; le atomicos e nao escreve.
     //
     // o clamp depois e' o que importa: uma regiao curta a 4x daria 25 ms, que nao
-    // completa um grao de 100 ms. em regiao extrema a taxa satura, e isso e'
-    // documentado.
+    // completa a audicao minima de 100 ms. em regiao extrema a taxa satura, e isso
+    // e' documentado.
     [[nodiscard]] double durationSeconds() const noexcept;
 
 private:

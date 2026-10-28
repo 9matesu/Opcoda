@@ -34,7 +34,7 @@ GranularParams baseParams() {
     return params;
 }
 
-float renderPeak(float driveDb, float amplitude = 0.3f) {
+float renderPeak(float driveDb, float amplitude = 0.3f, float density = 40.0f) {
     const auto material = hotSource(amplitude);
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
@@ -43,12 +43,19 @@ float renderPeak(float driveDb, float amplitude = 0.3f) {
 
     auto params = baseParams();
     params.f1DriveDb = driveDb;
+    params.densityGrainsPerSec = density;
 
     std::vector<float> left(kBlock, 0.0f);
     std::vector<float> right(kBlock, 0.0f);
     float peak = 0.0f;
     for (int block = 0; block < 48; ++block) {
         engine.processBlock(left.data(), right.data(), kBlock, params);
+        // so' os ultimos blocos: o tecto do clip desce de 1,0 ate' ao alvo dentro
+        // do primeiro bloco e o gate tem 5 ms de ataque. medir a subida apanhava
+        // um pico anterior ao patamar (0,52 a 24 dB com a nuvem densa).
+        if (block < 32) {
+            continue;
+        }
         for (int i = 0; i < kBlock; ++i) {
             peak = std::max(peak, std::abs(left[static_cast<std::size_t>(i)]));
         }
@@ -103,19 +110,24 @@ TEST(Drive, CeilingBindsAtTwentyFourDb) {
 
 TEST(Drive, CeilingStaysOpenBelowSixDb) {
     // ate' 6 dB o teto e' 1,0: o clip nao encosta e o pico passa do valor que
-    // ele teria a 24 dB.
-    EXPECT_GT(renderPeak(6.0f, 1.5f), 0.5f);
+    // ele teria a 24 dB. a nuvem densa garante que a soma chega perto do teto,
+    // senao o ensaio mediria so' o ganho de cada grao.
+    EXPECT_GT(renderPeak(6.0f, 1.5f, 200.0f), 0.5f);
 }
 
 TEST(Drive, CeilingInterpolatesWithTheKnob) {
     // 1,0 - 0,60 * (12 - 6) / 18 = 0,80: o teto e' uma rampa, nao um degrau.
-    EXPECT_NEAR(renderPeak(12.0f, 1.5f), 0.80f, 0.02f);
+    EXPECT_NEAR(renderPeak(12.0f, 1.5f, 200.0f), 0.80f, 0.02f);
 }
 
 TEST(Drive, CeilingClipsInsteadOfScaling) {
     // um ganho constante daria a mesma forma so' mais baixa: o crest factor
     // ficaria o do material (~3,2). o clip achata o topo e o crest cai.
-    EXPECT_LT(renderCrest(24.0f, 1.5f), 1.8f);
+    const auto drivenCrest = renderCrest(24.0f, 1.5f);
+    // o crest de silencio e' zero (o divisor e' zero em renderCrest), e zero
+    // passaria no limite superior; o piso impede um caminho mudo de aprovar.
+    ASSERT_GT(drivenCrest, 0.5f) << "saida muda a 24 dB: o ensaio mediria silencio";
+    EXPECT_LT(drivenCrest, 1.8f);
     // o material limpo, medido da mesma forma, tem crista bem acima disso.
     EXPECT_GT(renderCrest(0.0f, 1.5f), 2.5f);
 }
@@ -131,7 +143,7 @@ std::vector<float> toneSource() {
     return samples;
 }
 
-int crossingsAtPitch(float semitones) {
+int crossingsAtPitch(float semitones, float density = 80.0f) {
     const auto material = toneSource();
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
@@ -142,7 +154,7 @@ int crossingsAtPitch(float semitones) {
     // densidade acima de 1/duracao: os graos sobrepoem-se e o ultimo trecho nao
     // cai numa falha de agendamento, que mediria zero cruzamentos.
     params.grainSizeMs = 40.0f;
-    params.densityGrainsPerSec = 80.0f;
+    params.densityGrainsPerSec = density;
     params.pitchSemitones = semitones;
 
     std::vector<float> left(kBlock, 0.0f);
@@ -158,8 +170,12 @@ int crossingsAtPitch(float semitones) {
     for (std::size_t i = collected.size() - window + 1; i < collected.size(); ++i) {
         const auto previous = collected[i - 1];
         const auto current = collected[i];
-        if (std::abs(previous) > 0.01f && std::abs(current) > 0.01f &&
-            (previous < 0.0f) != (current < 0.0f)) {
+        // cruzamentos crus, sem limiar de amplitude. o limiar antigo de 0,01
+        // descartava as duas amostras em volta de cada zero quando o tom era
+        // fraco (918 Hz com passo de 0,015 por amostra) e um tom bom contava
+        // zero. silencio e' zero exato, entao o numero cru ja' distingue som
+        // de nada.
+        if ((previous < 0.0f) != (current < 0.0f)) {
             ++count;
         }
     }
@@ -173,6 +189,16 @@ TEST(Pitch, PlusFortyEightIsFourOctaves) {
     const auto high = crossingsAtPitch(48.0f);
 
     ASSERT_GT(plain, 8) << "ha' de haver tom para medir";
-    // 2^4 = 16x, nao 2x: um clamp de uma oitava falharia aqui.
-    EXPECT_GT(high, plain * 8);
+    ASSERT_GT(high, 8) << "a oitava alta ficou muda";
+    // 2^4 = 16x numa oitava, nao 2x. a razao e' medida, e nao so' um piso: um
+    // clamp em 36 st (8x) ficaria no limiar e passaria por contagem inteira.
+    const auto ratio = static_cast<double>(high) / static_cast<double>(plain);
+    EXPECT_NEAR(ratio, 16.0, 2.0) << "razao medida " << ratio;
+}
+
+TEST(Pitch, SilenceHasNoCrossings) {
+    // controlo negativo do contador cru: com densidade zero a saida e' zero
+    // exato, e zero nao muda de sinal. sem este caso, um contador que somasse
+    // ruido de fundo passaria no ensaio das quatro oitavas.
+    EXPECT_EQ(crossingsAtPitch(0.0f, 0.0f), 0);
 }

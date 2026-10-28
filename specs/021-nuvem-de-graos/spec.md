@@ -61,7 +61,8 @@ das durações com `grainjit = 1` e confirma zero com `grainjit = 0`.
    `[-spread, +spread]`, somado a `pitch`, `pitchrand` e à nota, antes da
    conversão para taxa.
 3. **`grainjit`** de 0 a 1: duração multiplicada por um fator uniforme em
-   `[1 - 0.5·jit, 1 + 0.5·jit]`, com piso de 1 ms e teto de 100 ms.
+   `[1 - 0.5·jit, 1 + 0.5·jit]`, com piso de 1 ms e teto de 2000 ms, os mesmos
+   limites do knob `SIZE`.
 4. **Zero é o comportamento atual.** Com os três a zero, o motor produz
    exatamente a mesma saída que antes da feature, o que é verificado por
    comparação amostra a amostra.
@@ -111,3 +112,20 @@ das durações com `grainjit = 1` e confirma zero com `grainjit = 0`.
 | `Cloud.PitchSpreadStaysWithinRange` | intervalo de afinação, simetria e uso da faixa |
 | `Cloud.GrainJitterVariesDuration` | jitter de duração com média e desvio |
 | `Cloud.SameSeedSameCloud` | determinismo e sensibilidade à semente |
+
+## Revisão de 27/10/2026
+
+O sorteio da nuvem estava congelado. `startGrain` montava o estado do gerador
+como `seed_ + voz` a cada grão, então a mesma voz sorteava sempre o mesmo spray,
+o mesmo detune e o mesmo spread: com oito vozes, a nuvem repetia uma roda de oito
+valores em vez de variar. Passava nos ensaios de intervalo e de determinismo
+porque nenhum deles olhava para a distribuição ao longo do tempo.
+
+O estado do grão passou a sair de `seed_ + ouro × (voz + serial × 8 + 1)`, com
+um serial que o `prepare` e o `setSeed` reiniciam. O determinismo fica igual
+(mesma semente, mesma nuvem) e cada grão sorteia valores novos. `setSeed` também
+reinicia o serial, senão duas corridas com a mesma semente davam nuvens
+diferentes.
+
+`Cloud.PitchSpreadStaysWithinRange` é o ensaio que apanha o defeito: a média da
+dispersão em 400 blocos não fica perto de zero com oito valores fixos.

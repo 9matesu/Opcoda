@@ -1,6 +1,7 @@
 #pragma once
 
 #include "byte_display.h"
+#include "choice_button.h"
 #include "display_panel.h"
 #include "envelope_view.h"
 #include "filter_view.h"
@@ -32,13 +33,18 @@ namespace opcoda {
 // quando o redimensionamento saiu.
 //
 // as faixas, de cima para baixo: header de chapa, ecra com tira de vistas a' direita,
-// tira de navegacao, abas de modulo, painel de knobs. o master (volume, medidor
-// stereo) ocupa a coluna da direita ate' ao fundo, e o teclado fica em baixo, a'
-// esquerda do medidor.
+// tira de navegacao, abas de modulo, painel de controlos. o master (volume, pan e
+// medidor stereo) ocupa a coluna da direita ate' ao fundo, e o teclado fica em baixo,
+// a' esquerda do medidor.
+//
+// **os controlos de cada aba vivem em campos semanticos.** grao, playback e mix sao
+// grupos separados por legenda e filete; os parametros de escolha viram campos com
+// menu, porque girar um knob de quatro posicoes nunca foi a melhor leitura. pan e
+// volume formam o master, o unico sitio onde a saida se ve e se controla.
 //
 // **sem MAIN e sem OUT nas abas.** a MAIN repetia onze parametros que ja' vivem nos
 // modulos, e o OUT tinha um volume que passou a ser o master sempre visivel. cada
-// parametro aparece uma vez, no modulo a que pertence.
+// parametro aparece uma vez, no grupo a que pertence.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      private juce::ValueTree::Listener,
@@ -245,14 +251,27 @@ private:
     // XML fora da interface; fica a marcacao e o retrato sai no timer.
     std::atomic<bool> undoFromAudio_ {false};
 
-    // sete modulos visiveis. OUT existe no enum porque o volume precisa de um
-    // Knob; nao tem aba, e o knob mora no master.
+    // sete modulos visiveis. OUT existe no enum porque o volume e o pan formam o
+    // master; nao tem aba, e os dois knobs moram na coluna da direita.
     enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys };
     ParamModule activeModule_ {ParamModule::grain};
-    std::vector<std::unique_ptr<Knob>> knobs_;
-    std::vector<std::size_t> moduleFirstKnob_ {};
-    std::vector<std::size_t> moduleKnobCount_ {};
-    std::size_t masterKnobIndex_ {0};
+
+    // um grupo semantico e' uma legenda e a fila de controlos que ela governa.
+    // Idade, densidade e janela sao "grao"; posicao, spray e scan sao "playback";
+    // nivel e largura sao "mix". o painel desenha a legenda e o filete, e o
+    // layout nao deixa um grupo partir-se entre duas filas.
+    struct ControlGroup {
+        juce::String title;
+        std::vector<juce::Component*> controls;
+        juce::Rectangle<int> bounds;
+    };
+
+    std::array<std::vector<ControlGroup>, 7> moduleGroups_;
+    std::vector<juce::Component*> masterControls_;
+    std::vector<std::unique_ptr<juce::Component>> controls_;
+    Knob* masterVolume_ {nullptr};
+    Knob* masterPan_ {nullptr};
+    juce::Rectangle<int> masterGroupBounds_;
 
     ModuleFolderTab moduleGrainButton_ {"grainMod", "Grain module"};
     ModuleFolderTab moduleEnvelopeButton_ {"envMod", "Envelope module"};

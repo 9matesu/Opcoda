@@ -67,7 +67,7 @@ Os objetivos específicos se distribuem em três áreas.
 
 Na área de engenharia de software estão o parser do formato PE, próprio, que valida assinatura MZ, assinatura PE, número de seções e limites de cada seção, e converte bytes em ponto flutuante normalizado; a ingestão somente leitura, que aceita abertura por diálogo e arrasto do sistema operacional, faz cópia defensiva e devolve códigos de erro claros para arquivos truncados, sem propagar exceção através da interface binária do plugin; e a fila sem trava entre interface e processamento de sinais, com troca de amostra por duplo tampão.
 
-Na área de processamento de sinais estão o motor granular mono com oito grãos simultâneos, com tamanho de grão de 1 a 100 ms, densidade, posição, dispersão, afinação e volume, e janelas Hann e gaussiana; o cálculo de entropia de Shannon por janela de 2048 bytes e por seção, usado para controlar a dispersão e a aleatoriedade dos grãos; e a cadeia de condicionamento, com centralização da corrente contínua, filtro de primeira ordem com coeficiente de 0,9983 e limitador de saída com teto de -1 dBFS.
+Na área de processamento de sinais estão o motor granular mono com oito grãos simultâneos, com tamanho de grão de 1 ms a 2 s, densidade, posição, dispersão, afinação e volume, e janelas Hann e gaussiana; o cálculo de entropia de Shannon por janela de 2048 bytes e por seção, usado para controlar a dispersão e a aleatoriedade dos grãos; e a cadeia de condicionamento, com centralização da corrente contínua, filtro de primeira ordem com coeficiente de 0,9983 e limitador de saída com teto de -1 dBFS.
 
 Na área de interface estão a interface de três faixas com mapa de seções do PE e grelha navegável de bytes, com controles automatizáveis na estação de trabalho; o isolamento entre interface e processamento, sem acesso direto ao estado do áudio, verificado por guard de alocação; e o mapeamento MIDI nativo, com notas, pedal de sustentação e dois controladores de mudança de controle, nos parâmetros granulares, tanto no aplicativo autônomo quanto no plugin.
 
@@ -121,7 +121,7 @@ A medição por janela impõe um cuidado que a análise forense não precisa tom
 
 ## 2.3 Processamento digital de sinais e síntese granular
 
-Roads formalizou a síntese granular a partir do conceito de microsom: o som como agregado de microfragmentos de 1 a 100 ms, cada grão com duração, envelope, frequência, amplitude e posição próprios, organizados em estruturas meso-temporais como nuvens e fluxos @cite{roads2001}. Os parâmetros canônicos são tamanho de grão, densidade de disparo, dispersão temporal, afinação e panorama. Essa teoria sustenta o motor do Opcoda, cujos grãos variam de 1 a 100 ms no MVP.
+Roads formalizou a síntese granular a partir do conceito de microsom: o som como agregado de microfragmentos de 1 a 100 ms, cada grão com duração, envelope, frequência, amplitude e posição próprios, organizados em estruturas meso-temporais como nuvens e fluxos @cite{roads2001}. Os parâmetros canônicos são tamanho de grão, densidade de disparo, dispersão temporal, afinação e panorama. Essa teoria sustenta o motor do Opcoda, cujos grãos variam de 1 ms a 2 s.
 
 O problema do material bruto não senoidal precisa ser nomeado com precisão. Interpretar bytes executáveis como amostras PCM produz um sinal sem as garantias do áudio convencional: média diferente de zero, descontinuidades abruptas nos limites de cabeçalhos e regiões de preenchimento, e variações amostra a amostra acima do limite de Nyquist, que se dobram para o espectro audível como aliasing @cite{smith2007, zolzer2011}. O janelamento granular e a filtragem de condicionamento existem precisamente para converter esse material bruto em sinal musicalmente utilizável.
 
@@ -235,7 +235,7 @@ Doze requisitos funcionais principais foram derivados do problema de pesquisa e 
 | RF02 | Validar assinatura MZ, assinatura PE, número de seções e limites por seção | OE1 | T3 |
 | RF03 | Converter bytes em ponto flutuante normalizado no intervalo de -1 a 1 | OE1 | T1 |
 | RF04 | Medir entropia de Shannon por janela de 2048 bytes e por seção | OE5 | T1 |
-| RF05 | Sintetizar até oito grãos simultâneos granulares com tamanho entre 1 e 100 ms | OE4 | T2 |
+| RF05 | Sintetizar até oito grãos simultâneos granulares com tamanho entre 1 ms e 2 s | OE4 | T2 |
 | RF06 | Expor 41 parâmetros automatizáveis na estação de trabalho | OE4, OE7 | T4 |
 | RF07 |condicionar o sinal com bloqueio de corrente contínua e limitador | OE6 | T1 |
 | RF08 | Controlar o motor por notas, pedal de sustentação e dois controladores de mudança de controle | OE9 | T4 |

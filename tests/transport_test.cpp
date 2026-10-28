@@ -50,10 +50,11 @@ TEST(Transport, SmallestRegionHasAnAudibleFloor) {
     transport.setRegionLength(64);
     transport.play();
 
-    // 64 bytes a 48 kHz dao 1,3 ms, e 1,3 ms nao chega para um grao. o piso e' o
-    // comprimento do maior grao, 100 ms, e nao um numero redondo: com 250 ms uma
-    // regiao de 4 KB (85 ms naturais) esticava quase tres vezes e quebrava o
-    // criterio de duracao natural da spec.
+    // 64 bytes a 48 kHz dao 1,3 ms, e 1,3 ms nao chega para uma audicao. o piso e'
+    // 100 ms, um numero fixo: nao acompanha o tamanho do grao (que vai a 2 s) e
+    // nao e' um numero redondo escolhido por gosto. com 250 ms uma regiao de 4 KB
+    // (85 ms naturais) esticava quase tres vezes e quebrava o criterio de duracao
+    // natural da spec.
     ASSERT_NEAR(transport.durationSeconds(), Transport::kMinSeconds, 1e-9);
     ASSERT_NEAR(Transport::kMinSeconds, 0.1, 1e-12);
 

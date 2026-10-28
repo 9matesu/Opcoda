@@ -273,8 +273,8 @@ captura, registados em `docs/16-arquitetura-implementacao.md:252-293`.
 - **FR-001**: `src/opcoda_core` MUST fornecer `rt::Transport`, sem incluir
   cabeçalho do JUCE e sem alocar, travar ou fazer I/O
 - **FR-002**: a duração de uma passagem MUST ser
-  `clamp(bytesDaRegião / taxaAmostragem, 0,1 s, 30 s)`, e o piso MUST ser igual ao
-  comprimento do maior grão que o motor produz, verificado por `static_assert`
+  `clamp(bytesDaRegião / taxaAmostragem, 0,1 s, 30 s)`, e o piso MUST ser 0,1 s,
+  fixo: ele MUST NOT acompanhar o comprimento do maior grão que o motor produz
 - **FR-003**: `advance(n)` MUST mover a posição exatamente `passosPorSegundo × n`
   e embrulhar em zero ao atingir o fim da região
 - **FR-004**: a posição devolvida MUST NEVER alcançar 1,0, porque 1,0 é silêncio
@@ -397,14 +397,15 @@ isso ouve-se como um clique a cada 30 s. A posição devolvida é recortada a
 `moveRegionTo` aceita, dá 1,3 ms: menos do que um grão, e um botão que mal chega a
 piscar. O clamp nos dois extremos é a mesma linha.
 
-**O piso é o comprimento do maior grão, e não um número redondo.** Abaixo de
-`GranularEngine::kMaxGrainMs` uma passagem nem dá para completar um grão: produz um
-clique e não uma audição. Esse comprimento é 100 ms, e por isso o piso é 0,1 s — e
-não os 0,25 s que esta spec propunha inicialmente. Com 250 ms, uma região de 4 KB
-que dura 85 ms de forma natural era esticada quase três vezes, o que anulava o
-critério 2 da História 1. Um `static_assert` em `transport.cpp` prende os dois
-números, porque dois valores que precisam de concordar divergem no primeiro que
-alguém mexer num deles.
+**O piso é 0,1 s, fixo, e não acompanha o maior grão.** Abaixo de um grão uma
+passagem nem dá para completar uma audição: produz um clique. O piso de 0,1 s
+resolve isso, mas **não** pode ser o comprimento do maior grão: quando o ganho do
+tamanho de grão subiu para 2 s (27/10/2026), amarrar o piso ao teto esticaria a
+região de 64 bytes — 1,3 ms — por um fator de 1500 e anularia o critério 2 da
+História 1 em todo o material curto. O piso é uma decisão de audição (100 ms dão
+para ouvir o clique), e o teto do grão é uma decisão do motor; os dois números
+divergem de propósito. Não há mais `static_assert`: prender o piso ao teto
+voltaria a acoplar os dois.
 
 **O tecto de amostras por coluna tem de ser maior do que 256, e não por
 afinidade.** A entropia de uma amostra de N bytes uniformes de 256 valores aproxima-se

@@ -139,10 +139,11 @@ TEST(Cloud, PitchSpreadStaysWithinRange) {
 
     ASSERT_GT(counted, 0);
     // simetrica e a usar a faixa: os dois extremos aparecem e a media fica perto
-    // de zero. com poucos graos a media oscila; 200 blocos a 40/s dao centenas de
-    // amostras.
-    EXPECT_LT(minSpread, -4.0f);
-    EXPECT_GT(maxSpread, 4.0f);
+    // de zero. com poucos graos a media oscila; 400 blocos a 200/s dao centenas
+    // de amostras. o limite de 8 st (num knob de 12) falha se um clamp encolher
+    // a nuvem para os dois lados.
+    EXPECT_LT(minSpread, -8.0f);
+    EXPECT_GT(maxSpread, 8.0f);
     EXPECT_NEAR(sum / static_cast<double>(counted), 0.0, 1.5);
 
     // fora do intervalo: com spread 4 nenhum grao passa de 4.
@@ -161,7 +162,7 @@ TEST(Cloud, GrainJitterVariesDuration) {
     const int baseLength = static_cast<int>(40.0f * 0.001f * static_cast<float>(kSampleRate));
     std::vector<int> lengths;
     for (const auto& s : run(params, 400)) {
-        // metade a uma vez e meia de 40 ms, com piso de 1 ms e tecto de 100 ms.
+        // metade a uma vez e meia de 40 ms, com piso de 1 ms e tecto de 2000 ms.
         // blocos sem grao novo reportam zero, e nao sao amostras.
         if (s.length == 0) {
             continue;

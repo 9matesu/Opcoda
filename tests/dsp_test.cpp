@@ -301,21 +301,203 @@ TEST(GranularEngine, ProducesAudioFromSyntheticSource) {
 TEST(GranularEngine, RespectsGrainSizeBounds) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
-    std::vector<float> source(8192, 0.5f);
+    // fonte de 5 s: a metade tem de valer 2,5 s para o tecto de 2 s ser o que
+    // morde. com fonte mais curta o recorte da metade agia primeiro e o ensaio
+    // media outro limite (esse caso tem ensaio proprio abaixo).
+    const auto sourceCount = static_cast<std::size_t>(kSampleRate * 5.0);
+    std::vector<float> source(sourceCount, 0.0f);
+    for (std::size_t i = 0; i < sourceCount; ++i) {
+        source[i] = 0.5f * static_cast<float>(
+            std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate));
+    }
     engine.setSource(source.data(), source.size());
+    engine.setSounding(true);
 
     GranularParams params;
+    params.grainSizeMs = 5000.0f;
+    params.densityGrainsPerSec = 4.0f;
     std::vector<float> left(256);
     std::vector<float> right(256);
 
-    // acima do teto de 100 ms ainda produz, sem estourar o buffer pre-alocado.
-    params.grainSizeMs = 1000.0f;
-    params.densityGrainsPerSec = 200.0f;
-    engine.processBlock(left.data(), right.data(), 256, params);
-
-    for (const auto sample : left) {
-        EXPECT_TRUE(std::isfinite(sample));
+    // acima do teto de 2 s ainda produz, sem estourar o buffer pre-alocado --
+    // mas fica nos 2 s, nao nos 5 s pedidos.
+    float peak = 0.0f;
+    for (int block = 0; block < 220; ++block) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        for (const auto sample : left) {
+            ASSERT_TRUE(std::isfinite(sample));
+            peak = std::max(peak, std::abs(sample));
+        }
     }
+    // dois segundos, o teto que o utilizador ve' no knob. literal de proposito:
+    // escrito a partir da constante, o ensaio aceitaria qualquer teto novo.
+    const auto expected = static_cast<int>(2.0 * kSampleRate);
+    EXPECT_EQ(engine.lastGrainLengthSamples(), expected);
+    // o grao clampado tem de soar: so' o comprimento nao distingue um motor que
+    // aceita o valor e cala a voz.
+    EXPECT_GT(peak, 0.01f) << "o grao no tecto ficou mudo";
+
+    // o piso: 1 ms, o menor valor que o knob entrega. abaixo disso o motor nao
+    // pode encurtar para zero nem dividir por um comprimento invalido.
+    GranularEngine floorEngine;
+    floorEngine.prepare(kSampleRate, 256);
+    floorEngine.setSounding(true);
+    floorEngine.setSource(source.data(), source.size());
+    auto tiny = params;
+    tiny.grainSizeMs = 0.0f;
+    tiny.densityGrainsPerSec = 200.0f;
+    for (int block = 0; block < 220; ++block) {
+        floorEngine.processBlock(left.data(), right.data(), 256, tiny);
+    }
+    EXPECT_EQ(floorEngine.lastGrainLengthSamples(),
+              static_cast<int>(GranularEngine::kMinGrainMs * 0.001 * kSampleRate));
+}
+
+TEST(GranularEngine, GrainNeverTakesMoreThanHalfTheSource) {
+    // a fonte tem 2 s, logo o tecto da metade vale 1 s: o grao de 2 s pedido tem
+    // de encolher para 1 s, e nao para o tecto de milissegundos. era este recorte
+    // que a fonte de 5 s escondia.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 256);
+    engine.setSounding(true);
+
+    const auto sourceCount = static_cast<std::size_t>(kSampleRate * 2.0);
+    std::vector<float> source(sourceCount, 0.0f);
+    for (std::size_t i = 0; i < sourceCount; ++i) {
+        source[i] = 0.5f * static_cast<float>(
+            std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate));
+    }
+    engine.setSource(source.data(), source.size());
+
+    GranularParams params;
+    params.grainSizeMs = 2000.0f;
+    params.densityGrainsPerSec = 4.0f;
+    params.position = 0.0f;
+
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+    for (int block = 0; block < 200; ++block) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+    }
+
+    EXPECT_EQ(engine.lastGrainLengthSamples(), static_cast<int>(sourceCount / 2));
+}
+
+TEST(GranularEngine, LongGrainStaysAliveForTheWholeLength) {
+    // 1,5 s de grao. o teto antigo de 100 ms matava o som no primeiro decimo e o
+    // knob parecia nao fazer nada acima disso.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 256);
+    engine.setSounding(true);
+
+    // seno, e nao uma constante: o dc_blocker da saida corta material continuo e
+    // o ensaio leria silencio mesmo com o grao vivo.
+    const auto sourceCount = static_cast<std::size_t>(kSampleRate * 4.0);
+    std::vector<float> source(sourceCount, 0.0f);
+    for (std::size_t i = 0; i < sourceCount; ++i) {
+        source[i] = 0.5f * static_cast<float>(
+            std::sin(2.0 * M_PI * 220.0 * static_cast<double>(i) / kSampleRate));
+    }
+    engine.setSource(source.data(), source.size());
+
+    GranularParams params;
+    params.grainSizeMs = 1500.0f;
+    // um grao por segundo: a medicao tem de apanhar o mesmo grao ja' velho, e nao
+    // um recem-nascido que esconderia um motor que consome dois blocos por bloco.
+    params.densityGrainsPerSec = 1.0f;
+    params.position = 0.0f;
+    params.spray = 0.0f;
+
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+
+    // mede a 1,9 s do arranque. o unico grao antes disso nasceu em ~1,0 s, logo
+    // tem 0,9 s de vida: um grao de 1,5 s chega vivo, um de 100 ms ja' morreu ha'
+    // muito, e um motor que renderiza cada grao duas vezes por bloco (bug de
+    // 27/10/2026) matava-o aos 0,75 s. o grao seguinte so' nasce em ~2,0 s.
+    const int blocksUntilMeasurement = static_cast<int>(kSampleRate * 1.9 / 256.0);
+    for (int block = 0; block < blocksUntilMeasurement; ++block) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+    }
+
+    std::fill(left.begin(), left.end(), 0.0f);
+    float peak = 0.0f;
+    for (int block = 0; block < 8; ++block) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        for (const auto sample : left) {
+            peak = std::max(peak, std::abs(sample));
+        }
+    }
+    EXPECT_GT(peak, 0.01f) << "o grao de 1,5 s calou antes do fim: pico " << peak;
+}
+
+TEST(GrainWindow, MappingClosesTheEnvelopeOnTheLastSample) {
+    // o grao de N amostras le a tabela com passo (4096-1)/(N-1): o ultimo indice
+    // tem de cair em 4095, onde a Hann vale zero. o ensaio le a tabela a serio em
+    // vez de repetir a conta da funcao; a formula antiga (4096/N) deixava o rabo
+    // do grao curto no pico da janela (2 amostras caiam no indice 2048, valor 1).
+    std::array<float, GranularEngine::kWindowTableSamples> hann {};
+    fillWindow(WindowType::kHann, hann.data(),
+               static_cast<int>(GranularEngine::kWindowTableSamples));
+
+    constexpr double kLastIndex = static_cast<double>(GranularEngine::kWindowTableSamples - 1);
+    for (const int length : {2, 3, 8, 44, 441, 4410, 8820}) {
+        const auto scale = GranularEngine::windowScaleForLength(length);
+        // mesmo truncamento da renderizacao: static_cast<size_t> do produto.
+        const auto lastIndex = static_cast<std::size_t>(
+            std::min(static_cast<double>(length - 1) * scale, kLastIndex));
+        EXPECT_LT(hann[lastIndex], 1.0e-4f)
+            << "o ultimo indice do grao de " << length << " nao fecha a janela";
+
+        // a formula antiga, para comparar: num grao de 2 ou 3 amostras o ultimo
+        // indice chegava perto do pico e ouvia-se o corte.
+        const auto oldIndex = static_cast<std::size_t>(
+            std::min(static_cast<double>(length - 1) * 4096.0 / static_cast<double>(length),
+                     kLastIndex));
+        if (length <= 3) {
+            EXPECT_GT(hann[oldIndex], 0.5f)
+                << "a formula antiga devia deixar o grao de " << length << " no pico";
+        }
+    }
+
+    EXPECT_DOUBLE_EQ(GranularEngine::windowScaleForLength(1), 0.0);
+}
+
+TEST(GranularEngine, AGrainLivesAsLongAsItsLength) {
+    // 200 ms a 44,1 kHz sao 8820 amostras, ~35 blocos de 256. o motor renderizava
+    // cada grao duas vezes por bloco (um passe antes do nascimento, outro depois,
+    // ambos sobre todas as vozes) e consumia dois blocos de vida por bloco: o grao
+    // morria em ~17. o grao longo nao era longo por isso.
+    GranularEngine engine;
+    engine.prepare(kSampleRate, 256);
+
+    std::vector<float> material(48000, 0.25f);
+    engine.setSource(material.data(), material.size());
+
+    GranularParams params;
+    params.grainSizeMs = 200.0f;
+    params.densityGrainsPerSec = 1.0f; // nao nasce outro durante a contagem
+    params.position = 0.0f;
+
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+    std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
+
+    int waits = 0;
+    while (engine.telemetry().read(views) == 0 && waits < 400) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        ++waits;
+    }
+    ASSERT_LT(waits, 400) << "nenhum grao nasceu em 400 blocos";
+
+    int blocksAlive = 1; // o bloco em que nasceu ja' o publicou
+    while (engine.telemetry().read(views) > 0 && blocksAlive < 60) {
+        engine.processBlock(left.data(), right.data(), 256, params);
+        ++blocksAlive;
+    }
+
+    EXPECT_GE(blocksAlive, 33) << "o grao de 200 ms morreu cedo demais";
+    EXPECT_LE(blocksAlive, 36) << "o grao de 200 ms sobreviveu demais";
 }
 
 TEST(GranularEngine, NeverExceedsCeiling) {

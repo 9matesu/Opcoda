@@ -81,7 +81,20 @@ utilizador escolheu perde apenas o que a janela não teria como ler, e o fim do
 material deixa de ser um silêncio. Numa região curta com pitch alto o grão não
 cabe em sítio nenhum e o tecto caía para zero — todos os grãos no primeiro byte,
 knob de posição morto. Passa a haver um segundo limite: o grão nunca ocupa mais
-de metade do material, e a janela encurta com o envelope reescalado.
+de metade do material, e a janela acompanha o comprimento que sobrou.
+
+**A janela deixou de ser construída no comprimento do grão.** Até 27/10/2026 havia
+duas tabelas do tamanho do grão, refeitas em `rebuildWindow` a cada mudança de
+tamanho. Com o tecto a 2 s, um grão de 48 kHz pediria 96 mil amostras por tipo, e
+uma tabela nova a cada tique do knob no caminho do áudio. Passaram a ser quatro
+tabelas de 4096 pontos — Hann, gaussiana, Hamming e Blackman —, preenchidas uma
+vez no `prepare`; o grão lê a tabela com passo `(4096−1)/(grainLength−1)`, de modo
+que o primeiro índice cai em zero e o último em 4095. A escala antiga,
+`4096/grainLength`, deixava a última amostra de um grão de 2 amostras no pico da
+Hann, e o corte ouvia-se. `rebuildWindow` passou a ser uma troca de ponteiro
+(nenhum `cos` no callback), e cada grão guarda a tabela com que nasceu: mudar de
+janela não salta o envelope de um grão de 2 s a meio. `activeWindowLength_`
+desapareceu porque o comprimento vive no grão que está a soar.
 
 O spray e' dispersao pura dos graos, independente da entropia local; a entropia so' o modula quando roteada pela matriz: região
 repetitiva fica mais ancorada. É o Entropy-to-CV descrito na fundamentação.
@@ -134,8 +147,11 @@ cobre a invariante com duas threads de verdade.
 
 O `operator new` global é substituído por uma versão que conta alocações
 dentro da janela de áudio. O teste do portão C marca a janela e falha se
-`processBlock` alocar, inclusive em 5 minutos de playback sintético. Isso é o
-critério de tempo real virando código, e não revisão manual.
+`processBlock` alocar, em cinco segundos de playback sintético no pior caso
+(densidade, spray e passo de leitura máximos). A alocação, se existir, acontece
+em qualquer bloco; os cinco minutos contínuos são o ensaio T2 no host, que mede
+p99 e xruns e não o `operator new`. Isto é o critério de tempo real virando
+código, e não revisão manual.
 
 ## Correções pendentes na documentação
 
@@ -206,7 +222,8 @@ Cada arquivo tem uma responsabilidade só:
 | `look_and_feel.h` | desenho do knob, do botão e dos ícones, todos em `juce::Path` |
 | `animator.h` | meia-vida exponencial, a única forma de interpolação da interface |
 | `boxed_label.h` | rótulo com fundo, usado no valor e nos chips |
-| `knob.h` | rótulo, `juce::Slider` rotativo, valor e dropdown dos *choices* |
+| `knob.h` | rótulo com glifo, `juce::Slider` rotativo e valor |
+| `choice_button.h` | parâmetro de escolha como chip escuro com valor, chevron e `PopupMenu` |
 | `display_panel.h` | fundo escuro com gradiente, brilho de topo e sombra interna, sem grelha |
 | `byte_display.h/.cpp` | as três vistas do material, a caret e o *preview* |
 | `hex_grid.h/.cpp` | a vista de bytes: endereços de 8 dígitos, 16 colunas num bloco só, ASCII, ASM com cores por símbolo e barra de deslocamento |
@@ -250,19 +267,29 @@ padrão, é decisão: `Slider` entrega foco por teclado, ajuste com setas e
 `SliderParameterAttachment` cuida do undo por parâmetro, e por isso exige a
 referência do `RangedAudioParameter`, não a da árvore inteira.
 
-O nome accessible de cada knob é a descrição completa em inglês
+O nome acessível de cada controle é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
 seria inútil para quem navega por leitor de tela. Os **66 parâmetros** vivem em
 seis módulos (GRAIN, ENV, FILTER, MOD, CLOUD, KEYS), com uma faixa visível de
 cada vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
-onze knobs de grão numa linha. A aba MAIN saiu porque repetia os onze parâmetros
-de grão; a aba OUT saiu porque o volume é um knob mestre persistente na coluna
-escura da direita, ao lado do medidor de saída. Cada controle aparece uma vez.
-Os knobs de choice (window, tipos de filtro, inclinação do filtro, alvo, forma e
-sincronismo do LFO, escala e tônica) usam o mesmo `SliderParameterAttachment` —
-o JUCE entrega intervalo 0..N-1 com passo 1 para `AudioParameterChoice` — e o
-caret ao lado do valor abre um `PopupMenu` com os rótulos reais; girar o knob
-continua a responder à roda e às setas.
+controles numa linha. A aba MAIN saiu porque repetia os onze parâmetros de grão;
+a aba OUT saiu porque volume e pan formam o master persistente na coluna escura
+da direita, ao lado do medidor de saída. Cada controle aparece uma vez, no campo
+semântico a que pertence: GRAIN separa grão, playback e mix; ENV separa tempos e
+curvas; FILTER separa o primeiro filtro, o carácter e o segundo; MOD separa o LFO
+do roteamento. A legenda e o filete desenham o campo, e a largura de cada um
+segue o número de controles que contém.
+
+Os parâmetros de escolha deixaram de ser knobs. Window, tipos e inclinação do
+filtro, alvo, forma, sincronismo e divisão do LFO, escala e tônica passam a
+campos de escolha: um chip escuro, baixo e largo, com o valor escrito e um
+chevron à direita. O clique abre o `PopupMenu` com os rótulos reais e o
+`ParameterAttachment` mantém o campo em sincronia com o host. O chip fica na
+altura do disco do knob, mas não ocupa a célula inteira: o quadrado que aqui
+estava lia-se como um disco sem escala. A troca derruba o número de discos de
+trinta e nove para vinte e nove sem perder parâmetro nenhum, e resolve a leitura
+de "Low-pass" num campo onde antes cabia "Lo". Cada legenda leva ainda um glifo
+em `juce::Path`, desenhado pela mesma função que serve os ícones dos módulos.
 
 ### Três decisões que deram errado na primeira tentativa
 
@@ -282,18 +309,24 @@ display e das abas não comporta dois knobs com rótulo e valor, e eles
 despencam para poucos pixels. Cada módulo fica sempre em uma linha, como no mock, e
 o diâmetro do knob é limitado dentro do componente, então encolhe com a janela
 sem precisar de um segundo layout. Por isso as abas trocam a faixa em vez de
-empilhar: cinco fileiras pediriam ~700 px e não caberiam na janela fixa.
+empilhar: cinco fileiras pediriam ~700 px e não caberiam na janela fixa. A
+revisão de 27/10/2026 reforçou a decisão: os campos semânticos dividem a mesma
+linha e os parâmetros de escolha, ao virarem chips baixos, não pedem altura de
+disco. No filtro, o gráfico cede um pouco da largura para os dez controlos
+caberem com o rótulo inteiro.
 
 ### A janela fixa e as quatro vistas
 
 O chassi fecha em 1180×760 e não aceita redimensionamento (`setResizable(false,
 false)`). O display ocupa a faixa superior de 380 px, com uma rail vertical de
 62 px à direita para as vistas e o zoom; as seis abas de módulo encostam
-directamente no display, sem tira de navegação pelo meio; os knobs e a coluna
-mestra de 116 px preenchem o meio; o teclado de 84 px e o rodapé fecham o
+directamente no display, sem tira de navegação pelo meio; os controles e a coluna
+mestra de 168 px preenchem o meio; o teclado de 84 px e o rodapé fecham o
 desenho. O layout foi escrito para estes números e não tem um caminho
 alternativo — a guarda de `resized()` contra o primeiro rectângulo 0×0 é a única
-excepção.
+excepção. A coluna mestra cresceu de 116 para 168 px quando pan e volume passaram
+a dividi-la, e as leituras de POS e REG subiram para a tira superior do visor,
+deixando o pé do ecrã com o transporte e as páginas do hex.
 
 A grelha hexadecimal é contínua, com 16 bytes por linha num bloco só (o vão de
 12 px que partia a linha em dois grupos de oito saiu), endereços de 8 dígitos,
@@ -409,10 +442,14 @@ fracas, o level manda na opacidade e o pan desloca o ponto do topo. O desenho é
 limitado à área visível, para a silhueta não aparecer meio cortada na posição 0.
 
 **A escala do medidor saiu do aperto.** O piso desceu de -60 para -48 dB e os
-rótulos passaram a 0, -12, -24, -36 e -48, com 8 px de corpo, centrados no traço
-e limitados dentro da pista. O volume da coluna mestra cedeu 18 px ao medidor:
-com a pista antiga, 0 e -6 dB ficavam a 8 px de distância e os números
-encostavam uns aos outros.
+rótulos passaram a 0, -12, -24, -36 e -48, centrados no traço e limitados dentro
+da pista. O volume da coluna mestra cedeu 18 px ao medidor: com a pista antiga, 0
+e -6 dB ficavam a 8 px de distância e os números encostavam uns aos outros. Em
+27/10/2026 os rótulos voltaram a encostar — saíam por cima da coluna esquerda — e
+o grupo inteiro passou a ser medido de uma vez e centrado: coluna de 22 px, 7 px
+entre as colunas, 9 px até a escala e 26 px de escala. O corpo da escala desceu
+para 7,5 px e a altura do medidor passou a 45 % da coluna, presa entre 64 e 104
+px, para o grupo não dançar quando a janela muda de altura.
 
 ### O display F008
 
@@ -874,11 +911,11 @@ quente:
   não no início do bloco, que seria quantizar a nuvem ao tamanho do bloco.
 - **`pitchspread`** soma um desvio simétrico ao detune antes da razão de
   semitons.
-- **`grainjit`** sorteia um fator em `[0,5×, 1,5×]` e recorta a 1–100 ms. A
-  janela **não é reconstruída por grão**: a tabela é uma por bloco e os oito
-  slots partilham-na, por isso o índice é escalado por
-  `activeWindowLength / grainLength`. Com jitter 0 esse fator é exatamente 1,0
-  e o índice é o de antes.
+- **`grainjit`** sorteia um fator em `[0,5×, 1,5×]` e recorta a 1–2000 ms, o mesmo
+  intervalo do knob de tamanho. A janela **não é reconstruída por grão**: a tabela
+  é uma por tipo, preenchida no `prepare`, e os oito slots partilham-na, por isso
+  o índice é escalado por `(kWindowTableSamples − 1) / (grainLength − 1)`. O grão
+  guarda a tabela com que nasceu, e não a que o knob aponta agora.
 
 **Nenhum dos três sorteia quando está a zero.** Um sorteio a mais mudaria a
 sequência do gerador e a saída com os knobs a zero deixaria de reproduzir a
@@ -1172,3 +1209,71 @@ ao lado do nome e do ícone da janela, e a identidade já vem dos dois. Os quatr
 parafusos decorativos dos cantos do chassi também saíram — `paintScrew` e as
 quatro chamadas.
 
+### O grão até 2 s e o piso do transporte (27/10/2026)
+
+O `SIZE` parava em 100 ms. Não havia dead zone: o teto do knob era o teto do
+motor, e os dois números viviam casados em `kMaxGrainMs` e no `NormalisableRange`
+de `grain`. Quem quisesse um grão de meio segundo não tinha para onde girar. O
+teto passa a 2 s, que é o que se espera de um granular moderno, e o knob ganhou
+escala em milissegundos com centro em 100 ms (`setSkewForCentre`), senão os 40 ms
+do default moravam nos primeiros 2 % do curso e o resto da viagem era só material
+longo. O valor guardado, automatizado e nos presets continua em milissegundos, e
+tudo até 100 ms lê exatamente como antes.
+
+No motor, `kMaxGrainSamples` passou a 768 mil — 2 s mesmo a 384 kHz, a maior taxa
+que um host entrega —, e o limite que o utilizador vê é o de milissegundos. O
+recorte de "no máximo metade do material" não mudou: um grão de 2 s numa fonte de
+3 s continua a encolher, e o envelope acompanha.
+
+O transporte tinha o piso amarrado ao maior grão por um `static_assert`: 100 ms de
+piso porque 100 ms era o grão. Com 2 s, o piso herdaria 2 s e a região de 64 bytes
+— 1,3 ms — seria esticada mil e quinhentas vezes, o que anula o critério de
+duração natural da F008. O piso de 0,1 s é uma decisão de audição e ficou fixo; o
+`static_assert` saiu, porque prender outra vez os dois números voltaria a acoplar
+o que precisa de divergir.
+
+`getTailLengthSeconds` passa a devolver 2 s. É o tempo que um grão já nascido tem
+para acabar depois de o gate fechar; sem a cauda declarada, o host cortava o som
+do `STOP` a meio do grão.
+
+**O grão de 2 s não durava 2 s.** Ao medir a vida do grão apareceu um defeito
+antigo: o `processBlock` renderizava as vozes antes de semear as novas e voltava a
+renderizar todas depois. A voz que já estava ativa via `writeIndex` voltar a zero
+e avançava um segundo bloco inteiro, somado ao primeiro. Cada grão consumia dois
+blocos de vida por bloco — um grão de 1,5 s morria em 0,75 s, e a saída somava
+dois trechos distintos do material. Com grãos de 100 ms o erro passava por "grão
+curto"; com 2 s ficou impossível não ver. O segundo passe só renderiza as vozes
+que nasceram no bloco (`bornThisBlock`), e `AGrainLivesAsLongAsItsLength` conta os
+blocos de um grão de 200 ms — cerca de 35 blocos de 256 amostras — para o defeito
+não voltar.
+
+No mesmo dia, `releaseResources` passou a soltar a fonte do motor
+(`setSource(nullptr, 0)`) antes de `owned_.clear()`. O motor guarda um ponteiro
+cru para o buffer de bytes, e libertar o buffer deixava o próximo
+`prepareToPlay` a ler memória que já não era dele.
+
+**A nuvem estava congelada.** O mesmo trabalho de medição mostrou que o spray, o
+detune e o spread não variavam: `startGrain` montava o estado do gerador como
+`seed_ + voz` a cada grão, então cada voz repetia exatamente os mesmos três
+sorteios. Com oito vozes, a "nuvem" era uma roda de oito valores. Passou a haver
+um serial por grão (`grainSerial_`, reiniciado no `prepare` e no `setSeed`), e o
+estado sai de `seed_ + ouro × (voz + serial × 8 + 1)`. A mesma semente continua a
+dar a mesma nuvem; o que muda é que agora ela varia no tempo.
+
+Três ensaios acompanharam o teto. `RespectsGrainSizeBounds` pede 5 s com uma
+fonte de 5 s — uma fonte curta escondia o recorte de milissegundos atrás do
+recorte de metade do material — e exige 88200 amostras a 44,1 kHz, os 2 s
+literais; escrito a partir da constante, aceitaria qualquer teto novo.
+`LongGrainStaysAliveForTheWholeLength` mede a 1,9 s do arranque, 0,9 s depois do
+único grão que nasceu, e falha se o teto voltar atrás ou se o motor voltar a
+consumir dois blocos por bloco; `WindowScaleClosesTheEnvelopeOnTheLastSample`
+percorre os comprimentos de 2 a 4096 e exige que o último índice caia em 4095.
+`factory_presets` passou a aceitar até 2000 ms. Os dois ensaios de drive
+(`CeilingStaysOpenBelowSixDb`, `CeilingInterpolatesWithTheKnob`) passaram a usar
+uma nuvem densa e a medir só depois de o ganho de drive assentar: com um grão
+renderizado por bloco a soma já não chegava ao tecto, e medir a subida apanhava
+um pico anterior ao próprio tecto. O `character_test` foi o único que apanhou a mudança de forma
+inesperada: media a terça harmónica do `DRIVE` com um grão de 400 ms que o teto
+antigo recortava para 100, e com 400 ms reais os grãos sobrepunham-se e a razão
+caía. O teste passou a pedir 100 ms de propósito — ele mede o `tanh` do filtro, e
+não a sobreposição de janelas, e assim não muda se o teto crescer outra vez.

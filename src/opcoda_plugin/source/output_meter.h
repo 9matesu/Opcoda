@@ -77,14 +77,19 @@ public:
                    juce::Justification::centredLeft, false);
 
         // duas colunas de segmentos, com as letras por baixo e a escala a' direita.
+        // o conjunto fica centrado na chapa: encostado a' esquerda sobrava um
+        // vazio de metade da caixa a' direita.
         constexpr float labelHeight {12.0f};
         const auto track = bounds.reduced(8.0f, 4.0f)
                                .withTrimmedTop(titleHeight)
                                .withTrimmedBottom(labelHeight);
-        constexpr float columnWidth {20.0f};
-        constexpr float columnGap {6.0f};
+        constexpr float columnWidth {22.0f};
+        constexpr float columnGap {7.0f};
+        constexpr float scaleGap {9.0f};
+        constexpr float scaleWidth {26.0f};
         const auto columnsWidth = columnWidth * 2.0f + columnGap;
-        const auto leftX = track.getX() + 2.0f;
+        const auto meterWidth = columnsWidth + scaleGap + scaleWidth;
+        const auto leftX = bounds.getCentreX() - meterWidth * 0.5f;
 
         const auto drawColumn = [&](float x, float level, float peak) {
             const auto lit = static_cast<int>(std::ceil(level * kSegments));
@@ -127,11 +132,11 @@ public:
         drawColumn(leftX + columnWidth + columnGap, right_.value(), peakRight_);
 
         // escala de dB a' direita: 0 no tecto, -48 em baixo. cada rotulo assenta no
-        // seu traco e o ultimo de cima e' empurrado para dentro da pista -- era o
-        // "0" a sair por cima da caixa que fazia a escala parecer desalinhada.
-        g.setFont(fonts().sans(8.0f));
-        const auto scaleX = leftX + columnsWidth + 7.0f;
-        constexpr float kLabelHeight {9.0f};
+        // seu traco e o ultimo de cima e' empurrado para dentro da pista. a fonte
+        // e' pequena de proposito: a pista tem cinco rotulos e a altura e' curta.
+        g.setFont(fonts().sans(7.5f));
+        const auto scaleX = leftX + columnsWidth + scaleGap;
+        constexpr float kLabelHeight {8.0f};
         for (const auto db : {0.0f, -12.0f, -24.0f, -36.0f, -48.0f}) {
             const auto unit = std::clamp((db - kFloorDb) / -kFloorDb, 0.0f, 1.0f);
             const auto y = track.getBottom() - unit * track.getHeight();
@@ -142,7 +147,7 @@ public:
             g.fillRect(juce::Rectangle<float> {scaleX, y - 0.5f, 3.0f, 1.0f});
             g.setColour(palette::alpha(palette::textOnDarkSub, 0.9f));
             g.drawText(juce::String {static_cast<int>(db)},
-                       juce::Rectangle<float> {scaleX + 5.0f, labelY, 24.0f,
+                       juce::Rectangle<float> {scaleX + 5.0f, labelY, 20.0f,
                                                kLabelHeight},
                        juce::Justification::centredLeft, false);
         }

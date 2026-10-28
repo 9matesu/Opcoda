@@ -1,4 +1,4 @@
-﻿#include "plugin_editor.h"
+#include "plugin_editor.h"
 
 #include "factory_presets.h"
 
@@ -39,10 +39,9 @@ constexpr int kTabGap {6};
 constexpr int kFolderTabTail {6};
 
 constexpr int kKeyboardHeight {84};
-constexpr int kMasterWidth {116};
+constexpr int kMasterWidth {168};
 constexpr int kMasterGap {12};
 constexpr int kMaxCellWidth {156};
-constexpr int kKnobContentHeight {148};
 constexpr int kFooterHeight {24};
 constexpr int kStatusHeight {16};
 
@@ -69,30 +68,37 @@ const auto cutoffText = [](float v) {
 // sessoes salvas referenciam por ID -- so' o titulo e o nome falado passam a ingles.
 const std::array<Knob::Spec, 11> kGrainSpecs {
     Knob::Spec {"grain", "SIZE", "Grain size, in milliseconds", 40.0f,
-                [](float v) { return asInteger(v) + " ms"; }},
+                [](float v) {
+                    return v < 1000.0f ? asInteger(v) + " ms"
+                                       : juce::String {v / 1000.0f, 2} + " s";
+                },
+                {}, "size"},
     Knob::Spec {"density", "DENSITY", "Density, in grains per second", 20.0f,
-                [](float v) { return asInteger(v) + " /s"; }},
-    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent},
-    Knob::Spec {"spray", "SPRAY", "Spray, start position spread", 0.0f, percent},
+                [](float v) { return asInteger(v) + " /s"; }, {}, "density"},
+    Knob::Spec {"position", "POSITION", "Read position in the material", 0.5f, percent,
+                {}, "position"},
+    Knob::Spec {"spray", "SPRAY", "Spray, start position spread", 0.0f, percent, {},
+                "spray"},
     Knob::Spec {"pitch", "PITCH", "Tuning, in semitones", 0.0f,
-                [](float v) { return juce::String {v, 1} + " st"; }},
+                [](float v) { return juce::String {v, 1} + " st"; }, {}, "pitch"},
     Knob::Spec {"window", "WINDOW", "Grain window shape", 0.0f, {},
-                {"Hann", "Gaussian", "Hamming", "Blackman"}},
+                {"Hann", "Gaussian", "Hamming", "Blackman"}, "window"},
     Knob::Spec {"pan", "PAN", "Stereo pan, left to right", 0.0f,
                 [](float v) {
                     return v == 0.0f ? juce::String {"C"}
                          : v < 0.0f  ? asInteger(-v * 100.0f) + " L"
                                      : asInteger(v * 100.0f) + " R";
-                }},
+                },
+                {}, "pan"},
     // largura stereo na saida: mid/side, 0 e' mono, 100 % o material, 200 % o
     // side dobrado. destino da matriz tambem (Stereo Width).
     Knob::Spec {"width", "STEREO", "Stereo width, mono to wide", 1.0f,
-                [](float v) { return asInteger(v * 100.0f) + " %"; }},
-    Knob::Spec {"grainlevel", "LEVEL", "Per-grain level", 1.0f, percent},
+                [](float v) { return asInteger(v * 100.0f) + " %"; }, {}, "stereo"},
+    Knob::Spec {"grainlevel", "LEVEL", "Per-grain level", 1.0f, percent, {}, "level"},
     Knob::Spec {"pitchrand", "P.RAND", "Random detune per grain, in semitones", 0.0f,
-                [](float v) { return juce::String {v, 1} + " st"; }},
+                [](float v) { return juce::String {v, 1} + " st"; }, {}, "rand"},
     Knob::Spec {"scanspeed", "SCAN", "Playhead scan speed, times realtime", 1.0f,
-                [](float v) { return juce::String {v, 2} + "x"; }},
+                [](float v) { return juce::String {v, 2} + "x"; }, {}, "scan"},
 };
 
 // F020: as tres curvas ficam ao lado dos tempos que moldam. O valor diz a forma:
@@ -103,82 +109,92 @@ const auto curveText = [](float v) {
 };
 
 const std::array<Knob::Spec, 7> kEnvelopeSpecs {
-    Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds},
-    Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds},
-    Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent},
-    Knob::Spec {"release", "REL", "Release time", 0.05f, seconds},
+    Knob::Spec {"attack", "ATK", "Attack time", 0.005f, seconds, {}, "rise"},
+    Knob::Spec {"decay", "DEC", "Decay time", 0.1f, seconds, {}, "fall"},
+    Knob::Spec {"sustain", "SUS", "Sustain level", 1.0f, percent, {}, "hold"},
+    Knob::Spec {"release", "REL", "Release time", 0.05f, seconds, {}, "fall"},
     Knob::Spec {"atkcurve", "ATK CRV", "Attack curve, exponential to logarithmic", 0.0f,
-                curveText},
+                curveText, {}, "curve"},
     Knob::Spec {"deccurve", "DEC CRV", "Decay curve, exponential to logarithmic", 0.0f,
-                curveText},
+                curveText, {}, "curve"},
     Knob::Spec {"relcurve", "REL CRV", "Release curve, exponential to logarithmic", 0.0f,
-                curveText},
+                curveText, {}, "curve"},
 };
 
 const std::array<Knob::Spec, 10> kFilterSpecs {
-    Knob::Spec {"f1type", "F1 TYPE", "Filter 1 type", 0.0f, {},
-                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
-    Knob::Spec {"f1cutoff", "F1 CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText},
-    Knob::Spec {"f1q", "F1 Q", "Filter 1 resonance", 0.7071f,
-                [](float v) { return juce::String {v, 2}; }},
-    Knob::Spec {"f1slope", "F1 SLOPE", "Filter 1 slope", 0.0f, {}, {"12 dB", "24 dB"}},
-    Knob::Spec {"f1drive", "F1 DRIVE", "Filter 1 drive, in decibels", 0.0f,
-                [](float v) { return juce::String {v, 1} + " dB"; }},
-    Knob::Spec {"f1keytrack", "F1 KEY", "Filter 1 key tracking", 0.0f, percent},
-    Knob::Spec {"f1env", "F1 ENV", "Filter 1 envelope amount", 0.0f,
+    Knob::Spec {"f1type", "TYPE", "Filter 1 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}, "filter"},
+    Knob::Spec {"f1cutoff", "CUT", "Filter 1 cutoff frequency", 20000.0f, cutoffText,
+                {}, "filter"},
+    Knob::Spec {"f1q", "Q", "Filter 1 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }, {}, "res"},
+    Knob::Spec {"f1slope", "SLOPE", "Filter 1 slope", 0.0f, {}, {"12 dB", "24 dB"},
+                "slope"},
+    Knob::Spec {"f1drive", "DRIVE", "Filter 1 drive, in decibels", 0.0f,
+                [](float v) { return juce::String {v, 1} + " dB"; }, {}, "drive"},
+    Knob::Spec {"f1keytrack", "KEY", "Filter 1 key tracking", 0.0f, percent, {},
+                "key"},
+    Knob::Spec {"f1env", "ENV", "Filter 1 envelope amount", 0.0f,
                 [](float v) {
                     const int pct = static_cast<int>(v * 100.0f + (v >= 0.0f ? 0.5f : -0.5f));
                     return juce::String {pct} + " %";
-                }},
-    Knob::Spec {"f2type", "F2 TYPE", "Filter 2 type", 0.0f, {},
-                {"Low-pass", "High-pass", "Band-pass", "Notch"}},
-    Knob::Spec {"f2cutoff", "F2 CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText},
-    Knob::Spec {"f2q", "F2 Q", "Filter 2 resonance", 0.7071f,
-                [](float v) { return juce::String {v, 2}; }},
+                },
+                {}, "env"},
+    Knob::Spec {"f2type", "TYPE", "Filter 2 type", 0.0f, {},
+                {"Low-pass", "High-pass", "Band-pass", "Notch"}, "filter"},
+    Knob::Spec {"f2cutoff", "CUT", "Filter 2 cutoff frequency", 20000.0f, cutoffText,
+                {}, "filter"},
+    Knob::Spec {"f2q", "Q", "Filter 2 resonance", 0.7071f,
+                [](float v) { return juce::String {v, 2}; }, {}, "res"},
 };
 
 const std::array<Knob::Spec, 7> kModSpecs {
     Knob::Spec {"lforate", "RATE", "LFO rate, in hertz", 1.0f,
-                [](float v) { return juce::String {v, 2} + " Hz"; }},
-    Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent},
+                [](float v) { return juce::String {v, 2} + " Hz"; }, {}, "rate"},
+    Knob::Spec {"lfodepth", "DEPTH", "LFO depth", 0.0f, percent, {}, "depth"},
     Knob::Spec {"lfotarget", "TARGET", "LFO target parameter", 0.0f, {},
-                {"Pitch", "Density", "Cutoff", "Position"}},
+                {"Pitch", "Density", "Cutoff", "Position"}, "target"},
     Knob::Spec {"lfowave", "WAVE", "LFO waveform", 0.0f, {},
-                {"Sine", "Tri", "Saw", "Square", "S&H"}},
+                {"Sine", "Tri", "Saw", "Square", "S&H"}, "wave"},
     Knob::Spec {"lfosync", "SYNC", "LFO follows the host tempo", 0.0f, {},
-                {"Free", "Sync"}},
+                {"Free", "Sync"}, "sync"},
     Knob::Spec {"lfodiv", "DIV", "LFO division when synced", 0.0f, {},
                 {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4.", "1/8.",
-                 "1/4T", "1/8T", "1/16T"}},
+                 "1/4T", "1/8T", "1/16T"}, "div"},
     Knob::Spec {"lfosteps", "STEPS", "LFO steps per cycle", 16.0f,
-                [](float v) { return juce::String {static_cast<int>(v + 0.5f)}; }},
+                [](float v) { return juce::String {static_cast<int>(v + 0.5f)}; }, {},
+                "steps"},
 };
 
 const std::array<Knob::Spec, 3> kCloudSpecs {
     Knob::Spec {"cloudsize", "CLOUD W", "Temporal width of the grain cloud", 0.0f,
-                [](float v) { return asInteger(v * 500.0f) + " ms"; }},
+                [](float v) { return asInteger(v * 500.0f) + " ms"; }, {}, "cloud"},
     Knob::Spec {"pitchspread", "SPREAD", "Pitch spread across the cloud, in semitones", 0.0f,
-                [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"grainjit", "JITTER", "Grain duration jitter", 0.0f, percent},
+                [](float v) { return juce::String {v, 1} + " st"; }, {}, "spread"},
+    Knob::Spec {"grainjit", "JITTER", "Grain duration jitter", 0.0f, percent, {},
+                "jitter"},
 };
 
-// o volume nao tem aba: e' o master, sempre visivel no canto inferior direito.
+// o volume e o pan formam o master, sempre visivel no canto inferior direito.
 const std::array<Knob::Spec, 1> kOutSpecs {
     Knob::Spec {"volume", "VOLUME", "Output volume, in decibels", 0.0f,
                 [](float v) {
                     return v <= -60.0f ? juce::String {"-inf"}
                                        : juce::String {v, 1} + " dB";
-                }},
+                },
+                {}, "volume"},
 };
 
 const std::array<Knob::Spec, 3> kKeysSpecs {
     Knob::Spec {"scale", "SCALE", "Scale applied to incoming notes", 0.0f, {},
                 {"Chromatic", "Major", "Natural Minor", "Harmonic Minor", "Dorian",
                  "Phrygian", "Lydian", "Mixolydian", "Pentatonic Major",
-                 "Pentatonic Minor", "Blues", "Whole Tone"}},
+                 "Pentatonic Minor", "Blues", "Whole Tone"}, "scale"},
     Knob::Spec {"root", "ROOT", "Scale root note", 0.0f, {},
-                {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}},
-    Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
+                {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"},
+                "root"},
+    Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds, {},
+                "glide"},
 };
 
 } // namespace
@@ -515,7 +531,7 @@ void PluginEditor::buildHeader() {
         readout->setJustificationType(juce::Justification::centredLeft);
     }
     positionReadout_.setJustificationType(juce::Justification::centredLeft);
-    offsetReadout_.setJustificationType(juce::Justification::centredLeft);
+    offsetReadout_.setJustificationType(juce::Justification::centredRight);
 
     makePlainLabel(fileName_, "Sem binario", palette::textDark,
                    fonts().sans(12.0f, true));
@@ -730,26 +746,95 @@ void PluginEditor::pushTransportAnchor() {
 }
 
 void PluginEditor::buildParameterPanel() {
-    // ordem de construcao = ordem do enum. As fatias ficam guardadas para a aba
-    // mostrar sem procurar por ID. OUT nao tem aba: o volume e' o master.
-    const auto addSpecs = [this](const auto& specs) {
-        moduleFirstKnob_.push_back(knobs_.size());
-        for (const auto& spec : specs) {
-            knobs_.push_back(std::make_unique<Knob>(owner_.parameters(), spec));
-            addAndMakeVisible(*knobs_.back());
-        }
-        moduleKnobCount_.push_back(knobs_.size() - moduleFirstKnob_.back());
+    // fabricas de controlo: knob para o que e' continuo, tecla para o que e'
+    // escolha. o tipo fica decidido aqui e nao no layout, para a semantica do
+    // parametro (girar vs. escolher) ser uma so' fonte da verdade.
+    const auto addKnob = [this](const Knob::Spec& spec) -> juce::Component* {
+        auto knob = std::make_unique<Knob>(owner_.parameters(), spec);
+        auto* raw = knob.get();
+        controls_.push_back(std::move(knob));
+        addAndMakeVisible(*raw);
+        return raw;
     };
-    addSpecs(kGrainSpecs);
-    addSpecs(kEnvelopeSpecs);
-    addSpecs(kFilterSpecs);
-    addSpecs(kModSpecs);
-    addSpecs(kCloudSpecs);
-    addSpecs(kOutSpecs);
-    addSpecs(kKeysSpecs);
+    const auto addChoice = [this](const Knob::Spec& spec) -> juce::Component* {
+        auto button = std::make_unique<ChoiceButton>(owner_.parameters(), spec);
+        auto* raw = button.get();
+        controls_.push_back(std::move(button));
+        addAndMakeVisible(*raw);
+        return raw;
+    };
+    const auto addGroup = [this](ParamModule module, const char* title,
+                                 std::initializer_list<juce::Component*> items) {
+        auto& groups = moduleGroups_[static_cast<std::size_t>(module)];
+        groups.push_back(ControlGroup {juce::String {title}, {}, {}});
+        groups.back().controls.assign(items.begin(), items.end());
+    };
 
-    masterKnobIndex_ = moduleFirstKnob_[static_cast<std::size_t>(ParamModule::out)];
-    knobs_[masterKnobIndex_]->setOnDark(true);
+    // -- GRAIN: o material, a cabeca de leitura e o que sai para a mesa --
+    {
+        const auto& s = kGrainSpecs;
+        addGroup(ParamModule::grain, "GRAIN",
+                 {addKnob(s[0]), addKnob(s[1]), addChoice(s[5])});
+        addGroup(ParamModule::grain, "PLAYBACK",
+                 {addKnob(s[2]), addKnob(s[3]), addKnob(s[10]), addKnob(s[4]),
+                  addKnob(s[9])});
+        addGroup(ParamModule::grain, "MIX", {addKnob(s[8]), addKnob(s[7])});
+    }
+
+    // -- ENV: os tempos que moldam e as curvas que os deformam --
+    {
+        const auto& s = kEnvelopeSpecs;
+        addGroup(ParamModule::envelope, "TIME",
+                 {addKnob(s[0]), addKnob(s[1]), addKnob(s[2]), addKnob(s[3])});
+        addGroup(ParamModule::envelope, "CURVE",
+                 {addKnob(s[4]), addKnob(s[5]), addKnob(s[6])});
+    }
+
+    // -- FILTER: duas metades iguais; o caracter da primeira fica ao lado --
+    {
+        const auto& s = kFilterSpecs;
+        addGroup(ParamModule::filter, "FILTER 1",
+                 {addChoice(s[0]), addKnob(s[1]), addKnob(s[2]), addChoice(s[3])});
+        addGroup(ParamModule::filter, "CHARACTER",
+                 {addKnob(s[4]), addKnob(s[5]), addKnob(s[6])});
+        addGroup(ParamModule::filter, "FILTER 2",
+                 {addChoice(s[7]), addKnob(s[8]), addKnob(s[9])});
+    }
+
+    // -- MOD: o oscilador e para onde ele aponta --
+    {
+        const auto& s = kModSpecs;
+        addGroup(ParamModule::mod, "LFO",
+                 {addKnob(s[0]), addKnob(s[1]), addKnob(s[6])});
+        addGroup(ParamModule::mod, "ROUTING",
+                 {addChoice(s[2]), addChoice(s[3]), addChoice(s[4]), addChoice(s[5])});
+    }
+
+    // -- CLOUD: o espalhamento do grao no tempo e na afinacao --
+    {
+        const auto& s = kCloudSpecs;
+        addGroup(ParamModule::cloud, "GRAIN CLOUD",
+                 {addKnob(s[0]), addKnob(s[1]), addKnob(s[2])});
+    }
+
+    // -- KEYS: o teclado, a escala e o deslize entre notas --
+    {
+        const auto& s = kKeysSpecs;
+        addGroup(ParamModule::keys, "TUNING",
+                 {addChoice(s[0]), addChoice(s[1]), addKnob(s[2])});
+    }
+
+    // -- MASTER: volume e pan juntos, como numa mesa de mistura. o pan saiu da
+    // aba GRAIN: ele nao e' do grao, e' da saida.
+    {
+        auto* volume = addKnob(kOutSpecs[0]);
+        auto* pan = addKnob(kGrainSpecs[6]);
+        masterVolume_ = static_cast<Knob*>(volume);
+        masterPan_ = static_cast<Knob*>(pan);
+        masterVolume_->setOnDark(true);
+        masterPan_->setOnDark(true);
+        masterControls_ = {volume, pan};
+    }
 
     buildModuleTabs();
     showModule(activeModule_);
@@ -792,16 +877,21 @@ void PluginEditor::updateModuleTabs() {
 
 void PluginEditor::showModule(ParamModule module) {
     activeModule_ = module;
-    const auto index = static_cast<std::size_t>(module);
-    const auto first = moduleFirstKnob_[index];
-    const auto count = moduleKnobCount_[index];
+    const auto selected = static_cast<std::size_t>(module);
 
-    // o knob do master nunca se esconde: nao pertence a aba nenhuma e vive no
-    // canto inferior direito em todas.
-    for (std::size_t i = 0; i < knobs_.size(); ++i) {
-        const auto inModule = i >= first && i < first + count;
-        knobs_[i]->setVisible(inModule || i == masterKnobIndex_);
+    // cada modulo tem os seus grupos; o master fica sempre a' vista, como o
+    // volume de uma mesa.
+    for (std::size_t m = 0; m < moduleGroups_.size(); ++m) {
+        for (auto& group : moduleGroups_[m]) {
+            for (auto* control : group.controls) {
+                control->setVisible(m == selected);
+            }
+        }
     }
+    for (auto* control : masterControls_) {
+        control->setVisible(true);
+    }
+
     updateModuleTabs();
     resized();
 }
@@ -957,6 +1047,46 @@ void PluginEditor::paint(juce::Graphics& g) {
                              master.getX() + 8.0f, master.getRight() - 8.0f);
     }
 
+    // -- legendas dos grupos: a semantica escrita por cima do campo --
+    {
+        const auto moduleIndex = static_cast<std::size_t>(activeModule_);
+        const auto& groups = moduleGroups_[moduleIndex];
+        const auto captionFont = fonts().sans(8.5f, true).withExtraKerningFactor(0.18f);
+
+        for (std::size_t i = 0; i < groups.size(); ++i) {
+            const auto& group = groups[i];
+            if (group.controls.empty()) {
+                continue;
+            }
+
+            const auto caption = group.bounds.withHeight(16);
+            g.setFont(captionFont);
+            g.setColour(palette::alpha(palette::textSub, 0.95f));
+            g.drawText(group.title, caption, juce::Justification::centred, false);
+
+            // filete curto sob a legenda e o separador entre campos.
+            g.setColour(palette::alpha(palette::faceplateDark, 0.42f));
+            g.drawHorizontalLine(caption.getBottom() + 1,
+                                 static_cast<float>(caption.getX() + 4),
+                                 static_cast<float>(caption.getRight() - 4));
+            if (i + 1 < groups.size()) {
+                g.drawVerticalLine(group.bounds.getRight() + 4,
+                                   static_cast<float>(group.bounds.getY() + 18),
+                                   static_cast<float>(group.bounds.getBottom() - 4));
+            }
+        }
+    }
+
+    if (!masterGroupBounds_.isEmpty()) {
+        g.setFont(fonts().sans(8.5f, true).withExtraKerningFactor(0.18f));
+        g.setColour(palette::alpha(palette::textOnDarkSub, 0.95f));
+        g.drawText("MIX", masterGroupBounds_, juce::Justification::centred, false);
+        g.setColour(palette::alpha(palette::ivory, 0.12f));
+        g.drawHorizontalLine(masterGroupBounds_.getBottom() + 1,
+                             static_cast<float>(masterGroupBounds_.getX() + 6),
+                             static_cast<float>(masterGroupBounds_.getRight() - 6));
+    }
+
     // -- teclado --
     if (!keyboardBayBounds_.isEmpty()) {
         const auto bay = keyboardBayBounds_.toFloat();
@@ -1061,14 +1191,20 @@ void PluginEditor::resized() {
         }
     }
 
-    // leituras e area de desenho, por dentro do ecra
+    // leituras e area de desenho, por dentro do ecra. POS e REG subiram para a
+    // tira do topo do ecra: sao informacao sobre o material que se esta' a ver e
+    // vivem onde a onda vive, em vez de roubarem o pe' do ecra.
     const auto displayBounds = display_.getBounds();
-    status_.setBounds(displayBounds.getX() + 18, displayBounds.getY() + 4,
-                      displayBounds.getWidth() - 36, kStatusHeight);
+    const int topY = displayBounds.getY() + 4;
+    offsetReadout_.setBounds(displayBounds.getRight() - 18 - 260, topY, 260,
+                             kStatusHeight);
+    positionReadout_.setBounds(offsetReadout_.getX() - 174, topY, 168, kStatusHeight);
+    status_.setBounds(displayBounds.getX() + 18, topY,
+                      positionReadout_.getX() - displayBounds.getX() - 26,
+                      kStatusHeight);
 
-    // pe' do ecra: o transporte no canto esquerdo, as leituras ao lado e as
-    // paginas do hex a' direita. a tira horizontal deixou de existir: o que se
-    // procura com o dedo vive junto ao que se esta' a ver.
+    // pe' do ecra: o transporte no canto esquerdo e as paginas do hex a' direita.
+    // o meio ficou livre quando as leituras subiram para o topo.
     const int footerY = displayBounds.getBottom() - kFooterHeight - 4;
     const int transportY = footerY + (kFooterHeight - kTransportButtonHeight) / 2;
 
@@ -1078,11 +1214,6 @@ void PluginEditor::resized() {
     fx += kTransportButtonWidth + kTransportGap;
     holdButton_.setBounds(fx, transportY, kTransportButtonWidth,
                           kTransportButtonHeight);
-    fx += kTransportButtonWidth + 14;
-
-    positionReadout_.setBounds(fx, footerY, 168, kFooterHeight);
-    fx += 168;
-    offsetReadout_.setBounds(fx, footerY, 300, kFooterHeight);
 
     {
         constexpr int kPageButton {20};
@@ -1131,14 +1262,26 @@ void PluginEditor::resized() {
     keyboardBayBounds_ = lower.removeFromBottom(kKeyboardHeight);
     parameterPanelBounds_ = lower;
 
+    // -- master: volume e pan no topo, medidor em baixo --
     {
-        auto master = masterBayBounds_.reduced(5, 6);
-        // o volume cede 18 px ao medidor: a escala de dB precisava de altura para
-        // os rotulos nao se encostarem.
-        auto volumeCell = master.removeFromTop(kKnobContentHeight - 18);
-        knobs_[masterKnobIndex_]->setBounds(volumeCell.reduced(2, 0));
-        master.removeFromTop(4);
-        meter_.setBounds(master);
+        auto master = masterBayBounds_.reduced(6, 6);
+        constexpr int kCaption {16};
+        masterGroupBounds_ = master.removeFromTop(kCaption);
+        master.removeFromTop(2);
+
+        // o medidor leva quase metade da coluna: cinco rotulos de dB num terco
+        // encostavam uns nos outros e o -36 chegava a sobrepor-se ao -48.
+        const int meterHeight = juce::jlimit(64, 104, master.getHeight() * 45 / 100);
+        auto meterArea = master.removeFromBottom(meterHeight);
+        master.removeFromBottom(6);
+
+        // volume e pan lado a lado: os dois sao da saida, e a mesa trata-os
+        // como um par.
+        const int half = juce::jmax(1, master.getWidth() / 2);
+        auto volumeCell = master.removeFromLeft(half);
+        masterVolume_->setBounds(volumeCell.reduced(2, 0));
+        masterPan_->setBounds(master.reduced(2, 0));
+        meter_.setBounds(meterArea);
     }
 
     keyboard_.setBounds(keyboardBayBounds_.reduced(12, 6));
@@ -1152,73 +1295,83 @@ void PluginEditor::resized() {
     }
 
     const auto moduleIndex = static_cast<std::size_t>(activeModule_);
-    const auto first = moduleFirstKnob_[moduleIndex];
-    const auto count = moduleKnobCount_[moduleIndex];
-
-    for (std::size_t i = 0; i < knobs_.size(); ++i) {
-        const auto inModule = i >= first && i < first + count;
-        knobs_[i]->setVisible(inModule || i == masterKnobIndex_);
-    }
 
     // ENV e FILTER trazem o visualizador: o grafico fica com a esquerda e os
-    // knobs recuam para a direita, menores. e' a hierarquia que o Ableton usa no
-    // dispositivo -- a forma primeiro, os numeros ao lado.
+    // controlos recuam para a direita. e' a hierarquia da forma primeiro, os
+    // numeros ao lado.
     envelopeView_.setVisible(activeModule_ == ParamModule::envelope);
     filterView_.setVisible(activeModule_ == ParamModule::filter);
 
-    const bool hasVisual = envelopeView_.isVisible() || filterView_.isVisible();
+    auto controlArea = parameterPanelBounds_.reduced(10, 6);
 
-    if (count > 0 && hasVisual) {
-        auto knobArea = parameterPanelBounds_.reduced(10, 6);
-
-        // o grafico leva 42 % da largura, entre 300 e 460 px: abaixo de 300 a
-        // curva do filtro perde a leitura das decadas, acima de 460 nao sobra
-        // celula de knob que caiba o nome.
+    if (envelopeView_.isVisible() || filterView_.isVisible()) {
+        // o filtro tem dez controlos na fila, o envelope tem sete: o grafico do
+        // filtro cede a largura que os campos de escolha precisam para o rotulo
+        // caber, o do envelope nao tem razao para encolher.
+        const float graphFraction = activeModule_ == ParamModule::filter ? 0.28f : 0.36f;
         const int graphWidth =
-            juce::jlimit(300, 460, static_cast<int>(knobArea.getWidth() * 0.42f));
-        const auto graph = knobArea.removeFromLeft(graphWidth);
-        knobArea.removeFromLeft(12);
-
+            juce::jlimit(260, 420, static_cast<int>(controlArea.getWidth() * graphFraction));
+        const auto graph = controlArea.removeFromLeft(graphWidth);
+        controlArea.removeFromLeft(12);
         if (activeModule_ == ParamModule::envelope) {
             envelopeView_.setBounds(graph);
         } else {
             filterView_.setBounds(graph);
         }
+    }
 
-        // FILTER tem dez knobs: duas filas de cinco, para o nome de cada um caber
-        // com a curva a' vista.
-        const int rows = activeModule_ == ParamModule::filter ? 2 : 1;
-        const int perRow = juce::jmax(1, static_cast<int>(count) / rows);
-        const int rowHeight = knobArea.getHeight() / rows;
-        const int cellWidth = knobArea.getWidth() / perRow;
+    // uma fila de grupos semanticos. a largura de cada grupo segue o numero de
+    // controlos que tem; se o total couber, a fila centra-se em vez de esticar
+    // celulas ate' ao limite. a legenda ocupa o topo do grupo e o filete separa
+    // um campo do seguinte, como num painel de sintetizador.
+    auto& groups = moduleGroups_[moduleIndex];
+    constexpr int kCaptionHeight {16};
+    constexpr int kGroupGap {8};
 
-        for (int row = 0; row < rows; ++row) {
-            for (int k = 0; k < perRow; ++k) {
-                const auto index = first + static_cast<std::size_t>(row * perRow + k);
-                if (index >= first + count) {
-                    break;
-                }
-                knobs_[index]->setBounds(
-                    juce::Rectangle<int> {knobArea.getX() + k * cellWidth,
-                                          knobArea.getY() + row * rowHeight, cellWidth, rowHeight}
+    auto captionRow = controlArea.removeFromTop(kCaptionHeight);
+    controlArea.removeFromTop(2);
+
+    int totalControls = 0;
+    for (const auto& group : groups) {
+        totalControls += static_cast<int>(group.controls.size());
+    }
+
+    if (totalControls > 0) {
+        const int gaps = kGroupGap * juce::jmax(0, static_cast<int>(groups.size()) - 1);
+        const int available = controlArea.getWidth() - gaps;
+        const int natural = totalControls * kMaxCellWidth;
+        const int totalWidth = juce::jmin(available, natural);
+        int x = controlArea.getX() + (controlArea.getWidth() - totalWidth) / 2;
+        int used = 0;
+
+        for (std::size_t i = 0; i < groups.size(); ++i) {
+            auto& group = groups[i];
+            const int n = static_cast<int>(group.controls.size());
+            if (n == 0) {
+                group.bounds = {};
+                continue;
+            }
+
+            const int groupWidth =
+                (i + 1 == groups.size())
+                    ? juce::jmax(1, totalWidth - used)
+                    : juce::jmax(1, totalWidth * n / totalControls);
+
+            group.bounds = {x, captionRow.getY(), groupWidth,
+                            kCaptionHeight + 2 + controlArea.getHeight()};
+
+            const int cellWidth = juce::jmax(1, groupWidth / n);
+            const int rowWidth = cellWidth * n;
+            const int startX = group.bounds.getX() + (groupWidth - rowWidth) / 2;
+            for (int k = 0; k < n; ++k) {
+                group.controls[static_cast<std::size_t>(k)]->setBounds(
+                    juce::Rectangle<int> {startX + k * cellWidth, controlArea.getY(),
+                                          cellWidth, controlArea.getHeight()}
                         .reduced(2, 0));
             }
-        }
-    } else if (count > 0) {
-        const auto knobArea = parameterPanelBounds_.reduced(10, 6);
-        const int cellWidth = juce::jmin(
-            kMaxCellWidth, knobArea.getWidth() / static_cast<int>(count));
-        const int totalWidth = cellWidth * static_cast<int>(count);
-        const int startX = knobArea.getX() + (knobArea.getWidth() - totalWidth) / 2;
 
-        const int contentHeight = juce::jmin(kKnobContentHeight, knobArea.getHeight());
-        const int contentY = knobArea.getY() + (knobArea.getHeight() - contentHeight) / 2;
-
-        for (std::size_t k = 0; k < count; ++k) {
-            knobs_[first + k]->setBounds(
-                juce::Rectangle<int> {startX + static_cast<int>(k) * cellWidth, contentY,
-                                      cellWidth, contentHeight}
-                    .reduced(2, 0));
+            x += groupWidth + kGroupGap;
+            used += groupWidth;
         }
     }
 

@@ -66,7 +66,7 @@ struct GranularParams {
     // detune por grao, 0..12 st. zero desliga.
     float pitchRandomSemitones {0.0f};
     // nuvem: cloud 0..1 vira 0..500 ms de atraso; pitch spread 0..24 st;
-    // jitter 0..1 muda a duracao entre 0,5x e 1,5x, presa a 1..100 ms.
+    // jitter 0..1 muda a duracao entre 0,5x e 1,5x, presa a 1..2000 ms.
     float cloudSize {0.0f};
     float pitchSpreadSemitones {0.0f};
     float grainJitter {0.0f};
@@ -101,14 +101,18 @@ struct Grain {
     double readStep {};
     int remaining {};
     int windowIndex {};
-    // espera antes do grao, em amostras, e fator que mapeia a janela na tabela
-    // quando o jitter muda a duracao. sem jitter, o fator e' 1,0.
+    // espera antes do grao, em amostras, e escala que leva o indice do grao a'
+    // tabela de 4096 pontos: (4096-1)/(grainLength-1), para o ultimo indice cair
+    // em 4095 e a janela fechar em zero tambem nos graos curtos.
     int delay {0};
-    double windowScale {1.0};
+    double windowScale {0.0};
     int writeIndex {0};
     float gain {};
     float panLeft {};
     float panRight {};
+    // a tabela com que o grao nasceu. trocar a janela no meio de um grao de 2 s
+    // saltava o envelope; o grao novo usa a tabela nova e o antigo termina na dele.
+    const float* window {nullptr};
 };
 
 // -- telemetria --
@@ -220,9 +224,27 @@ public:
 class GranularEngine {
 public:
     static constexpr int kMaxVoices = 8;
-    static constexpr int kMaxGrainSamples = 48000;
-    static constexpr float kMaxGrainMs = 100.0f;
+    // dois segundos no maior sample rate que um host entrega (384 kHz). o teto em
+    // amostras so' existe para o int nao transbordar com taxa absurda; o limite
+    // que o utilizador ve' e' o de milissegundos.
+    static constexpr int kMaxGrainSamples = 768000;
+    static constexpr float kMaxGrainMs = 2000.0f;
     static constexpr float kMinGrainMs = 1.0f;
+
+    // **a janela e' uma tabela fixa, nao o grao.** encher 96 mil pontos por bloco
+    // enquanto o knob de tamanho se mexia custava mais do que o proprio audio;
+    // uma tabela fina lida por escala da' o mesmo envelope e cabe na cache.
+    static constexpr int kWindowTableSamples = 4096;
+
+    // escala que leva o indice do grao (0..length-1) aos 4096 pontos da tabela.
+    // o ultimo indice tem de cair em 4095: com 4096/length, um grao de 2 amostras
+    // terminava no pico da Hann e o corte ouvia-se. publica para o ensaio poder
+    // afirmar a borda sem depender do audio.
+    [[nodiscard]] static constexpr double windowScaleForLength(int length) noexcept {
+        return (length > 1) ? static_cast<double>(kWindowTableSamples - 1) /
+                                  static_cast<double>(length - 1)
+                            : 0.0;
+    }
 
     // pontos da curva de entropia. publico porque a interface precisa saber
     // quantos pontos cabem.
@@ -311,7 +333,12 @@ public:
     // semente fixa por omissao: mesma fonte e mesmos parametros, mesmo som. quem
     // quiser outra nuvem chama setSeed com o relogio.
     static constexpr std::uint64_t kDefaultSeed = 0x9E3779B97F4A7C15ull;
-    void setSeed(std::uint64_t seed) noexcept { seed_ = seed; }
+    // reinicia a nuvem. so' antes do processamento: nem a semente nem o serial
+    // sao atomicos, e mexer neles com o audio a correr e' corrida de dados.
+    void setSeed(std::uint64_t seed) noexcept {
+        seed_ = seed;
+        grainSerial_ = 0;
+    }
     [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
 
     // fase do lfo, para os ensaios de sync. so a thread de audio escreve.
@@ -375,10 +402,14 @@ private:
 
     std::array<Grain, kMaxVoices> voices_ {};
 
-    std::array<float, kMaxGrainSamples> windowA_ {};
-    std::array<float, kMaxGrainSamples> windowB_ {};
+    // uma tabela por tipo de janela, preenchida uma vez no prepare. a troca de
+    // tipo no caminho de audio vira um ponteiro, e nao 4096 cos no callback. o
+    // tamanho sai do enum e nao de um 4 escrito a mao: um tipo novo antes de
+    // kBlackman mudaria a contagem e o indice estouraria o array.
+    static constexpr std::size_t kWindowTypeCount =
+        static_cast<std::size_t>(WindowType::kBlackman) + 1;
+    std::array<std::array<float, kWindowTableSamples>, kWindowTypeCount> windowTables_ {};
     const float* activeWindow_ {nullptr};
-    int activeWindowLength_ {0};
     WindowType activeWindowType_ {WindowType::kHann};
 
     double spawnAccumulator_ {0.0};
@@ -430,6 +461,10 @@ private:
 
     // semente e o que o ultimo grao recebeu da nuvem.
     std::uint64_t seed_ {kDefaultSeed};
+    // o estado do sorteio e' por grao. antes nascia sempre de `seed_ + voz`, e a
+    // mesma voz repetia o mesmo spray, o mesmo detune e o mesmo spread: a nuvem
+    // ficava presa numa roda de oito valores em vez de variar ao longo do tempo.
+    std::uint64_t grainSerial_ {0};
     int lastGrainDelay_ {0};
     float lastGrainSpread_ {0.0f};
     int lastGrainLength_ {0};

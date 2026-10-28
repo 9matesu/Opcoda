@@ -52,6 +52,14 @@ deps/
 *.dll
 *.exe
 
+# Projeto .NET auxiliar (OpcodaOtimizacao): bin/obj sao residuo de build
+src/*/bin/
+src/*/obj/
+
+# Entregaveis de outra disciplina (mochila 0/1), fora do repositorio do plugin
+dist/
+results/
+
 # Hospede de plugins de teste do JUCE
 AudioPluginHost*
 

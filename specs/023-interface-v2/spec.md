@@ -329,6 +329,47 @@ ASM — e a de entropia só desenha janelas de 256 bytes ou mais.
   dizer só "Opcoda") e do cabeçalho dos ajustes; os quatro parafusos decorativos
   dos cantos saem. Emenda a revisão (4).
 
+## Revisão de 27/10/2026 (7) — campos semânticos e controlos por escolha
+
+- **Cada aba passa a ter campos semânticos.** O painel deixa a fila indiferenciada
+  de knobs e agrupa os parâmetros pela função: `GRAIN` separa `GRAIN`, `PLAYBACK`
+  e `MIX`; `ENV` separa `TIME` e `CURVE`; `FILTER` separa `FILTER 1`, `CHARACTER`
+  e `FILTER 2`; `MOD` separa `LFO` e `ROUTING`; `CLOUD` e `KEYS` ficam com o campo
+  único que já lhes bastava. A legenda e o filete de separação são desenhados pelo
+  editor, sem componentes extra, e a largura de cada campo segue o número de
+  controlos que contém.
+- **Pan e volume formam o master.** O `PAN` saiu da aba `GRAIN`, porque não é do
+  grão: é da saída. Fica ao lado do `VOLUME`, sob a legenda `MIX`, com o medidor
+  *stereo* por baixo.
+- **Parâmetros de escolha viram campos.** `WINDOW`, os dois tipos e a inclinação
+  do filtro, `TARGET`, `WAVE`, `SYNC`, `DIV`, `SCALE` e `ROOT` passam de knob a um
+  chip escuro, baixo e largo, com o valor visível e chevron; o clique abre o menu
+  com os rótulos reais. Girar um knob de duas a doze posições nunca foi a melhor
+  leitura, e um azulejo do tamanho do disco lia-se como um knob sem escala. No
+  filtro, o gráfico cede largura para os dez controlos caberem com o rótulo
+  inteiro. O total de discos cai de trinta e nove para vinte e nove, sem perder
+  nenhum parâmetro.
+- **Ícones nas legendas.** Cada controlo leva um glifo desenhado em `juce::Path`
+  ao lado do nome — grão, densidade, posição, spray, afinação, aleatoriedade,
+  varredura, nível, largura, ataque, queda, patamar, curva, corte, ressonância,
+  inclinação, saturação, teclado, velocidade, profundidade, degraus, alvo, sincronia,
+  divisão, nuvem, espalhamento, ruído, escala, tónica, deslize, volume e pan.
+- **POS e REG sobem para o visor.** As duas leituras deixam o pé do ecrã e passam a
+  ocupar a tira superior do visualizador, alinhadas à direita; o pé fica só com o
+  transporte e as páginas do hex.
+
+## Revisão de 27/10/2026 (8) — o grupo do medidor e o `SIZE`
+
+- **Medidor centrado como um grupo.** As duas colunas, o intervalo entre elas e a
+  escala deixam de ser posicionados à mão e passam a ser medidos de uma vez e
+  centrados na pista: coluna de 22 px, 7 px entre colunas, 9 px até a escala e
+  26 px de escala. O corpo dos rótulos desce para 7,5 px e a altura do medidor
+  passa a 45 % da coluna mestra, presa entre 64 e 104 px. Os rótulos de dB
+  deixam de encostar nos traços e nas colunas.
+- **`SIZE` de 1 ms a 2 s.** O knob é linear em milissegundos com centro em 100 ms
+  (`setSkewForCentre`), e o campo mostra `ms` até 999 e `s` a partir de 1000, com
+  duas casas. O valor guardado continua em milissegundos.
+
 ## Estado dos testes de interface
 
 Em 24/10/2026 a suite automática cobre `opcoda_core`; os testes `Ui.*` da tabela

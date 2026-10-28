@@ -731,8 +731,8 @@ public:
             return true;
         }
         if (kind == "home" || kind == "end") {
-            // home aponta para a esquerda com a barra a' esquerda (|◀); end e' o
-            // espelho (▶|). a barra fica do lado da ponta, como nos transportes.
+            // home aponta para a esquerda com a barra a' esquerda (|<); end e' o
+            // espelho (>|). a barra fica do lado da ponta, como nos transportes.
             const auto dir = kind == "home" ? -1.0f : 1.0f;
             const auto w = side * 0.15f;
             const auto h = side * 0.20f;
@@ -792,6 +792,396 @@ public:
             return true;
         }
 
+        // -- glifos dos parametros: a mesma lingua dos modulos, aplicada ao knob --
+        // cada um diz o que o controlo faz. sao simples de proposito: a 10 px, um
+        // desenho com detalhe vira borrao.
+
+        if (kind == "size") {
+            // grao: duas barras que medem o comprimento.
+            const auto x = side * 0.22f;
+            const auto y = side * 0.16f;
+            g.setColour(ink);
+            g.drawLine(c.x - x, c.y - y, c.x - x, c.y + y, 1.5f);
+            g.drawLine(c.x + x, c.y - y, c.x + x, c.y + y, 1.5f);
+            g.drawLine(c.x - x, c.y, c.x + x, c.y, 1.2f);
+            return true;
+        }
+        if (kind == "density") {
+            // nove pontos: quanto mais denso, mais graos.
+            const auto step = side * 0.16f;
+            const auto r = juce::jmax(1.1f, side * 0.045f);
+            g.setColour(ink);
+            for (int row = -1; row <= 1; ++row) {
+                for (int col = -1; col <= 1; ++col) {
+                    g.fillEllipse(c.x + static_cast<float>(col) * step - r,
+                                  c.y + static_cast<float>(row) * step - r, r * 2.0f,
+                                  r * 2.0f);
+                }
+            }
+            return true;
+        }
+        if (kind == "position") {
+            // cabeca de leitura: linha vertical com a bandeira em cima.
+            const auto top = c.y - side * 0.24f;
+            g.setColour(ink);
+            g.drawLine(c.x, top, c.x, c.y + side * 0.24f, 1.5f);
+            juce::Path flag;
+            flag.addTriangle(c.x, top, c.x, top + side * 0.17f,
+                             c.x + side * 0.16f, top + side * 0.09f);
+            g.fillPath(flag);
+            return true;
+        }
+        if (kind == "spray") {
+            // dispersao: pontos soltos a' volta do centro.
+            const juce::Point<float> dots[] {
+                {c.x - side * 0.20f, c.y - side * 0.12f},
+                {c.x - side * 0.04f, c.y - side * 0.24f},
+                {c.x + side * 0.22f, c.y - side * 0.16f},
+                {c.x - side * 0.14f, c.y + side * 0.14f},
+                {c.x + side * 0.06f, c.y + side * 0.24f},
+                {c.x + side * 0.24f, c.y + side * 0.06f}};
+            const auto r = juce::jmax(1.1f, side * 0.045f);
+            g.setColour(ink);
+            for (const auto& dot : dots) {
+                g.fillEllipse(dot.x - r, dot.y - r, r * 2.0f, r * 2.0f);
+            }
+            return true;
+        }
+        if (kind == "pitch") {
+            // diapasao: duas hastes e a haste de baixo.
+            const auto w = side * 0.13f;
+            const auto top = c.y - side * 0.24f;
+            g.setColour(ink);
+            g.drawLine(c.x - w, top, c.x - w, c.y + side * 0.02f, 1.5f);
+            g.drawLine(c.x + w, top, c.x + w, c.y + side * 0.02f, 1.5f);
+            juce::Path fork;
+            fork.addCentredArc(c.x, c.y + side * 0.02f, w, w * 0.72f, 0.0f, 0.0f,
+                               juce::MathConstants<float>::pi, true);
+            g.strokePath(fork, juce::PathStrokeType {1.5f});
+            g.drawLine(c.x, c.y + w * 0.72f + side * 0.02f, c.x, c.y + side * 0.24f,
+                       1.5f);
+            return true;
+        }
+        if (kind == "rand") {
+            // dado: aleatoriedade por grao.
+            const auto h = side * 0.20f;
+            g.setColour(ink);
+            g.drawRoundedRectangle(juce::Rectangle<float> {c.x - h, c.y - h, h * 2.0f,
+                                                            h * 2.0f},
+                                   2.0f, 1.4f);
+            g.fillEllipse(c.x - 2.4f, c.y - 2.4f, 4.8f, 4.8f);
+            return true;
+        }
+        if (kind == "scan") {
+            // avancar: dois triangulos, a velocidade da cabeca.
+            const auto w = side * 0.13f;
+            const auto h = side * 0.16f;
+            g.setColour(ink);
+            for (int i = 0; i < 2; ++i) {
+                juce::Path arrow;
+                const auto x = c.x - w * 1.3f + static_cast<float>(i) * w * 1.5f;
+                arrow.addTriangle(x, c.y - h, x, c.y + h, x + w, c.y);
+                g.fillPath(arrow);
+            }
+            return true;
+        }
+        if (kind == "level") {
+            // nivel: tres barras de altura crescente.
+            const auto w = side * 0.10f;
+            const auto gap = side * 0.07f;
+            const auto base = c.y + side * 0.22f;
+            const float heights[] {0.20f, 0.32f, 0.44f};
+            g.setColour(ink);
+            for (int i = 0; i < 3; ++i) {
+                g.fillRoundedRectangle(
+                    juce::Rectangle<float> {c.x - (w + gap) * 1.5f +
+                                                static_cast<float>(i) * (w + gap),
+                                            base - side * heights[i], w,
+                                            side * heights[i]},
+                    1.0f);
+            }
+            return true;
+        }
+        if (kind == "stereo") {
+            // largura: duas setas a afastar-se do centro.
+            const auto arm = side * 0.20f;
+            g.setColour(ink);
+            g.drawLine(c.x, c.y - side * 0.22f, c.x, c.y + side * 0.22f, 1.4f);
+            for (int dir = -1; dir <= 1; dir += 2) {
+                const auto x = c.x + static_cast<float>(dir) * arm;
+                g.drawLine(c.x, c.y, x, c.y, 1.4f);
+                juce::Path head;
+                head.addTriangle(x, c.y, x - static_cast<float>(dir) * side * 0.08f,
+                                 c.y - side * 0.08f,
+                                 x - static_cast<float>(dir) * side * 0.08f,
+                                 c.y + side * 0.08f);
+                g.fillPath(head);
+            }
+            return true;
+        }
+        if (kind == "window") {
+            // janela do grao: um arco, a forma que multiplica a amostra.
+            const auto w = side * 0.24f;
+            const auto base = c.y + side * 0.18f;
+            juce::Path arc;
+            arc.startNewSubPath(c.x - w, base);
+            arc.quadraticTo(c.x - w, c.y - side * 0.26f, c.x, c.y - side * 0.26f);
+            arc.quadraticTo(c.x + w, c.y - side * 0.26f, c.x + w, base);
+            g.setColour(ink);
+            g.strokePath(arc, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "volume") {
+            // altifalante com duas ondas.
+            const auto x = c.x - side * 0.24f;
+            g.setColour(ink);
+            juce::Path body;
+            body.addRectangle(x, c.y - side * 0.08f, side * 0.10f, side * 0.16f);
+            body.addTriangle(x + side * 0.10f, c.y - side * 0.08f,
+                             x + side * 0.10f, c.y + side * 0.08f,
+                             x + side * 0.22f, c.y + side * 0.18f);
+            body.lineTo(x + side * 0.22f, c.y - side * 0.18f);
+            body.closeSubPath();
+            g.fillPath(body);
+            for (int i = 1; i <= 2; ++i) {
+                const auto r = side * 0.10f * static_cast<float>(i);
+                g.drawEllipse(x + side * 0.18f - r, c.y - r, r * 2.0f, r * 2.0f, 1.2f);
+            }
+            return true;
+        }
+        if (kind == "pan") {
+            // balanco: o ponto entre L e R.
+            const auto arm = side * 0.24f;
+            g.setColour(ink);
+            g.drawLine(c.x - arm, c.y, c.x + arm, c.y, 1.3f);
+            g.fillEllipse(c.x - 2.2f, c.y - side * 0.20f, 4.4f, 4.4f);
+            g.drawLine(c.x - arm, c.y - side * 0.10f, c.x - arm, c.y + side * 0.10f,
+                       1.3f);
+            g.drawLine(c.x + arm, c.y - side * 0.10f, c.x + arm, c.y + side * 0.10f,
+                       1.3f);
+            return true;
+        }
+        if (kind == "rise") {
+            g.setColour(ink);
+            g.drawLine(c.x - side * 0.22f, c.y + side * 0.16f, c.x - side * 0.22f,
+                       c.y + side * 0.22f, 1.4f);
+            juce::Path line;
+            line.startNewSubPath(c.x - side * 0.22f, c.y + side * 0.16f);
+            line.lineTo(c.x + side * 0.22f, c.y - side * 0.20f);
+            g.strokePath(line, juce::PathStrokeType {1.6f});
+            return true;
+        }
+        if (kind == "hold") {
+            // patamar: sobe, fica, desce.
+            const auto w = side * 0.44f;
+            const auto left = c.x - w * 0.5f;
+            g.setColour(ink);
+            juce::Path line;
+            line.startNewSubPath(left, c.y + side * 0.20f);
+            line.lineTo(left + w * 0.22f, c.y - side * 0.18f);
+            line.lineTo(left + w * 0.78f, c.y - side * 0.18f);
+            line.lineTo(left + w, c.y + side * 0.20f);
+            g.strokePath(line, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "fall") {
+            g.setColour(ink);
+            g.drawLine(c.x - side * 0.22f, c.y + side * 0.22f, c.x - side * 0.22f,
+                       c.y + side * 0.16f, 1.4f);
+            juce::Path line;
+            line.startNewSubPath(c.x - side * 0.22f, c.y - side * 0.20f);
+            line.lineTo(c.x + side * 0.22f, c.y + side * 0.16f);
+            g.strokePath(line, juce::PathStrokeType {1.6f});
+            return true;
+        }
+        if (kind == "curve") {
+            // curva: o traco que muda a forma do estagio.
+            const auto w = side * 0.24f;
+            juce::Path path;
+            path.startNewSubPath(c.x - w, c.y + side * 0.20f);
+            path.cubicTo(c.x - w * 0.4f, c.y + side * 0.20f, c.x + w * 0.4f,
+                         c.y - side * 0.20f, c.x + w, c.y - side * 0.20f);
+            g.setColour(ink);
+            g.strokePath(path, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "res") {
+            // ressonancia: o pico em cima do corte.
+            const auto w = side * 0.26f;
+            const auto left = c.x - w;
+            juce::Path path;
+            path.startNewSubPath(left, c.y + side * 0.14f);
+            path.lineTo(left + w * 0.45f, c.y + side * 0.14f);
+            path.lineTo(left + w * 0.62f, c.y - side * 0.24f);
+            path.lineTo(left + w * 0.80f, c.y + side * 0.14f);
+            path.lineTo(c.x + w, c.y + side * 0.14f);
+            g.setColour(ink);
+            g.strokePath(path, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "slope") {
+            // inclinacao: degrau de 12 ou 24 dB.
+            const auto w = side * 0.24f;
+            g.setColour(ink);
+            juce::Path path;
+            path.startNewSubPath(c.x - w, c.y - side * 0.16f);
+            path.lineTo(c.x, c.y - side * 0.16f);
+            path.lineTo(c.x + w, c.y + side * 0.18f);
+            g.strokePath(path, juce::PathStrokeType {1.6f});
+            return true;
+        }
+        if (kind == "drive") {
+            // saturacao: a onda com os topos achatados.
+            const auto w = side * 0.26f;
+            juce::Path path;
+            constexpr int kSteps {24};
+            for (int i = 0; i <= kSteps; ++i) {
+                const auto t = static_cast<float>(i) / static_cast<float>(kSteps);
+                const auto x = c.x - w + t * w * 2.0f;
+                const auto y = c.y - juce::jlimit(-0.55f, 0.55f,
+                                                  std::sin(t * juce::MathConstants<float>::twoPi *
+                                                           1.5f)) *
+                                           side * 0.46f;
+                if (i == 0) {
+                    path.startNewSubPath(x, y);
+                } else {
+                    path.lineTo(x, y);
+                }
+            }
+            g.setColour(ink);
+            g.strokePath(path, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "rate") {
+            // relogio: a velocidade do lfo.
+            const auto r = side * 0.22f;
+            g.setColour(ink);
+            g.drawEllipse(c.x - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
+            g.drawLine(c.x, c.y, c.x, c.y - r * 0.62f, 1.4f);
+            g.drawLine(c.x, c.y, c.x + r * 0.52f, c.y + r * 0.28f, 1.4f);
+            return true;
+        }
+        if (kind == "depth") {
+            // profundidade: seta dupla vertical.
+            g.setColour(ink);
+            g.drawLine(c.x, c.y - side * 0.20f, c.x, c.y + side * 0.20f, 1.4f);
+            for (int dir = -1; dir <= 1; dir += 2) {
+                const auto y = c.y + static_cast<float>(dir) * side * 0.20f;
+                juce::Path head;
+                head.addTriangle(c.x, y, c.x - side * 0.09f,
+                                 y - static_cast<float>(dir) * side * 0.08f,
+                                 c.x + side * 0.09f,
+                                 y - static_cast<float>(dir) * side * 0.08f);
+                g.fillPath(head);
+            }
+            return true;
+        }
+        if (kind == "steps") {
+            // degraus: o lfo em escada.
+            const auto w = side * 0.34f;
+            const auto h = side * 0.10f;
+            const auto left = c.x - w * 0.5f;
+            const auto base = c.y + side * 0.18f;
+            g.setColour(ink);
+            for (int i = 0; i < 4; ++i) {
+                const auto y = base - static_cast<float>(i) * h * 1.4f;
+                g.drawLine(left + static_cast<float>(i) * w * 0.25f, y,
+                           left + static_cast<float>(i + 1) * w * 0.25f, y, 1.4f);
+                if (i < 3) {
+                    g.drawLine(left + static_cast<float>(i + 1) * w * 0.25f, y,
+                               left + static_cast<float>(i + 1) * w * 0.25f,
+                               y - h * 1.4f, 1.4f);
+                }
+            }
+            return true;
+        }
+        if (kind == "target") {
+            // alvo: mira.
+            const auto r = side * 0.20f;
+            g.setColour(ink);
+            g.drawEllipse(c.x - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
+            g.fillEllipse(c.x - 1.6f, c.y - 1.6f, 3.2f, 3.2f);
+            return true;
+        }
+        if (kind == "sync") {
+            // dois elos: o que segue o tempo do host.
+            const auto r = side * 0.12f;
+            g.setColour(ink);
+            g.drawEllipse(c.x - r * 2.0f, c.y - r, r * 3.2f, r * 2.0f, 1.4f);
+            g.drawEllipse(c.x - r * 1.2f, c.y - r, r * 3.2f, r * 2.0f, 1.4f);
+            return true;
+        }
+        if (kind == "div") {
+            // grelha: a divisao ritmica.
+            const auto w = side * 0.20f;
+            g.setColour(ink);
+            g.drawRect(juce::Rectangle<float> {c.x - w, c.y - w, w * 2.0f, w * 2.0f}, 1.2f);
+            g.drawLine(c.x - w, c.y, c.x + w, c.y, 1.2f);
+            g.drawLine(c.x, c.y - w, c.x, c.y + w, 1.2f);
+            return true;
+        }
+        if (kind == "spread") {
+            // leque: a afinacao a abrir.
+            const auto w = side * 0.24f;
+            g.setColour(ink);
+            g.drawLine(c.x - w, c.y, c.x + w, c.y - side * 0.18f, 1.4f);
+            g.drawLine(c.x - w, c.y, c.x + w, c.y + side * 0.18f, 1.4f);
+            g.drawLine(c.x - w, c.y, c.x + w, c.y, 1.2f);
+            return true;
+        }
+        if (kind == "jitter") {
+            // ruido: o zigue-zague do jitter.
+            g.setColour(ink);
+            juce::Path path;
+            path.startNewSubPath(c.x - side * 0.24f, c.y);
+            path.lineTo(c.x - side * 0.12f, c.y - side * 0.14f);
+            path.lineTo(c.x, c.y + side * 0.14f);
+            path.lineTo(c.x + side * 0.12f, c.y - side * 0.14f);
+            path.lineTo(c.x + side * 0.24f, c.y);
+            g.strokePath(path, juce::PathStrokeType {1.4f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+        if (kind == "scale") {
+            // regua: a escala de notas.
+            const auto w = side * 0.24f;
+            g.setColour(ink);
+            g.drawLine(c.x - w, c.y + side * 0.12f, c.x + w, c.y + side * 0.12f, 1.4f);
+            for (int i = 0; i < 4; ++i) {
+                const auto x = c.x - w + static_cast<float>(i) * (w * 0.66f);
+                g.drawLine(x, c.y + side * 0.12f, x, c.y - side * 0.10f, 1.2f);
+            }
+            return true;
+        }
+        if (kind == "root") {
+            // nota: a tonica.
+            g.setColour(ink);
+            g.fillEllipse(c.x - side * 0.13f, c.y + side * 0.08f, side * 0.18f,
+                          side * 0.14f);
+            g.drawLine(c.x + side * 0.04f, c.y + side * 0.12f, c.x + side * 0.04f,
+                       c.y - side * 0.22f, 1.4f);
+            g.drawLine(c.x + side * 0.04f, c.y - side * 0.22f, c.x + side * 0.16f,
+                       c.y - side * 0.16f, 1.4f);
+            return true;
+        }
+        if (kind == "glide") {
+            // deslize: a passagem suave entre notas.
+            g.setColour(ink);
+            juce::Path path;
+            path.startNewSubPath(c.x - side * 0.24f, c.y + side * 0.14f);
+            path.lineTo(c.x - side * 0.08f, c.y + side * 0.14f);
+            path.quadraticTo(c.x + side * 0.14f, c.y + side * 0.14f, c.x + side * 0.22f,
+                             c.y - side * 0.16f);
+            g.strokePath(path, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+            return true;
+        }
+
         // -- abas de pasta: um glifo por modulo, 12 px de leitura --
         if (kind == "grainMod") {
             // tres rajadas de altura variavel: grao e' rajada curta.
@@ -810,7 +1200,7 @@ public:
             }
             return true;
         }
-        if (kind == "envMod") {
+        if (kind == "envMod" || kind == "env") {
             // ADSR: sobe, cai, patamar, desce.
             const auto w = side * 0.56f;
             const auto h = side * 0.40f;
@@ -827,7 +1217,7 @@ public:
                                                     juce::PathStrokeType::rounded});
             return true;
         }
-        if (kind == "filterMod") {
+        if (kind == "filterMod" || kind == "filter") {
             // resposta passa-baixa: plano e queda, com o corte marcado.
             const auto w = side * 0.56f;
             const auto h = side * 0.36f;
@@ -867,7 +1257,7 @@ public:
                                                      juce::PathStrokeType::rounded});
             return true;
         }
-        if (kind == "cloudMod") {
+        if (kind == "cloudMod" || kind == "cloud") {
             // dispersao: cinco pontos, o grao solto na nuvem.
             const juce::Point<float> dots[] {
                 {c.x - side * 0.20f, c.y - side * 0.10f},
@@ -882,7 +1272,7 @@ public:
             }
             return true;
         }
-        if (kind == "keysMod") {
+        if (kind == "keysMod" || kind == "key") {
             // piano de tres teclas: branca, preta, branca.
             const auto w = side * 0.16f;
             const auto h = side * 0.34f;

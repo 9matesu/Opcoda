@@ -80,7 +80,7 @@ entrou em cada fatia (F018–F021).
 
 | ID | Nome exibido | Faixa / opções | Padrão | Estado |
 | --- | --- | --- | --- | --- |
-| `grain` | Grain Size | 1–100 ms | 40 ms | implementado |
+| `grain` | Grain Size | 1–2000 ms | 40 ms | implementado |
 | `density` | Density | 1–200 grãos/s | 20 | implementado |
 | `position` | Position | 0–1 | 0,5 | implementado |
 | `spray` | Spray | 0–1 | 0 | implementado |

@@ -113,8 +113,10 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
 }
 
 TEST(AllocGuard, SustainedPlaybackStaysClean) {
-    // 5 minutos de audio sintetico a 128 amostras por bloco, o menor orcamento do
-    // ensaio T2. sem alocacao, sem xrun.
+    // 5 segundos de audio sintetico a 128 amostras por bloco, o menor orcamento do
+    // ensaio T2. a alocacao, se existisse, aparecia em qualquer bloco; os 5
+    // minutos continuos do criterio sao do T2 no host (docs/07), que mede p99 e
+    // xruns, nao o operator new.
     constexpr double kSampleRate = 44100.0;
     constexpr int kBlock = 128;
     constexpr int kBlocks = (5 * 44100) / kBlock;

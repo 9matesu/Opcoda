@@ -46,7 +46,7 @@ No Opcoda, a curva de entropia opera como fonte de modulação paramétrica cont
 
 ### 5.3.1 Microsom e síntese granular
 
-Roads formalizou a síntese granular a partir do conceito de microsom: o som como agregado de microfragmentos de 1 a 100 ms, cada grão com duração, envelope, frequência, amplitude e posição próprios, organizados em estruturas meso-temporais como nuvens e fluxos (ROADS, 2001). Os parâmetros canônicos são tamanho de grão, densidade de disparo, dispersão temporal (spray), afinação e panorama. Essa teoria sustenta o motor do Opcoda, cujos grãos variam de 1 a 100 ms no MVP.
+Roads formalizou a síntese granular a partir do conceito de microsom: o som como agregado de microfragmentos de 1 a 100 ms, cada grão com duração, envelope, frequência, amplitude e posição próprios, organizados em estruturas meso-temporais como nuvens e fluxos (ROADS, 2001). Os parâmetros canônicos são tamanho de grão, densidade de disparo, dispersão temporal (spray), afinação e panorama. Essa teoria sustenta o motor do Opcoda, cujos grãos variam de 1 ms a 2 s.
 
 ### 5.3.2 O problema do PCM bruto não senoidal
 

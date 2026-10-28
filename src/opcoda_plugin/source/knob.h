@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fonts.h"
+#include "look_and_feel.h"
 #include "palette.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -38,18 +39,17 @@ public:
         // o valor mostra o rotulo em vez do numero. o attachment ja poe o
         // intervalo 0..N-1 com passo 1, por isso aqui so falta o texto.
         juce::StringArray choiceLabels {};
+        // glifo desenhado ao lado do titulo. a 10 px diz o que o knob faz antes
+        // de o nome se ler: e' a mesma lingua dos icones dos modulos.
+        const char* icon {nullptr};
     };
 
     // sem parametro de tamanho: o editor posiciona por celula e o knob ajusta-se
     // em resized(). um tamanho aqui seria uma segunda fonte da verdade.
     Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
         : attachment_(makeAttachment(state, spec, slider_)) {
-        title_.setText(spec.title, juce::dontSendNotification);
-        title_.setJustificationType(juce::Justification::centred);
-        title_.setFont(fonts().sans(12.0f, true));
-        title_.setColour(juce::Label::textColourId, palette::textSub);
-        addAndMakeVisible(title_);
-
+        title_ = spec.title;
+        icon_ = spec.icon != nullptr ? spec.icon : "";
         value_.setJustificationType(juce::Justification::centred);
         value_.setFont(fonts().sans(13.0f));
         value_.setColour(juce::Label::textColourId, palette::textDark);
@@ -91,8 +91,7 @@ public:
     // quando o knob vive no mestre, que e' uma tira escura. textSub sobre carvao
     // seria texto invisivel.
     void setOnDark(bool on) {
-        title_.setColour(juce::Label::textColourId,
-                         on ? palette::textOnDarkSub : palette::textSub);
+        titleColour_ = on ? palette::textOnDarkSub : palette::textSub;
         value_.setColour(juce::Label::textColourId,
                          on ? palette::ivory : palette::textDark);
         repaint();
@@ -102,7 +101,7 @@ public:
         auto area = getLocalBounds();
         const bool tight = getHeight() < 112;
         const int titleHeight = tight ? 14 : 17;
-        title_.setBounds(area.removeFromTop(titleHeight));
+        area.removeFromTop(titleHeight);
         area.removeFromTop(1);
 
         const int valueHeight = tight ? 18 : 22;
@@ -127,7 +126,41 @@ public:
     }
 
     void paint(juce::Graphics& g) override {
-        static_cast<void>(g);
+        if (getWidth() <= 0 || getHeight() <= 0 || title_.isEmpty()) {
+            return;
+        }
+
+        const bool tight = getHeight() < 112;
+        const int titleHeight = tight ? 14 : 17;
+        const auto font = fonts().sans(tight ? 10.5f : 12.0f, true)
+                              .withExtraKerningFactor(0.10f);
+
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText(font, title_, 0.0f, 0.0f);
+        const auto textWidth = glyphs.getBoundingBox(0, -1, false).getWidth();
+
+        const float glyphSize = tight ? 10.0f : 12.0f;
+        const float gap = icon_.isEmpty() ? 0.0f : 4.0f;
+        const auto total = (icon_.isEmpty() ? 0.0f : glyphSize) + gap + textWidth;
+        const auto left = static_cast<float>(getWidth()) * 0.5f - total * 0.5f;
+        const auto row = juce::Rectangle<float> {
+            0.0f, 0.0f, static_cast<float>(getWidth()), static_cast<float>(titleHeight)};
+
+        auto textLeft = left;
+        if (!icon_.isEmpty()) {
+            OpcodaLookAndFeel::paintGlyph(
+                g, icon_,
+                juce::Rectangle<float> {left, row.getCentreY() - glyphSize * 0.5f,
+                                        glyphSize, glyphSize},
+                titleColour_, false);
+            textLeft += glyphSize + gap;
+        }
+
+        g.setColour(titleColour_);
+        g.setFont(font);
+        g.drawText(title_, juce::Rectangle<float> {textLeft, row.getY(), textWidth,
+                                                   row.getHeight()},
+                   juce::Justification::centredLeft, false);
     }
 
 private:
@@ -189,9 +222,11 @@ private:
     }
 
     juce::Slider slider_;
-    juce::Label title_;
     juce::Label value_;
     juce::TextButton menuButton_;
+    juce::String title_;
+    juce::String icon_;
+    juce::Colour titleColour_ {palette::textSub};
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
     juce::StringArray choiceLabels_;

@@ -106,6 +106,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         return std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID {id, 1}, juce::String {name}, cutoff, def);
     };
+    // 1 ms a 2 s, o que um granular moderno oferece. em escala linear, 40 ms morava
+    // nos primeiros 2 % do curso e o resto era so' material longo; o skew poe o
+    // centro do gesto em 100 ms e deixa a metade da viagem para os graos grandes. o
+    // valor guardado e automatizado continua em ms.
+    const auto grainSize = [] {
+        juce::NormalisableRange<float> size {dsp::GranularEngine::kMinGrainMs,
+                                            dsp::GranularEngine::kMaxGrainMs};
+        size.setSkewForCentre(100.0f);
+        return std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID {"grain", 1}, "Grain Size", size, 40.0f);
+    };
     const auto choice = [](const char* id, const char* name, juce::StringArray options, int def) {
         return std::make_unique<juce::AudioParameterChoice>(
             juce::ParameterID {id, 1}, juce::String {name}, std::move(options), def);
@@ -114,7 +125,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
     // os seis IDs originais nao mudam — sessao salva referencia por ID — so' o nome
     // exibido passou a ingles. Os novos ja' nascem com ID ingles.
     juce::AudioProcessorValueTreeState::ParameterLayout layout {
-        range("grain", "Grain Size", 1.0f, 100.0f, 40.0f),
+        grainSize(),
         range("density", "Density", 1.0f, 200.0f, 20.0f),
         range("position", "Position", 0.0f, 1.0f, 0.5f),
         range("spray", "Spray", 0.0f, 1.0f, 0.0f),
@@ -286,6 +297,10 @@ void PluginProcessor::prepareToPlay(double sampleRate, int maximumExpectedSample
 
 void PluginProcessor::releaseResources() {
     engine_.reset();
+    // o motor guarda um ponteiro cru para o buffer de bytes; solta-lo antes de
+    // owned_.clear() evita que o proximo processBlock leia memoria libertada se o
+    // host chamar prepareToPlay e tocar sem publicar material novo.
+    engine_.setSource(nullptr, 0);
     // reposto pelo metodo do transporte, nao escrevendo position_ a mao: quem
     // escreve ali e' advance().
 transport_.reset();

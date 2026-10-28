@@ -14,7 +14,7 @@ Entregar até 03/11 o Opcoda como aplicativo standalone e plugin VST3 x64 (Windo
 
 ### DSP
 
-- OE4. Motor granular **mono** com oito grãos simultâneos (prioridade à última nota), com tamanho de grão de 1 a 100 ms, densidade, posição, jitter, afinação e panorama, com janelas Hann e Gaussiana.
+- OE4. Motor granular **mono** com oito grãos simultâneos (prioridade à última nota), com tamanho de grão de 1 ms a 2 s, densidade, posição, jitter, afinação e panorama, com janelas Hann e Gaussiana.
 - OE5. Cálculo de entropia de Shannon por janela de 2048 bytes e por seção, usado para controlar dispersão e aleatoriedade dos grãos. Fórmula: H = - soma de p(xi) log2 p(xi).
 - OE6. Cadeia de condicionamento com centralização DC, filtro DC-blocker de primeira ordem com R = 0,9983 e limitador de saída.
 

@@ -1,19 +1,10 @@
 #include "opcoda_core/rt/transport.h"
 
-#include "opcoda_core/dsp/granular_engine.h"
-
 #include <algorithm>
 #include <cmath>
 
 namespace opcoda::rt {
 namespace {
-
-// o piso existe porque abaixo de um grao nao ha audicao, e o grao mais longo do
-// motor e' GranularEngine::kMaxGrainMs. a assercao prende os dois numeros: se o
-// maximo mudar e ninguem mexer aqui, o build parte em vez de o piso ficar curto.
-static_assert(Transport::kMinSeconds ==
-                  static_cast<double>(opcoda::dsp::GranularEngine::kMaxGrainMs) / 1000.0,
-              "o piso de duracao tem de ser o comprimento do maior grao");
 
 // a posicao e' fracao, e o que se recusa e' o que nao e' fracao. NaN sairia como
 // zero em silencio, e nao como erro.

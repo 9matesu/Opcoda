@@ -55,7 +55,7 @@ public:
     // cauda = maior grao: e' o tempo que um grao ja' nascido ainda tem para
     // acabar depois de o gate fechar.
     // devolver 0 valia sem transporte, quando a nota acabava com o gate. Com o
-    // botao, o STOP fecha o gate e deixa ate' 100 ms de graos em voo; sem cauda
+    // botao, o STOP fecha o gate e deixa ate' 2 s de graos em voo; sem cauda
     // declarada o host corta-os a meio.
     double getTailLengthSeconds() const override {
         return static_cast<double>(dsp::GranularEngine::kMaxGrainMs) / 1000.0;

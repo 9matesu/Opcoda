@@ -4,7 +4,7 @@
 
 Sintetizador granular em tempo real para Windows x64. Lê arquivos Portable
 Executable (`.exe`, `.dll`, `.bin`, `.sys`) como matéria-prima sonora e organiza
-os bytes em grãos de 1 a 100 ms. Existe como VST3 e *standalone*, na versão
+os bytes em grãos de 1 ms a 2 s. Existe como VST3 e *standalone*, na versão
 0.1.0, ainda sem lançamento comercial.
 
 ![Interface do Opcoda com um binário carregado](docs/assets/screenshots/opcoda-ui.png)
@@ -128,7 +128,7 @@ chegam ao teclado virtual — dá para segurar uma nota e trocar de placa a ouvi
 
 | Controle | Função |
 | --- | --- |
-| `SIZE` | Duração do grão, 1 a 100 ms. |
+| `SIZE` | Duração do grão, 1 ms a 2 s. |
 | `DENSITY` | Grãos por segundo, 1 a 200. |
 | `POSITION` | Ponto de leitura no material, 0 a 100%. |
 | `SPRAY` | Dispersão aleatória da posição de cada grão, 0 a 100%. |

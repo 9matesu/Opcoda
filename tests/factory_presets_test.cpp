@@ -6,6 +6,8 @@
 
 #include "opcoda_plugin/source/factory_presets.h"
 
+#include "opcoda_core/dsp/granular_engine.h"
+
 #include <gtest/gtest.h>
 
 #include <set>
@@ -15,6 +17,7 @@ namespace {
 
 using opcoda::factoryPresets;
 using opcoda::FactoryPreset;
+using opcoda::dsp::GranularEngine;
 
 struct Range {
     float lo;
@@ -27,7 +30,7 @@ void checkRanges(const FactoryPreset& p) {
         EXPECT_GE(v, lo) << id << " em " << p.name;
         EXPECT_LE(v, hi) << id << " em " << p.name;
     };
-    in(p.grain, 1.0f, 100.0f, "grain");
+    in(p.grain, GranularEngine::kMinGrainMs, GranularEngine::kMaxGrainMs, "grain");
     in(p.density, 1.0f, 200.0f, "density");
     in(p.position, 0.0f, 1.0f, "position");
     in(p.spray, 0.0f, 1.0f, "spray");

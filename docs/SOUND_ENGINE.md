@@ -152,6 +152,7 @@ substitui o `operator new` global e falha se o callback alocar.
 ## Limitações do motor
 
 - Oito vozes de grão. O instrumento é mono com prioridade à última nota.
-- Grãos de 1 a 100 ms.
+- Grãos de 1 ms a 2 s. A janela é uma tabela fixa de 4096 pontos por tipo, lida
+  com passo proporcional ao grão, e não uma tabela do tamanho do grão.
 - Filtros biquad de 12 ou 24 dB no primeiro estágio; o segundo estágio tem 12 dB.
 - Sem FM, sem síntese espectral e sem reverb interno.

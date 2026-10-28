@@ -9,7 +9,7 @@ estéreo e as 24 células da matriz.
 
 | ID | Controle | Unidade | Faixa | Padrão | Comportamento |
 | --- | --- | --- | --- | --- | --- |
-| `grain` | SIZE | ms | 1 a 100 | 40 | Duração da janela do grão. Numa região curta com pitch alto, o grão encurta para metade do material (e o envelope acompanha) para a posição não ficar morta. |
+| `grain` | SIZE | ms | 1 a 2000 | 40 | Duração da janela do grão. O knob é linear em milissegundos com centro em 100 ms, e a interface mostra segundos a partir de 1000. Numa região curta com pitch alto, o grão encurta para metade do material (e o envelope acompanha) para a posição não ficar morta. |
 | `density` | DENSITY | grãos/s | 1 a 200 | 20 | Taxa de disparo. |
 | `position` | POSITION | fração | 0 a 1 | 0,5 | Ponto de leitura no material. |
 | `spray` | SPRAY | fração | 0 a 1 | 0 | Desvio uniforme da posição de cada grão em ±spray. |
@@ -28,7 +28,7 @@ estéreo e as 24 células da matriz.
 | --- | --- | --- | --- | --- | --- |
 | `cloudsize` | CLOUD W | fração | 0 a 1 | 0 | Atraso uniforme de 0 a 500 ms no início de cada grão. |
 | `pitchspread` | P.SPREAD | semitons | 0 a 24 | 0 | Desvio de afinação por grão, simétrico. |
-| `grainjit` | JITTER | fração | 0 a 1 | 0 | Variação de duração entre 0,5x e 1,5x, limitada a 1–100 ms. |
+| `grainjit` | JITTER | fração | 0 a 1 | 0 | Variação de duração entre 0,5x e 1,5x, limitada a 1–2000 ms. |
 
 ## Envelope
 

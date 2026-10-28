@@ -32,9 +32,12 @@ std::vector<float> sineSource(float toneHz, float amplitude, float seconds) {
 // mede a resposta, nao o agendamento.
 GranularParams toneParams(float cutoffHz) {
     GranularParams params;
-    params.grainSizeMs = 400.0f;
-    // densidade alta: com 400 ms de grao o motor nunca fica em silencio entre
-    // graos, e o ensaio mede regime em vez de apanhar uma pausa.
+    // 100 ms e' um grao de cada vez nesta densidade: o ensaio mede o tanh do
+    // filtro, e nao a soma de janelas sobrepostas. o valor fica abaixo do maximo
+    // de proposito, para a medicao nao mudar se o knob do grao crescer outra vez.
+    params.grainSizeMs = 100.0f;
+    // densidade alta: 8 janelas por segundo deixam o tom quase sempre presente, e
+    // a media de 20 blocos apanha poucas pausas entre graos.
     params.densityGrainsPerSec = 8.0f;
     params.position = 0.5f;
     params.spray = 0.0f;

@@ -53,9 +53,12 @@ void GranularEngine::prepare(double sampleRate, int maximumBlockSize) noexcept {
     limiterLeft_.prepare();
     limiterRight_.prepare();
 
-    activeWindow_ = windowA_.data();
-    activeWindowLength_ = 512;
-    fillWindow(WindowType::kHann, windowA_.data(), activeWindowLength_);
+    // todas as tabelas ficam prontas aqui. preencher no callback custava 4096
+    // cos na primeira troca de tipo e voltava a pagar a cada alternancia.
+    for (std::size_t i = 0; i < windowTables_.size(); ++i) {
+        fillWindow(static_cast<WindowType>(i), windowTables_[i].data(), kWindowTableSamples);
+    }
+    activeWindow_ = windowTables_[0].data();
     activeWindowType_ = WindowType::kHann;
 
     // o haas guarda 12 ms; a capacidade e' o que a taxa permite dentro do array
@@ -104,6 +107,7 @@ void GranularEngine::reset() noexcept {
         filter.reset();
     }
     spawnAccumulator_ = 0.0;
+    grainSerial_ = 0;
     lastActiveVoices_ = 0;
     envelopeLevel_ = 0.0f;
     soundingCmd_ = false;
@@ -168,17 +172,14 @@ void GranularEngine::setSource(const float* samples,
 }
 
 void GranularEngine::rebuildWindow(const GranularParams& params) noexcept {
-    const int length = clampGrainSamples(sampleRate_, params.grainSizeMs);
     const auto window = sanitizeWindowType(params.window);
-    if (length == activeWindowLength_ && window == activeWindowType_) {
+    if (window == activeWindowType_) {
         return;
     }
 
-    // dois buffers alternados: o agendador pode estar lendo o outro no meio do bloco.
-    float* target = (activeWindow_ == windowA_.data()) ? windowB_.data() : windowA_.data();
-    fillWindow(window, target, length);
-    activeWindow_ = target;
-    activeWindowLength_ = length;
+    // as quatro tabelas ja' existem: trocar de janela e' so' apontar para outra.
+    // nada de fillWindow (4096 cos) na thread de audio.
+    activeWindow_ = windowTables_[static_cast<std::size_t>(window)].data();
     activeWindowType_ = window;
 }
 
@@ -191,9 +192,13 @@ void GranularEngine::startGrain(int voice,
     Grain& grain = voices_[static_cast<std::size_t>(voice)];
     (void)entropy;
 
-    // cada voz tem a sua sequencia, derivada da semente. assim o sorteio de uma
-    // nao mexe no da outra.
-    std::uint64_t state = seed_ + static_cast<std::uint64_t>(voice) * 0x9E3779B1ull;
+    // estado novo por grao, derivado da semente, da voz e de um contador. com o
+    // estado a nascer sempre do mesmo valor, cada voz repetia exatamente o mesmo
+    // spray, o mesmo detune e o mesmo spread, e a nuvem ficava parada.
+    std::uint64_t state =
+        seed_ + 0x9E3779B97F4A7C15ull *
+                    (static_cast<std::uint64_t>(voice) +
+                     (grainSerial_++) * static_cast<std::uint64_t>(kMaxVoices) + 1ull);
 
     // o LFO e' lido no offset do bloco em que o grao nasce. a 20 Hz, inicio e fim
     // de um bloco de 256 ja' estao a 0,13 ciclo de distancia.
@@ -241,21 +246,24 @@ void GranularEngine::startGrain(int voice,
                                  ? static_cast<int>(nextRandom(state) * cloudWindow * sampleRate_)
                                  : 0;
 
-    // jitter de duracao: fator de 0,5x a 1,5x, recortado a 1..100 ms. a janela
-    // e' lida por escala; a tabela e' uma so' por bloco.
+    // jitter de duracao: fator de 0,5x a 1,5x, recortado ao intervalo do knob. a
+    // janela e' lida por escala; a tabela e' uma so' e nao depende do comprimento.
     const double jitter =
         std::isfinite(static_cast<double>(params.grainJitter))
             ? std::clamp(static_cast<double>(params.grainJitter), 0.0, 1.0)
             : 0.0;
-    int grainLength = activeWindowLength_;
-    double windowScale = 1.0;
+    // a janela tem 4096 pontos e o grao tem grainLength: a escala leva o primeiro
+    // indice a zero e o ultimo a 4095, senao um grao curto terminava com a janela
+    // a meio (2 amostras caiam no pico da Hann) e o corte ouvia-se.
+    int grainLength = clampGrainSamples(sampleRate_, params.grainSizeMs);
+    double windowScale = windowScaleForLength(grainLength);
     if (jitter > 0.0) {
         const double factor = 1.0 + (nextRandom(state) * 2.0 - 1.0) * 0.5 * jitter;
         const double jitteredMs = std::clamp(
-            static_cast<double>(params.grainSizeMs) * factor, 1.0, 100.0);
+            static_cast<double>(params.grainSizeMs) * factor,
+            static_cast<double>(kMinGrainMs), static_cast<double>(kMaxGrainMs));
         grainLength = clampGrainSamples(sampleRate_, static_cast<float>(jitteredMs));
-        windowScale = static_cast<double>(activeWindowLength_) /
-                      static_cast<double>(grainLength);
+        windowScale = windowScaleForLength(grainLength);
     }
 
     // LFO no pitch: +-12 st com depth cheio. entra na soma antes da razao.
@@ -298,8 +306,7 @@ void GranularEngine::startGrain(int voice,
             std::floor(0.5 / grain.readStep)));
         if (maxSpanSamples > 0 && grainLength > maxSpanSamples) {
             grainLength = maxSpanSamples;
-            windowScale = static_cast<double>(activeWindowLength_) /
-                          static_cast<double>(grainLength);
+            windowScale = windowScaleForLength(grainLength);
         }
 
         const double span = static_cast<double>(grainLength) * grain.readStep;
@@ -310,6 +317,7 @@ void GranularEngine::startGrain(int voice,
     grain.remaining = grainLength;
     grain.windowIndex = 0;
     grain.windowScale = windowScale;
+    grain.window = activeWindow_;
     grain.delay = delaySamples;
     lastGrainDelay_ = delaySamples;
     lastGrainSpread_ = static_cast<float>(spreadOffset);
@@ -518,6 +526,11 @@ void GranularEngine::processBlock(float* left,
     const double lastIndex = static_cast<double>(sourceCount_ - 1);
     const double positionPoint = std::clamp(static_cast<double>(params.position), 0.0, 1.0);
 
+    // os graos que nascem neste bloco. o segundo passe so' renderiza estes: os
+    // antigos ja' foram renderizados no primeiro, e renderizar outra vez consumia
+    // dois blocos de vida por bloco -- um grao de 1,5 s morria em 0,75 s.
+    std::array<bool, kMaxVoices> bornThisBlock {};
+
     auto spawnInto = [&](int voice, int atSample) {
         const std::size_t point = (entropyPointCount_ > 0)
             ? static_cast<std::size_t>(positionPoint * static_cast<double>(entropyPointCount_ - 1))
@@ -527,6 +540,7 @@ void GranularEngine::processBlock(float* left,
             : 4.0;
         startGrain(voice, params, entropy, atSample, lfoSettings);
         voices_[static_cast<std::size_t>(voice)].writeIndex = atSample;
+        bornThisBlock[static_cast<std::size_t>(voice)] = true;
     };
 
     // writeIndex e' a posicao dentro do bloco, nao um contador global.
@@ -556,13 +570,14 @@ void GranularEngine::processBlock(float* left,
 
             const float fraction = static_cast<float>(read - static_cast<double>(index));
             const float sample = source_[index] + (source_[index + 1] - source_[index]) * fraction;
-            // com jitter, a tabela e' lida mais depressa ou mais devagar. o
-            // ultimo indice e' o teto para nao ler fora da janela.
+            // a tabela e' a do nascimento do grao, nao a que o knob aponta agora:
+            // trocar de janela a meio de um grao longo saltava o envelope.
             const auto windowIndex = std::min(
                 static_cast<std::size_t>(static_cast<double>(grain.windowIndex) *
                                          grain.windowScale),
-                static_cast<std::size_t>(activeWindowLength_ - 1));
-            const float envelope = activeWindow_[windowIndex];
+                static_cast<std::size_t>(kWindowTableSamples - 1));
+            const float envelope =
+                (grain.window != nullptr) ? grain.window[windowIndex] : 0.0f;
 
             float driven = sample * envelope * grain.gain;
             // drive antes do filtro: ganho e tanh. o clip que fecha o topo do
@@ -620,11 +635,11 @@ void GranularEngine::processBlock(float* left,
     }
 
     for (int i = 0; i < kMaxVoices; ++i) {
-        if (voices_[static_cast<std::size_t>(i)].active) {
+        if (voices_[static_cast<std::size_t>(i)].active &&
+            bornThisBlock[static_cast<std::size_t>(i)]) {
             renderVoice(i);
         }
     }
-
 
     dcBlockerLeft_.processBlock(left, numSamples);
     dcBlockerRight_.processBlock(right, numSamples);
@@ -656,7 +671,7 @@ void GranularEngine::applyDriveClip(float* left, float* right, int numSamples,
                                     float driveDb) noexcept {
     const float db = std::isfinite(driveDb) ? std::clamp(driveDb, 0.0f, 24.0f) : 0.0f;
     // abaixo de 6 dB o teto e' 1.0 e o clip nao se ouve; a partir daí desce ate'
-    // 0.35 aos 24 dB. o teto desliza dentro do bloco para a automacao nao
+    // 0.40 aos 24 dB. o teto desliza dentro do bloco para a automacao nao
     // estalar no limite do buffer.
     const float target =
         db > 6.0f
@@ -929,7 +944,8 @@ void GranularEngine::applyModMatrix(GranularParams& params, float lfoValue) noex
 
     const float grainSize = offset(ModDest::kGrainSize);
     if (grainSize != 0.0f) {
-        params.grainSizeMs = std::clamp(params.grainSizeMs * octaves(grainSize, 2.0f), 1.0f, 200.0f);
+        params.grainSizeMs = std::clamp(params.grainSizeMs * octaves(grainSize, 2.0f),
+                                       kMinGrainMs, kMaxGrainMs);
     }
 
     const float cutoff1 = offset(ModDest::kCutoff1);
