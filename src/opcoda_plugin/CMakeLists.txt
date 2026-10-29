@@ -81,6 +81,8 @@ target_sources(Opcoda
         source/look_and_feel.h
         source/module_folder_tab.h
         source/knob.h
+        source/choice_control.cpp
+        source/choice_control.h
         source/animator.h
         source/display_panel.h
         source/hex_grid.cpp
@@ -93,6 +95,8 @@ target_sources(Opcoda
         source/envelope_view.h
         source/filter_view.cpp
         source/filter_view.h
+        source/lfo_view.cpp
+        source/lfo_view.h
         source/fonts.h
         source/palette.h)
 

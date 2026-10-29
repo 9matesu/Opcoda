@@ -48,6 +48,10 @@ public:
 
     [[nodiscard]] float value() const noexcept { return value_; }
 
+    // alvo corrente: quem ja' anima precisa de saber para onde o valor vai sem
+    // guardar uma copia paralela do parametro.
+    [[nodiscard]] float target() const noexcept { return target_; }
+
     // verdadeiro quando a diferenca ja nao se ve. serve para parar de repintar:
     // um repaint por quadro sem mudanca visivel cobra o custo da animacao.
     [[nodiscard]] bool settled(float epsilon = 0.001f) const noexcept {

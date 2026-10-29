@@ -440,6 +440,7 @@ void GranularEngine::processBlock(float* left,
     updateGlide(params, numSamples);
     // valor do lfo no inicio do bloco, para densidade e cutoff.
     const float lfoBlock = lfo_.blockValue(lfoSettings.wave, lfoSettings.steps);
+    lastLfoValue_ = lfoBlock;
     // matriz depois do lfo e antes dos coeficientes.
     applyModMatrix(params, lfoBlock);
 

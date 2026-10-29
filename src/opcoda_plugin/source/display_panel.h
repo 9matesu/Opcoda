@@ -49,8 +49,9 @@ public:
         g.drawVerticalLine(juce::roundToInt(bounds.getRight()) - 2, 0.0f,
                            bounds.getHeight());
 
-        g.setColour(palette::displayBorder);
-        g.drawRect(bounds.reduced(0.5f), 1.0f);
+        // **sem moldura.** o ecra do material e' preto e sem borda: um rectangulo
+        // a rodear da onda lia-se como moldura, e era o que se via em volta do
+        // audio. o vidro e' a unica coisa que separa o ecra da chapa.
     }
 };
 

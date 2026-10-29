@@ -49,11 +49,11 @@ public:
                                   5.0f, 5.0f, true, true, false, false);
 
         auto fill = on ? palette::faceplateLight
-                       : palette::alpha(palette::faceplateDark, 0.24f);
+                       : palette::alpha(palette::faceplateDark, 0.14f);
         if (down) {
-            fill = on ? palette::faceplate : palette::alpha(palette::faceplateDark, 0.40f);
+            fill = on ? palette::faceplate : palette::alpha(palette::faceplateDark, 0.36f);
         } else if (highlighted && !on) {
-            fill = palette::alpha(palette::faceplateDark, 0.36f);
+            fill = palette::alpha(palette::faceplateDark, 0.28f);
         }
         g.setColour(fill);
         g.fillPath(shape);

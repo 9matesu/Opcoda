@@ -78,32 +78,36 @@ void ModMatrixView::attach(juce::AudioProcessorValueTreeState& state) {
 
 void ModMatrixView::paint(juce::Graphics& g) {
     const auto bounds = getLocalBounds().toFloat();
-    g.setColour(palette::displayPanel);
+    g.setColour(palette::display);
     g.fillRect(bounds);
 
-    // cabecalho: o que a vista e' e como se le. a coluna do amount e' bipolar:
-    // negativo a' esquerda, positivo a' direita, o centro e' nada.
+    // cabecalho: o que a vista e' e como se le. as tres colunas sao desenhadas
+    // onde as celulas estao, e nao em numeros soltos: o cabecalho e' a legenda
+    // da coluna, tem de cair em cima dela.
     g.setFont(fonts().sans(10.0f, true));
-    g.setColour(palette::alpha(palette::textOnDark, 0.55f));
+    g.setColour(palette::alpha(palette::textOnDark, 0.60f));
     g.drawText("MOD MATRIX",
-               juce::Rectangle<float> {bounds.getX() + 8.0f, bounds.getY() + 5.0f,
+               juce::Rectangle<float> {bounds.getX() + 10.0f, bounds.getY() + 5.0f,
                                        120.0f, 13.0f},
                juce::Justification::centredLeft, false);
 
-    g.setFont(fonts().sans(9.0f));
-    g.setColour(palette::alpha(palette::textOnDarkSub, 0.70f));
-    const auto headerY = bounds.getY() + 6.0f;
-    // o rotulo da fonte e' o proprio combo: so' destino e amount precisam de
-    // cabecalho, e o titulo fica a' esquerda.
-    g.drawText("DESTINATION",
-               juce::Rectangle<float> {bounds.getX() + 262.0f, headerY, 200.0f, 12.0f},
-               juce::Justification::centredLeft, false);
-    g.drawText("AMOUNT",
-               juce::Rectangle<float> {bounds.getX() + 486.0f, headerY, 120.0f, 12.0f},
-               juce::Justification::centredLeft, false);
+    g.setFont(fonts().sans(9.0f, true));
+    g.setColour(palette::alpha(palette::textOnDarkSub, 0.75f));
+    const auto headerY = bounds.getY() + 7.0f;
+    if (!columnBounds_.empty()) {
+        const auto headerFor = [&](std::size_t column) {
+            return juce::Rectangle<float> {static_cast<float>(columnBounds_[column].getX()),
+                                           headerY,
+                                           static_cast<float>(columnBounds_[column].getWidth()),
+                                           12.0f};
+        };
+        g.drawText("SOURCE", headerFor(0), juce::Justification::centredLeft, false);
+        g.drawText("DESTINATION", headerFor(1), juce::Justification::centredLeft, false);
+        g.drawText("AMOUNT", headerFor(2), juce::Justification::centredLeft, false);
+    }
 
-    // indice e seta de cada linha, pintados: sao rotulo, nao controle.
-    g.setFont(fonts().sans(10.0f));
+    // indice de cada linha, pintado: e' rotulo, nao controle.
+    g.setFont(fonts().sans(10.0f, true));
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         const auto row = rowBounds_[i].toFloat();
         if (row.isEmpty()) {
@@ -114,10 +118,11 @@ void ModMatrixView::paint(juce::Graphics& g) {
                    juce::Rectangle<float> {row.getX() - 24.0f, row.getY(), 16.0f,
                                            row.getHeight()},
                    juce::Justification::centredRight, false);
-        g.setColour(palette::alpha(palette::accent, 0.70f));
+        g.setColour(palette::alpha(palette::accent, 0.75f));
+        const auto arrowX = columnBounds_.empty() ? row.getX() + 214.0f
+                                                  : static_cast<float>(columnBounds_[0].getRight());
         g.drawText(juce::String::fromUTF8("\xE2\x86\x92"),
-                   juce::Rectangle<float> {row.getX() + 214.0f, row.getY(), 18.0f,
-                                           row.getHeight()},
+                   juce::Rectangle<float> {arrowX, row.getY(), 22.0f, row.getHeight()},
                    juce::Justification::centred, false);
     }
 }
@@ -128,29 +133,46 @@ void ModMatrixView::resized() {
 
 void ModMatrixView::layoutRows() {
     // margem esquerda 26 px para o indice, 22 em cima para o cabecalho.
-    const auto area = getLocalBounds().reduced(8, 4).withTrimmedTop(22).withTrimmedLeft(26);
+    const auto area = getLocalBounds().reduced(10, 4).withTrimmedTop(24).withTrimmedLeft(28);
     if (area.isEmpty()) {
         rowBounds_ = {};
+        columnBounds_ = {};
         return;
     }
 
-    constexpr int kRowGap {4};
-    const int rowHeight = juce::jmax(18, (area.getHeight() - kRowGap * 7) / 8);
+    constexpr int kRowGap {5};
+    const int rowHeight = juce::jmax(20, (area.getHeight() - kRowGap * 7) / 8);
     const int gridHeight = rowHeight * 8 + kRowGap * 7;
     int y = area.getY() + juce::jmax(0, (area.getHeight() - gridHeight) / 2);
 
-    const int comboWidth = juce::jmax(120, juce::jmin(200, area.getWidth() * 22 / 100));
-    const int gap = 8;
+    // tres colunas: fonte, destino e amount. a barra bipolar ocupa o resto da
+    // largura, porque e' ela que se le de relance.
+    const int sourceWidth = juce::jmax(120, juce::jmin(210, area.getWidth() * 20 / 100));
+    const int destinationWidth =
+        juce::jmax(120, juce::jmin(210, area.getWidth() * 20 / 100));
+    const int arrow = 26;
+    const int gap = 10;
+    const int amountWidth =
+        juce::jmax(120, area.getWidth() - sourceWidth - destinationWidth - arrow - gap * 3);
+
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         auto& row = rows_[i];
         auto line = area.withTop(y).withHeight(rowHeight);
         rowBounds_[i] = line;
 
-        row.source_.setBounds(line.removeFromLeft(comboWidth).reduced(0, 1));
-        line.removeFromLeft(20 + gap);
-        row.destination_.setBounds(line.removeFromLeft(comboWidth).reduced(0, 1));
+        const auto source = line.removeFromLeft(sourceWidth);
+        line.removeFromLeft(arrow + gap);
+        const auto destination = line.removeFromLeft(destinationWidth);
         line.removeFromLeft(gap);
-        row.amount_.setBounds(line.reduced(0, 3));
+        const auto amount = line.removeFromLeft(amountWidth);
+
+        if (i == 0) {
+            columnBounds_ = {source, destination, amount};
+        }
+
+        row.source_.setBounds(source.reduced(0, 1));
+        row.destination_.setBounds(destination.reduced(0, 1));
+        row.amount_.setBounds(amount.reduced(0, 3));
         y += rowHeight + kRowGap;
     }
 }

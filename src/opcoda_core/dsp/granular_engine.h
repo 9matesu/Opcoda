@@ -343,6 +343,9 @@ public:
 
     // fase do lfo, para os ensaios de sync. so a thread de audio escreve.
     [[nodiscard]] double lfoPhase() const noexcept { return lfo_.phase(); }
+    // valor bipolar do lfo no inicio do bloco: o ponto vivo do visualizador de
+    // MOD le o mesmo numero que a matriz usou, nao uma segunda conta na interface.
+    [[nodiscard]] float lfoBlockValue() const noexcept { return lastLfoValue_; }
 
     void processBlock(float* left, float* right, int numSamples,
                       const GranularParams& params) noexcept;
@@ -486,6 +489,7 @@ private:
     // fase em voltas, sempre no inicio do bloco. avanca no fim, mesmo em
     // silencio: o lfo e' tempo absoluto.
     LFO lfo_ {};
+    float lastLfoValue_ {0.0f};
 };
 
 } // namespace opcoda::dsp

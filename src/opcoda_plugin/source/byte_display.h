@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -68,32 +69,6 @@ public:
         matrix,    // tecla 4
     };
 
-    // o que os knobs estao a pedir, desenhado sobre a onda. nao e' uma segunda
-    // fonte da verdade: sao os valores lidos do estado, a 60 Hz, para o material
-    // mostrar spray, densidade, tamanho do grao e posicao antes de se ouvir.
-    struct ParamPreview {
-        float position {0.5f};
-        float spray {0.0f};
-        float density {20.0f};
-        float grainMs {40.0f};
-        float pitchSpread {0.0f};
-        float pan {0.0f};
-        float sampleRate {48000.0f};
-        // a janela e' a forma do grao; sem ela o preview mostrava onde os graos
-        // nascem mas nao como soam. pitch e nivel moldam a mesma silhueta.
-        int window {0};
-        float pitchSemitones {0.0f};
-        float level {1.0f};
-
-        [[nodiscard]] bool operator==(const ParamPreview& other) const noexcept {
-            return position == other.position && spray == other.spray &&
-                   density == other.density && grainMs == other.grainMs &&
-                   pitchSpread == other.pitchSpread && pan == other.pan &&
-                   sampleRate == other.sampleRate && window == other.window &&
-                   pitchSemitones == other.pitchSemitones && level == other.level;
-        }
-    };
-
     ByteDisplay();
 
     void setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize);
@@ -101,27 +76,34 @@ public:
         sections_ = sections;
         repaint();
     }
-
     void setRegion(std::uint64_t start, std::uint64_t end);
     void setReadHead(std::uint64_t address);
 
     void setPlayhead(float fraction, bool visible) {
-        playheadVisible_ = visible;
-
-        if (!playheadAnimated_ || !visible) {
+        const bool already = playheadVisible_ == visible &&
+                             std::abs(playheadFraction_.value() - fraction) < 1.0e-6f &&
+                             std::abs(playheadFraction_.target() - fraction) < 1.0e-6f;
+        if (!visible) {
+            playheadFraction_.jumpTo(fraction);
+        } else if (!playheadAnimated_) {
             playheadFraction_.jumpTo(fraction);
         } else {
             playheadFraction_.set(fraction);
         }
+        playheadVisible_ = visible;
+        const bool wasAnimated = playheadAnimated_;
         playheadAnimated_ = visible;
 
+        // parado e sem mudanca: nao repinta. enquanto anda, a agulha mexe-se e o
+        // tickAnimation trata do repaint.
+        if (already && wasAnimated == visible) {
+            return;
+        }
         repaint();
     }
 
     void setGrains(const std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices>& views,
                    int count);
-
-    void setParamPreview(const ParamPreview& preview);
 
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
@@ -210,10 +192,6 @@ private:
     [[nodiscard]] std::uint64_t bookmarkAt(
         float x, const juce::Rectangle<float>& area) const noexcept;
 
-    // o preview dos parametros: banda de spray, barrinhas de grao com a largura
-    // do tamanho e o espacamento da densidade, e a posicao. so' na forma de onda.
-    void paintParamPreview(juce::Graphics& g, const juce::Rectangle<float>& area);
-
     void layoutHex();
     void paintSectionTicks(juce::Graphics& g);
     void paintGrains(juce::Graphics& g, const juce::Rectangle<float>& area);
@@ -271,6 +249,10 @@ private:
     std::vector<float> pixelMin_;
     std::vector<float> hullMax_;
     std::vector<float> hullMin_;
+    // nucleo de rms por pixel: e' o que da' corpo a' onda. sem ele, material
+    // saturado desenha um bloco; com ele, le-se a dinamica como num audio gravado.
+    std::vector<float> pixelRms_;
+    std::vector<float> hullRms_;
 
     const std::vector<std::uint8_t>* bytes_ {nullptr};
     std::vector<PluginProcessor::SourceInfo::SectionInfo> sections_;
@@ -282,7 +264,7 @@ private:
     bool caretMoved_ {false};
 
     std::uint64_t pendingScrub_ {std::numeric_limits<std::uint64_t>::max()};
-    float playheadVisible_ {false};
+    bool playheadVisible_ {false};
 
     ViewMode mode_ {ViewMode::waveform};
 
@@ -336,12 +318,14 @@ private:
 
     void paintRuler(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
     void paintOverview(juce::Graphics& g);
-    void paintSourceTag(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
-
+    // os pontos da amostra entram com o zoom: o alpha e' o peso que a leitura
+    // detalhada tem sobre o envelope desenhado, e a mistura e' o que torna o
+    // zoom continuo.
     void paintSampleDots(juce::Graphics& g,
                          const juce::Rectangle<float>& plotArea,
                          std::uint64_t viewStartByte,
-                         std::uint64_t viewEndByte);
+                         std::uint64_t viewEndByte,
+                         float alpha);
     [[nodiscard]] bool sampleDotsVisible() const noexcept;
 
     std::vector<pe::Column> columns_;
@@ -351,9 +335,6 @@ private:
     float cachedViewStart_ {-1.0f};
     float cachedViewLength_ {-1.0f};
     bool cacheValid_ {false};
-
-    ParamPreview preview_ {};
-    bool previewValid_ {false};
 
     juce::Font font_ {fonts().sans(10.0f)};
 };

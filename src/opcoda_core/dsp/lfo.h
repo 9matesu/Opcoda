@@ -144,6 +144,12 @@ public:
     // resto do motor. o display le a telemetria.
     [[nodiscard]] double phase() const noexcept { return phase_; }
 
+    // a forma em funcao da fase, para quem desenha a curva (a vista MOD) sem
+    // duplicar a matematica das ondas no lado da interface.
+    [[nodiscard]] static float shapeAt(LFOWave wave, double phase) noexcept {
+        return waveAt(wave, phase);
+    }
+
 private:
     [[nodiscard]] static float waveAt(LFOWave wave, double phase) noexcept;
 

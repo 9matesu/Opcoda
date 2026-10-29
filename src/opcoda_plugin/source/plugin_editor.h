@@ -1,11 +1,12 @@
 #pragma once
 
 #include "byte_display.h"
-#include "choice_button.h"
+#include "choice_control.h"
 #include "display_panel.h"
 #include "envelope_view.h"
 #include "filter_view.h"
 #include "knob.h"
+#include "lfo_view.h"
 #include "look_and_feel.h"
 #include "module_folder_tab.h"
 #include "output_meter.h"
@@ -19,6 +20,7 @@
 
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -33,18 +35,13 @@ namespace opcoda {
 // quando o redimensionamento saiu.
 //
 // as faixas, de cima para baixo: header de chapa, ecra com tira de vistas a' direita,
-// tira de navegacao, abas de modulo, painel de controlos. o master (volume, pan e
-// medidor stereo) ocupa a coluna da direita ate' ao fundo, e o teclado fica em baixo,
-// a' esquerda do medidor.
-//
-// **os controlos de cada aba vivem em campos semanticos.** grao, playback e mix sao
-// grupos separados por legenda e filete; os parametros de escolha viram campos com
-// menu, porque girar um knob de quatro posicoes nunca foi a melhor leitura. pan e
-// volume formam o master, o unico sitio onde a saida se ve e se controla.
+// tira de navegacao, abas de modulo, painel de knobs. o master (volume, medidor
+// stereo) ocupa a coluna da direita ate' ao fundo, e o teclado fica em baixo, a'
+// esquerda do medidor.
 //
 // **sem MAIN e sem OUT nas abas.** a MAIN repetia onze parametros que ja' vivem nos
 // modulos, e o OUT tinha um volume que passou a ser o master sempre visivel. cada
-// parametro aparece uma vez, no grupo a que pertence.
+// parametro aparece uma vez, no modulo a que pertence.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      private juce::ValueTree::Listener,
@@ -58,7 +55,6 @@ public:
     void resized() override;
     void parentHierarchyChanged() override;
     void visibilityChanged() override;
-
     bool keyPressed(const juce::KeyPress& key) override;
     bool keyStateChanged(bool isKeyDown) override;
 
@@ -140,6 +136,22 @@ private:
 
     void chooseFile();
 
+    // a janela encolheu 10 %: o desenho continua a pensar em 1180x760 e este
+    // canvas aplica a escala. todos os filhos vivem nele, por isso as
+    // coordenadas do layout nao mudam -- so' o pixel final.
+    class DesignCanvas : public juce::Component {
+    public:
+        std::function<void(juce::Graphics&)> onPaint;
+        void paint(juce::Graphics& g) override {
+            if (onPaint) {
+                onPaint(g);
+            }
+        }
+    };
+
+    void paintDesign(juce::Graphics& g);
+    DesignCanvas canvas_;
+
     static bool accepts(const juce::StringArray& files) {
         for (const auto& file : files) {
             if (juce::File(file).existsAsFile()) {
@@ -175,6 +187,7 @@ private:
     // esta' aberta.
     EnvelopeView envelopeView_;
     FilterView filterView_;
+    LfoView lfoView_;
 
     // tira vertical a' direita do ecra: vistas e zoom, icones empilhados.
     juce::TextButton viewWaveButton_;
@@ -251,33 +264,41 @@ private:
     // XML fora da interface; fica a marcacao e o retrato sai no timer.
     std::atomic<bool> undoFromAudio_ {false};
 
-    // sete modulos visiveis. OUT existe no enum porque o volume e o pan formam o
-    // master; nao tem aba, e os dois knobs moram na coluna da direita.
-    enum class ParamModule { grain, envelope, filter, mod, cloud, out, keys };
+    // quatro modulos visiveis. OUT existe no enum porque o volume precisa de um
+    // Knob; nao tem aba, e o knob mora no master. CLOUD e KEYS sairam: a nuvem
+    // nao pagava o que custava e do teclado ficou so' o glide, no GRAIN.
+    enum class ParamModule { grain, cloud, envelope, filter, mod, keys, out };
     ParamModule activeModule_ {ParamModule::grain};
+    std::vector<std::unique_ptr<Knob>> knobs_;
+    std::vector<std::unique_ptr<ChoiceControl>> controls_;
 
-    // um grupo semantico e' uma legenda e a fila de controlos que ela governa.
-    // Idade, densidade e janela sao "grao"; posicao, spray e scan sao "playback";
-    // nivel e largura sao "mix". o painel desenha a legenda e o filete, e o
-    // layout nao deixa um grupo partir-se entre duas filas.
-    struct ControlGroup {
-        juce::String title;
-        std::vector<juce::Component*> controls;
-        juce::Rectangle<int> bounds;
+    // celula do painel: um knob ou um controle de escolha. o painel de cada
+    // modulo e' uma grelha de celulas, e uma celula pode ocupar mais de uma
+    // coluna: a onda do LFO e' larga, o tipo de filtro e' um bloco de icones.
+    struct Cell {
+        Knob* knob {nullptr};
+        ChoiceControl* control {nullptr};
+        int span {1};
     };
 
-    std::array<std::vector<ControlGroup>, 7> moduleGroups_;
-    std::vector<juce::Component*> masterControls_;
-    std::vector<std::unique_ptr<juce::Component>> controls_;
-    Knob* masterVolume_ {nullptr};
-    Knob* masterPan_ {nullptr};
-    juce::Rectangle<int> masterGroupBounds_;
+    struct ModuleGrid {
+        std::vector<std::vector<Cell>> rows {};
+        int columns {1};
+        // largura maxima da celula: acima dela a grelha encolhe e alinha-se ao
+        // centro, para os knobs nao ficarem esbarrados nas bordas do painel.
+        int maxCellWidth {0};
+    };
+
+    std::vector<ModuleGrid> moduleGrids_;
+    Knob* masterKnob_ {nullptr};
+
+    void layoutModuleGrid(const ModuleGrid& grid, juce::Rectangle<int> area);
 
     ModuleFolderTab moduleGrainButton_ {"grainMod", "Grain module"};
+    ModuleFolderTab moduleCloudButton_ {"cloudMod", "Cloud module"};
     ModuleFolderTab moduleEnvelopeButton_ {"envMod", "Envelope module"};
     ModuleFolderTab moduleFilterButton_ {"filterMod", "Filter module"};
     ModuleFolderTab moduleModButton_ {"modMod", "Modulation module"};
-    ModuleFolderTab moduleCloudButton_ {"cloudMod", "Grain cloud module"};
     ModuleFolderTab moduleKeysButton_ {"keysMod", "Keyboard and tuning module"};
 
     void buildModuleTabs();

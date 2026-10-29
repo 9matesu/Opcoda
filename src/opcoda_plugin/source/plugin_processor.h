@@ -174,6 +174,11 @@ bool snapByteRangeToSection();
         std::atomic<int> envelopePhase {0};
         std::atomic<float> cutoff1Hz {0.0f};
         std::atomic<float> cutoff2Hz {0.0f};
+
+        // lfo: a fase em voltas e o valor bipolar do bloco. e' o que poe o ponto
+        // vivo do visualizador MOD em cima da curva que o audio esta' a usar.
+        std::atomic<float> lfoPhase {0.0f};
+        std::atomic<float> lfoValue {0.0f};
     };
 
     [[nodiscard]] const Telemetry& telemetry() const noexcept { return telemetry_; }

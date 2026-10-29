@@ -1198,16 +1198,28 @@ meia altura desceu para 47 % do gráfico — com o envelope a encostar ao limite
 filete era cortado pelo topo e só os entalhes apareciam. O `pixelRms_` e o
 `paintRmsSilhouette` saíram com o resto.
 
-A rail de vistas voltou a ser uma tira de teclas simples: 44×38, só o glifo, sem
-o nome ao lado. A largura caiu de 96 para 62 px e os 34 px foram para o display. O
-nome falado continua no tooltip e no leitor de ecrã, e o alvo não desceu abaixo
-dos 24 px do WCAG 2.5.8. O mesmo desenho serve as quatro vistas e o trio de zoom.
+A rail de vistas voltou a ser uma tira de teclas simples: 38×32, só o glifo, sem
+o nome ao lado. A largura caiu de 96 para 54 px, com 10 px de compasso entre
+teclas, e os px foram para o display. O nome falado continua no tooltip e no
+leitor de ecrã, e o alvo não desceu abaixo dos 24 px do WCAG 2.5.8. O mesmo
+desenho serve as quatro vistas e o trio de zoom.
 
 A marca "Op" saiu de toda a interface: da barra da janela (que passa a dizer só
 "Opcoda") e do cabeçalho dos ajustes. A caixa laranja era uma segunda assinatura
 ao lado do nome e do ícone da janela, e a identidade já vem dos dois. Os quatro
-parafusos decorativos dos cantos do chassi também saíram — `paintScrew` e as
+parafusos decorativos dos cantos do chassi também saíram - `paintScrew` e as
 quatro chamadas.
+
+O `ChoiceControl` dá o passo seguinte na hierarquia: cada parâmetro discreto
+passa a ter um componente que guarda um `juce::Slider` invisível como fonte de
+valor — o `SliderParameterAttachment` continua a ser o único caminho para o
+parâmetro, o componente escreve nele e as teclas apenas espelham o índice. Há
+quatro modos, a saber, tira de ícones, botões de texto curto, chave de dois
+estados e cursor com dentes, e nenhum deles abre estado paralelo ao APVTS. A
+escolha de um `Slider` oculto em vez de um `ButtonParameterAttachment` é
+deliberada: o attachment de botão só mapeia 0 e 1, e uma escolha de quatro ou
+cinco valores ficaria a meio. O `Knob` guarda a variante antiga, com menu, para
+os casos em que o rótulo longo não cabe numa tira de glifos.
 
 ### O grão até 2 s e o piso do transporte (27/10/2026)
 

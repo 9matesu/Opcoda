@@ -69,9 +69,13 @@ StandaloneWindow::StandaloneWindow(juce::String title,
     setTitleBarButtonsRequired(minimiseButton | closeButton, false);
     setResizable(false, false);
 
-    settingsButton_.setButtonText("SETTINGS");
+    // so' o icone: a palavra SETTINGS era uma placa na barra da janela, e o
+    // glifo das tres barras diz a mesma coisa em 34 px.
+    settingsButton_.setButtonText("");
+    settingsButton_.setName("Settings");
+    settingsButton_.setTooltip("Audio and MIDI settings");
     settingsButton_.getProperties().set("uiIcon", "settings");
-    settingsButton_.getProperties().set("uiLook", "bar");
+    settingsButton_.getProperties().set("uiLook", "rail");
     settingsButton_.onClick = [this] {
         if (body_ != nullptr) {
             body_->openSettings();
@@ -107,8 +111,13 @@ void StandaloneWindow::resized() {
     DocumentWindow::resized();
 
     const auto titleBar = getTitleBarArea();
-    settingsButton_.setBounds(titleBar.getRight() - 2 * 34 - 4 - 8 - 96, titleBar.getY() + 4,
-                              96, titleBar.getHeight() - 8);
+    // a tecla fica a' esquerda das teclas da janela, com o mesmo compasso: 34 px
+    // de lado e a mesma folga de 4 px ao canto.
+    constexpr int kButton {34};
+    constexpr int kWindowButtons {2 * kButton + 4};
+    constexpr int kGap {8};
+    settingsButton_.setBounds(titleBar.getRight() - kWindowButtons - kGap - kButton,
+                              titleBar.getY() + 4, kButton, titleBar.getHeight() - 8);
 }
 
 void StandaloneWindow::applyTaskbarIcon() {

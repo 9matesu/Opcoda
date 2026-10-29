@@ -322,9 +322,10 @@ ASM — e a de entropia só desenha janelas de 256 bytes ou mais.
   a fechar a forma, com a reamostragem ao dobro da largura em pixéis e a meia
   altura a 47 % do gráfico para o contorno não ser cortado pelo topo. Emenda o
   ponto «Silhueta» da revisão de 26/10.
-- **Rail de teclas simples.** 44×38, só o glifo, rail de 62 px; o nome vive no
-  tooltip e no leitor de ecrã. Os 34 px ganhos vão para o display. Emenda os
-  rectângulos de 88×34 da revisão de 26/10.
+- **Rail de teclas simples.** 38×32, só o glifo, rail de 54 px, com 10 px de
+  compasso entre teclas; o nome vive no tooltip e no leitor de ecrã. Os px
+  ganhos vão para o display. Emenda os rectângulos de 88×34 da revisão de 26/10
+  e o 44×38 desta mesma revisão.
 - **Sem marca e sem parafusos.** A caixa "Op" sai da barra da janela (que passa a
   dizer só "Opcoda") e do cabeçalho dos ajustes; os quatro parafusos decorativos
   dos cantos saem. Emenda a revisão (4).
@@ -369,6 +370,49 @@ ASM — e a de entropia só desenha janelas de 256 bytes ou mais.
 - **`SIZE` de 1 ms a 2 s.** O knob é linear em milissegundos com centro em 100 ms
   (`setSkewForCentre`), e o campo mostra `ms` até 999 e `s` a partir de 1000, com
   duas casas. O valor guardado continua em milissegundos.
+
+## Revisão de 28/10/2026 (8) — componentes de escolha, grelha do filtro e escala de 90 %
+
+A oitava revisão parte de uma constatação simples: tratar todo parâmetro como
+disco gasta a hierarquia do painel e mente sobre a natureza do dado. Onde o
+parâmetro é uma escolha discreta, o disco não acrescenta leitura nenhuma. Entra,
+por isso, o `ChoiceControl`, componente que mantém um `juce::Slider` oculto como
+fonte de valor — o `SliderParameterAttachment` continua a ser o único caminho
+para o parâmetro — e desenha a escolha em quatro modos, a saber, tira de ícones,
+botões de texto curto, chave de dois estados e cursor com dentes. Treze glifos
+novos acompanham o componente: as cinco formas de LFO, as quatro janelas de grão
+e as quatro respostas de filtro.
+
+Com isso o painel troca disco por tecla onde a tecla diz mais. A janela do grão,
+a forma e o alvo do LFO, o tipo e a inclinação dos filtros e a divisão
+sincronizada deixam de ser discos. A escala e a tónica passam a cursor com
+dentes, porque doze notas e oito modos não cabem num disco nem numa fila de
+teclas. O ganho não é decorativo: o valor de uma escolha lê-se sem abrir o
+tooltip e o parâmetro discreto deixa de partilhar o vocabulário visual de um
+contínuo.
+
+- **Escala de 90 %.** O desenho continua a pensar em 1180×760 e um canvas filho
+  aplica `AffineTransform::scale(0.9)`; a janela passa a 1062×684 e o layout não
+  ganha um segundo caminho. A janela é fixa e não redimensionável.
+- **Seis módulos, seis abas.** `GRAIN`, `CLOUD`, `ENV`, `FILTER`, `MOD` e `KEYS`
+  dividem a largura do painel em partes iguais, numa faixa reservada no fluxo
+  vertical. A nuvem e a afinação mantêm-se: são variedade de motor, não cromo, e
+  a revisão não as sacrifica à arrumação.
+- **Grelha do filtro em cinco colunas iguais e duas filas cheias.** Ficam dez
+  células preenchidas, sem calha de numeração e sem placa de fila: os rótulos já
+  dizem F1 e F2, e uma caixa por baixo apenas somava contorno. O tipo é uma tira
+  de quatro ícones dentro de uma célula, a inclinação é uma chave de 92×34 e
+  nenhum controlo ocupa duas colunas, de sorte que o compasso é o mesmo em toda
+  a grelha. Emenda o agrupamento de oito colunas da revisão de 27/10.
+- **Onda de uma tinta.** O preenchimento do núcleo e o filete partilham a mesma
+  cor em opacidades diferentes; antes eram duas tintas e a silhueta lia-se como
+  duas formas sobrepostas. A barra de visão geral desenha a miniatura na mesma
+  tinta, com a amplitude a 78 % da altura, e a decoração da janela visível só
+  aparece quando há janela para marcar.
+- **Chaves de estado sem legenda duplicada.** Nos modos de chave e de ícone o
+  rótulo de valor desaparece: o primeiro escreve o estado dentro do próprio
+  botão e o segundo acende a tecla escolhida. A altura recuperada fica com os
+  glifos, que sobem de 34 para 42 px.
 
 ## Estado dos testes de interface
 

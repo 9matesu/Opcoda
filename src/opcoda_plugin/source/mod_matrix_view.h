@@ -45,8 +45,10 @@ private:
 
     void layoutRows();
 
-    // geometria das linhas, guardada para o paint desenhar o indice.
+    // geometria das linhas, guardada para o paint desenhar o indice, e a das
+    // tres colunas, para o cabecalho cair em cima delas.
     std::array<juce::Rectangle<int>, 8> rowBounds_ {};
+    std::array<juce::Rectangle<int>, 3> columnBounds_ {};
     bool attached_ {false};
     std::array<Row, 8> rows_ {};
 };

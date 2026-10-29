@@ -157,7 +157,12 @@ com o ponto vivo do envelope, e a resposta dos dois biquads com o corte já
 modulado — e os knobs ficam à direita, menores. As pegas do desenho mudam os
 mesmos parâmetros: no envelope, os cantos dão ataque, decay/sustain e release, e
 as pegas de meio de segmento dobram as curvas; no filtro, cada pega dá corte (na
-horizontal) e Q (na vertical).
+horizontal) e Q (na vertical). Nem todo parâmetro é um disco: a janela do grão, a
+forma e o alvo do LFO e o tipo e a inclinação dos filtros são teclas e tiras de
+ícones, e a escala e a tónica são cursores com dentes. No filtro, os cinco
+controles de cada fila alinham-se numa grelha de cinco colunas iguais: tipo,
+corte, Q, inclinação e drive na primeira; tipo, corte, Q, keytrack e envelope na
+segunda.
 
 | `ENV`: ADSR desenhado, com o ponto vivo | `FILTER`: resposta dos dois biquads |
 | --- | --- |

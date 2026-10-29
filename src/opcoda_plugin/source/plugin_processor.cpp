@@ -803,6 +803,9 @@ void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) n
     telemetry_.envelopePhase.store(engine_.envelopePhaseIndex(), std::memory_order_relaxed);
     telemetry_.cutoff1Hz.store(engine_.f1CutoffHz(), std::memory_order_relaxed);
     telemetry_.cutoff2Hz.store(engine_.f2CutoffHz(), std::memory_order_relaxed);
+    telemetry_.lfoPhase.store(static_cast<float>(engine_.lfoPhase()),
+                              std::memory_order_relaxed);
+    telemetry_.lfoValue.store(engine_.lfoBlockValue(), std::memory_order_relaxed);
 }
 
 
