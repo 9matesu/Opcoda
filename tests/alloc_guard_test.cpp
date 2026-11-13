@@ -90,10 +90,6 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     params.attackCurve = -1.0f;
     params.decayCurve = 0.5f;
     params.releaseCurve = 1.0f;
-    // f021: a nuvem no maximo — atraso, dispersao e jitter — pela mesma razao.
-    params.cloudSize = 1.0f;
-    params.pitchSpreadSemitones = 12.0f;
-    params.grainJitter = 1.0f;
     params.modMatrix.routes[0] = {ModSource::kLfo, ModDest::kCutoff1, 0.5f};
     params.modMatrix.routes[1] = {ModSource::kEnvelope, ModDest::kPitch, 0.25f};
     params.modMatrix.routes[2] = {ModSource::kVelocity, ModDest::kDensity, 0.5f};

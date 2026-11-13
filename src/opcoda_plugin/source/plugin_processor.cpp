@@ -135,12 +135,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         range("pan", "Pan", -1.0f, 1.0f, 0.0f),
         range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
         range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
-        // F021: a nuvem. Zero em todos devolve o motor anterior, amostra a amostra:
-        // espalhamento, dispersao de afinacao e jitter so' entram quando o knob sai do
-        // zero.
-        range("cloudsize", "Cloud Size", 0.0f, 1.0f, 0.0f),
-        range("pitchspread", "Pitch Spread", 0.0f, 24.0f, 0.0f),
-        range("grainjit", "Grain Jitter", 0.0f, 1.0f, 0.0f),
         range("scanspeed", "Scan Speed", 0.25f, 4.0f, 1.0f),
         range("attack", "Attack", 0.001f, 2.0f, 0.005f),
         range("decay", "Decay", 0.001f, 2.0f, 0.1f),
@@ -234,9 +228,6 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.widthStereo = value("width");
     params.grainLevel = value("grainlevel");
     params.pitchRandomSemitones = value("pitchrand");
-    params.cloudSize = value("cloudsize");
-    params.pitchSpreadSemitones = value("pitchspread");
-    params.grainJitter = value("grainjit");
     params.attackSeconds = value("attack");
     params.decaySeconds = value("decay");
     params.sustainLevel = value("sustain");
@@ -848,12 +839,9 @@ void PluginProcessor::applyFactoryPreset(int index) {
     set("lfodepth", preset.lfodepth);
     set("lfotarget", preset.lfotarget);
     set("lfowave", preset.lfowave);
-    // nuvem, largura, glide e o caracter do filtro 1. sem estes, os presets
+    // largura, glide e o caracter do filtro 1. sem estes, os presets
     // tonais que dependem do corte (Keys, Bass) abriam com o filtro aberto e a
     // largura a 100 %, que e' o Init disfarcado.
-    set("cloudsize", preset.cloudsize);
-    set("pitchspread", preset.pitchspread);
-    set("grainjit", preset.grainjit);
     set("width", preset.width);
     set("glide", preset.glide);
     set("f1slope", preset.f1slope);

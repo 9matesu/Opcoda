@@ -20,9 +20,11 @@ namespace opcoda {
 //
 // duas pegas: a do filtro 1 e a do filtro 2. no eixo x o corte, no eixo y o Q --
 // o gesto que se faz num filtro, sem passar por quatro knobs.
-class FilterView final : public juce::Component {
+class FilterView final : public juce::Component,
+                         private juce::AudioProcessorValueTreeState::Listener {
 public:
     explicit FilterView(juce::AudioProcessorValueTreeState& state);
+    ~FilterView() override;
 
     void paint(juce::Graphics&) override;
 
@@ -36,6 +38,10 @@ public:
     void setLive(float cutoff1, float cutoff2);
 
 private:
+    // a curva segue os knobs mesmo sem audio: mover o corte tem de mexer o
+    // desenho no mesmo quadro.
+    void parameterChanged(const juce::String&, float) override { repaint(); }
+
     enum class Handle : std::uint8_t { none, first, second };
 
     struct Response {

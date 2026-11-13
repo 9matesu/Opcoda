@@ -33,9 +33,9 @@ entropia e matriz de modulação.
 - Ingestão de PE com validação de limites e erros tipados (`E_BAD_MZ`,
   `E_BAD_PE`, `E_TRUNCATED`, `E_OOB`, `E_TOO_MANY_SECTIONS`).
 - Motor granular de oito vozes, janelas Hann, Gauss, Hamming e Blackman.
-- 66 parâmetros automatizáveis: grão, largura estéreo, envelope ADSR com
-  curvas, dois filtros biquad em série, LFO, teclado, nuvem de grãos e uma
-  matriz de modulação de 8 rotas editável no display.
+- 63 parâmetros automatizáveis: grão, largura estéreo, envelope ADSR com
+  curvas, dois filtros biquad em série, LFO, teclado e uma matriz de
+  modulação de 8 rotas editável no display.
 - Matriz de modulação com oito rotas e oito fontes.
 - Presets de fábrica e arquivos `.opcoda` para carregar e salvar.
 - Transporte sem MIDI, teclado virtual e controle por MIDI.
@@ -47,7 +47,7 @@ entropia e matriz de modulação.
   qualquer zoom, e a rail de vistas é de teclas simples, só com o glifo.
 - Curva de entropia em janelas de pelo menos 256 bytes, para que o eixo de 0 a 8
   bits continue verdadeiro em qualquer zoom.
-- Ícone próprio: a onda que os bytes fazem, laranja sobre preto, dentro do
+- Ícone próprio: a onda que os bytes fazem, verde-água sobre preto, dentro do
   executável e na barra de tarefas.
 - Interface fixa de 1180×760, com o display como elemento dominante, o
   transporte no pé do display, medidor stereo de saída e *HOLD*.
@@ -151,7 +151,7 @@ parâmetro (no Standalone; no *host*, o desfazer é o do *host*). O clique num
 controle não tira o foco do teclado: tocar notas continua a funcionar em qualquer
 vista, e o MIDI que chega do *host* acende as teclas do teclado virtual.
 
-As abas `GRAIN`, `ENV`, `FILTER`, `MOD`, `CLOUD` e `KEYS` mostram ícone e nome. Em
+As abas `GRAIN`, `ENV`, `FILTER`, `MOD` e `KEYS` mostram ícone e nome. Em
 `ENV` e `FILTER`, o painel abre com o desenho do que se ouve — a forma do ADSR
 com o ponto vivo do envelope, e a resposta dos dois biquads com o corte já
 modulado — e os knobs ficam à direita, menores. As pegas do desenho mudam os
@@ -202,7 +202,7 @@ Detalhes em `docs/SOUND_ENGINE.md`.
 
 ## Presets
 
-A interface oferece dez presets de fábrica: Init, Cloud, Shimmer, Pulse, Drone,
+A interface oferece dez presets de fábrica: Init, Haze, Shimmer, Pulse, Drone,
 Grit, Pad, Keys, Pluck e Bass. Os seis primeiros são texturais; os quatro últimos
 são pontos de partida tonais, com o filtro 1 a responder à nota. O menu de preset
 carrega e salva arquivos `.opcoda`. O estado do projeto também guarda o material,
@@ -235,7 +235,6 @@ Pendente ou não verificado:
 - Verificação de arrasto, parâmetros e CCs em *host* (T4).
 - Correção dos valores iniciais do *standalone* quando há estado de sessão antigo.
 - Formato CLAP.
-- Visualização da nuvem de grãos.
 
 <!-- defeito conhecido -->
 

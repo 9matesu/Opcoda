@@ -227,44 +227,11 @@ void GranularEngine::startGrain(int voice,
             : 0.0;
     const double detune = (nextRandom(state) * 2.0 - 1.0) * randomRange;
 
-    // pitch spread da nuvem. so' sorteia quando o knob sai do zero, senao a
-    // sequencia muda e os tres knobs a zero deixam de repetir a saida antiga.
-    const double spreadRange =
-        std::isfinite(static_cast<double>(params.pitchSpreadSemitones))
-            ? std::clamp(static_cast<double>(params.pitchSpreadSemitones), 0.0, 24.0)
-            : 0.0;
-    const double spreadOffset =
-        (spreadRange > 0.0) ? (nextRandom(state) * 2.0 - 1.0) * spreadRange : 0.0;
-
-    // atraso uniforme da nuvem. o grao ocupa o slot e espera; o proximo sorteia
-    // de novo, sem herdar.
-    const double cloudWindow =
-        std::isfinite(static_cast<double>(params.cloudSize))
-            ? std::clamp(static_cast<double>(params.cloudSize), 0.0, 1.0) * 0.5
-            : 0.0;
-    const int delaySamples = (cloudWindow > 0.0)
-                                 ? static_cast<int>(nextRandom(state) * cloudWindow * sampleRate_)
-                                 : 0;
-
-    // jitter de duracao: fator de 0,5x a 1,5x, recortado ao intervalo do knob. a
-    // janela e' lida por escala; a tabela e' uma so' e nao depende do comprimento.
-    const double jitter =
-        std::isfinite(static_cast<double>(params.grainJitter))
-            ? std::clamp(static_cast<double>(params.grainJitter), 0.0, 1.0)
-            : 0.0;
     // a janela tem 4096 pontos e o grao tem grainLength: a escala leva o primeiro
     // indice a zero e o ultimo a 4095, senao um grao curto terminava com a janela
     // a meio (2 amostras caiam no pico da Hann) e o corte ouvia-se.
     int grainLength = clampGrainSamples(sampleRate_, params.grainSizeMs);
     double windowScale = windowScaleForLength(grainLength);
-    if (jitter > 0.0) {
-        const double factor = 1.0 + (nextRandom(state) * 2.0 - 1.0) * 0.5 * jitter;
-        const double jitteredMs = std::clamp(
-            static_cast<double>(params.grainSizeMs) * factor,
-            static_cast<double>(kMinGrainMs), static_cast<double>(kMaxGrainMs));
-        grainLength = clampGrainSamples(sampleRate_, static_cast<float>(jitteredMs));
-        windowScale = windowScaleForLength(grainLength);
-    }
 
     // LFO no pitch: +-12 st com depth cheio. entra na soma antes da razao.
     const double lfoPitch = (lfo.target == LFOTarget::kPitch)
@@ -282,7 +249,7 @@ void GranularEngine::startGrain(int voice,
     // a nota vem em semitons relativos a Do4, ja' quantizada pela escala. o
     // glide interpola esse termo; o knob PITCH fica de fora e responde na hora.
     const double ratio =
-        std::pow(2.0, (tuned + detune + lfoPitch + spreadOffset + glideSemitones_) / 12.0);
+        std::pow(2.0, (tuned + detune + lfoPitch + glideSemitones_) / 12.0);
     // quatro oitavas para cada lado. o limite antigo de 0,5..2,0 cortava a nota
     // no primeiro semitom fora da oitava central.
     const double rate = std::clamp(ratio, 0.0625, 16.0);
@@ -318,9 +285,7 @@ void GranularEngine::startGrain(int voice,
     grain.windowIndex = 0;
     grain.windowScale = windowScale;
     grain.window = activeWindow_;
-    grain.delay = delaySamples;
-    lastGrainDelay_ = delaySamples;
-    lastGrainSpread_ = static_cast<float>(spreadOffset);
+    grain.delay = 0;
     lastGrainLength_ = grainLength;
     grain.active = true;
 

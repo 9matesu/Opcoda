@@ -45,15 +45,14 @@ CHARACTERS = (
 #
 # **So' os pesos que a interface usa.** Nao e' uma lista do que existe na fonte, e'
 # a lista do que o codigo pede: peso medio para texto e leituras, semi-negrito
-# para rotulos e titulos. A monoespacada saiu — a interface e' Inter em tudo.
+# para rotulos e titulos. A monoespacada saiu — a interface e' uma familia em tudo.
 #
-# Inter e' **Display** e nao o corte normal, e a razao e' o tamanho. InterDisplay e'
-# a variante com altura de x e contraste concebidos para texto pequeno — 9 a 11 px,
-# que e' exactamente onde esta interface passa a vida. A 10 px, InterDisplay le-se
-# melhor do que Inter, e a letra e' mais aberta sem ser maior.
+# Switzer (Fontshare, licenca FFL) substituiu a Inter Display a 13/11/2026. E' um
+# grotesco suico de eixo neutro: formas mais fechadas e um `a` mais estreito, por
+# isso a linha de 9 px cabe com folga no cabecalho e nos rotulos de 8,5 px.
 WANTED = [
-    ("extras/ttf/InterDisplay-Medium.ttf", "InterDisplay-Medium.ttf"),
-    ("extras/ttf/InterDisplay-SemiBold.ttf", "InterDisplay-SemiBold.ttf"),
+    ("Fonts/WEB/fonts/Switzer-Medium.ttf", "Switzer-Medium.ttf"),
+    ("Fonts/WEB/fonts/Switzer-Semibold.ttf", "Switzer-Semibold.ttf"),
 ]
 
 # (nameID 1 familia, nameID 2 estilo, nameID 6 postscript)
@@ -65,8 +64,8 @@ WANTED = [
 # peso, sem aviso nenhum. Um nome errado aqui e' um defeite silencioso, e por isso
 # se reescreve em vez de confiar no que a fonte traz.
 NAMING = {
-    "InterDisplay-Medium.ttf": ("Inter Display", "Medium", "InterDisplay-Medium"),
-    "InterDisplay-SemiBold.ttf": ("Inter Display", "SemiBold", "InterDisplay-SemiBold"),
+    "Switzer-Medium.ttf": ("Switzer", "Medium", "Switzer-Medium"),
+    "Switzer-Semibold.ttf": ("Switzer", "SemiBold", "Switzer-Semibold"),
 }
 
 OPTIONS = subset.Options()

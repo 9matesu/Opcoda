@@ -62,7 +62,7 @@ desliza entre notas no tempo definido. O pedal de sustain segura a nota.
 ## Presets
 
 O seletor no topo lista dez presets de fábrica. Os seis primeiros são
-texturais: Init, Cloud, Shimmer, Pulse, Drone e Grit. Os quatro últimos partem
+texturais: Init, Haze, Shimmer, Pulse, Drone e Grit. Os quatro últimos partem
 para o som convencional — Pad, Keys, Pluck e Bass — e distinguem-se sobretudo
 pela sobreposição de grãos, `DENSITY` × `SIZE`, e pelo trabalho do envelope e do
 filtro 1, que carrega o keytrack e o envelope onde o timbre precisa de nota. As

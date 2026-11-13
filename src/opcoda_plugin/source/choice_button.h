@@ -43,12 +43,12 @@ public:
     }
 
     void setOnDark(bool on) {
-        // no painel claro a fenda e' carvao, a mesma lingua das teclas de vista
-        // e da caixa de preset; numa baia escura ela inverte para um banho de
-        // creme. o texto acompanha.
+        // a fenda e' um sulco no painel: mais escura que a chapa. numa baia
+        // escura, onde o sulco nao tem para onde descer, ela inverte para um
+        // banho de branco. o texto acompanha.
         titleColour_ = on ? palette::textOnDarkSub : palette::textSub;
         textColour_ = palette::ivory;
-        slotFill_ = on ? palette::alpha(palette::ivory, 0.10f) : palette::charcoal;
+        slotFill_ = on ? palette::alpha(palette::ivory, 0.10f) : palette::charcoalDeep;
         slotEdge_ = on ? palette::alpha(palette::ivory, 0.26f)
                        : palette::alpha(palette::knobEdge, 0.55f);
         onDark_ = on;
@@ -115,9 +115,9 @@ public:
         }
 
         g.setColour(fill);
-        g.fillRoundedRectangle(slot, 3.0f);
+        g.fillRoundedRectangle(slot, 7.0f);
         g.setColour(edge);
-        g.drawRoundedRectangle(slot, 3.0f, 1.0f);
+        g.drawRoundedRectangle(slot, 7.0f, 1.0f);
         // realce de 1 px no topo, como nos outros botoes da casa.
         g.setColour(palette::alpha(palette::ivory, onDark_ ? 0.28f : 0.12f));
         g.drawHorizontalLine(juce::roundToInt(slot.getY() + 1.0f),

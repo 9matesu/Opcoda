@@ -24,12 +24,11 @@ resultado. O buffer fica em memória e alimenta as oito vozes do motor granular.
 
 ## Granulação
 
-Cada grão nasce com quatro decisões tomadas no início:
+Cada grão nasce com três decisões tomadas no início:
 
 1. Posição de leitura no buffer.
-2. Passo de leitura, derivado de afinação, detune, spread e nota.
-3. Duração, a partir de `SIZE` e do jitter.
-4. Atraso, a partir de `CLOUD`.
+2. Passo de leitura, derivado de afinação, detune e nota.
+3. Duração, a partir de `SIZE`.
 
 O agendador dispara grãos na taxa de `DENSITY`. Uma voz livre recebe o grão. Se
 as oito vozes estiverem ocupadas, o grão novo espera a próxima oportunidade. O

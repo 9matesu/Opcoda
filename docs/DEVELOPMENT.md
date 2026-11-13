@@ -42,7 +42,7 @@ Dois binários:
 Um filtro específico:
 
 ```powershell
-build\tests\opcoda_tests.exe --gtest_filter=Cloud.*
+build\tests\opcoda_tests.exe --gtest_filter=GrainParams.*
 ```
 
 Rode os binários em um shell com `vcvars64` carregado. Fora desse ambiente, o

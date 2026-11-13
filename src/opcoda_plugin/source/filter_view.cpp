@@ -59,6 +59,18 @@ FilterView::FilterView(juce::AudioProcessorValueTreeState& state) : state_(state
     setHelpText("Arraste as pegas para mudar o corte (horizontal) e o Q (vertical) "
                 "de cada filtro.");
     setWantsKeyboardFocus(false);
+
+    for (const char* id : {"f1type", "f1cutoff", "f1q", "f1slope", "f1drive", "f1keytrack",
+                           "f1env", "f2type", "f2cutoff", "f2q"}) {
+        state_.addParameterListener(id, this);
+    }
+}
+
+FilterView::~FilterView() {
+    for (const char* id : {"f1type", "f1cutoff", "f1q", "f1slope", "f1drive", "f1keytrack",
+                           "f1env", "f2type", "f2cutoff", "f2q"}) {
+        state_.removeParameterListener(id, this);
+    }
 }
 
 FilterView::Response FilterView::response() const {

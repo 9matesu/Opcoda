@@ -26,9 +26,11 @@ namespace opcoda {
 // **sincronizado.** o ponto vivo vem do audio (nivel, fase e progresso do
 // estagio), nao de um temporizador da interface: mostra o envelope que esta' a
 // soar, com o mesmo atraso de um bloco que o resto do display.
-class EnvelopeView final : public juce::Component {
+class EnvelopeView final : public juce::Component,
+                           private juce::AudioProcessorValueTreeState::Listener {
 public:
     explicit EnvelopeView(juce::AudioProcessorValueTreeState& state);
+    ~EnvelopeView() override;
 
     void paint(juce::Graphics&) override;
 
@@ -42,6 +44,10 @@ public:
     void setLive(float level, float stage, int phase);
 
 private:
+    // um knob a mexer tem de mexer a forma: sem isto o desenho so' acordava no
+    // arrasto da propria pega e no audio a soar, e o ADSR parecia congelado.
+    void parameterChanged(const juce::String&, float) override { repaint(); }
+
     // pegas: os tres cantos e o meio de cada segmento.
     enum class Handle : std::uint8_t {
         none,

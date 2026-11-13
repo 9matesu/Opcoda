@@ -245,11 +245,15 @@ A geometria dele tem três capturas atrás e um redesenho seria o caminho de per
 três. O `ByteDisplay` é o dono do modo e pinta por cima a cabeça de reprodução, que
 é a única peça que o `HexGrid` não conhece.
 
-O editor tem três faixas de conteúdo — header claro, display escuro, painel de
+O editor tem três faixas de conteúdo — header, display e painel de
 parâmetros — mais a fileira de abas de módulo e a faixa do teclado ao fundo. É a
-convenção do Ableton, e é também a resposta ao pedido de brilho: halo laranja
-sobre superfície clara dá 2,4:1 e desaparece, então toda a energia de glow fica na
-região escura.
+convenção do Ableton, e é também a resposta ao pedido de brilho. Desde a revisão
+de 13/11/2026 tudo é escuro e monocromático: a chapa é grafite (`#171717`), o
+display é preto puro, e **tudo o que é sinal sai da mesma família de verde-água**,
+separado por luminosidade e nunca por matiz. Antes havia laranja, âmbar, verde e
+vermelho; um painel com cinco matizes lê-se como um semáforo, e o texto e a forma
+já dizem o estado. O mesmo verde-água carrega o arco do knob, a tecla ligada, a
+cabeça de leitura, a onda e a escada do medidor.
 
 **O teclado virtual não atravessa o `MidiBuffer`.** O `MidiKeyboardComponent`
 escreve num `MidiKeyboardState` que o editor escuta, e o listener empurra um
@@ -269,12 +273,14 @@ referência do `RangedAudioParameter`, não a da árvore inteira.
 
 O nome acessível de cada controle é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
-seria inútil para quem navega por leitor de tela. Os **66 parâmetros** vivem em
-seis módulos (GRAIN, ENV, FILTER, MOD, CLOUD, KEYS), com uma faixa visível de
-cada vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
+seria inútil para quem navega por leitor de tela. Os **63 parâmetros** vivem em
+cinco módulos (GRAIN, ENV, FILTER, MOD, KEYS), com uma faixa visível de cada
+vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
 controles numa linha. A aba MAIN saiu porque repetia os onze parâmetros de grão;
 a aba OUT saiu porque volume e pan formam o master persistente na coluna escura
-da direita, ao lado do medidor de saída. Cada controle aparece uma vez, no campo
+da direita, ao lado do medidor de saída. A aba CLOUD saiu com a nuvem de grãos:
+os três parâmetros que a alimentavam foram retirados do motor. Cada controle
+aparece uma vez, no campo
 semântico a que pertence: GRAIN separa grão, playback e mix; ENV separa tempos e
 curvas; FILTER separa o primeiro filtro, o carácter e o segundo; MOD separa o LFO
 do roteamento. A legenda e o filete desenham o campo, e a largura de cada um
@@ -422,7 +428,7 @@ fora. As setas, `PageUp`/`PageDown`, `Home`, `End` e `Enter` passaram a ser
 tratadas pelo editor e encaminhadas para o cursor do display, de modo que trocar
 de vista ou arrastar um knob não cala as teclas de nota. O `keyStateChanged`
 encaminha a tecla que sobe para o teclado quando este perdeu o foco, e nenhuma
-nota fica presa. O anel de foco laranja sobreviveu apenas à travessia por `Tab`:
+nota fica presa. O anel de foco verde-água sobreviveu apenas à travessia por `Tab`:
 o `ByteDisplay` trocou-o por um caret branco.
 
 **O botão de play não pisca mais.** A condição de activação incluía
@@ -433,7 +439,7 @@ o do instrumento. A leitura de `VOICES` saiu do rodapé — era ela que tremia �
 número continua na telemetria, sem caixa onde piscar.
 
 **As agulhas do visor são brancas, rectas e opacas.** O `preview` do display
-deixou de desenhar barrinhas laranja arredondadas: a densidade vira um comb de
+deixou de desenhar barrinhas arredondadas de cor: a densidade vira um comb de
 2,5 px de espessura com 3 a 16 dentes, o spray um banho com dois filetes, a
 posição uma linha de 2,6 px a toda a altura e o grão a silhueta da janela
 escolhida — Hann, Gaussian, Hamming ou Blackman, com as mesmas expressões do

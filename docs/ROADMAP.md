@@ -12,7 +12,6 @@ Prioridades para a demo pública.
 
 ## Depois da demo
 
-- Visualização da nuvem de grãos.
 - Formato CLAP.
 - Presets de fábrica adicionais.
 - Documentação em inglês.

@@ -13,8 +13,8 @@ juce_add_binary_data(OpcodaFonts
     HEADER_NAME OpcodaFonts.h
     NAMESPACE BinaryData
     SOURCES
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Medium.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Semibold.ttf)
 
 # O icone da janela vai por BinaryData: o standalone carrega o mesmo PNG que
 # alimenta o .ico do executavel, e a janela, a barra de tarefas e o ficheiro no
@@ -79,6 +79,9 @@ target_sources(Opcoda
         source/plugin_editor.cpp
         source/plugin_editor.h
         source/look_and_feel.h
+        source/palette.h
+        source/palette.cpp
+        source/keyboard.h
         source/module_folder_tab.h
         source/knob.h
         source/choice_control.cpp
@@ -97,8 +100,7 @@ target_sources(Opcoda
         source/filter_view.h
         source/lfo_view.cpp
         source/lfo_view.h
-        source/fonts.h
-        source/palette.h)
+        source/fonts.h)
 
 target_link_libraries(Opcoda
     PRIVATE

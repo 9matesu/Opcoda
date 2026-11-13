@@ -24,10 +24,9 @@ namespace opcoda {
 // 2,8 no pluck (o grao e' o gesto) e 2,1 no baixo. nos tres tonais o filtro 1
 // faz o trabalho, com keytrack e envelope.
 //
-// o pad nao usa detune aleatorio largo. spread e pitchrand sao desvios por
-// grao, nao por voz: 5 st de spread nao engrossa o som, desafina-o contra si
-// proprio. a espessura vem da nuvem, do jitter e da largura, que nao mexem na
-// afinacao.
+// o pad nao usa detune aleatorio largo. pitchrand e' um desvio por grao, nao
+// por voz: 5 st nao engrossa o som, desafina-o contra si proprio. a espessura
+// vem do grao longo e da largura, que nao mexem na afinacao.
 struct FactoryPreset {
     const char* name;
     // grain, density, position, spray, pitch, volume
@@ -42,10 +41,6 @@ struct FactoryPreset {
     float pan {0.0f};
     float grainlevel {1.0f};
     float pitchrand {0.0f};
-    // cloudsize (fracao de 500 ms), pitchspread, grainjit
-    float cloudsize {0.0f};
-    float pitchspread {0.0f};
-    float grainjit {0.0f};
     float scanspeed {1.0f};
     // attack, decay, sustain, release
     float attack {0.005f};
@@ -81,7 +76,7 @@ struct FactoryPreset {
 inline const std::array<FactoryPreset, 10>& factoryPresets() {
     static const std::array<FactoryPreset, 10> presets {{
         {.name = "Init"},
-        {.name = "Cloud",
+        {.name = "Haze",
          .grain = 70.0f,
           .density = 140.0f,
           .spray = 0.45f,
@@ -157,8 +152,8 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .lfowave = 2.0f},
         // pad: grao no maximo (100 ms) e 70 graos/s para sete sobrepostos, que e'
         // o que faz corpo e nao chuvisco. a afinacao fica estavel de proposito --
-        // spray 1,5 %, spread 0,5 st, pitchrand zero -- e a espessura vem da
-        // nuvem de 200 ms, do jitter de 20 % e da largura 1,5. o ataque de 1,5 s
+        // spray 1,5 %, pitchrand zero -- e a espessura vem da largura 1,5 e do
+        // envelope longo. o ataque de 1,5 s
         // com curva +0,35 fica baixo e floresce no fim, que e' o gesto do pad.
         // filtro 1 em 3,2 khz com drive leve, e o filtro 2 em high-pass a 70 hz
         // limpa o rumo que o material binario traz.
@@ -168,9 +163,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .spray = 0.015f,
           .volume = -6.0f,
           .window = 1.0f,
-          .cloudsize = 0.4f,
-          .pitchspread = 0.5f,
-          .grainjit = 0.2f,
           .attack = 1.5f,
           .decay = 0.5f,
           .sustain = 1.0f,
@@ -195,7 +187,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .density = 100.0f,
           .spray = 0.02f,
           .volume = -3.0f,
-          .grainjit = 0.05f,
           .attack = 0.003f,
           .decay = 0.25f,
           .sustain = 0.25f,
@@ -216,7 +207,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .density = 140.0f,
           .spray = 0.01f,
           .volume = -3.0f,
-          .grainjit = 0.06f,
           .attack = 0.002f,
           .decay = 0.35f,
           .sustain = 0.0f,

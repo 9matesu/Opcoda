@@ -6,7 +6,9 @@ namespace opcoda {
 namespace {
 
 constexpr int kPoints {256};
-constexpr int kCycles {2};
+// **um ciclo, nao dois.** com dois ciclos a bolinha percorria so' metade da
+// largura (a fase e' de uma volta) e lia-se como fora de sincronia com a curva.
+constexpr int kCycles {1};
 
 } // namespace
 
@@ -15,6 +17,18 @@ LfoView::LfoView(juce::AudioProcessorValueTreeState& state) : state_(state) {
     setHelpText("A forma do LFO, a profundidade e o ponto vivo do audio. Os "
                 "knobs ao lado escolhem onda, ritmo, alvo e profundidade.");
     setWantsKeyboardFocus(false);
+
+    for (const char* id : {"lfowave", "lfotarget", "lfodepth", "lfosteps", "lforate",
+                           "lfosync", "lfodiv"}) {
+        state_.addParameterListener(id, this);
+    }
+}
+
+LfoView::~LfoView() {
+    for (const char* id : {"lfowave", "lfotarget", "lfodepth", "lfosteps", "lforate",
+                           "lfosync", "lfodiv"}) {
+        state_.removeParameterListener(id, this);
+    }
 }
 
 float LfoView::valueOf(const char* id) const {
@@ -46,19 +60,31 @@ void LfoView::setLive(float phase, float value) {
     lastLiveMs_ = now;
 
     const auto wrapped = phase - std::floor(phase);
+    // desenrola a fase: 0,99 -> 0,01 vale +0,02 de avanco, nao -0,98. o valor
+    // acumulado e' o que a mola segue; o desenho volta a ler em volta.
+    float step = wrapped - rawPhasePrev_;
+    rawPhasePrev_ = wrapped;
+    if (step > 0.5f) {
+        step -= 1.0f;
+    } else if (step < -0.5f) {
+        step += 1.0f;
+    }
+
     if (!liveSeen_) {
-        phaseEased_.jumpTo(wrapped);
+        phaseContinuous_ = wrapped;
+        phaseEased_.jumpTo(phaseContinuous_);
         valueEased_.jumpTo(value);
         liveSeen_ = true;
     } else {
-        phaseEased_.set(wrapped);
+        phaseContinuous_ += step;
+        phaseEased_.set(phaseContinuous_);
         valueEased_.set(value);
     }
 
     const auto beforePhase = livePhase_;
     const auto beforeValue = liveValue_;
-    phaseEased_.tick(static_cast<float>(delta), 0.020f);
-    valueEased_.tick(static_cast<float>(delta), 0.020f);
+    phaseEased_.tick(static_cast<float>(delta), 0.012f);
+    valueEased_.tick(static_cast<float>(delta), 0.012f);
     livePhase_ = phaseEased_.value();
     liveValue_ = valueEased_.value();
 
@@ -158,7 +184,8 @@ void LfoView::paint(juce::Graphics& g) {
 
     // -- fase de agora, no primeiro ciclo --
     if (liveSeen_) {
-        const auto x = xFor(livePhase_);
+        const auto dotPhase = livePhase_ - std::floor(livePhase_);
+        const auto x = xFor(dotPhase);
         g.setColour(palette::alpha(inkFor(target), 0.25f));
         g.drawVerticalLine(juce::roundToInt(x), plot.getY(), plot.getBottom());
 

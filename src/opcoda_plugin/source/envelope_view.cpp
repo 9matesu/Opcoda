@@ -29,6 +29,18 @@ EnvelopeView::EnvelopeView(juce::AudioProcessorValueTreeState& state) : state_(s
     setHelpText("Arraste as pegas para moldar ataque, decay, sustain e release. "
                 "As pegas de curva dobram cada segmento.");
     setWantsKeyboardFocus(false);
+
+    for (const char* id : {"attack", "decay", "sustain", "release", "atkcurve", "deccurve",
+                           "relcurve"}) {
+        state_.addParameterListener(id, this);
+    }
+}
+
+EnvelopeView::~EnvelopeView() {
+    for (const char* id : {"attack", "decay", "sustain", "release", "atkcurve", "deccurve",
+                           "relcurve"}) {
+        state_.removeParameterListener(id, this);
+    }
 }
 
 EnvelopeView::Shape EnvelopeView::shape() const {

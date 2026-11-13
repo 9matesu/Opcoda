@@ -60,29 +60,27 @@ void NoteTracker::handle(const Event& event) noexcept {
             // o ataque no instrumento mono. notaOff nao a apaga, senao a cauda
             // perdia a fonte a meio.
             activeVelocity_ = std::clamp(static_cast<float>(event.value & 0x7F) / 127.0f, 0.0f, 1.0f);
-            ++pressed_;
             break;
         }
 
         case Event::Kind::noteOff: {
             const int note = event.number & 0x7F;
             // o pedal decide onde a nota vai parar, nao a tecla.
-            if (sustain_ && pressed_ > 0) {
-                const bool wasHeld = isHeld(note);
+            if (sustain_ && isHeld(note)) {
                 removeHeld(note);
-                if (wasHeld) {
-                    pushSustained(note);
-                }
-                --pressed_;
+                pushSustained(note);
                 ++sustained_;
                 // mantem a altura: mudar ao largar a tecla seria um salto sem
                 // nota nova.
             } else {
+                // **nota-off sem nota-on nao conta.** um arrasto rapido pelo
+                // teclado pode perder o note-on na fila; descontar aí deixava a
+                // contagem abaixo do que esta' premido e o gate fechava com
+                // teclas na mao. a pilha e' a unica fonte da contagem.
                 removeHeld(note);
                 if (activeNote_ == note && heldCount_ > 0) {
                     activeNote_ = heldNotes_[static_cast<std::size_t>(heldCount_ - 1)];
                 }
-                --pressed_;
             }
             break;
         }
@@ -101,7 +99,6 @@ void NoteTracker::handle(const Event& event) noexcept {
             break;
 
         case Event::Kind::allNotesOff:
-            pressed_ = 0;
             sustained_ = 0;
             sustain_ = false;
             heldCount_ = 0;
@@ -115,8 +112,9 @@ void NoteTracker::handle(const Event& event) noexcept {
     }
 
     // nota-off sem nota-on vem de hosts que reenviam o estado inicial no primeiro
-    // bloco. contagem negativa faria sounding() mentir e o motor ficava calado.
-    pressed_ = std::max(pressed_, 0);
+    // bloco. a contagem sai da pilha, nunca de incrementos soltos: um evento
+    // perdido na fila deixava de haver contagem e sim um numero que mentia.
+    pressed_ = heldCount_;
     sustained_ = std::max(sustained_, 0);
     sounding_ = pressed_ > 0 || sustained_ > 0;
 }

@@ -167,13 +167,18 @@ lê o material a uma velocidade que corresponde à altura da nota, relativa a
 C4 (MIDI 60). Fora da escala, a nota é quantizada ao grau mais próximo, com
 prioridade descendente — decisão registada para o teste de borda.
 
-### 2.6 Grupo F — nuvem de grãos (3)
+### 2.6 Grupo F — nuvem de grãos (3) — *removido*
+
+> **Nota posterior.** O grupo F saiu do instrumento: os três parâmetros
+> (`cloudsize`, `pitchspread`, `grainjit`) e a aba CLOUD foram retirados. A
+> tabela fica como registo do que o estudo mediu, não como descrição do plugin
+> actual.
 
 | ID | Nome exibido | Faixa / opções | Padrão | Estado |
 | --- | --- | --- | --- | --- |
-| `cloudsize` | Cloud Size | 0–1 (0–500 ms) | 0 | implementado |
-| `pitchspread` | Pitch Spread | 0–24 st | 0 | implementado |
-| `grainjit` | Grain Jitter | 0–1 | 0 | implementado |
+| `cloudsize` | Cloud Size | 0–1 (0–500 ms) | 0 | removido |
+| `pitchspread` | Pitch Spread | 0–24 st | 0 | removido |
+| `grainjit` | Grain Jitter | 0–1 | 0 | removido |
 
 `cloudsize` alarga a janela temporal em que os grãos de um mesmo disparo são
 distribuídos; `pitchspread` dispersa a afinação de cada grão dentro do intervalo;

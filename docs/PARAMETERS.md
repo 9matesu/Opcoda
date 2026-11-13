@@ -2,7 +2,7 @@
 
 Fonte: `PluginProcessor::createParameterLayout` em
 `src/opcoda_plugin/source/plugin_processor.cpp`. Valores na unidade exibida pela
-interface. O host automatiza todos os 66 parâmetros: 41 de som, a largura
+interface. O host automatiza todos os 63 parâmetros: 38 de som, a largura
 estéreo e as 24 células da matriz.
 
 ## Grão
@@ -21,14 +21,6 @@ estéreo e as 24 células da matriz.
 | `grainlevel` | LEVEL | linear | 0 a 1 | 1 | Ganho por grão. |
 | `pitchrand` | P.RAND | semitons | 0 a 12 | 0 | Detune aleatório por grão. |
 | `scanspeed` | SCAN | fator | 0,25 a 4 | 1 | Velocidade da varredura no transporte. |
-
-## Nuvem
-
-| ID | Controle | Unidade | Faixa | Padrão | Comportamento |
-| --- | --- | --- | --- | --- | --- |
-| `cloudsize` | CLOUD W | fração | 0 a 1 | 0 | Atraso uniforme de 0 a 500 ms no início de cada grão. |
-| `pitchspread` | P.SPREAD | semitons | 0 a 24 | 0 | Desvio de afinação por grão, simétrico. |
-| `grainjit` | JITTER | fração | 0 a 1 | 0 | Variação de duração entre 0,5x e 1,5x, limitada a 1–2000 ms. |
 
 ## Envelope
 

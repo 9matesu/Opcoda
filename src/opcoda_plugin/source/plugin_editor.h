@@ -5,6 +5,7 @@
 #include "display_panel.h"
 #include "envelope_view.h"
 #include "filter_view.h"
+#include "keyboard.h"
 #include "knob.h"
 #include "lfo_view.h"
 #include "look_and_feel.h"
@@ -63,6 +64,11 @@ public:
     // janela e o instrumento parecia surdo por causa de uma janela que ja' nao
     // esta' a' vista.
     void focusPlayKeyboard();
+
+    // troca de chapa a meio da sessao: traduz as cores que os controlos tinham
+    // fixado e manda repintar. quem pinta a partir da paleta le ja' os valores
+    // novos no proximo quadro.
+    void refreshTheme();
 
     // o clique nao rouba o foco ao teclado: sem isto, trocar de vista calava as
     // teclas do computador e o instrumento parecia avariado.
@@ -177,7 +183,7 @@ private:
     OpcodaLookAndFeel lookAndFeel_;
 
     juce::MidiKeyboardState keyboardState_;
-    juce::MidiKeyboardComponent keyboard_;
+    OpcodaKeyboard keyboard_;
 
     DisplayPanel display_;
     ByteDisplay grid_;
@@ -264,10 +270,10 @@ private:
     // XML fora da interface; fica a marcacao e o retrato sai no timer.
     std::atomic<bool> undoFromAudio_ {false};
 
-    // quatro modulos visiveis. OUT existe no enum porque o volume precisa de um
-    // Knob; nao tem aba, e o knob mora no master. CLOUD e KEYS sairam: a nuvem
-    // nao pagava o que custava e do teclado ficou so' o glide, no GRAIN.
-    enum class ParamModule { grain, cloud, envelope, filter, mod, keys, out };
+    // cinco modulos visiveis. OUT existe no enum porque o volume precisa de um
+    // Knob; nao tem aba, e o knob mora no master. KEYS saiu: do teclado ficou
+    // so' o glide, no GRAIN, e a escala e a tonica vivem no teclado.
+    enum class ParamModule { grain, envelope, filter, mod, keys, out };
     ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::vector<std::unique_ptr<ChoiceControl>> controls_;
@@ -295,7 +301,6 @@ private:
     void layoutModuleGrid(const ModuleGrid& grid, juce::Rectangle<int> area);
 
     ModuleFolderTab moduleGrainButton_ {"grainMod", "Grain module"};
-    ModuleFolderTab moduleCloudButton_ {"cloudMod", "Cloud module"};
     ModuleFolderTab moduleEnvelopeButton_ {"envMod", "Envelope module"};
     ModuleFolderTab moduleFilterButton_ {"filterMod", "Filter module"};
     ModuleFolderTab moduleModButton_ {"modMod", "Modulation module"};
@@ -314,6 +319,12 @@ private:
     juce::Rectangle<int> parameterPanelBounds_;
     juce::Rectangle<int> masterBayBounds_;
     juce::Rectangle<int> keyboardBayBounds_;
+
+    // filete vertical entre o grupo do preset e o grupo do ficheiro no header.
+    int headerDividerX_ {-1};
+
+    // escala do desenho: calculada no construtor a partir da area util do monitor.
+    float uiScale_ {0.9f};
 
     juce::String loadedSignature_;
     double lastTick_ {0.0};

@@ -23,6 +23,24 @@ StandaloneWindow::Body::Body(juce::StandalonePluginHolder& holder) {
 
     settings_ = std::make_unique<SettingsScreen>(holder.deviceManager);
 
+    // **a chapa troca-se em SETTINGS > THEMES e vale para a janela toda.** o
+    // editor e' um filho do corpo, mas a barra de titulo e' do DocumentWindow:
+    // sem este aviso, metade da janela ficava com a tinta anterior.
+    settings_->onThemeChanged = [this] {
+        if (auto* editor = dynamic_cast<PluginEditor*>(editor_.get())) {
+            editor->refreshTheme();
+        }
+        if (auto* lnf =
+                dynamic_cast<OpcodaLookAndFeel*>(&juce::LookAndFeel::getDefaultLookAndFeel())) {
+            lnf->refreshPalette();
+        }
+        if (auto* window = findParentComponentOfClass<juce::DocumentWindow>()) {
+            window->setBackgroundColour(palette::chassis);
+            window->repaint();
+        }
+        repaint();
+    };
+
     // as teclas que o ecra de configuracao nao usa tocam no editor, e o foco
     // volta ao teclado virtual quando ele fecha: escolher a placa com uma nota
     // presa e' o caso normal, e fechar os ajustes nao pode calar o instrumento.

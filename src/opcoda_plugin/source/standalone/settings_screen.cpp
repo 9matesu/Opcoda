@@ -31,7 +31,7 @@ juce::String formatInteger(double value) {
 } // namespace
 
 SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(devices) {
-    for (auto* tab : {&audioTab_, &midiTab_}) {
+    for (auto* tab : {&audioTab_, &midiTab_, &themesTab_}) {
         tab->getProperties().set("uiLook", "tab");
         tab->setClickingTogglesState(true);
         tab->setRadioGroupId(1);
@@ -40,6 +40,19 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
     audioTab_.setToggleState(true, juce::dontSendNotification);
     audioTab_.onClick = [this] { selectPage(Page::audio); };
     midiTab_.onClick = [this] { selectPage(Page::midi); };
+    themesTab_.onClick = [this] { selectPage(Page::themes); };
+
+    // as duas chapas: uma tecla por tema, com o estado no proprio botao. nao ha'
+    // previa em miniatura — o painel inteiro muda por tras e a previa e' o
+    // instrumento.
+    for (auto* row : {&darkTheme_, &classicTheme_}) {
+        row->getProperties().set("uiLook", "row");
+        row->setClickingTogglesState(true);
+        row->setRadioGroupId(2);
+        addChildComponent(*row);
+    }
+    darkTheme_.onClick = [this] { chooseTheme(palette::Theme::dark); };
+    classicTheme_.onClick = [this] { chooseTheme(palette::Theme::classic); };
 
     // a cruz do cabecalho fala a lingua da rail: traco claro sobre carvao.
     closeButton_.setButtonText("");
@@ -135,8 +148,8 @@ void SettingsScreen::visibilityChanged() {
 
 //==============================================================================
 juce::Rectangle<int> SettingsScreen::panelBounds() const {
-    const auto width = juce::jmin(kPanelWidth, getWidth() - 80);
-    const auto height = juce::jmin(kPanelHeight, getHeight() - 80);
+    const auto width = juce::jmin(kPanelWidth, getWidth() - 72);
+    const auto height = juce::jmin(kPanelHeight, getHeight() - 48);
     return juce::Rectangle<int> {juce::jmax(320, width), juce::jmax(240, height)}
         .withCentre(getLocalBounds().getCentre());
 }
@@ -153,16 +166,17 @@ void SettingsScreen::resized() {
 
     audioTab_.setBounds(panel_.getX() + kInset, panel_.getY() + 66, 92, 28);
     midiTab_.setBounds(panel_.getX() + kInset + 96, panel_.getY() + 66, 92, 28);
+    themesTab_.setBounds(panel_.getX() + kInset + 192, panel_.getY() + 66, 92, 28);
 
     const auto body = bodyBounds();
     auto y = body.getY() + 4;
     const auto comboWidth = juce::jmin(460, juce::jmax(160, body.getWidth() - 180));
     for (auto* box : {&driverBox_, &outputBox_, &rateBox_, &bufferBox_}) {
         box->setBounds(body.getX() + 180, y, comboWidth, 30);
-        y += 48;
+        y += kRowPitch;
     }
 
-    status_ = body.withTop(body.getBottom() - 168);
+    status_ = body.withTop(body.getBottom() - kStatusHeight);
     controlPanel_.setBounds(status_.getRight() - 160, status_.getY() + 6, 160, 28);
 
     auto rowY = body.getY() + 42;
@@ -170,6 +184,11 @@ void SettingsScreen::resized() {
         row->setBounds(body.getX(), rowY, body.getWidth(), 34);
         rowY += 34;
     }
+
+    // a lista de temas segue o mesmo compasso das entradas MIDI: uma tecla por
+    // linha, a largura do corpo. a descricao de cada uma vive no paint.
+    darkTheme_.setBounds(body.getX(), body.getY() + 42, body.getWidth(), 42);
+    classicTheme_.setBounds(body.getX(), body.getY() + 100, body.getWidth(), 42);
 }
 
 //==============================================================================
@@ -215,7 +234,7 @@ void SettingsScreen::paint(juce::Graphics& g) {
                juce::Justification::centredLeft, false);
 
     // filete do rodape: separa a unica accao do ecra.
-    g.setColour(palette::alpha(palette::charcoal, 0.30f));
+    g.setColour(palette::alpha(palette::ivory, 0.10f));
     g.drawHorizontalLine(panel_.getBottom() - 64, panel.getX() + kInset,
                          panel.getRight() - kInset);
 
@@ -226,7 +245,7 @@ void SettingsScreen::paint(juce::Graphics& g) {
         auto y = body.getY() + 4;
         for (const auto* label : labels) {
             paintSectionLabel(g, label, {body.getX(), y, 170, 30});
-            y += 48;
+            y += kRowPitch;
         }
 
         // canais: leitura, nao escolha. o Opcoda e' um sintetizador e nao tem
@@ -239,6 +258,26 @@ void SettingsScreen::paint(juce::Graphics& g) {
                    juce::Justification::centredLeft, false);
 
         paintStatus(g);
+    } else if (page_ == Page::themes) {
+        paintSectionLabel(g, "THEME", {body.getX(), body.getY() + 4, 300, 18});
+        g.setColour(palette::textMuted);
+        g.setFont(fonts().sans(9.5f));
+        g.drawText("The whole instrument changes at once; the choice is saved.",
+                   juce::Rectangle<int> {body.getX(), body.getY() + 22, body.getWidth(), 16},
+                   juce::Justification::centredLeft, false);
+
+        // a descricao de cada chapa fica por baixo do nome, recuada 16 px para
+        // alinhar com o texto da tecla e nao com o rebordo.
+        const auto note = [&g](juce::Rectangle<int> row, const juce::String& text) {
+            g.setColour(palette::textMuted);
+            g.setFont(fonts().sans(9.0f));
+            g.drawText(text,
+                       juce::Rectangle<int> {row.getX() + 16, row.getY() + 22,
+                                             row.getWidth() - 32, 14},
+                       juce::Justification::centredLeft, false);
+        };
+        note(darkTheme_.getBounds(), "Graphite and white. No colour anywhere.");
+        note(classicTheme_.getBounds(), "Cream, charcoal and burnt orange. The 2025 face.");
     } else {
         paintSectionLabel(g, "MIDI INPUTS", {body.getX(), body.getY() + 4, 300, 18});
         g.setColour(palette::textMuted);
@@ -272,17 +311,17 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
         return;
     }
 
-    g.setColour(palette::alpha(palette::charcoal, 0.12f));
+    g.setColour(palette::alpha(palette::ivory, 0.08f));
     g.drawHorizontalLine(area.getY(), static_cast<float>(area.getX()),
                          static_cast<float>(area.getRight()));
 
-    paintSectionLabel(g, "DEVICE", {area.getX(), area.getY() + 12, 200, 16});
+    paintSectionLabel(g, "DEVICE", {area.getX(), area.getY() + 10, 200, 16});
 
     auto* device = devices_.getCurrentAudioDevice();
     g.setColour(palette::textDark);
     g.setFont(fonts().sans(11.5f, true));
     g.drawText(device != nullptr ? device->getName() : juce::String {"no device"},
-               juce::Rectangle<int> {area.getX(), area.getY() + 30, area.getWidth() - 176, 20},
+               juce::Rectangle<int> {area.getX(), area.getY() + 28, area.getWidth() - 176, 20},
                juce::Justification::centredLeft, true);
 
     if (device != nullptr) {
@@ -295,7 +334,7 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
                           latency;
         g.setColour(palette::textSub);
         g.setFont(fonts().sans(10.5f));
-        g.drawText(line, juce::Rectangle<int> {area.getX(), area.getY() + 52,
+        g.drawText(line, juce::Rectangle<int> {area.getX(), area.getY() + 48,
                                                area.getWidth() - 176, 18},
                    juce::Justification::centredLeft, true);
     }
@@ -303,11 +342,11 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
     // cpu: a mesma escada do medidor de saida, porque e' a mesma pergunta
     // ("quanto e' que isto ainda tem?").
     const auto load = juce::jlimit(0.0, 1.0, devices_.getCpuUsage());
-    const auto bar = juce::Rectangle<int> {area.getX() + 34, area.getY() + 92, 200, 8};
+    const auto bar = juce::Rectangle<int> {area.getX() + 34, area.getY() + 80, 200, 8};
 
-    paintSectionLabel(g, "CPU", {area.getX(), area.getY() + 86, 30, 20});
+    paintSectionLabel(g, "CPU", {area.getX(), area.getY() + 74, 30, 20});
 
-    g.setColour(palette::alpha(palette::charcoal, 0.16f));
+    g.setColour(palette::alpha(palette::ivory, 0.10f));
     g.fillRoundedRectangle(bar.toFloat(), 2.0f);
     g.setColour(load > 0.85 ? palette::meterRed
                             : (load > 0.60 ? palette::meterAmber : palette::meterGreen));
@@ -318,7 +357,7 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
     g.setColour(palette::textDark);
     g.setFont(fonts().sans(10.5f));
     g.drawText(formatInteger(load * 100.0) + " %",
-               juce::Rectangle<int> {bar.getRight() + 10, area.getY() + 86, 60, 20},
+               juce::Rectangle<int> {bar.getRight() + 10, area.getY() + 74, 60, 20},
                juce::Justification::centredLeft, false);
 }
 
@@ -351,21 +390,50 @@ void SettingsScreen::selectPage(Page page) {
 
     audioTab_.setToggleState(page == Page::audio, juce::dontSendNotification);
     midiTab_.setToggleState(page == Page::midi, juce::dontSendNotification);
+    themesTab_.setToggleState(page == Page::themes, juce::dontSendNotification);
 
     const auto audio = page == Page::audio;
     for (auto* box : {&driverBox_, &outputBox_, &rateBox_, &bufferBox_}) {
         box->setVisible(audio);
     }
     for (auto& row : midiRows_) {
-        row->setVisible(!audio);
+        row->setVisible(page == Page::midi);
     }
 
-    if (!audio) {
+    const auto themes = page == Page::themes;
+    darkTheme_.setVisible(themes);
+    classicTheme_.setVisible(themes);
+    if (themes) {
+        darkTheme_.setToggleState(palette::currentTheme == palette::Theme::dark,
+                                  juce::dontSendNotification);
+        classicTheme_.setToggleState(palette::currentTheme == palette::Theme::classic,
+                                     juce::dontSendNotification);
+    }
+
+    if (page == Page::midi) {
         refreshMidi();
     }
 
     refreshStatus();
     resized();
+    repaint();
+}
+
+// troca de chapa: o tema muda, fica guardado, e a arvore deste ecra volta a
+// apanhar as tintas que os componentes tinham fixado antes da troca. o editor e'
+// avisado por onThemeChanged, que percorre a arvore dele da mesma maneira.
+void SettingsScreen::chooseTheme(palette::Theme theme) {
+    palette::setTheme(theme);
+    palette::saveTheme(theme);
+    palette::applyToTree(*this);
+
+    darkTheme_.setToggleState(theme == palette::Theme::dark, juce::dontSendNotification);
+    classicTheme_.setToggleState(theme == palette::Theme::classic,
+                                 juce::dontSendNotification);
+
+    if (onThemeChanged) {
+        onThemeChanged();
+    }
     repaint();
 }
 

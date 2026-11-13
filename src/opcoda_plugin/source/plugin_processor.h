@@ -378,7 +378,10 @@ private:
 
     // teclado virtual. Capacidade 64: um bloco de 2048 a 48 kHz dura 43 ms, e nesse
     // tempo nao se carrega em 64 teclas. Cheia, descarta — como as filas sem trava.
-    rt::SpscRing<rt::NoteTracker::Event, 64> keyboardNotes_;
+    // 256 eventos: um arrasto rapido pelo teclado do editor gera um note-on e um
+    // note-off por tecla atravessada; com 64 o note-off do fim caia fora e a nota
+    // ficava presa.
+    rt::SpscRing<rt::NoteTracker::Event, 256> keyboardNotes_;
 
     // tempo do host: escrito por bloco pelo callback e lido por currentParams() no
     // mesmo bloco. Relaxado chega, nao ordena nada entre os dois.

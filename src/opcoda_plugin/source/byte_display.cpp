@@ -1183,44 +1183,6 @@ void ByteDisplay::paintOverview(juce::Graphics& g) {
     }
 }
 
-void ByteDisplay::paintEntropyLine(
-    juce::Graphics& g,
-    const std::vector<pe::Column>& columns,
-    const std::function<float(std::size_t)>& xAt,
-    const std::function<float(std::size_t)>& yAt) {
-    juce::Path low;
-    juce::Path mid;
-    juce::Path high;
-
-    std::size_t lastInBucket[3] {columns.size(), columns.size(), columns.size()};
-
-    for (std::size_t i = 0; i < columns.size(); ++i) {
-        const auto x = xAt(i);
-        const auto b = entropyBucket(columns[i].entropyBits);
-
-        auto& path = b == 0 ? low : b == 1 ? mid : high;
-        if (path.isEmpty() || lastInBucket[b] + 1 != i) {
-            path.startNewSubPath(x, yAt(i));
-        } else {
-            path.lineTo(x, yAt(i));
-        }
-        lastInBucket[b] = i;
-    }
-
-    const juce::Colour inks[3] {palette::accentSoft, palette::accentWarn, palette::accent};
-    const juce::Path* paths[3] {&low, &mid, &high};
-    for (int b = 0; b < 3; ++b) {
-        if (paths[b]->isEmpty()) {
-            continue;
-        }
-        g.setColour(palette::alpha(inks[b], 0.20f));
-        g.strokePath(*paths[b], juce::PathStrokeType {3.0f, juce::PathStrokeType::curved,
-                                                      juce::PathStrokeType::rounded});
-        g.setColour(palette::alpha(inks[b], 0.95f));
-        g.strokePath(*paths[b], juce::PathStrokeType {1.0f});
-    }
-}
-
 void ByteDisplay::resampleEnvelope(int pixels) {
     if (pixels < 2) {
         pixels = 2;
@@ -1343,31 +1305,32 @@ void ByteDisplay::paintEntropy(juce::Graphics& g) {
     // colunas em centros, com as pontas esticadas ate' as bordas do ecra: no
     // zoom fundo ficam poucas colunas e o desenho tem de cobrir a largura toda
     // na mesma.
-    const auto xAt = [&](std::size_t i) {
-        return plot.getX() + (static_cast<float>(i) + 0.5f) * columnWidth;
-    };
     const auto yAt = [&](std::size_t i) { return yFor(entropyColumns_[i].entropyBits); };
 
-    juce::Path curve;
-    curve.startNewSubPath(plot.getX(), yAt(0));
+    // -- barras largas -- 
+    // antes era um veu de 20 % sobre a curva inteira e o ecra lia-se apagado. a
+    // barra tem corpo opaco, um pe' de 2 px para a coluna vazia nao desaparecer e
+    // um topo claro que marca o valor exacto. e' a leitura de um medidor, nao de
+    // um grafico de area.
+    const juce::Colour inks[3] {palette::alpha(palette::accent, 0.45f), palette::accent,
+                                palette::accentSoft};
+    const auto barWidth = juce::jmax(1.5f, columnWidth * 0.74f);
+    const auto gap = (columnWidth - barWidth) * 0.5f;
+
     for (std::size_t i = 0; i < count; ++i) {
-        curve.lineTo(xAt(i), yAt(i));
+        const auto ink = inks[entropyBucket(entropyColumns_[i].entropyBits)];
+        const auto x = plot.getX() + static_cast<float>(i) * columnWidth + gap;
+        const auto top = juce::jmin(plot.getBottom() - 2.0f, yAt(i));
+        const auto height = juce::jmax(2.0f, plot.getBottom() - top);
+
+        g.setColour(palette::alpha(ink, 0.30f));
+        g.fillRect(juce::Rectangle<float> {x, plot.getY(), barWidth,
+                                           plot.getHeight()});
+        g.setColour(ink);
+        g.fillRect(juce::Rectangle<float> {x, top, barWidth, height});
+        g.setColour(palette::alpha(palette::ivory, 0.85f));
+        g.fillRect(juce::Rectangle<float> {x, top, barWidth, 1.0f});
     }
-    curve.lineTo(plot.getRight(), yAt(count - 1));
-    curve.lineTo(plot.getRight(), plot.getBottom());
-    curve.lineTo(plot.getX(), plot.getBottom());
-    curve.closeSubPath();
-
-    // o preenchimento e' um veu, nao uma parede. a 0,42 a curva desaparecia dentro
-    // do proprio banho e a vista lia-se como um bloco laranja.
-    juce::ColourGradient veil {palette::alpha(palette::accent, 0.20f),
-                               plot.getCentreX(), plot.getY(),
-                               palette::alpha(palette::accent, 0.02f),
-                               plot.getCentreX(), plot.getBottom(), false};
-    g.setGradientFill(veil);
-    g.fillPath(curve);
-
-    paintEntropyLine(g, entropyColumns_, xAt, yAt);
 
     paintBookmarks(g, plot);
     paintOverview(g);

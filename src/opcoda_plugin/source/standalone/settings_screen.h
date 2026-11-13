@@ -43,6 +43,7 @@ public:
     std::function<bool(const juce::KeyPress&)> onUnhandledKey;
     std::function<bool(bool)> onKeyStateChanged;
     std::function<void()> onClosed;
+    std::function<void()> onThemeChanged;
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -51,12 +52,13 @@ public:
     bool keyStateChanged(bool isKeyDown) override;
 
 private:
-    enum class Page { audio, midi };
+    enum class Page { audio, midi, themes };
 
     [[nodiscard]] juce::Rectangle<int> panelBounds() const;
     [[nodiscard]] juce::Rectangle<int> bodyBounds() const;
 
     void selectPage(Page page);
+    void chooseTheme(palette::Theme theme);
     void refreshAudio();
     void refreshMidi();
     void refreshStatus();
@@ -71,6 +73,7 @@ private:
 
     juce::TextButton audioTab_ {"AUDIO"};
     juce::TextButton midiTab_ {"MIDI"};
+    juce::TextButton themesTab_ {"THEMES"};
     juce::TextButton closeButton_;
     juce::TextButton doneButton_ {"CLOSE"};
     juce::TextButton controlPanel_ {"CONTROL PANEL"};
@@ -82,6 +85,10 @@ private:
 
     std::vector<std::unique_ptr<juce::TextButton>> midiRows_;
 
+    // duas chapas: a escura monocromatica e a classica de 2025.
+    juce::TextButton darkTheme_ {"DARK"};
+    juce::TextButton classicTheme_ {"CLASSIC"};
+
     Page page_ {Page::audio};
     bool applying_ {false};
     juce::String error_;
@@ -89,10 +96,15 @@ private:
     juce::Rectangle<int> panel_;
     juce::Rectangle<int> status_;
 
-    static constexpr int kPanelWidth {820};
+    static constexpr int kPanelWidth {860};
     static constexpr int kPanelHeight {580};
     static constexpr int kHeaderHeight {52};
     static constexpr int kInset {28};
+    // o compasso das linhas e a altura do bloco de estado sao um so' numero:
+    // o ecra nao tem scroll, por isso o que nao cabe tem de ser medido, e nao
+    // empurrado para baixo de uma linha que ja' la' estava.
+    static constexpr int kRowPitch {44};
+    static constexpr int kStatusHeight {132};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SettingsScreen)
 };

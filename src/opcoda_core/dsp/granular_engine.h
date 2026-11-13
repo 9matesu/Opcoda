@@ -65,11 +65,6 @@ struct GranularParams {
     float widthStereo {1.0f};
     // detune por grao, 0..12 st. zero desliga.
     float pitchRandomSemitones {0.0f};
-    // nuvem: cloud 0..1 vira 0..500 ms de atraso; pitch spread 0..24 st;
-    // jitter 0..1 muda a duracao entre 0,5x e 1,5x, presa a 1..2000 ms.
-    float cloudSize {0.0f};
-    float pitchSpreadSemitones {0.0f};
-    float grainJitter {0.0f};
     // nota da pilha mono. -1 desliga; 60 (Do4) e' razao 1,0. a escala quantiza
     // antes da taxa, e root e' a tonica (0 = Do).
     int noteNumber {-1};
@@ -324,10 +319,8 @@ public:
     // o corte modulado, nao o do knob.
     [[nodiscard]] float f2CutoffHz() const noexcept { return lastF2Cutoff_; }
 
-    // atraso, spread e duracao do ultimo grao. o ensaio da nuvem mede o que o
-    // motor aplicou, nao o que o gerador devia ter dado.
-    [[nodiscard]] int lastGrainDelaySamples() const noexcept { return lastGrainDelay_; }
-    [[nodiscard]] float lastGrainSpreadSemitones() const noexcept { return lastGrainSpread_; }
+    // duracao do ultimo grao, para os ensaios medirem o que o motor aplicou e
+    // nao o que o gerador devia ter dado.
     [[nodiscard]] int lastGrainLengthSamples() const noexcept { return lastGrainLength_; }
 
     // semente fixa por omissao: mesma fonte e mesmos parametros, mesmo som. quem
@@ -468,8 +461,6 @@ private:
     // mesma voz repetia o mesmo spray, o mesmo detune e o mesmo spread: a nuvem
     // ficava presa numa roda de oito valores em vez de variar ao longo do tempo.
     std::uint64_t grainSerial_ {0};
-    int lastGrainDelay_ {0};
-    float lastGrainSpread_ {0.0f};
     int lastGrainLength_ {0};
 
     int lastActiveVoices_ {0};

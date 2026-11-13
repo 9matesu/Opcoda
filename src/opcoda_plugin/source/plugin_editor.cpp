@@ -7,15 +7,15 @@
 namespace opcoda {
 namespace {
 
-// janela fixa. o desenho pensa em 1180x760 e o canvas encolhe-o 10 %: o
-// resultado e' uma janela de 1062x684, mais discreta no ecra sem mexer numa
-// coordenada de layout. a F023 pedia um minimo para o redimensionamento; com a
-// janela amarrada, o minimo deixou de ter caso.
+// janela fixa. o desenho pensa em 1180x760 e o canvas aplica a escala: o
+// resultado tem de caber no ecra do portatil mais pequeno que se usa para
+// compor, sem o host ter de encolher a janela. 0,9 e' o tecto; abaixo disso a
+// escala vem da area util do monitor (ver scaleForDisplay).
+//
+// a F023 pedia um minimo para o redimensionamento; com a janela amarrada, o
+// minimo deixou de ter caso.
 constexpr int kDesignWidth {1180};
 constexpr int kDesignHeight {760};
-constexpr float kUiScale {0.9f};
-constexpr int kWindowWidth {static_cast<int>(kDesignWidth * kUiScale)};
-constexpr int kWindowHeight {static_cast<int>(kDesignHeight * kUiScale)};
 constexpr int kHeaderHeight {60};
 
 // margens da chapa. o painel nao encosta em nada: o respiro entre as pecas e'
@@ -73,6 +73,20 @@ constexpr int kModGraphWidth {300};
 constexpr std::uint32_t kGestureGapMs {400};
 constexpr std::size_t kMaxUndoSteps {32};
 
+// a escala que cabe no monitor: nunca mais do que 0,9 e nunca tao pequena que o
+// texto de 11 px deixe de se ler. o desconto cobre a barra de titulo da janela
+// e a barra de tarefas do Windows.
+float scaleForDisplay() {
+    float scale = 0.9f;
+    if (const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()) {
+        const auto area = display->userBounds;
+        const auto sx = (area.getWidth() - 24.0f) / static_cast<float>(kDesignWidth);
+        const auto sy = (area.getHeight() - 72.0f) / static_cast<float>(kDesignHeight);
+        scale = juce::jlimit(0.62f, 0.9f, juce::jmin(sx, sy));
+    }
+    return scale;
+}
+
 juce::String asInteger(float value) {
     return juce::String {juce::roundToInt(value)};
 }
@@ -123,16 +137,6 @@ const std::array<Knob::Spec, 6> kGrainRow2Specs {
                 [](float v) { return juce::String {v, 2} + "x"; }},
     // o glide era o unico parametro do modulo KEYS que valia a pena guardar.
     Knob::Spec {"glide", "GLIDE", "Glide time between notes", 0.0f, seconds},
-};
-
-// a nuvem: os tres controles que abrem o grao num enxame. zero em todos devolve
-// o motor de um grao, por isso sao controles de profundidade, nao de ligar.
-const std::array<Knob::Spec, 3> kCloudSpecs {
-    Knob::Spec {"cloudsize", "CLOUD", "Cloud size, grains spread around the playhead",
-                0.0f, percent},
-    Knob::Spec {"pitchspread", "SPREAD", "Pitch spread across the cloud, in semitones",
-                0.0f, [](float v) { return juce::String {v, 1} + " st"; }},
-    Knob::Spec {"grainjit", "JITTER", "Grain timing jitter", 0.0f, percent},
 };
 
 // a janela do grao: quatro botoes com o desenho do envelope. o nome da janela
@@ -243,14 +247,20 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
       envelopeView_(processor.parameters()),
       filterView_(processor.parameters()),
       lfoView_(processor.parameters()) {
+    // **o tema e' carregado antes de existir um controlo.** as cores que os
+    // construtores fixam em setColour vem daqui; aplicar depois obrigava a
+    // percorrer a arvore toda para nao ficar com metade da chapa antiga.
+    palette::setTheme(palette::loadSavedTheme());
+
     setLookAndFeel(&lookAndFeel_);
     setOpaque(true);
 
     // o canvas e' o unico filho directo: vive em 1180x760 e o transform encolhe-o
-    // para a janela de 1062x684. o paint do editor fica so' com o fundo.
+    // para a janela. o paint do editor fica so' com o fundo.
+    uiScale_ = scaleForDisplay();
     canvas_.onPaint = [this](juce::Graphics& g) { paintDesign(g); };
     canvas_.setBounds(0, 0, kDesignWidth, kDesignHeight);
-    canvas_.setTransform(juce::AffineTransform::scale(kUiScale));
+    canvas_.setTransform(juce::AffineTransform::scale(uiScale_));
     addAndMakeVisible(canvas_);
 
     makePlainLabel(status_, "", palette::textOnDark, fonts().sans(11.0f));
@@ -279,7 +289,8 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     // **fixa.** o host nao ganha uma asa de redimensionamento e o layout nao tem
     // um segundo caminho. e' o que permite os numeros do resized() serem o desenho.
     setResizable(false, false);
-    setSize(kWindowWidth, kWindowHeight);
+    setSize(juce::roundToInt(static_cast<float>(kDesignWidth) * uiScale_),
+            juce::roundToInt(static_cast<float>(kDesignHeight) * uiScale_));
     // **o clique nao rouba o foco.** com o foco a saltar para cada botao, as teclas
     // do computador deixavam de soar depois de trocar de vista. o teclado fica com
     // o foco e as teclas de navegacao sao encaminhadas pelo editor.
@@ -832,20 +843,6 @@ void PluginEditor::buildParameterPanel() {
         moduleGrids_[static_cast<std::size_t>(ParamModule::grain)] = std::move(grid);
     }
 
-    // -- CLOUD: os tres controles que abrem o grao numa nuvem. ficam numa fila
-    // propria porque mudam o motor, nao o grao.
-    {
-        ModuleGrid grid;
-        grid.columns = 3;
-        grid.maxCellWidth = kMaxCellWidth;
-        grid.rows.push_back(rowOf({
-            {addKnob(kCloudSpecs[0]), nullptr, 1},
-            {addKnob(kCloudSpecs[1]), nullptr, 1},
-            {addKnob(kCloudSpecs[2]), nullptr, 1},
-        }));
-        moduleGrids_[static_cast<std::size_t>(ParamModule::cloud)] = std::move(grid);
-    }
-
     // -- KEYS: escala e tonica. doze notas e oito modos nao cabem num disco nem
     // numa fila de botoes: vao num cursor com dentes, que mostra o nome do valor
     // e aceita as setas.
@@ -948,7 +945,6 @@ void PluginEditor::buildModuleTabs() {
         canvas_.addAndMakeVisible(button);
     };
     setup(moduleGrainButton_, "GRAIN", "Grain module", ParamModule::grain);
-    setup(moduleCloudButton_, "CLOUD", "Cloud module", ParamModule::cloud);
     setup(moduleEnvelopeButton_, "ENV", "Envelope module", ParamModule::envelope);
     setup(moduleFilterButton_, "FILTER", "Filter module", ParamModule::filter);
     setup(moduleModButton_, "MOD", "Modulation module", ParamModule::mod);
@@ -963,7 +959,6 @@ void PluginEditor::updateModuleTabs() {
         }
     };
     mark(moduleGrainButton_, ParamModule::grain);
-    mark(moduleCloudButton_, ParamModule::cloud);
     mark(moduleEnvelopeButton_, ParamModule::envelope);
     mark(moduleFilterButton_, ParamModule::filter);
     mark(moduleModButton_, ParamModule::mod);
@@ -1009,19 +1004,22 @@ void PluginEditor::buildKeyboard() {
                       "A W S E D F T G Y H U J K");
     keyboard_.setWantsKeyboardFocus(true);
 
+    // a tecla e' desenhada pelo LookAndFeel (drawWhiteNote/drawBlackNote): cor
+    // plana, sem gradiente nem sombra. as entradas de cor ficam aqui so' como
+    // contrato do componente e para o caso de outro LookAndFeel assumir.
     keyboard_.setColour(juce::MidiKeyboardComponent::whiteNoteColourId, palette::ivory);
     keyboard_.setColour(juce::MidiKeyboardComponent::blackNoteColourId,
                         palette::charcoalDeep);
     keyboard_.setColour(juce::MidiKeyboardComponent::keySeparatorLineColourId,
                         palette::faceplateDark);
     keyboard_.setColour(juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId,
-                        palette::accent.withAlpha(0.22f));
+                        juce::Colours::transparentBlack);
     keyboard_.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId,
-                        palette::accent.withAlpha(0.72f));
+                        juce::Colours::transparentBlack);
     keyboard_.setColour(juce::MidiKeyboardComponent::textLabelColourId,
                         palette::charcoalDeep);
     keyboard_.setColour(juce::MidiKeyboardComponent::shadowColourId,
-                        juce::Colours::black.withAlpha(0.35f));
+                        juce::Colours::transparentBlack);
 
     canvas_.addAndMakeVisible(keyboard_);
     keyboardState_.addListener(this);
@@ -1100,6 +1098,12 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     g.setColour(palette::alpha(palette::brass, 0.60f));
     g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(kDesignWidth));
 
+    // filete do header: separa o preset (do instrumento) do ficheiro (o material).
+    if (headerDividerX_ > 0) {
+        g.setColour(palette::alpha(palette::brass, 0.35f));
+        g.drawVerticalLine(headerDividerX_, header.getY() + 18.0f, header.getBottom() - 18.0f);
+    }
+
     // -- corpo --
     const auto body = design.withTrimmedTop(kHeaderHeight).toFloat();
     g.setColour(palette::faceplate);
@@ -1113,31 +1117,31 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     if (!screenBezelBounds_.isEmpty()) {
         const auto bezel = screenBezelBounds_.toFloat();
         g.setColour(palette::charcoalDeep);
-        g.fillRoundedRectangle(bezel, 4.0f);
+        g.fillRoundedRectangle(bezel, 8.0f);
         g.setColour(palette::alpha(palette::brass, 0.45f));
-        g.drawRoundedRectangle(bezel, 4.0f, 1.0f);
+        g.drawRoundedRectangle(bezel, 8.0f, 1.0f);
         g.setColour(palette::alpha(palette::ivory, 0.05f));
-        g.drawRoundedRectangle(bezel.reduced(1.0f), 3.0f, 1.0f);
+        g.drawRoundedRectangle(bezel.reduced(1.0f), 7.0f, 1.0f);
     }
 
     // -- tira de vistas: a unica superficie escura a' direita do ecra --
     if (!railBounds_.isEmpty()) {
         const auto rail = railBounds_.toFloat();
         g.setColour(palette::rail);
-        g.fillRoundedRectangle(rail, 4.0f);
+        g.fillRoundedRectangle(rail, 8.0f);
         g.setColour(palette::alpha(palette::knobEdge, 0.65f));
-        g.drawRoundedRectangle(rail, 4.0f, 1.0f);
+        g.drawRoundedRectangle(rail, 8.0f, 1.0f);
         g.setColour(palette::alpha(palette::ivory, 0.05f));
-        g.drawRoundedRectangle(rail.reduced(1.0f), 3.0f, 1.0f);
+        g.drawRoundedRectangle(rail.reduced(1.0f), 7.0f, 1.0f);
     }
 
     // -- painel de parametros --
     if (!parameterPanelBounds_.isEmpty()) {
         const auto panel = parameterPanelBounds_.toFloat();
         g.setColour(palette::faceplateLight);
-        g.fillRoundedRectangle(panel, 3.0f);
+        g.fillRoundedRectangle(panel, 6.0f);
         g.setColour(palette::alpha(palette::faceplateDark, 0.90f));
-        g.drawRoundedRectangle(panel, 3.0f, 1.0f);
+        g.drawRoundedRectangle(panel, 6.0f, 1.0f);
         g.setColour(palette::alpha(palette::ivory, 0.28f));
         g.drawHorizontalLine(juce::roundToInt(panel.getY() + 1.0f),
                              panel.getX() + 6.0f, panel.getRight() - 6.0f);
@@ -1191,9 +1195,9 @@ void PluginEditor::resized() {
         return;
     }
 
-    // o canvas pensa em 1180x760 e o transform faz os 1062x684 da janela.
+    // o canvas pensa em 1180x760 e o transform faz a janela que cabe no ecra.
     canvas_.setBounds(0, 0, kDesignWidth, kDesignHeight);
-    canvas_.setTransform(juce::AffineTransform::scale(kUiScale));
+    canvas_.setTransform(juce::AffineTransform::scale(uiScale_));
 
     auto area = canvas_.getLocalBounds();
 
@@ -1205,34 +1209,39 @@ void PluginEditor::resized() {
     // um titulo repetido a' esquerda era o que empurrava este bloco para o canto,
     // deixando um vazio grande a' direita.
     {
-        constexpr int kArrow {22};
-        constexpr int kName {172};
-        constexpr int kLoad {30};
-        constexpr int kFile {250};
-        constexpr int kFormat {76};
-        constexpr int kSize {62};
-        constexpr int kPresetToFile {22};
+        constexpr int kArrow {24};
+        constexpr int kName {200};
+        constexpr int kLoad {26};
+        constexpr int kFile {246};
+        constexpr int kFormat {68};
+        constexpr int kSize {58};
+        constexpr int kPresetToFile {26};
+        constexpr int kGap {10};
 
-        const int presetWidth = kArrow + 3 + kName + 3 + kArrow;
-        const int fileWidth = kLoad + 8 + kFile + 8 + kFormat + 6 + kSize;
+        const int presetWidth = kArrow + 2 + kName + 2 + kArrow;
+        const int fileWidth = kLoad + kGap + kFile + kGap + kFormat + 8 + kSize;
         int x = header.getX() + (header.getWidth() - (presetWidth + kPresetToFile + fileWidth)) / 2;
 
-        presetPrevButton_.setBounds(x, header.getY() + 19, kArrow, 26);
-        x += kArrow + 3;
-        presetNameButton_.setBounds(x, header.getY() + 17, kName, 30);
-        x += kName + 3;
-        presetNextButton_.setBounds(x, header.getY() + 19, kArrow, 26);
+        presetPrevButton_.setBounds(x, header.getY() + 18, kArrow, 24);
+        x += kArrow + 2;
+        presetNameButton_.setBounds(x, header.getY() + 16, kName, 30);
+        x += kName + 2;
+        presetNextButton_.setBounds(x, header.getY() + 18, kArrow, 24);
         x += kArrow + kPresetToFile;
 
-        loadButton_.setBounds(x, header.getY() + 19, kLoad, 26);
-        x += kLoad + 8;
+        // filete entre os dois grupos: o preset e' do instrumento, o ficheiro e'
+        // o material. sem esta marca os seis controles liam-se como uma fila so'.
+        headerDividerX_ = x - kPresetToFile / 2;
+
+        loadButton_.setBounds(x, header.getY() + 18, kLoad, 24);
+        x += kLoad + kGap;
         // a largura do nome e' fixa: com um ficheiro carregado ou sem ele, o bloco
         // fica no mesmo sitio. a linha nao salta a' passagem de cada ingest.
         fileName_.setBounds(x, header.getY() + 16, kFile, 32);
-        x += kFile + 8;
-        formatTag_.setBounds(x, header.getY() + 19, kFormat, 26);
-        x += kFormat + 6;
-        fileSize_.setBounds(x, header.getY() + 19, kSize, 26);
+        x += kFile + kGap;
+        formatTag_.setBounds(x, header.getY() + 18, kFormat, 24);
+        x += kFormat + 8;
+        fileSize_.setBounds(x, header.getY() + 18, kSize, 24);
     }
 
     // -- corpo --
@@ -1324,10 +1333,10 @@ void PluginEditor::resized() {
     {
         // quatro teclas rectangulares a dividir a largura do painel: icone e
         // nome, como as teclas da rail. o compasso entre elas e' o respiro.
-        juce::Button* tabs[] = {&moduleGrainButton_, &moduleCloudButton_,
+        juce::Button* tabs[] = {&moduleGrainButton_,
                                 &moduleEnvelopeButton_, &moduleFilterButton_,
                                 &moduleModButton_, &moduleKeysButton_};
-        constexpr int kCount {6};
+        constexpr int kCount {5};
         const int width = (moduleRowBounds_.getWidth() - kTabGap * (kCount - 1)) / kCount;
         int tx = moduleRowBounds_.getX();
         for (auto* button : tabs) {
@@ -1481,6 +1490,12 @@ void PluginEditor::timerCallback() {
 
 void PluginEditor::focusPlayKeyboard() {
     keyboard_.grabKeyboardFocus();
+}
+
+void PluginEditor::refreshTheme() {
+    palette::applyToTree(*this);
+    lookAndFeel_.refreshPalette();
+    repaint();
 }
 
 bool PluginEditor::keyPressed(const juce::KeyPress& key) {

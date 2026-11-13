@@ -70,14 +70,14 @@ public:
                        bounds.getRight() - 4.0f, bounds.getBottom() - 1.0f, 2.0f);
         }
 
-        juce::Colour ink = on ? palette::charcoalDeep : palette::textSub;
+        juce::Colour ink = on ? palette::textOnDark : palette::textSub;
         if (!on && (highlighted || down)) {
             ink = palette::textDark;
         }
 
         // glifo em cima do nome? nao: lado a lado, centrados em bloco. a altura
         // da tecla da' para os dois e a leitura faz-se de uma vez.
-        constexpr float kGlyph {15.0f};
+        constexpr float kGlyph {13.0f};
         constexpr float kGap {7.0f};
         const auto total = kGlyph + kGap + textWidth_;
         const auto left = bounds.getCentreX() - total * 0.5f;

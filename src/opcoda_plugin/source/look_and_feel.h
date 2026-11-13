@@ -65,6 +65,13 @@ private:
 class OpcodaLookAndFeel : public juce::LookAndFeel_V4 {
 public:
     OpcodaLookAndFeel() {
+        refreshPalette();
+    }
+
+    // as cores fixadas no LookAndFeel sao lidas nos construtores dos controlos.
+    // uma troca de tema a meio da sessao tem de as voltar a escrever, senao os
+    // menus e as caixas ficavam com a tinta da chapa anterior.
+    void refreshPalette() {
         setColour(juce::ResizableWindow::backgroundColourId, palette::chassis);
 
         setColour(juce::Slider::textBoxTextColourId, palette::textDark);
@@ -144,19 +151,22 @@ public:
         track.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f,
                             rotaryStartAngle, rotaryEndAngle, true);
         g.setColour(palette::alpha(palette::charcoalDeep, 0.45f));
-        g.strokePath(track, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
+        g.strokePath(track, juce::PathStrokeType {2.2f, juce::PathStrokeType::curved,
                                                   juce::PathStrokeType::rounded});
 
         juce::Path valueArc;
         valueArc.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f,
                                rotaryStartAngle, angle, true);
+        // **o arco e' o valor, por isso e' o traco mais grosso do knob.** a
+        // 2,4 px lia-se como um fio ao lado das marcas; a 4 px le-se de longe.
         g.setColour(palette::rust);
-        g.strokePath(valueArc, juce::PathStrokeType {2.4f, juce::PathStrokeType::curved,
+        g.strokePath(valueArc, juce::PathStrokeType {4.0f, juce::PathStrokeType::curved,
                                                      juce::PathStrokeType::rounded});
 
-        // ponteiro de marfim: o laranja do arco ja' carrega o valor; a agulha
-        // tem de se ler sobre o corpo escuro.
-        const auto inner = bodyRadius * 0.34f;
+        // ponteiro de marfim: o arco ja' carrega o valor; a agulha tem de se ler
+        // sobre o corpo escuro e atravessar o disco, por isso arranca perto do
+        // centro e vai ate' ao aro.
+        const auto inner = bodyRadius * 0.16f;
         const auto tip = bodyRadius - 1.0f;
         const auto tailX = centre.x + std::sin(angle) * inner;
         const auto tailY = centre.y - std::cos(angle) * inner;
@@ -166,7 +176,7 @@ public:
         g.setColour(palette::alpha(juce::Colours::black, 0.45f));
         g.drawLine(tailX + 1.0f, tailY + 1.0f, tipX + 1.0f, tipY + 1.0f, 3.0f);
         g.setColour(palette::ivory);
-        g.drawLine(tailX, tailY, tipX, tipY, 2.6f);
+        g.drawLine(tailX, tailY, tipX, tipY, 3.6f);
 
         if (slider.hasKeyboardFocus(true)) {
             drawFocusRing(g, bounds.expanded(1.5f));
@@ -197,7 +207,7 @@ public:
             // o estado vive num quadrado a' esquerda e o hover e' um banho de
             // carvao a 7%, para a lista nao competir com os knobs do painel.
             if (highlighted && !down) {
-                g.setColour(palette::alpha(palette::charcoalDeep, 0.07f));
+                g.setColour(palette::alpha(palette::ivory, 0.06f));
                 g.fillRoundedRectangle(bounds, 2.0f);
             }
             const auto box = juce::Rectangle<float> {bounds.getX() + 2.0f,
@@ -206,8 +216,8 @@ public:
                 g.setColour(palette::accent);
                 g.fillRoundedRectangle(box, 1.5f);
             }
-            g.setColour(on ? palette::alpha(palette::charcoalDeep, 0.85f)
-                           : palette::alpha(palette::charcoal, 0.45f));
+            g.setColour(on ? palette::charcoalDeep
+                           : palette::alpha(palette::ivory, 0.28f));
             g.drawRoundedRectangle(box, 1.5f, 1.2f);
             if (on) {
                 // visto a carvao dentro do quadrado laranja: a cor sozinha nao
@@ -236,9 +246,9 @@ public:
                 fill = palette::charcoal.interpolatedWith(palette::ivory, 0.10f);
             }
             g.setColour(fill);
-            g.fillRoundedRectangle(bounds, 2.5f);
+            g.fillRoundedRectangle(bounds, 5.0f);
             g.setColour(palette::alpha(palette::knobEdge, on ? 0.85f : 0.45f));
-            g.drawRoundedRectangle(bounds, 2.5f, 1.0f);
+            g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
             if (on) {
                 g.setColour(palette::accent);
                 g.fillRect(juce::Rectangle<float> {bounds.getX() + 1.0f,
@@ -264,7 +274,7 @@ public:
             }
 
             g.setColour(fill);
-            g.fillRoundedRectangle(bounds, isIcon || isRail ? 3.0f : 4.0f);
+            g.fillRoundedRectangle(bounds, 4.5f);
             if (on) {
                 g.setColour(palette::accent);
                 if (isRail) {
@@ -293,9 +303,9 @@ public:
             }
 
             g.setColour(fill);
-            g.fillRoundedRectangle(bounds, 3.0f);
+            g.fillRoundedRectangle(bounds, 5.0f);
             g.setColour(isTransport && on ? palette::accentSoft : palette::knobEdge);
-            g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
+            g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
             g.setColour(palette::alpha(palette::ivory, 0.10f));
             g.drawHorizontalLine(juce::roundToInt(bounds.getY() + 1.0f),
                                  bounds.getX() + 3.0f, bounds.getRight() - 3.0f);
@@ -658,7 +668,10 @@ public:
         }
 
         const auto c = bounds.getCentre();
-        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight());
+        // **84 % do lado.** o glifo encostava ao botao e a 30 px os tracos de 1,6
+        // px liam-se como uma moldura. o recuo e' igual em todos os icones, por
+        // isso a grelha de teclas nao perde o alinhamento.
+        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.84f;
 
         if (kind == "transport") {
             paintTransportGlyph(g, bounds, on ? 1 : 0, ink);
@@ -831,22 +844,37 @@ public:
         }
 
         if (kind == "settings") {
-            // tres cursos com o puxador em posicoes diferentes: a leitura de
-            // "ajustes" num aparelho, sem engrenagem. o espaco entre os cursos e'
-            // um terco do lado: a versao anterior encostava-os e a 14 px os tres
-            // puxadores fundiam-se num borrao.
-            const auto w = side * 0.40f;
-            const auto gap = side * 0.32f;
-            const float handles[] {-0.5f, 0.15f, -0.3f};
-            for (int i = 0; i < 3; ++i) {
-                const auto y = c.y + (static_cast<float>(i) - 1.0f) * gap;
-                g.setColour(palette::alpha(ink, 0.80f));
-                g.drawLine(c.x - w, y, c.x + w, y, 1.1f);
-                g.setColour(ink);
-                g.fillRoundedRectangle(juce::Rectangle<float> {c.x + handles[i] * w - 1.3f,
-                                                               y - 1.6f, 2.6f, 3.2f},
-                                       0.8f);
+            // **engrenagem.** tres cursos diziam "ajustes" num aparelho de som;
+            // o que este botao abre e' a configuracao do programa, e a roda
+            // dentada e' a unica forma que se le a 13 px sem texto.
+            const auto outer = side * 0.48f;
+            const auto tooth = outer * 0.20f;
+            constexpr int kTeeth {8};
+
+            juce::Path cog;
+            for (int i = 0; i < kTeeth; ++i) {
+                const auto a = juce::MathConstants<float>::twoPi *
+                               static_cast<float>(i) / static_cast<float>(kTeeth);
+                juce::Path toothPath;
+                toothPath.addRoundedRectangle(
+                    juce::Rectangle<float> {-tooth * 0.5f, -outer - tooth * 0.30f, tooth,
+                                            tooth * 1.55f},
+                    tooth * 0.22f);
+                toothPath.applyTransform(juce::AffineTransform::rotation(a).translated(
+                    c.x, c.y));
+                cog.addPath(toothPath);
             }
+
+            juce::Path ring;
+            ring.addEllipse(c.x - outer * 0.72f, c.y - outer * 0.72f, outer * 1.44f,
+                            outer * 1.44f);
+            ring.addEllipse(c.x - outer * 0.30f, c.y - outer * 0.30f, outer * 0.60f,
+                            outer * 0.60f);
+            ring.setUsingNonZeroWinding(false);
+
+            g.setColour(ink);
+            g.fillPath(cog);
+            g.fillPath(ring);
             return true;
         }
 
@@ -959,15 +987,18 @@ public:
             return true;
         }
         if (kind == "chevronLeft" || kind == "chevronRight") {
-            // seta solida de preset, sem barra: aponta para o vizinho.
+            // seta de preset: um angulo de traco, nao um triangulo cheio. a 22 px
+            // o cheio lia-se como um play.
             const auto dir = kind == "chevronLeft" ? -1.0f : 1.0f;
-            const auto w = side * 0.14f;
-            const auto h = side * 0.18f;
+            const auto w = side * 0.13f;
+            const auto h = side * 0.22f;
             juce::Path chevron;
-            chevron.addTriangle(c.x + dir * w, c.y - h, c.x + dir * w, c.y + h,
-                                c.x - dir * w, c.y);
+            chevron.startNewSubPath(c.x - dir * w, c.y - h);
+            chevron.lineTo(c.x + dir * w, c.y);
+            chevron.lineTo(c.x - dir * w, c.y + h);
             g.setColour(ink);
-            g.fillPath(chevron);
+            g.strokePath(chevron, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded});
             return true;
         }
 
@@ -1086,30 +1117,31 @@ public:
                                     const juce::Rectangle<float>& bounds,
                                     int state,
                                     juce::Colour ink) {
-        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.42f;
+        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.34f;
         const auto centre = bounds.getCentre();
 
         juce::Path glyph;
         if (state == 1) {
             // a tocar: duas barras, o pause. e' o par do triangulo e le-se sem cor.
-            const auto bar = side * 0.28f;
-            const auto gap = side * 0.16f;
-            glyph.addRectangle(centre.x - bar - gap * 0.5f, centre.y - side * 0.5f, bar,
-                               side);
-            glyph.addRectangle(centre.x + gap * 0.5f, centre.y - side * 0.5f, bar, side);
-        } else {
-            glyph.addTriangle(centre.x - side * 0.42f, centre.y - side * 0.56f,
-                              centre.x - side * 0.42f, centre.y + side * 0.56f,
-                              centre.x + side * 0.56f, centre.y);
+            const auto bar = side * 0.30f;
+            const auto gap = side * 0.20f;
+            glyph.addRoundedRectangle(centre.x - bar - gap * 0.5f, centre.y - side * 0.5f,
+                                      bar, side, 0.8f);
+            glyph.addRoundedRectangle(centre.x + gap * 0.5f, centre.y - side * 0.5f,
+                                      bar, side, 0.8f);
+            g.setColour(ink);
+            g.fillPath(glyph);
+            return;
         }
 
-        g.setColour(palette::alpha(ink, 0.16f));
-        juce::Path halo;
-        halo.addRoundedRectangle(glyph.getBounds().expanded(2.5f), 2.5f);
-        g.fillPath(halo);
-
+        // o triangulo do play e' um contorno, nao um bloco: a 13 px o cheio
+        // pesava mais que o texto ao lado. o halo saiu com ele.
+        glyph.addTriangle(centre.x - side * 0.36f, centre.y - side * 0.50f,
+                          centre.x - side * 0.36f, centre.y + side * 0.50f,
+                          centre.x + side * 0.50f, centre.y);
         g.setColour(ink);
-        g.fillPath(glyph);
+        g.strokePath(glyph, juce::PathStrokeType {1.4f, juce::PathStrokeType::curved,
+                                                  juce::PathStrokeType::rounded});
     }
 
     // hold: um cadeado, a mesma ideia de latch que o transporte tem.
@@ -1118,39 +1150,45 @@ public:
                                juce::Colour ink) {
         const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight());
         const auto c = bounds.getCentre();
-        const auto w = side * 0.34f;
-        const auto h = side * 0.26f;
+        const auto w = side * 0.30f;
+        const auto h = side * 0.24f;
         const auto body = juce::Rectangle<float> {c.x - w * 0.5f, c.y - h * 0.10f, w, h};
 
         g.setColour(ink);
-        g.drawRoundedRectangle(body, 1.2f, 1.6f);
+        g.drawRoundedRectangle(body, 1.4f, 1.4f);
 
         juce::Path shackle;
-        shackle.addCentredArc(c.x, c.y - h * 0.10f, w * 0.26f, h * 0.42f, 0.0f,
+        shackle.addCentredArc(c.x, c.y - h * 0.10f, w * 0.24f, h * 0.40f, 0.0f,
                               -juce::MathConstants<float>::halfPi,
                               juce::MathConstants<float>::halfPi, true);
-        g.strokePath(shackle, juce::PathStrokeType {1.6f});
-
-        g.fillEllipse(c.x - 1.2f, c.y + h * 0.03f, 2.4f, 2.4f);
+        g.strokePath(shackle, juce::PathStrokeType {1.4f});
     }
 
+    // carregar: uma folha com o canto dobrado. a pasta dizia "directoria"; o que
+    // a tecla faz e' abrir um ficheiro.
     static void paintFolderGlyph(juce::Graphics& g,
                                  const juce::Rectangle<float>& bounds,
                                  juce::Colour ink) {
-        const auto w = juce::jmin(bounds.getWidth() * 0.52f, 20.0f);
-        const auto h = w * 0.72f;
+        const auto w = juce::jmin(bounds.getWidth() * 0.46f, 17.0f);
+        const auto h = w * 1.24f;
         const auto x = bounds.getCentreX() - w * 0.5f;
         const auto y = bounds.getCentreY() - h * 0.5f;
+        const auto fold = w * 0.36f;
+
+        juce::Path sheet;
+        sheet.startNewSubPath(x, y);
+        sheet.lineTo(x + w - fold, y);
+        sheet.lineTo(x + w, y + fold);
+        sheet.lineTo(x + w, y + h);
+        sheet.lineTo(x, y + h);
+        sheet.closeSubPath();
+        sheet.startNewSubPath(x + w - fold, y);
+        sheet.lineTo(x + w - fold, y + fold);
+        sheet.lineTo(x + w, y + fold);
 
         g.setColour(ink);
-        juce::Path folder;
-        folder.addRoundedRectangle(x, y + h * 0.22f, w, h * 0.78f, 1.5f);
-        folder.startNewSubPath(x, y + h * 0.22f);
-        folder.lineTo(x, y);
-        folder.lineTo(x + w * 0.38f, y);
-        folder.lineTo(x + w * 0.48f, y + h * 0.22f);
-        g.strokePath(folder, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
-                                                   juce::PathStrokeType::rounded});
+        g.strokePath(sheet, juce::PathStrokeType {1.4f, juce::PathStrokeType::curved,
+                                                  juce::PathStrokeType::butt});
     }
 
     void drawKnobBody(juce::Graphics& g, juce::Point<float> centre, float radius) {
@@ -1173,10 +1211,8 @@ public:
         g.setColour(palette::alpha(palette::ivory, 0.08f));
         g.drawEllipse(rim.reduced(3.0f), 1.0f);
 
-        const auto markerRadius = radius * 0.055f;
-        g.setColour(palette::alpha(palette::ivory, 0.42f));
-        g.fillEllipse(centre.x - markerRadius, centre.y - markerRadius,
-                      markerRadius * 2.0f, markerRadius * 2.0f);
+        // sem ponto central: o ponteiro diz onde esta' o valor, e um ponto ao
+        // meio so' competia com ele.
     }
 };
 

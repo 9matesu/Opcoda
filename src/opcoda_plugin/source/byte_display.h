@@ -174,11 +174,6 @@ private:
     void paintWaveform(juce::Graphics& g);
     void paintEntropy(juce::Graphics& g);
 
-    void paintEntropyLine(juce::Graphics& g,
-                          const std::vector<pe::Column>& columns,
-                          const std::function<float(std::size_t)>& xAt,
-                          const std::function<float(std::size_t)>& yAt);
-
     [[nodiscard]] static int entropyBucket(float bits) noexcept;
 
     // reamostra o envelope a' resolucao da tela: um maximo e um minimo por

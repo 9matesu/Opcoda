@@ -55,9 +55,6 @@ void checkRanges(const FactoryPreset& p) {
     in(p.lfodepth, 0.0f, 1.0f, "lfodepth");
     in(p.lfotarget, 0.0f, 3.0f, "lfotarget");
     in(p.lfowave, 0.0f, 4.0f, "lfowave");
-    in(p.cloudsize, 0.0f, 1.0f, "cloudsize");
-    in(p.pitchspread, 0.0f, 24.0f, "pitchspread");
-    in(p.grainjit, 0.0f, 1.0f, "grainjit");
     in(p.width, 0.0f, 2.0f, "width");
     in(p.glide, 0.0f, 2.0f, "glide");
     in(p.f1slope, 0.0f, 1.0f, "f1slope");
@@ -118,9 +115,6 @@ TEST(FactoryPresets, InitIsAllDefaults) {
     EXPECT_FLOAT_EQ(init.lfodepth, 0.0f);
     EXPECT_FLOAT_EQ(init.lfotarget, 0.0f);
     EXPECT_FLOAT_EQ(init.lfowave, 0.0f);
-    EXPECT_FLOAT_EQ(init.cloudsize, 0.0f);
-    EXPECT_FLOAT_EQ(init.pitchspread, 0.0f);
-    EXPECT_FLOAT_EQ(init.grainjit, 0.0f);
     EXPECT_FLOAT_EQ(init.width, 1.0f);
     EXPECT_FLOAT_EQ(init.glide, 0.0f);
     EXPECT_FLOAT_EQ(init.f1slope, 0.0f);
