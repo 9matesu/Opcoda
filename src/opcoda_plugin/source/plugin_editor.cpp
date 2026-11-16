@@ -16,12 +16,12 @@ namespace {
 // minimo deixou de ter caso.
 constexpr int kDesignWidth {1180};
 constexpr int kDesignHeight {760};
-constexpr int kHeaderHeight {60};
+constexpr int kHeaderHeight {44};
 
 // margens da chapa. o painel nao encosta em nada: o respiro entre as pecas e'
 // o que faz a interface parecer desenhada e nao colada.
-constexpr int kBodyMargin {22};
-constexpr int kBodyTopGap {10};
+constexpr int kBodyMargin {24};
+constexpr int kBodyTopGap {8};
 constexpr int kBodyBottomGap {16};
 constexpr int kScreenBezel {6};
 constexpr int kDisplayHeight {304};
@@ -1087,21 +1087,25 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     g.setColour(palette::alpha(palette::charcoalDeep, 0.85f));
     g.drawRect(full.reduced(1.0f), 1.0f);
 
-    // -- chapa do header --
+    // -- barra do topo --
+    // gradiente vertical de 3 % e um filete de 1 px embaixo: e' o cromo da
+    // barra do Logic. sombra aqui viraria elevacao de dashboard, e a regra da
+    // casa e' que a profundidade venha do filete, nao do desfoque.
     const auto header = design.withHeight(kHeaderHeight).toFloat();
-    g.setColour(palette::faceplate);
+    g.setGradientFill(juce::ColourGradient {palette::faceplateLight, header.getCentreX(),
+                                            header.getY(), palette::faceplate,
+                                            header.getCentreX(), header.getBottom(), false});
     g.fillRect(header);
-    g.setColour(palette::alpha(palette::ivory, 0.30f));
+    g.setColour(palette::alpha(palette::ivory, 0.10f));
     g.drawHorizontalLine(0, 0.0f, header.getWidth());
-    g.setColour(palette::faceplateDark);
+    g.setColour(palette::charcoalDeep);
     g.drawHorizontalLine(kHeaderHeight - 1, 0.0f, header.getWidth());
-    g.setColour(palette::alpha(palette::brass, 0.60f));
     g.drawHorizontalLine(kHeaderHeight, 0.0f, static_cast<float>(kDesignWidth));
 
     // filete do header: separa o preset (do instrumento) do ficheiro (o material).
     if (headerDividerX_ > 0) {
-        g.setColour(palette::alpha(palette::brass, 0.35f));
-        g.drawVerticalLine(headerDividerX_, header.getY() + 18.0f, header.getBottom() - 18.0f);
+        g.setColour(palette::alpha(palette::knobEdge, 0.55f));
+        g.drawVerticalLine(headerDividerX_, header.getY() + 10.0f, header.getBottom() - 10.0f);
     }
 
     // -- corpo --
@@ -1222,26 +1226,32 @@ void PluginEditor::resized() {
         const int fileWidth = kLoad + kGap + kFile + kGap + kFormat + 8 + kSize;
         int x = header.getX() + (header.getWidth() - (presetWidth + kPresetToFile + fileWidth)) / 2;
 
-        presetPrevButton_.setBounds(x, header.getY() + 18, kArrow, 24);
+        // tudo centrado na vertical: a barra tem 44 px e cada peca tem a sua
+        // altura. antes cada uma levava um deslocamento fixo, o que so' batia
+        // certo com a altura antiga do header.
+        const auto cy = header.getCentreY();
+        const auto rowY = [cy](int height) { return cy - height / 2; };
+
+        presetPrevButton_.setBounds(x, rowY(24), kArrow, 24);
         x += kArrow + 2;
-        presetNameButton_.setBounds(x, header.getY() + 16, kName, 30);
+        presetNameButton_.setBounds(x, rowY(30), kName, 30);
         x += kName + 2;
-        presetNextButton_.setBounds(x, header.getY() + 18, kArrow, 24);
+        presetNextButton_.setBounds(x, rowY(24), kArrow, 24);
         x += kArrow + kPresetToFile;
 
         // filete entre os dois grupos: o preset e' do instrumento, o ficheiro e'
         // o material. sem esta marca os seis controles liam-se como uma fila so'.
         headerDividerX_ = x - kPresetToFile / 2;
 
-        loadButton_.setBounds(x, header.getY() + 18, kLoad, 24);
+        loadButton_.setBounds(x, rowY(24), kLoad, 24);
         x += kLoad + kGap;
         // a largura do nome e' fixa: com um ficheiro carregado ou sem ele, o bloco
         // fica no mesmo sitio. a linha nao salta a' passagem de cada ingest.
-        fileName_.setBounds(x, header.getY() + 16, kFile, 32);
+        fileName_.setBounds(x, rowY(30), kFile, 30);
         x += kFile + kGap;
-        formatTag_.setBounds(x, header.getY() + 18, kFormat, 24);
+        formatTag_.setBounds(x, rowY(24), kFormat, 24);
         x += kFormat + 8;
-        fileSize_.setBounds(x, header.getY() + 18, kSize, 24);
+        fileSize_.setBounds(x, rowY(24), kSize, 24);
     }
 
     // -- corpo --

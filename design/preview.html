@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Opcoda — preview de interface</title>
+<link rel="icon" type="image/svg+xml" href="../resources/brand/logo-light.svg">
+<link rel="apple-touch-icon" href="../resources/brand/logo-light.svg">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   Tokens. Copiados de src/opcoda_plugin/source/palette.h (darkTokens), nao do
+   DESIGN-SYSTEM.md, que estava defasado.
+
+   A lingua e' a do arrange do Logic: cromo cinza, zero sombra, separador de
+   1 px, tipo 9-11 px e a cor toda no conteudo. Aqui o conteudo tambem e' cinza.
+--------------------------------------------------------------------------- */
+:root{
+  --bg:#1b1b1d;
+  --toolbar-a:#333335;
+  --toolbar-b:#2a2a2c;
+  --panel:#202022;
+  --surface:#262628;
+  --raise:#2c2c2e;
+  --sunken:#161618;
+  --display:#0c0c0d;
+  --line:#37373a;
+  --hair:rgba(255,255,255,.07);
+  --text:#dcdcde;
+  --text2:#9a9a9e;
+  --text3:#6f6f74;
+  --accent:#e8e8e8;
+  --knob-track:rgba(255,255,255,.22);
+  --wave:#c9c9cb;
+  --region:rgba(255,255,255,.058);
+  --font:"Switzer",-apple-system,"SF Pro Text","Segoe UI Variable Text","Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#111;color:var(--text);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+.wrap{width:1180px;margin:0 auto;padding:24px 0 80px}
+.page-h{display:flex;align-items:baseline;gap:10px;margin:0 0 14px}
+.page-h h1{font-size:13px;font-weight:600;margin:0;letter-spacing:-.01em}
+.page-h span{font-size:11px;color:var(--text3)}
+
+/* ---- o device ---------------------------------------------------------- */
+.device{
+  width:1180px;height:760px;background:var(--bg);border-radius:7px;
+  border:1px solid #000;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 18px 60px rgba(0,0,0,.55);
+}
+
+/* toolbar */
+.toolbar{height:44px;display:flex;align-items:center;gap:14px;padding:0 12px;flex:none;
+  background:linear-gradient(180deg,var(--toolbar-a),var(--toolbar-b));
+  border-bottom:1px solid #0a0a0b}
+.brand{display:flex;align-items:center;gap:7px;padding-right:12px;border-right:1px solid var(--hair)}
+.brand img{width:17px;height:17px;display:block}
+.brand b{font-size:11px;font-weight:600;letter-spacing:.04em}
+.menu{display:flex;gap:13px;font-size:10.5px;color:var(--text2)}
+.menu span{cursor:default}
+.menu span:hover{color:var(--text)}
+.tb-mid{flex:1;display:flex;align-items:center;justify-content:center;gap:8px}
+.filefield{display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;min-width:230px;
+  background:var(--sunken);border:1px solid #0d0d0e;border-radius:4px;font-size:10.5px}
+.filefield .ic{color:var(--text3)}
+.filefield .name{flex:1;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.filefield .meta{color:var(--text3);font-size:9.5px}
+.transport{display:flex;gap:3px}
+.gbtn{width:24px;height:22px;display:grid;place-items:center;border-radius:4px;
+  border:1px solid var(--hair);background:transparent;color:var(--text2);cursor:default}
+.gbtn.on{background:var(--raise);color:var(--text);border-color:#4a4a4d}
+
+/* ---- secao com rotulo (disciplina do Logic: 9 px, caixa alta, apagado) -- */
+.sechead{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;background:var(--panel);border-bottom:1px solid var(--hair)}
+.sechead .lbl{font-size:9px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text3)}
+.chips{display:flex;gap:2px}
+.chip{height:18px;padding:0 8px;display:grid;place-items:center;font-size:9px;font-weight:500;
+  letter-spacing:.05em;color:var(--text3);border-radius:3px;cursor:default}
+.chip.on{background:var(--raise);color:var(--text);box-shadow:inset 0 0 0 1px var(--hair)}
+
+/* ---- display / arrange ------------------------------------------------- */
+.display{height:304px;flex:none;background:var(--display);border-bottom:1px solid #08080a;
+  display:flex;flex-direction:column;padding:6px 8px 0;gap:0}
+.ruler{height:18px;display:flex;align-items:flex-end;position:relative;color:var(--text3);flex:none;
+  border-bottom:1px solid var(--hair);margin-bottom:4px}
+.ruler .tick{position:absolute;bottom:0;width:1px;height:5px;background:rgba(255,255,255,.14)}
+.ruler .tick.maj{height:9px;background:rgba(255,255,255,.26)}
+.ruler .num{position:absolute;bottom:9px;font-size:8.5px;font-variant-numeric:tabular-nums;
+  transform:translateX(-50%);letter-spacing:.02em}
+.ruler .num.maj{color:var(--text2)}
+.ruler .rt{position:absolute;right:0;bottom:1px;display:flex;gap:2px}
+.ruler .rt .gbtn{width:20px;height:16px;border:0}
+
+.trackrow{display:flex;align-items:center;gap:7px;height:17px;flex:none;padding-left:2px}
+.trackrow .no{width:16px;height:13px;display:grid;place-items:center;font-size:8.5px;
+  border:1px solid var(--hair);border-radius:2px;color:var(--text3)}
+.trackrow .nm{font-size:9.5px;color:var(--text2);letter-spacing:.01em}
+.trackrow .dot{color:var(--text3);font-size:9px}
+.trackrow .sp{flex:1}
+
+.region{position:relative;flex:1;background:var(--region);border-radius:3px;overflow:hidden;
+  border-top:1px solid rgba(255,255,255,.12)}
+.region canvas{display:block;width:100%;height:100%}
+.region .tag{position:absolute;left:7px;top:4px;font-size:8.5px;letter-spacing:.05em;
+  color:rgba(255,255,255,.42);text-transform:uppercase}
+.playhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);opacity:.85}
+.playhead:after{content:"";position:absolute;left:-3px;top:-1px;border-left:3.5px solid transparent;
+  border-right:3.5px solid transparent;border-top:5px solid var(--accent)}
+
+/* telemetria: texto puro, sem caixa */
+.telemetry{height:18px;flex:none;display:flex;align-items:center;gap:16px;padding:0 2px;
+  font-size:9px;letter-spacing:.05em;color:var(--text3);font-variant-numeric:tabular-nums}
+.telemetry b{color:var(--text2);font-weight:500}
+.telemetry .seg{display:flex;gap:4px;align-items:center}
+.led{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.telemetry .sp{flex:1}
+
+/* ---- abas de modulo: segmented control central ------------------------- */
+.tabstrip{height:34px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--panel);border-bottom:1px solid var(--hair)}
+.segmented{display:flex;gap:2px;padding:2px;background:var(--sunken);border-radius:6px;
+  border:1px solid #0d0d0e}
+.segmented button{height:21px;padding:0 13px;border:0;border-radius:4px;background:transparent;
+  color:var(--text3);font-family:var(--font);font-size:9px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;cursor:default;
+  background-image:linear-gradient(180deg,transparent,transparent)}
+.segmented button:hover{color:var(--text2)}
+.segmented button.on{color:var(--text);background-image:linear-gradient(180deg,#58585c,#454548);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 1px 2px rgba(0,0,0,.4)}
+
+/* ---- painel de parametros --------------------------------------------- */
+.panel{flex:1;min-height:0;display:flex;padding:14px 12px 10px;gap:12px;background:var(--bg)}
+.modules{flex:1;min-width:0;display:grid;grid-template-columns:repeat(5,1fr);
+  grid-auto-rows:minmax(0,1fr);gap:1px;background:var(--hair);
+  border:1px solid var(--hair);border-radius:5px;overflow:hidden}
+.cell{background:var(--panel);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:14px 8px;gap:11px;min-width:0}
+.cell .k-label{font-size:9.5px;color:var(--text2);letter-spacing:.01em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cell .k-value{font-size:10.5px;color:var(--text);font-variant-numeric:tabular-nums}
+.cell .k-value i{font-style:normal;color:var(--text3);font-size:9px;margin-left:2px}
+
+/* knob minimalista: so arco e ponto */
+.knobwrap{width:64px;height:64px;position:relative;flex:none}
+.cell .knobwrap{width:96px;height:96px}
+.knobwrap svg{display:block;width:100%;height:100%}
+.knobwrap .hit{position:absolute;inset:0;border-radius:50%}
+.knobwrap.focus{box-shadow:0 0 0 1.5px var(--accent);border-radius:50%}
+
+/* detent dial: anel de posicoes, sem marcas soltas */
+.detents{display:flex;gap:3px;margin-top:6px}
+.detents i{width:4px;height:4px;border-radius:50%;background:var(--knob-track)}
+.detents i.on{background:var(--accent)}
+
+/* master strip */
+.master{width:116px;flex:none;display:flex;flex-direction:column;gap:8px;
+  border-left:1px solid var(--hair);padding-left:12px}
+.meter{height:4px;border-radius:2px;background:var(--sunken);overflow:hidden}
+.meter i{display:block;height:100%;width:38%;background:var(--accent);opacity:.8}
+
+/* ---- teclado ----------------------------------------------------------- */
+.keyboard{height:74px;flex:none;background:var(--bg);border-top:1px solid var(--hair);
+  padding:0 12px 10px}
+.keys{position:relative;height:100%;display:flex;gap:1px}
+.wkey{flex:1;background:linear-gradient(180deg,#cfcfd1,#a9a9ac);border-radius:0 0 3px 3px}
+.bkey{position:absolute;top:0;height:62%;width:22px;background:linear-gradient(180deg,#2b2b2d,#141416);
+  border-radius:0 0 2px 2px;box-shadow:0 2px 4px rgba(0,0,0,.5)}
+
+/* ---- rodape ----------------------------------------------------------- */
+.footer{height:22px;flex:none;display:flex;align-items:center;gap:14px;padding:0 12px;
+  background:var(--toolbar-b);border-top:1px solid #0a0a0b;font-size:9px;color:var(--text3);
+  letter-spacing:.05em;font-variant-numeric:tabular-nums}
+.footer .sp{flex:1}
+
+/* ---- prancha de aprovacao --------------------------------------------- */
+.board{margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:#17171a;border:1px solid #26262a;border-radius:6px;padding:16px 18px}
+.card h2{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text2);margin:0 0 3px}
+.card p{font-size:11px;color:var(--text3);margin:0 0 14px;line-height:1.5}
+.icons{display:grid;grid-template-columns:repeat(10,1fr);gap:10px 4px}
+.icons figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--text2)}
+.icons svg{width:16px;height:16px}
+.icons figcaption{font-size:7.5px;color:var(--text3);letter-spacing:.02em;text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46px}
+.zooms{display:flex;gap:26px;align-items:flex-start}
+.zoom{display:flex;flex-direction:column;align-items:center;gap:6px}
+.zoom .knobwrap{width:96px;height:96px;margin:6px 0}
+.zoom figcaption{font-size:9px;color:var(--text3)}
+.old .knobwrap{opacity:.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-h"><h1>Opcoda — preview</h1><span>1180×760 · cromo monocromo · lingua do arrange do Logic</span></div>
+
+  <div class="device" id="device">
+    <!-- toolbar -->
+    <header class="toolbar">
+      <div class="brand">
+        <img src="../resources/brand/logo-light.svg" alt="">
+        <b>OPCODA</b>
+      </div>
+      <nav class="menu"><span>Arquivo</span><span>Editar</span><span>Ver</span></nav>
+      <div class="tb-mid">
+        <div class="filefield">
+          <span class="ic" data-icon="folder"></span>
+          <span class="name">notepad.exe</span>
+          <span class="meta">1,2 MB</span>
+          <span class="meta">PE64</span>
+          <span class="ic" data-icon="chevron"></span>
+        </div>
+      </div>
+      <div class="transport">
+        <button class="gbtn" data-icon="home"></button>
+        <button class="gbtn" data-icon="chevron-left"></button>
+        <button class="gbtn on" data-icon="play"></button>
+        <button class="gbtn" data-icon="stop"></button>
+        <button class="gbtn" data-icon="settings"></button>
+      </div>
+    </header>
+
+    <!-- faixa de titulo do display -->
+    <div class="sechead">
+      <span class="lbl">Material</span>
+      <div class="chips">
+        <span class="chip on">Wave</span>
+        <span class="chip">Hex</span>
+        <span class="chip">Entropia</span>
+      </div>
+    </div>
+
+    <!-- display -->
+    <section class="display">
+      <div class="ruler" id="ruler">
+        <div class="rt">
+          <button class="gbtn" data-icon="zoom-out"></button>
+          <button class="gbtn" data-icon="zoom-in"></button>
+          <button class="gbtn" data-icon="fit"></button>
+        </div>
+      </div>
+      <div class="trackrow">
+        <span class="no">1</span>
+        <span class="ic" style="color:var(--text3);display:flex" data-icon="wave"></span>
+        <span class="nm">notepad.exe</span>
+        <span class="dot">·</span>
+        <span class="nm">PE64</span>
+        <span class="sp"></span>
+        <span class="nm" style="color:var(--text3)">mapped audio</span>
+      </div>
+      <div class="region">
+        <canvas id="wave"></canvas>
+        <span class="tag" style="top:auto;bottom:5px;opacity:.7">bytes → samples</span>
+        <div class="playhead" style="left:38.5%"></div>
+      </div>
+      <div class="telemetry">
+        <span class="seg"><i class="led"></i><b>PRONTO</b></span>
+        <span class="seg">H <b>4,62</b> bits/byte</span>
+        <span class="seg">POS <b>0x01A4F0</b></span>
+        <span class="seg">REG <b>0x004000</b></span>
+        <span class="seg">TP <b>12,4 s</b></span>
+        <span class="sp"></span>
+        <span class="seg">PK <b>−6,2</b> dB</span>
+        <span class="seg">VOICES <b>8</b></span>
+      </div>
+    </section>
+
+    <!-- abas de modulo -->
+    <div class="tabstrip">
+      <div class="segmented" id="tabs">
+        <button class="on">Grain</button>
+        <button>Envelope</button>
+        <button>Filter</button>
+        <button>Mod</button>
+        <button>Out</button>
+      </div>
+    </div>
+
+    <!-- painel -->
+    <section class="panel">
+      <div class="modules" id="modules"></div>
+      <aside class="master">
+        <div style="font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--text3)">Master</div>
+        <div class="knobwrap" data-knob="72" data-label="Volume"></div>
+        <div class="meter"><i></i></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3)">
+          <span>L</span><span>R</span>
+        </div>
+        <div class="knobwrap" data-knob="45" data-label="Dry/Wet"></div>
+      </aside>
+    </section>
+
+    <!-- teclado -->
+    <div class="keyboard"><div class="keys" id="keys"></div></div>
+
+    <footer class="footer">
+      <span>64-BIT PE</span>
+      <span style="color:var(--text3)">·</span>
+      <span>SWITZER</span>
+      <span class="sp"></span>
+      <span>DARK</span>
+    </footer>
+  </div>
+
+  <!-- prancha -->
+  <div class="board">
+    <div class="card">
+      <h2>Ícones — 1,5 px, grelha de 16</h2>
+      <p>Traço fino, pontas redondas, um peso só. Substituem os glifos atuais de <code>paintGlyph</code>.</p>
+      <div class="icons" id="iconboard"></div>
+    </div>
+    <div class="card">
+      <h2>Knob e detent dial</h2>
+      <p>O knob perdeu corpo, marcas e halo: arco de 1,5 px, valor de 2 px e um ponto. O detent dial é o mesmo arco com as posições visíveis — só em parâmetros de até cinco opções.</p>
+      <div class="zooms">
+        <figure class="zoom"><div class="knobwrap" data-knob="64"></div><figcaption>knob contínuo</figcaption></figure>
+        <figure class="zoom"><div class="knobwrap" data-knob="50" data-detents="5"></div><figcaption>detent dial · 5</figcaption></figure>
+        <figure class="zoom old"><div class="knobwrap" data-knob="64" data-old="1"></div><figcaption>atual</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   Icones. Cada um desenhado na grelha de 24 e apresentado a 16. traco 1.5,
+   linecap/linejoin redondos, sem preenchimento. mesma lingua do SF Symbols,
+   desenhados aqui porque a licenca da Apple nao permite embarcar os originais.
+--------------------------------------------------------------------------- */
+const P = {
+  'play':        'M8 5.5v13l10-6.5z',
+  'stop':        'M7 7h10v10H7z',
+  'record':      'M12 6.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z',
+  'folder':      'M3.5 7.5a1 1 0 0 1 1-1h4l1.6 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z',
+  'chevron':     'M7 10l5 5 5-5',
+  'chevron-left':'M14 6l-6 6 6 6',
+  'chevron-right':'M10 6l6 6-6 6',
+  'wave':        'M3 12c1.6-4 3.2-4 4.8 0s3.2 4 4.8 0 3.2-4 4.8 0 2.4 3 3.6 0',
+  'hex':         'M8.5 4.5h7L19 12l-3.5 7.5h-7L5 12z M9.5 9.5h5 M9.5 14.5h5',
+  'entropy':     'M3.5 19c3-1 4-6 6-9s4-4 5.5-2 2 6 5.5 8',
+  'zoom-in':     'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z M15.2 15.2L20 20 M8 10.5h5 M10.5 8v5',
+  'zoom-out':    'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z M15.2 15.2L20 20 M8 10.5h5',
+  'fit':         'M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9 M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9 M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15 M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15',
+  'page-up':     'M6 5h12 M12 19V9 M8.5 12.5L12 9l3.5 3.5',
+  'page-down':   'M6 19h12 M12 5v10 M8.5 11.5L12 15l3.5-3.5',
+  'home':        'M4 11.5L12 5l8 6.5 M6.5 10v9h11v-9',
+  'end':         'M4 12h16 M16 8l4 4-4 4',
+  'matrix':      'M4 4h16v16H4z M4 9.5h16 M4 14.5h16 M9 4v16 M14.5 4v16',
+  'close':       'M6 6l12 12 M18 6L6 18',
+  'settings':    'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z M12 3v2.2 M12 18.8V21 M3 12h2.2 M18.8 12H21 M5.6 5.6l1.6 1.6 M16.8 16.8l1.6 1.6 M18.4 5.6l-1.6 1.6 M7.2 16.8l-1.6 1.6',
+  'grain':       'M6 18V9 M12 18V4 M18 18v-6',
+  'cloud':       'M7.5 18a4 4 0 0 1-.4-8 5 5 0 0 1 9.6 1.2A3.5 3.5 0 0 1 16.5 18z',
+  'keys':        'M3.5 6.5h17v11h-17z M7 6.5v4 M11 6.5v4 M15 6.5v4 M8.5 14.5h7',
+  'env':         'M3.5 17l4-11 4 8 3-3 5 6',
+  'filter':      'M4 5h16l-6 7.5V20l-4-2v-5.5z',
+  'mod':         'M3 12h3c2 0 2-5 4-5s2 10 4 10 2-5 4-5h3',
+  'sine':        'M3 12c2.2-5.5 4.3-5.5 6.5 0s4.3 5.5 6.5 0 2.7-4.4 5 -1.2',
+  'tri':         'M3 16l4.5-8 4.5 8 4.5-8 4.5 8',
+  'saw':         'M3 16l4.5-8v8L12 8v8l4.5-8v8L21 8',
+  'square':      'M3 15V9h4.5v6h4.5V9H16.5v6H21',
+  'hold':        'M3 15V9h4.5v6h3v-6H15v6h3',
+  'hann':        'M3 17c2-9 3.5-12 4.5-12S10 8 12 12s3.5 5 4.5 5S19 8 21 5',
+  'gaussian':    'M3 17c3.5 0 5-11 9-11s5.5 11 9 11',
+  'hamming':     'M3 17c2 0 3-1 4-3s2-5 5-5 4 3 5 5 2 3 4 3',
+  'blackman':    'M3 17c4 0 5-11 9-11s5 11 9 11',
+  'lowpass':     'M3 8h9c2 0 2 10 9 10',
+  'highpass':    'M3 18h3c7 0 7-10 9-10h6',
+  'bandpass':    'M3 18h3c3 0 3-10 6-10h3c3 0 3 10 6 10',
+  'notch':       'M3 8h3c3 0 3 10 6 10h3c3 0 3-10 6-10',
+  'cursor':      'M6 4l12 8-6 1.5L9.5 20z',
+  'check':       'M5 12.5l4.5 4.5L19 7.5',
+  'more':        'M6 12h.01 M12 12h.01 M18 12h.01',
+  'lock':        'M7 11V8.5a5 5 0 0 1 10 0V11 M5.5 11h13v8h-13z',
+  'power':       'M12 4v8 M7.2 6.8a7 7 0 1 0 9.6 0'
+};
+
+const NS='http://www.w3.org/2000/svg';
+function iconSvg(name,size){
+  const d=P[name]||P['more'];
+  return `<svg viewBox="0 0 24 24" width="${size||16}" height="${size||16}" fill="none"
+    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="${d}"/></svg>`;
+}
+document.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=iconSvg(el.dataset.icon,16);el.style.display='flex'});
+const board=document.getElementById('iconboard');
+board.innerHTML=Object.entries(P).slice(0,40).map(([k])=>
+  `<figure>${iconSvg(k,16)}<figcaption>${k}</figcaption></figure>`).join('');
+
+/* ---------------------------------------------------------------------------
+   Knob. Arco de 270 graus comecando a 135. trilho 1.5, valor 2, ponto 2.5.
+   data-detents=N desenha os dentes nas posicoes e o valor assenta nelas.
+--------------------------------------------------------------------------- */
+function knobHtml(value01,detents,focus){
+  const S=100,cx=50,cy=50,r=38;
+  const a0=135, sweep=270;
+  const ang=t=>a0+t*sweep;
+  const pt=(a)=>[cx+r*Math.cos(a*Math.PI/180),cy+r*Math.sin(a*Math.PI/180)];
+  const arc=(t0,t1)=>{
+    const [x0,y0]=pt(ang(t0)),[x1,y1]=pt(ang(t1));
+    const large=(t1-t0)*sweep>180?1:0;
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  };
+  let ticks='';
+  if(detents){
+    // os dentes ficam **fora** do arco: a escala e' referencia, nao desenho do
+    // valor, e por fora nao compete com o traco que se move.
+    for(let i=0;i<detents;i++){
+      const t=detents===1?0:i/(detents-1);
+      const a=ang(t);
+      const r0=r+2.0,r1=r+6.5;
+      const x0=cx+r0*Math.cos(a*Math.PI/180),y0=cy+r0*Math.sin(a*Math.PI/180);
+      const x1=cx+r1*Math.cos(a*Math.PI/180),y1=cy+r1*Math.sin(a*Math.PI/180);
+      const active=Math.abs(t-value01)<1/(detents-1)/2;
+      if(active){
+        ticks+=`<circle cx="${(cx+(r+4.2)*Math.cos(a*Math.PI/180)).toFixed(2)}"
+          cy="${(cy+(r+4.2)*Math.sin(a*Math.PI/180)).toFixed(2)}" r="2" fill="var(--accent)"/>`;
+      }else{
+        ticks+=`<line x1="${x0.toFixed(2)}" y1="${y0.toFixed(2)}" x2="${x1.toFixed(2)}" y2="${y1.toFixed(2)}"
+          stroke="rgba(255,255,255,.52)" stroke-width="1.6" stroke-linecap="round"/>`;
+      }
+    }
+  }
+  const [dx,dy]=pt(ang(value01));
+  return `<svg viewBox="0 0 ${S} ${S}">
+    <path d="${arc(0,1)}" fill="none" stroke="var(--knob-track)" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="${arc(0,Math.max(value01,0.001))}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+    ${ticks}
+    <circle cx="${dx.toFixed(2)}" cy="${dy.toFixed(2)}" r="2.6" fill="var(--accent)"/>
+  </svg>`;
+}
+
+/* knob antigo, para comparar: corpo, 11 marcas, arco de 4 px, ponteiro */
+function oldKnobHtml(value01){
+  const cx=50,cy=50,r=38,a0=135,sweep=270;
+  const ang=t=>a0+t*sweep;
+  const pt=(a)=>{const [x,y]=[cx+r*Math.cos(a*Math.PI/180),cy+r*Math.sin(a*Math.PI/180)];return [x,y]};
+  const arc=(t0,t1)=>{const [x0,y0]=pt(ang(t0)),[x1,y1]=pt(ang(t1));
+    const large=(t1-t0)*sweep>180?1:0;
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`};
+  let ticks='';
+  for(let i=0;i<=10;i++){const a=ang(i/10);const r0=r-(i%5===0?3.6:2.2);
+    ticks+=`<line x1="${(cx+r0*Math.cos(a*Math.PI/180)).toFixed(2)}" y1="${(cy+r0*Math.sin(a*Math.PI/180)).toFixed(2)}"
+      x2="${(cx+r*Math.cos(a*Math.PI/180)).toFixed(2)}" y2="${(cy+r*Math.sin(a*Math.PI/180)).toFixed(2)}"
+      stroke="rgba(255,255,255,.4)" stroke-width="${i%5===0?1.6:1}"/>`}
+  const a=ang(value01);
+  return `<svg viewBox="0 0 100 100">
+    <defs><radialGradient id="kb" cx="38%" cy="30%"><stop offset="0" stop-color="#3a3a3a"/><stop offset="1" stop-color="#111"/></radialGradient></defs>
+    ${ticks}
+    <circle cx="50" cy="50" r="35" fill="url(#kb)" stroke="#5c5c5c" stroke-width="1"/>
+    <path d="${arc(0,1)}" fill="none" stroke="rgba(0,0,0,.45)" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="${arc(0,value01)}" fill="none" stroke="#ededed" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${(50+8*Math.cos(a*Math.PI/180)).toFixed(2)}" y1="${(50+8*Math.sin(a*Math.PI/180)).toFixed(2)}"
+      x2="${(50+34*Math.cos(a*Math.PI/180)).toFixed(2)}" y2="${(50+34*Math.sin(a*Math.PI/180)).toFixed(2)}"
+      stroke="#f4f4f4" stroke-width="3.6" stroke-linecap="butt"/>
+  </svg>`;
+}
+
+document.querySelectorAll('.knobwrap').forEach((el,i)=>{
+  const v=(Number(el.dataset.knob)||50)/100;
+  el.innerHTML = el.dataset.old ? oldKnobHtml(v) : knobHtml(v, Number(el.dataset.detents)||0);
+});
+
+/* ---------------------------------------------------------------------------
+   Painel: seis celulas com o vocabulario do modulo GRAIN.
+--------------------------------------------------------------------------- */
+const cells=[
+  ['Size','40','ms',0.28,0,null],
+  ['Density','12','gr/s',0.42,0,null],
+  ['Position','0x01A4F0','',0.61,0,null],
+  ['Spray','18','%',0.18,0,null],
+  ['Window','Hann','',0.0,5,'gr/s']
+];
+const mod=document.getElementById('modules');
+mod.innerHTML=cells.map(([label,val,unit,v,detents])=>
+  `<div class="cell">
+     <span class="k-label">${label}</span>
+     <div class="knobwrap">${detents?knobHtml(0,detents):knobHtml(v)}</div>
+     <span class="k-value">${val}${unit?`<i>${unit}</i>`:''}</span>
+   </div>`).join('');
+
+document.querySelectorAll('#modules [data-icon]').forEach(el=>{el.innerHTML=iconSvg(el.dataset.icon,16);el.style.display='flex'});
+
+/* ---------------------------------------------------------------------------
+   Regua: compassos. marcas a cada 4, numero a cada 8.
+--------------------------------------------------------------------------- */
+const ruler=document.getElementById('ruler');
+const W=1164;
+let html='';
+for(let i=0;i<=W;i+=W/28){
+  const maj=Math.round(i/(W/28))%4===0;
+  html+=`<span class="tick ${maj?'maj':''}" style="left:${i}px"></span>`;
+}
+for(let bar=1;bar<=14;bar++){
+  const x=((bar-1)/14)*W;
+  if(x>W-30) break;
+  html+=`<span class="num maj" style="left:${x+2}px">${bar}</span>`;
+}
+ruler.insertAdjacentHTML('afterbegin',html);
+
+/* ---------------------------------------------------------------------------
+   Waveform: envelope min/max deterministico, espelhado. Cinza.
+--------------------------------------------------------------------------- */
+const cv=document.getElementById('wave');
+function drawWave(){
+  const dpr=window.devicePixelRatio||1;
+  const r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);
+  const g=cv.getContext('2d');g.scale(dpr,dpr);
+  const w=r.width,h=r.height,mid=h/2;
+  g.clearRect(0,0,w,h);
+  const N=Math.floor(w);
+  // envelope de material: frases com ataque curto e patamar, separadas por
+  // vales. uma massa continua mente sobre o que soa -- o silencio e' informacao.
+  const phrase=t=>{
+    const p=[[0.004,0.018,0.262,0.272],[0.300,0.312,0.498,0.508],
+             [0.540,0.552,0.742,0.752],[0.784,0.796,0.996,1.0]];
+    for(const [a,b,c,d] of p){
+      if(t>=a&&t<=d){
+        if(t<b) return (t-a)/(b-a);
+        if(t>c) return (d-t)/(d-c);
+        return 1;
+      }
+    }
+    return 0;
+  };
+  // textura: o corpo do material nao e' liso, e' serrilhado por byte
+  const ampAt=(x,t)=>{
+    const spike=0.58+0.42*Math.abs(Math.sin(x*1.73)+Math.sin(x*0.53)*0.5)/1.5;
+    const drift=0.92+0.08*Math.sin(t*11.7);
+    return 0.33*spike*drift*phrase(t)*h*0.95;
+  };
+  const up=[],dn=[];
+  for(let x=0;x<N;x++){
+    const a=ampAt(x,x/N);
+    up.push(mid-a);dn.push(mid+a);
+  }
+  const region=new Path2D();
+  region.moveTo(0,up[0]);
+  for(let x=1;x<N;x++)region.lineTo(x,up[x]);
+  for(let x=N-1;x>=0;x--)region.lineTo(x,dn[x]);
+  region.closePath();
+  g.fillStyle='rgba(201,201,203,.14)';g.fill(region);
+
+  // duas passagens: aresta de cima e de baixo, sem guardar as curvas
+  g.strokeStyle='rgba(214,214,217,.92)';g.lineWidth=1;
+  g.beginPath();g.moveTo(0,up[0]);
+  for(let x=1;x<N;x++)g.lineTo(x,up[x]);
+  g.stroke();
+  g.beginPath();g.moveTo(0,dn[0]);
+  for(let x=1;x<N;x++)g.lineTo(x,dn[x]);
+  g.stroke();
+}
+drawWave();
+addEventListener('resize',drawWave);
+
+/* teclado: 14 teclas brancas e as pretas nos lugares certos */
+const keys=document.getElementById('keys');
+let kh='';
+const blackAfter=[0,1,3,4,5,7,8,10,11,12];
+for(let i=0;i<14;i++)kh+=`<div class="wkey"></div>`;
+keys.innerHTML=kh;
+const kw=keys.getBoundingClientRect().width/14;
+blackAfter.forEach(i=>{
+  const b=document.createElement('div');b.className='bkey';
+  b.style.left=(i*kw+kw-11)+'px';keys.appendChild(b);
+});
+
+/* o device tem 1180 de projeto. se a janela for menor, encolhe-se para caber --
+   o desenho nao muda, so a ampliacao da vista. */
+function fit(){
+  const z=Math.min(1,(innerWidth-32)/1180);
+  document.querySelector('.wrap').style.zoom=z;
+  document.querySelector('.wrap').style.width='1180px';
+}
+fit();
+addEventListener('resize',()=>{fit();drawWave();});
+</script>
+</body></html>

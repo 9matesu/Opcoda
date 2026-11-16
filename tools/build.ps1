@@ -12,12 +12,27 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# A lista fixa so' cobria BuildTools. Uma maquina com o Professional (ou Community)
+# instalado tem o mesmo vcvars64 e ficava de fora -- o build dizia "nao encontrado"
+# com o compilador ali ao lado. O vswhere resolve isso sem adivinhar: devolve o
+# installPath de cada instancia, e o vcvars mora sempre em VC\Auxiliary\Build.
 $vcvarsCandidates = @(
     'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
     'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
     'C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
-    'C:\Program Files\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
+    'C:\Program Files\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat',
+    'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat'
 )
+$vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+if (Test-Path $vswhere) {
+    $discovered = @(& $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -property installationPath 2>$null) |
+        Where-Object { $_ } |
+        ForEach-Object { Join-Path $_ 'VC\Auxiliary\Build\vcvars64.bat' }
+    $vcvarsCandidates = @($discovered) + $vcvarsCandidates
+}
 $vcvars = $vcvarsCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $vcvars) { throw "vcvars64.bat nao encontrado" }
 $cmakeCandidates = @(

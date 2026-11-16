@@ -103,8 +103,18 @@ public:
         setColour(juce::TooltipWindow::outlineColourId, palette::alpha(palette::ivory, 0.14f));
     }
 
-    // knob de equipamento: corpo escuro, aro de marcas, arco de valor e ponteiro.
-    // o corpo nao muda com o valor; so o arco, o ponteiro e o foco mudam.
+    // knob: arco e ponto. nada de corpo, nada de marcas fixas.
+    //
+    // **o corpo saiu.** o disco com gradiente, o aro e as onze marcas eram o que
+    // dava ao painel o ar de pedalboard; a 96 px eles pesavam mais que o valor.
+    // o que fica e' a leitura: um arco de fundo fino, um arco de valor mais
+    // grosso e o ponto onde o dedo esta'. e' a lingua do knob de plugin do
+    // Logic, que tambem nao desenha peca.
+    //
+    // com a propriedade `uiDetents` > 0 o knob vira dial de detentes: as
+    // posicoes aparecem por fora do arco, em traco fino, e a ativa vira ponto
+    // cheio. so' vale a pena ate' cinco posicoes -- acima disso a lista do
+    // dropdown le-se melhor, e o Knob decide qual usar.
     void drawRotarySlider(juce::Graphics& g,
                           int x,
                           int y,
@@ -123,60 +133,64 @@ public:
             return;
         }
 
-        // o disco visual e' o que interessa: bodyRadius a 2.5 px da borda da
-        // celula da' disco = S-5 num slider de 96. o recuo antigo (-5) comia 16 px
-        // de knob e deixava o controlo pequeno dentro de uma celula grande.
-        const float bodyRadius = outer - 2.5f;
-        const float arcRadius = outer - 1.0f;
-        const float angle = rotaryStartAngle +
-                            sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
-
-        // marcas fixas: a escala fica visivel antes de se tocar no knob.
-        for (int tick = 0; tick <= 10; ++tick) {
-            const auto t = static_cast<float>(tick) / 10.0f;
-            const auto tickAngle = rotaryStartAngle + t * (rotaryEndAngle - rotaryStartAngle);
-            const auto inner = arcRadius - (tick % 5 == 0 ? 3.6f : 2.2f);
-            const auto sx = centre.x + std::sin(tickAngle) * inner;
-            const auto sy = centre.y - std::cos(tickAngle) * inner;
-            const auto ex = centre.x + std::sin(tickAngle) * arcRadius;
-            const auto ey = centre.y - std::cos(tickAngle) * arcRadius;
-            g.setColour(palette::alpha(palette::textSub,
-                                       tick % 5 == 0 ? 0.85f : 0.45f));
-            g.drawLine(sx, sy, ex, ey, tick % 5 == 0 ? 1.6f : 1.0f);
-        }
-
-        drawKnobBody(g, centre, bodyRadius);
+        const auto detents = static_cast<int>(slider.getProperties()["uiDetents"]);
+        // o anel de posicoes vive por fora do arco; o arco recolhe para lhe dar
+        // lugar em vez de se cruzar com ele.
+        const auto arcRadius = outer - (detents > 0 ? 6.5f : 2.0f);
+        const auto weight = juce::jmax(1.6f, arcRadius * 0.045f);
+        const auto angle =
+            rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
 
         juce::Path track;
-        track.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f,
-                            rotaryStartAngle, rotaryEndAngle, true);
-        g.setColour(palette::alpha(palette::charcoalDeep, 0.45f));
-        g.strokePath(track, juce::PathStrokeType {2.2f, juce::PathStrokeType::curved,
+        track.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f, rotaryStartAngle,
+                            rotaryEndAngle, true);
+        g.setColour(palette::alpha(palette::knobEdge, 0.45f));
+        g.strokePath(track, juce::PathStrokeType {weight, juce::PathStrokeType::curved,
                                                   juce::PathStrokeType::rounded});
 
-        juce::Path valueArc;
-        valueArc.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f,
-                               rotaryStartAngle, angle, true);
-        // **o arco e' o valor, por isso e' o traco mais grosso do knob.** a
-        // 2,4 px lia-se como um fio ao lado das marcas; a 4 px le-se de longe.
-        g.setColour(palette::rust);
-        g.strokePath(valueArc, juce::PathStrokeType {4.0f, juce::PathStrokeType::curved,
-                                                     juce::PathStrokeType::rounded});
+        if (sliderPosProportional > 0.0001f) {
+            juce::Path value;
+            value.addCentredArc(centre.x, centre.y, arcRadius, arcRadius, 0.0f,
+                                rotaryStartAngle, angle, true);
+            // o valor e' o traco mais grosso do knob, mas nao o dobro: 1,3x ja'
+            // separa os dois sem virar bisel.
+            g.setColour(palette::accent);
+            g.strokePath(value, juce::PathStrokeType {weight * 1.3f,
+                                                      juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded});
+        }
 
-        // ponteiro de marfim: o arco ja' carrega o valor; a agulha tem de se ler
-        // sobre o corpo escuro e atravessar o disco, por isso arranca perto do
-        // centro e vai ate' ao aro.
-        const auto inner = bodyRadius * 0.16f;
-        const auto tip = bodyRadius - 1.0f;
-        const auto tailX = centre.x + std::sin(angle) * inner;
-        const auto tailY = centre.y - std::cos(angle) * inner;
-        const auto tipX = centre.x + std::sin(angle) * tip;
-        const auto tipY = centre.y - std::cos(angle) * tip;
+        if (detents > 0) {
+            const auto inner = arcRadius + weight * 1.6f;
+            const auto outerTick = inner + weight * 2.4f;
+            const auto step = detents > 1 ? 1.0f / static_cast<float>(detents - 1) : 0.0f;
+            for (int i = 0; i < detents; ++i) {
+                const auto t = detents > 1 ? static_cast<float>(i) / static_cast<float>(detents - 1)
+                                           : 0.0f;
+                const auto a = rotaryStartAngle + t * (rotaryEndAngle - rotaryStartAngle);
+                // **o dente ativo e' um ponto, nao um risco mais grosso.** a
+                // forma diz qual esta' ativa mesmo sem cor, que e' o que o
+                // criterio 1.4.1 pede.
+                if (std::abs(t - sliderPosProportional) <= step * 0.5f) {
+                    const auto r = (inner + outerTick) * 0.5f;
+                    g.setColour(palette::accent);
+                    g.fillEllipse(centre.x + std::sin(a) * r - weight * 1.1f,
+                                  centre.y - std::cos(a) * r - weight * 1.1f, weight * 2.2f,
+                                  weight * 2.2f);
+                } else {
+                    g.setColour(palette::alpha(palette::textMuted, 0.7f));
+                    g.drawLine(centre.x + std::sin(a) * inner, centre.y - std::cos(a) * inner,
+                               centre.x + std::sin(a) * outerTick,
+                               centre.y - std::cos(a) * outerTick, weight);
+                }
+            }
+        }
 
-        g.setColour(palette::alpha(juce::Colours::black, 0.45f));
-        g.drawLine(tailX + 1.0f, tailY + 1.0f, tipX + 1.0f, tipY + 1.0f, 3.0f);
-        g.setColour(palette::ivory);
-        g.drawLine(tailX, tailY, tipX, tipY, 3.6f);
+        const auto dotRadius = weight * 1.05f;
+        g.setColour(palette::accent);
+        g.fillEllipse(centre.x + std::sin(angle) * arcRadius - dotRadius,
+                      centre.y - std::cos(angle) * arcRadius - dotRadius, dotRadius * 2.0f,
+                      dotRadius * 2.0f);
 
         if (slider.hasKeyboardFocus(true)) {
             drawFocusRing(g, bounds.expanded(1.5f));
@@ -641,23 +655,60 @@ private:
     }
 
 public:
-    // a marca: a caixa laranja com as duas letras da casa, na fonte do nome.
+    // a marca: o desenho do logo, em Path.
     //
-    // **o icone e' o texto.** tres graos num quadrado de 16 px nao se leem como
-    // nada; "Op" le-se, e' a mesma fonte do titulo e aguenta o tamanho do icone
-    // da barra de tarefas sem virar borrao. o tamanho da letra vem da caixa, para
-    // a mesma funcao servir a barra (22 px), o ecra de ajustes (16) e o icone da
-    // janela (256).
+    // o "Op" era texto e pedia a fonte do titulo em todos os tamanhos. o logo e'
+    // geometrico -- bloco com o canto cortado e um ponto ao lado -- por isso
+    // escala de 16 a 256 px sem perder o desenho e sem depender de fonte.
+    //
+    // **o ponto e' a segunda marca.** quem ve sem cor ve um bloco e um circulo,
+    // e continua a ler a mesma coisa.
     static void paintMark(juce::Graphics& g, juce::Rectangle<float> box) {
+        if (box.getWidth() <= 1.0f || box.getHeight() <= 1.0f) {
+            return;
+        }
+
+        const auto side = juce::jmin(box.getWidth(), box.getHeight());
+        const auto left = box.getCentreX() - side * 0.5f;
+        const auto top = box.getCentreY() - side * 0.5f;
+        const auto p = [&](float nx, float ny) {
+            return juce::Point<float> {left + nx * side, top + ny * side};
+        };
+
+        juce::Path mark;
+        // bloco: retangulo com o canto inferior direito cortado na diagonal
+        mark.startNewSubPath(p(0.24f, 0.0f));
+        mark.lineTo(p(0.76f, 0.0f));
+        mark.quadraticTo(p(1.0f, 0.0f), p(1.0f, 0.24f));
+        mark.lineTo(p(1.0f, 0.60f));
+        mark.lineTo(p(0.60f, 1.0f));
+        mark.lineTo(p(0.24f, 1.0f));
+        mark.quadraticTo(p(0.0f, 1.0f), p(0.0f, 0.76f));
+        mark.lineTo(p(0.0f, 0.24f));
+        mark.quadraticTo(p(0.0f, 0.0f), p(0.24f, 0.0f));
+        mark.closeSubPath();
+
+        const auto dotCentre = p(0.80f, 0.79f);
+        const auto dotRadius = side * 0.185f;
+
         g.setColour(palette::accent);
-        g.fillRoundedRectangle(box, box.getWidth() * 0.17f);
-        g.setColour(palette::chassisDark);
-        g.setFont(fonts().sans(box.getHeight() * 0.56f, true));
-        g.drawText("Op", box, juce::Justification::centred, false);
+        g.fillPath(mark);
+        g.fillEllipse(dotCentre.x - dotRadius, dotCentre.y - dotRadius, dotRadius * 2.0f,
+                      dotRadius * 2.0f);
     }
 
     // devolve true quando desenhou um glifo. o texto so' fica para as teclas que
     // nao tem icone. publico porque as abas de pasta desenham o proprio glifo.
+    //
+    // **uma grelha, um peso.** todos os glifos nascem na mesma grelha de 24 e
+    // sao tracados com o mesmo peso, pontas e juncoes redondas. antes cada um
+    // tinha o seu traco (1,5 a 1,9) e o seu recuo e o conjunto lia-se como
+    // trinta desenhos diferentes; agora le-se como um sistema.
+    //
+    // o desenho e' nosso e nao do SF Symbols: a licenca da Apple nao permite
+    // usar os originais fora de plataforma Apple. a lingua e' a mesma -- traco
+    // fino, canto redondo, peso unico -- e o resultado acompanha o resto da
+    // interface sem arrastar um binario de fonte de icones.
     static bool paintGlyph(juce::Graphics& g,
                            const juce::String& kind,
                            const juce::Rectangle<float>& bounds,
@@ -667,12 +718,8 @@ public:
             return false;
         }
 
-        const auto c = bounds.getCentre();
-        // **84 % do lado.** o glifo encostava ao botao e a 30 px os tracos de 1,6
-        // px liam-se como uma moldura. o recuo e' igual em todos os icones, por
-        // isso a grelha de teclas nao perde o alinhamento.
-        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.84f;
-
+        // o transporte e' preenchido de proposito: um triangulo de contorno a
+        // 16 px vira um risco.
         if (kind == "transport") {
             paintTransportGlyph(g, bounds, on ? 1 : 0, ink);
             return true;
@@ -681,436 +728,299 @@ public:
             paintLockGlyph(g, bounds, ink);
             return true;
         }
+
+        const auto c = bounds.getCentre();
+        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.84f;
+        const auto u = side / 24.0f;  // uma unidade da grelha
+        const auto ox = c.x - side * 0.5f;
+        const auto oy = c.y - side * 0.5f;
+
+        juce::Path path;
+        const auto move = [&](float x, float y) {
+            path.startNewSubPath(ox + x * u, oy + y * u);
+        };
+        const auto line = [&](float x, float y) { path.lineTo(ox + x * u, oy + y * u); };
+        const auto cubic = [&](float x1, float y1, float x2, float y2, float x, float y) {
+            path.cubicTo(ox + x1 * u, oy + y1 * u, ox + x2 * u, oy + y2 * u, ox + x * u,
+                         oy + y * u);
+        };
+        const auto circle = [&](float cx, float cy, float r) {
+            path.addEllipse(juce::Rectangle<float> {ox + (cx - r) * u, oy + (cy - r) * u,
+                                                    2.0f * r * u, 2.0f * r * u});
+        };
+        const auto box = [&](float x, float y, float w, float h) {
+            path.addRectangle(juce::Rectangle<float> {ox + x * u, oy + y * u, w * u, h * u});
+        };
+        const auto stroke = [&] {
+            // o peso tem piso em pixeis: a 11 px um traco proporcional cai
+            // abaixo de 1 px e o antialiasing apaga-o.
+            g.setColour(ink);
+            g.strokePath(path, juce::PathStrokeType {juce::jmax(1.15f, 1.5f * u),
+                                                     juce::PathStrokeType::curved,
+                                                     juce::PathStrokeType::rounded});
+        };
+
         if (kind == "folder") {
-            paintFolderGlyph(g, bounds, ink);
-            return true;
-        }
-        if (kind == "chevron") {
-            juce::Path chevron;
-            chevron.addTriangle(c.x - side * 0.16f, c.y - side * 0.08f,
-                                c.x + side * 0.16f, c.y - side * 0.08f,
-                                c.x, c.y + side * 0.12f);
-            g.setColour(ink);
-            g.fillPath(chevron);
-            return true;
-        }
-        if (kind == "wave") {
-            // onda: linha sinusoidal cheia de picos, a leitura da vista 1.
-            juce::Path wave;
-            const auto w = side * 0.58f;
-            const auto h = side * 0.30f;
-            const auto left = c.x - w * 0.5f;
-            constexpr int kSteps {24};
-            for (int i = 0; i <= kSteps; ++i) {
-                const auto t = static_cast<float>(i) / static_cast<float>(kSteps);
-                const auto x = left + t * w;
-                const auto y = c.y - std::sin(t * juce::MathConstants<float>::twoPi * 1.5f) *
-                                           h * (0.35f + 0.65f * std::sin(t * 3.1f));
-                if (i == 0) {
-                    wave.startNewSubPath(x, y);
-                } else {
-                    wave.lineTo(x, y);
-                }
-            }
-            g.setColour(ink);
-            g.strokePath(wave, juce::PathStrokeType {1.7f, juce::PathStrokeType::curved,
-                                                     juce::PathStrokeType::rounded});
-            return true;
-        }
-        if (kind == "hex") {
-            // grelha de bytes: quatro por tres pontos.
-            const auto step = side * 0.17f;
-            const auto dot = juce::jmax(1.6f, side * 0.055f);
-            g.setColour(ink);
-            for (int row = 0; row < 3; ++row) {
-                for (int col = 0; col < 4; ++col) {
-                    g.fillRoundedRectangle(
-                        juce::Rectangle<float> {c.x - step * 1.5f +
-                                                    static_cast<float>(col) * step -
-                                                    dot * 0.5f,
-                                                c.y - step +
-                                                    static_cast<float>(row) * step -
-                                                    dot * 0.5f,
-                                                dot, dot},
-                        1.0f);
-                }
-            }
-            return true;
-        }
-        if (kind == "entropy") {
-            // curva de entropia: quatro colunas ascendentes.
-            const auto w = side * 0.12f;
-            const auto gap = side * 0.07f;
-            const auto base = c.y + side * 0.24f;
-            const float heights[] {0.16f, 0.30f, 0.46f, 0.34f};
-            g.setColour(ink);
-            for (int i = 0; i < 4; ++i) {
-                g.fillRoundedRectangle(
-                    juce::Rectangle<float> {c.x - (w + gap) * 2.0f +
-                                                static_cast<float>(i) * (w + gap),
-                                            base - side * heights[i], w,
-                                            side * heights[i]},
-                    1.0f);
-            }
-            return true;
-        }
-        if (kind == "zoomIn" || kind == "zoomOut") {
-            const auto r = side * 0.22f;
-            const auto lens = juce::Point<float> {c.x - side * 0.04f, c.y - side * 0.04f};
-            g.setColour(ink);
-            g.drawEllipse(juce::Rectangle<float> {lens.x - r, lens.y - r, r * 2.0f, r * 2.0f},
-                          1.7f);
-            g.drawLine(lens.x + r * 0.72f, lens.y + r * 0.72f,
-                       lens.x + r * 1.55f, lens.y + r * 1.55f, 1.9f);
-            g.drawLine(lens.x - r * 0.45f, lens.y, lens.x + r * 0.45f, lens.y, 1.5f);
-            if (kind == "zoomIn") {
-                g.drawLine(lens.x, lens.y - r * 0.45f, lens.x, lens.y + r * 0.45f, 1.5f);
-            }
-            return true;
-        }
-        if (kind == "fit") {
-            // quatro cantos de mira.
-            const auto w = side * 0.46f;
-            const auto h = side * 0.36f;
-            const auto arm = side * 0.13f;
-            const auto left = c.x - w * 0.5f;
-            const auto right = c.x + w * 0.5f;
-            const auto top = c.y - h * 0.5f;
-            const auto bottom = c.y + h * 0.5f;
-            g.setColour(ink);
-            g.drawLine(left, top, left + arm, top, 1.7f);
-            g.drawLine(left, top, left, top + arm, 1.7f);
-            g.drawLine(right, top, right - arm, top, 1.7f);
-            g.drawLine(right, top, right, top + arm, 1.7f);
-            g.drawLine(left, bottom, left + arm, bottom, 1.7f);
-            g.drawLine(left, bottom, left, bottom - arm, 1.7f);
-            g.drawLine(right, bottom, right - arm, bottom, 1.7f);
-            g.drawLine(right, bottom, right, bottom - arm, 1.7f);
-            return true;
-        }
-        if (kind == "pageUp" || kind == "pageDown") {
-            // up: base em baixo, ponta em cima e barra acima. down e' o espelho.
-            const auto dir = kind == "pageUp" ? 1.0f : -1.0f;
-            const auto w = side * 0.20f;
-            const auto h = side * 0.12f;
-            juce::Path chevron;
-            chevron.addTriangle(c.x - w, c.y + dir * h, c.x + w, c.y + dir * h,
-                                c.x, c.y - dir * h * 0.4f);
-            g.setColour(ink);
-            g.fillPath(chevron);
-            g.fillRect(juce::Rectangle<float> {c.x - w, c.y - dir * h * 1.8f, w * 2.0f, 1.6f});
-            return true;
-        }
-        if (kind == "home" || kind == "end") {
-            // home aponta para a esquerda com a barra a' esquerda (|◀); end e' o
-            // espelho (▶|). a barra fica do lado da ponta, como nos transportes.
-            const auto dir = kind == "home" ? -1.0f : 1.0f;
-            const auto w = side * 0.15f;
-            const auto h = side * 0.20f;
-            juce::Path arrow;
-            arrow.addTriangle(c.x - dir * w, c.y - h, c.x - dir * w, c.y + h,
-                              c.x + dir * w, c.y);
-            g.setColour(ink);
-            g.fillPath(arrow);
-            const auto barX = c.x + dir * w * 1.35f;
-            g.fillRect(juce::Rectangle<float> {barX - 1.0f, c.y - h, 2.0f, h * 2.0f});
-            return true;
-        }
-
-        if (kind == "matrix") {
-            // duas rotas: no, no, seta. a leitura e' a vista que liga fontes a
-            // destinos, e nao uma grelha de bytes.
-            const auto r = juce::jmax(1.6f, side * 0.045f);
-            const auto leftX = c.x - side * 0.26f;
-            const auto rightX = c.x + side * 0.26f;
-            const auto y1 = c.y - side * 0.13f;
-            const auto y2 = c.y + side * 0.13f;
-            g.setColour(ink);
-            g.drawEllipse(leftX - r, y1 - r, r * 2.0f, r * 2.0f, 1.4f);
-            g.drawEllipse(leftX - r, y2 - r, r * 2.0f, r * 2.0f, 1.4f);
-            g.drawEllipse(rightX - r, c.y - r, r * 2.0f, r * 2.0f, 1.4f);
-            g.drawLine(leftX + r, y1, rightX - r, c.y, 1.3f);
-            g.drawLine(leftX + r, y2, rightX - r, c.y, 1.3f);
-            return true;
-        }
-
-        if (kind == "close") {
-            // cruz de 9 px, o mesmo traco das teclas da barra da janela.
-            const auto arm = side * 0.16f;
-            g.setColour(ink);
-            g.drawLine(c.x - arm, c.y - arm, c.x + arm, c.y + arm, 1.5f);
-            g.drawLine(c.x + arm, c.y - arm, c.x - arm, c.y + arm, 1.5f);
-            return true;
-        }
-
-        if (kind == "settings") {
-            // **engrenagem.** tres cursos diziam "ajustes" num aparelho de som;
-            // o que este botao abre e' a configuracao do programa, e a roda
-            // dentada e' a unica forma que se le a 13 px sem texto.
-            const auto outer = side * 0.48f;
-            const auto tooth = outer * 0.20f;
-            constexpr int kTeeth {8};
-
-            juce::Path cog;
-            for (int i = 0; i < kTeeth; ++i) {
-                const auto a = juce::MathConstants<float>::twoPi *
-                               static_cast<float>(i) / static_cast<float>(kTeeth);
-                juce::Path toothPath;
-                toothPath.addRoundedRectangle(
-                    juce::Rectangle<float> {-tooth * 0.5f, -outer - tooth * 0.30f, tooth,
-                                            tooth * 1.55f},
-                    tooth * 0.22f);
-                toothPath.applyTransform(juce::AffineTransform::rotation(a).translated(
-                    c.x, c.y));
-                cog.addPath(toothPath);
-            }
-
-            juce::Path ring;
-            ring.addEllipse(c.x - outer * 0.72f, c.y - outer * 0.72f, outer * 1.44f,
-                            outer * 1.44f);
-            ring.addEllipse(c.x - outer * 0.30f, c.y - outer * 0.30f, outer * 0.60f,
-                            outer * 0.60f);
-            ring.setUsingNonZeroWinding(false);
-
-            g.setColour(ink);
-            g.fillPath(cog);
-            g.fillPath(ring);
-            return true;
-        }
-
-        // -- abas de pasta: um glifo por modulo, 12 px de leitura --
-        if (kind == "grainMod") {
-            // tres rajadas de altura variavel: grao e' rajada curta.
-            const float heights[] {0.34f, 0.62f, 0.42f};
-            const auto w = side * 0.10f;
-            const auto gap = side * 0.09f;
-            const auto base = c.y + side * 0.26f;
-            g.setColour(ink);
-            for (int i = 0; i < 3; ++i) {
-                g.fillRoundedRectangle(
-                    juce::Rectangle<float> {c.x - (w + gap) * 1.5f +
-                                                static_cast<float>(i) * (w + gap),
-                                            base - side * heights[i], w,
-                                            side * heights[i]},
-                    1.0f);
-            }
-            return true;
-        }
-        if (kind == "cloudMod") {
-            // enxame: pontos soltos em volta de um centro. a nuvem nao tem forma,
-            // tem densidade -- e' o que o desenho diz.
-            const float px[] {0.0f, -0.30f, 0.26f, -0.14f, 0.34f, 0.12f, -0.36f};
-            const float py[] {-0.06f, 0.18f, -0.22f, -0.30f, 0.10f, 0.28f, -0.02f};
-            const auto r = side * 0.075f;
-            g.setColour(ink);
-            for (int i = 0; i < 7; ++i) {
-                g.fillEllipse(juce::Rectangle<float> {c.x + px[i] * side - r,
-                                                      c.y + py[i] * side - r, r * 2.0f,
-                                                      r * 2.0f});
-            }
-            return true;
-        }
-        if (kind == "keysMod") {
-            // tres teclas: a escala e a tonica sentam no teclado, nao num menu.
-            const auto w = side * 0.62f;
-            const auto h = side * 0.44f;
-            const auto left = c.x - w * 0.5f;
-            const auto top = c.y - h * 0.5f;
-            g.setColour(ink);
-            g.drawRoundedRectangle(left, top, w, h, 1.0f, juce::jmax(1.0f, side * 0.06f));
-            const auto kw = w / 3.0f;
-            for (int i = 1; i < 3; ++i) {
-                const auto x = left + kw * static_cast<float>(i);
-                g.drawLine(x, top, x, top + h, juce::jmax(1.0f, side * 0.06f));
-            }
-            for (int i = 0; i < 2; ++i) {
-                const auto x = left + kw * (static_cast<float>(i) + 1.0f) - kw * 0.20f;
-                g.fillRect(juce::Rectangle<float> {x, top, kw * 0.40f, h * 0.55f});
-            }
-            return true;
-        }
-        if (kind == "envMod") {
-            // ADSR: sobe, cai, patamar, desce.
-            const auto w = side * 0.56f;
-            const auto h = side * 0.40f;
-            const auto left = c.x - w * 0.5f;
-            const auto base = c.y + h * 0.5f;
-            juce::Path env;
-            env.startNewSubPath(left, base);
-            env.lineTo(left + w * 0.18f, base - h);
-            env.lineTo(left + w * 0.38f, base - h * 0.30f);
-            env.lineTo(left + w * 0.72f, base - h * 0.30f);
-            env.lineTo(left + w, base);
-            g.setColour(ink);
-            g.strokePath(env, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
-                                                    juce::PathStrokeType::rounded});
-            return true;
-        }
-        if (kind == "filterMod") {
-            // resposta passa-baixa: plano e queda, com o corte marcado.
-            const auto w = side * 0.56f;
-            const auto h = side * 0.36f;
-            const auto left = c.x - w * 0.5f;
-            const auto top = c.y - h * 0.5f;
-            juce::Path response;
-            response.startNewSubPath(left, top);
-            response.lineTo(left + w * 0.52f, top);
-            response.quadraticTo(left + w * 0.78f, top, left + w * 0.88f, top + h);
-            response.lineTo(left + w, top + h);
-            g.setColour(ink);
-            g.strokePath(response, juce::PathStrokeType {1.6f,
-                                                         juce::PathStrokeType::curved,
-                                                         juce::PathStrokeType::rounded});
-            return true;
-        }
-        if (kind == "modMod") {
-            // senoide: o lfo.
-            juce::Path sine;
-            const auto w = side * 0.56f;
-            const auto h = side * 0.30f;
-            const auto left = c.x - w * 0.5f;
-            constexpr int kSteps {20};
-            for (int i = 0; i <= kSteps; ++i) {
-                const auto t = static_cast<float>(i) / static_cast<float>(kSteps);
-                const auto x = left + t * w;
-                const auto y =
-                    c.y - std::sin(t * juce::MathConstants<float>::twoPi) * h;
-                if (i == 0) {
-                    sine.startNewSubPath(x, y);
-                } else {
-                    sine.lineTo(x, y);
-                }
-            }
-            g.setColour(ink);
-            g.strokePath(sine, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
-                                                     juce::PathStrokeType::rounded});
-            return true;
-        }
-        if (kind == "chevronLeft" || kind == "chevronRight") {
-            // seta de preset: um angulo de traco, nao um triangulo cheio. a 22 px
-            // o cheio lia-se como um play.
+            move(3.5f, 7.5f);
+            line(3.5f, 6.5f);
+            line(4.5f, 6.5f);
+            line(8.5f, 6.5f);
+            line(10.1f, 8.5f);
+            line(19.5f, 8.5f);
+            line(20.5f, 8.5f);
+            line(20.5f, 17.5f);
+            line(19.5f, 17.5f);
+            line(4.5f, 17.5f);
+            line(3.5f, 17.5f);
+            path.closeSubPath();
+        } else if (kind == "chevron") {
+            move(7.0f, 10.0f);
+            line(12.0f, 15.0f);
+            line(17.0f, 10.0f);
+        } else if (kind == "chevronLeft" || kind == "chevronRight") {
             const auto dir = kind == "chevronLeft" ? -1.0f : 1.0f;
-            const auto w = side * 0.13f;
-            const auto h = side * 0.22f;
-            juce::Path chevron;
-            chevron.startNewSubPath(c.x - dir * w, c.y - h);
-            chevron.lineTo(c.x + dir * w, c.y);
-            chevron.lineTo(c.x - dir * w, c.y + h);
-            g.setColour(ink);
-            g.strokePath(chevron, juce::PathStrokeType {1.6f, juce::PathStrokeType::curved,
-                                                        juce::PathStrokeType::rounded});
-            return true;
-        }
-
-        // -- escolhas: as formas que o parametro realmente assume --
-        if (kind == "waveSine" || kind == "waveTri" || kind == "waveSaw" ||
-            kind == "waveSquare" || kind == "waveHold") {
-            // uma onda, um ciclo: a forma e' o que o botao escolhe.
-            const auto w = side * 0.66f;
-            const auto h = side * 0.30f;
-            const auto left = c.x - w * 0.5f;
-            juce::Path wave;
-            constexpr int kSteps {32};
-            for (int i = 0; i <= kSteps; ++i) {
-                const auto t = static_cast<float>(i) / static_cast<float>(kSteps);
-                const auto x = left + t * w;
-                float value = 0.0f;
-                if (kind == "waveSine") {
-                    value = std::sin(t * juce::MathConstants<float>::twoPi);
-                } else if (kind == "waveTri") {
-                    value = t < 0.5f ? (4.0f * t - 1.0f) : (3.0f - 4.0f * t);
-                } else if (kind == "waveSaw") {
-                    value = 2.0f * t - 1.0f;
-                } else if (kind == "waveSquare") {
-                    value = t < 0.5f ? 1.0f : -1.0f;
-                } else {
-                    // sample and hold: quatro degraus, cada um com o valor do
-                    // ruido no instante.
-                    const auto step = static_cast<int>(t * 4.0f);
-                    const float levels[] {-0.7f, 0.35f, -0.2f, 0.8f};
-                    value = levels[juce::jlimit(0, 3, step)];
-                }
-                const auto y = c.y - value * h;
-                if (i == 0) {
-                    wave.startNewSubPath(x, y);
-                } else {
-                    wave.lineTo(x, y);
-                }
+            move(12.0f - dir * 2.0f, 6.0f);
+            line(12.0f + dir * 4.0f, 12.0f);
+            line(12.0f - dir * 2.0f, 18.0f);
+        } else if (kind == "wave") {
+            move(3.0f, 12.0f);
+            cubic(4.6f, 8.0f, 6.4f, 8.0f, 7.8f, 12.0f);
+            cubic(9.2f, 16.0f, 11.0f, 16.0f, 12.6f, 12.0f);
+            cubic(14.2f, 8.0f, 16.0f, 8.0f, 17.4f, 12.0f);
+            cubic(18.6f, 15.2f, 19.8f, 14.4f, 21.0f, 12.0f);
+        } else if (kind == "hex") {
+            move(8.5f, 4.5f);
+            line(15.5f, 4.5f);
+            line(19.0f, 12.0f);
+            line(15.5f, 19.5f);
+            line(8.5f, 19.5f);
+            line(5.0f, 12.0f);
+            path.closeSubPath();
+            move(9.5f, 9.5f);
+            line(14.5f, 9.5f);
+            move(9.5f, 14.5f);
+            line(14.5f, 14.5f);
+        } else if (kind == "entropy") {
+            move(3.5f, 19.0f);
+            cubic(6.5f, 18.0f, 7.5f, 13.0f, 9.5f, 10.0f);
+            cubic(11.5f, 7.0f, 13.0f, 7.0f, 14.5f, 9.0f);
+            cubic(16.0f, 11.0f, 16.5f, 15.0f, 20.0f, 17.0f);
+        } else if (kind == "zoomIn" || kind == "zoomOut") {
+            circle(10.5f, 10.5f, 6.5f);
+            move(15.2f, 15.2f);
+            line(20.0f, 20.0f);
+            move(8.0f, 10.5f);
+            line(13.0f, 10.5f);
+            if (kind == "zoomIn") {
+                move(10.5f, 8.0f);
+                line(10.5f, 13.0f);
             }
-            g.setColour(ink);
-            g.strokePath(wave, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
-                                                     juce::PathStrokeType::rounded});
-            return true;
-        }
-
-        if (kind == "winHann" || kind == "winGaussian" || kind == "winHamming" ||
-            kind == "winBlackman") {
-            // a janela do grao: o envelope que multiplica o material.
-            const auto w = side * 0.66f;
-            const auto h = side * 0.30f;
-            const auto left = c.x - w * 0.5f;
-            juce::Path window;
-            constexpr int kSteps {28};
-            for (int i = 0; i <= kSteps; ++i) {
-                const auto t = static_cast<float>(i) / static_cast<float>(kSteps);
-                const auto x = left + t * w;
-                float value = 0.0f;
-                if (kind == "winHann") {
-                    value = 0.5f * (1.0f - std::cos(t * juce::MathConstants<float>::twoPi));
-                } else if (kind == "winGaussian") {
-                    const auto d = (t - 0.5f) * 4.0f;
-                    value = std::exp(-2.2f * d * d);
-                } else if (kind == "winHamming") {
-                    value = 0.54f - 0.46f * std::cos(t * juce::MathConstants<float>::twoPi);
-                } else {
-                    // blackman: a janela mais larga, com os flancos mais fundos.
-                    const auto phase = t * juce::MathConstants<float>::twoPi;
-                    value = 0.42f - 0.50f * std::cos(phase) + 0.08f * std::cos(2.0f * phase);
-                }
-                const auto y = c.y + h * 0.5f - value * h;
-                if (i == 0) {
-                    window.startNewSubPath(x, y);
-                } else {
-                    window.lineTo(x, y);
-                }
-            }
-            g.setColour(ink);
-            g.strokePath(window, juce::PathStrokeType {1.5f, juce::PathStrokeType::curved,
-                                                       juce::PathStrokeType::rounded});
-            return true;
-        }
-
-        if (kind == "filterLowPass" || kind == "filterHighPass" ||
-            kind == "filterBandPass" || kind == "filterNotch") {
-            // a resposta do filtro: o que se ouve depois da frequencia de corte.
-            const auto w = side * 0.66f;
-            const auto h = side * 0.32f;
-            const auto left = c.x - w * 0.5f;
-            const auto top = c.y - h * 0.5f;
-            juce::Path response;
-            response.startNewSubPath(left, top);
-            if (kind == "filterLowPass") {
-                response.lineTo(left + w * 0.48f, top);
-                response.quadraticTo(left + w * 0.80f, top, left + w, top + h);
-            } else if (kind == "filterHighPass") {
-                response.quadraticTo(left + w * 0.22f, top, left + w * 0.52f, top + h);
-                response.lineTo(left + w, top + h);
-            } else if (kind == "filterBandPass") {
-                response.quadraticTo(left + w * 0.30f, top + h, left + w * 0.52f, top);
-                response.lineTo(left + w, top);
+        } else if (kind == "fit") {
+            move(4.0f, 9.0f);
+            line(4.0f, 5.5f);
+            line(5.5f, 5.5f);
+            line(8.0f, 5.5f);
+            move(16.0f, 5.5f);
+            line(18.5f, 5.5f);
+            line(20.0f, 5.5f);
+            line(20.0f, 9.0f);
+            move(20.0f, 15.0f);
+            line(20.0f, 18.5f);
+            line(18.5f, 18.5f);
+            line(16.0f, 18.5f);
+            move(8.0f, 18.5f);
+            line(5.5f, 18.5f);
+            line(4.0f, 18.5f);
+            line(4.0f, 15.0f);
+        } else if (kind == "pageUp" || kind == "pageDown") {
+            move(6.0f, 5.0f);
+            line(18.0f, 5.0f);
+            move(6.0f, 19.0f);
+            line(18.0f, 19.0f);
+            if (kind == "pageUp") {
+                move(12.0f, 18.0f);
+                line(12.0f, 9.0f);
+                move(8.5f, 12.5f);
+                line(12.0f, 9.0f);
+                line(15.5f, 12.5f);
             } else {
-                response.lineTo(left + w * 0.40f, top);
-                response.quadraticTo(left + w * 0.52f, top + h, left + w * 0.64f, top);
-                response.lineTo(left + w, top);
+                move(12.0f, 6.0f);
+                line(12.0f, 15.0f);
+                move(8.5f, 11.5f);
+                line(12.0f, 15.0f);
+                line(15.5f, 11.5f);
             }
-            g.setColour(ink);
-            g.strokePath(response, juce::PathStrokeType {1.5f,
-                                                          juce::PathStrokeType::curved,
-                                                          juce::PathStrokeType::rounded});
-            return true;
+        } else if (kind == "home") {
+            move(4.0f, 11.5f);
+            line(12.0f, 4.5f);
+            line(20.0f, 11.5f);
+            move(6.5f, 9.5f);
+            line(6.5f, 19.5f);
+            line(17.5f, 19.5f);
+            line(17.5f, 9.5f);
+        } else if (kind == "end") {
+            move(4.0f, 12.0f);
+            line(20.0f, 12.0f);
+            move(16.0f, 8.0f);
+            line(20.0f, 12.0f);
+            line(16.0f, 16.0f);
+        } else if (kind == "matrix") {
+            box(3.5f, 3.5f, 17.0f, 17.0f);
+            move(3.5f, 9.0f);
+            line(20.5f, 9.0f);
+            move(3.5f, 15.0f);
+            line(20.5f, 15.0f);
+            move(9.5f, 3.5f);
+            line(9.5f, 20.5f);
+            move(15.0f, 3.5f);
+            line(15.0f, 20.5f);
+        } else if (kind == "close") {
+            move(6.0f, 6.0f);
+            line(18.0f, 18.0f);
+            move(18.0f, 6.0f);
+            line(6.0f, 18.0f);
+        } else if (kind == "settings") {
+            circle(12.0f, 12.0f, 3.4f);
+            for (int i = 0; i < 8; ++i) {
+                const auto a = juce::MathConstants<float>::halfPi * 0.25f +
+                               static_cast<float>(i) * juce::MathConstants<float>::halfPi * 0.5f;
+                const auto dx = std::sin(a);
+                const auto dy = -std::cos(a);
+                move(12.0f + dx * 6.4f, 12.0f + dy * 6.4f);
+                line(12.0f + dx * 8.6f, 12.0f + dy * 8.6f);
+            }
+        } else if (kind == "grainMod") {
+            move(6.0f, 18.5f);
+            line(6.0f, 9.0f);
+            move(12.0f, 18.5f);
+            line(12.0f, 4.5f);
+            move(18.0f, 18.5f);
+            line(18.0f, 12.0f);
+        } else if (kind == "cloudMod") {
+            move(7.5f, 18.0f);
+            cubic(4.2f, 18.0f, 3.0f, 14.0f, 5.6f, 12.4f);
+            cubic(5.0f, 8.6f, 9.4f, 6.4f, 11.8f, 9.2f);
+            cubic(15.6f, 7.4f, 18.0f, 11.4f, 16.4f, 14.4f);
+            cubic(18.8f, 15.4f, 18.4f, 18.0f, 15.6f, 18.0f);
+            line(7.5f, 18.0f);
+        } else if (kind == "keysMod") {
+            box(3.5f, 6.5f, 17.0f, 11.0f);
+            move(7.0f, 6.5f);
+            line(7.0f, 10.5f);
+            move(11.0f, 6.5f);
+            line(11.0f, 10.5f);
+            move(15.0f, 6.5f);
+            line(15.0f, 10.5f);
+            move(8.5f, 14.5f);
+            line(15.5f, 14.5f);
+        } else if (kind == "envMod") {
+            move(3.5f, 17.5f);
+            line(6.0f, 6.0f);
+            line(10.0f, 10.5f);
+            line(15.0f, 10.5f);
+            line(20.5f, 17.5f);
+        } else if (kind == "filterMod") {
+            move(4.0f, 5.0f);
+            line(20.0f, 5.0f);
+            line(14.0f, 12.5f);
+            line(14.0f, 20.0f);
+            line(10.0f, 18.0f);
+            line(10.0f, 12.5f);
+            path.closeSubPath();
+        } else if (kind == "modMod") {
+            move(3.0f, 12.0f);
+            line(6.0f, 12.0f);
+            cubic(8.0f, 12.0f, 8.0f, 7.0f, 10.0f, 7.0f);
+            cubic(12.0f, 7.0f, 12.0f, 17.0f, 14.0f, 17.0f);
+            cubic(16.0f, 17.0f, 16.0f, 12.0f, 18.0f, 12.0f);
+            line(21.0f, 12.0f);
+        } else if (kind == "waveSine") {
+            move(3.0f, 12.0f);
+            cubic(5.2f, 6.2f, 7.3f, 6.2f, 9.5f, 12.0f);
+            cubic(11.7f, 17.8f, 13.8f, 17.8f, 16.0f, 12.0f);
+            cubic(18.2f, 6.2f, 19.4f, 8.2f, 21.0f, 10.4f);
+        } else if (kind == "waveTri") {
+            move(3.0f, 16.5f);
+            line(7.5f, 7.5f);
+            line(12.0f, 16.5f);
+            line(16.5f, 7.5f);
+            line(21.0f, 16.5f);
+        } else if (kind == "waveSaw") {
+            move(3.0f, 16.5f);
+            line(7.5f, 7.5f);
+            line(7.5f, 16.5f);
+            line(12.0f, 7.5f);
+            line(12.0f, 16.5f);
+            line(16.5f, 7.5f);
+            line(16.5f, 16.5f);
+            line(21.0f, 7.5f);
+        } else if (kind == "waveSquare") {
+            move(3.0f, 15.5f);
+            line(3.0f, 8.5f);
+            line(7.5f, 8.5f);
+            line(7.5f, 15.5f);
+            line(12.0f, 15.5f);
+            line(12.0f, 8.5f);
+            line(16.5f, 8.5f);
+            line(16.5f, 15.5f);
+            line(21.0f, 15.5f);
+        } else if (kind == "waveHold") {
+            move(3.0f, 15.0f);
+            line(3.0f, 9.0f);
+            line(7.5f, 9.0f);
+            line(7.5f, 15.0f);
+            line(10.5f, 15.0f);
+            line(10.5f, 9.0f);
+            line(15.0f, 9.0f);
+            line(15.0f, 15.0f);
+            line(18.0f, 15.0f);
+            line(18.0f, 9.0f);
+            line(21.0f, 9.0f);
+        } else if (kind == "winHann" || kind == "winGaussian" || kind == "winHamming" ||
+                   kind == "winBlackman") {
+            // as quatro janelas: o que muda e' a largura do lobo, e e' isso que
+            // se desenha. um sino mais estreito diz qual delas e'.
+            const auto shoulder = kind == "winHamming" ? 0.16f
+                                  : kind == "winBlackman" ? 0.30f
+                                  : kind == "winGaussian" ? 0.24f
+                                                          : 0.36f;
+            move(3.0f, 17.0f);
+            cubic(3.0f + 9.0f * shoulder, 17.0f, 3.0f + 9.0f * shoulder, 6.0f, 12.0f, 6.0f);
+            cubic(21.0f - 9.0f * shoulder, 6.0f, 21.0f - 9.0f * shoulder, 17.0f, 21.0f, 17.0f);
+        } else if (kind == "filterLowPass" || kind == "filterHighPass" ||
+                   kind == "filterBandPass" || kind == "filterNotch") {
+            // a resposta do filtro: patamar, joelho e queda. uma diagonal so'
+            // nao diz qual dos quatro e'.
+            if (kind == "filterLowPass") {
+                move(3.0f, 8.0f);
+                line(11.0f, 8.0f);
+                cubic(14.0f, 8.0f, 14.0f, 18.0f, 21.0f, 18.0f);
+            } else if (kind == "filterHighPass") {
+                move(3.0f, 18.0f);
+                line(10.0f, 18.0f);
+                cubic(17.0f, 18.0f, 17.0f, 8.0f, 20.0f, 8.0f);
+                line(21.0f, 8.0f);
+            } else if (kind == "filterBandPass") {
+                move(3.0f, 18.0f);
+                line(5.0f, 18.0f);
+                cubic(8.0f, 18.0f, 8.0f, 7.0f, 11.0f, 7.0f);
+                line(13.0f, 7.0f);
+                cubic(16.0f, 7.0f, 16.0f, 18.0f, 19.0f, 18.0f);
+                line(21.0f, 18.0f);
+            } else {
+                move(3.0f, 7.0f);
+                line(5.0f, 7.0f);
+                cubic(8.0f, 7.0f, 8.0f, 18.0f, 11.0f, 18.0f);
+                line(13.0f, 18.0f);
+                cubic(16.0f, 18.0f, 16.0f, 7.0f, 19.0f, 7.0f);
+                line(21.0f, 7.0f);
+            }
+        } else {
+            return false;
         }
 
-        return false;
+        stroke();
+        return true;
     }
 
     static void paintTransportGlyph(juce::Graphics& g,
@@ -1144,76 +1054,33 @@ public:
                                                   juce::PathStrokeType::rounded});
     }
 
-    // hold: um cadeado, a mesma ideia de latch que o transporte tem.
+    // hold: um cadeado, a mesma ideia de latch que o transporte tem. desenhado
+    // na grelha de 24 como o resto, para nao ser o unico glifo fora do peso.
     static void paintLockGlyph(juce::Graphics& g,
                                const juce::Rectangle<float>& bounds,
                                juce::Colour ink) {
-        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight());
+        const auto side = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.84f;
+        const auto u = side / 24.0f;
         const auto c = bounds.getCentre();
-        const auto w = side * 0.30f;
-        const auto h = side * 0.24f;
-        const auto body = juce::Rectangle<float> {c.x - w * 0.5f, c.y - h * 0.10f, w, h};
+        const auto ox = c.x - side * 0.5f;
+        const auto oy = c.y - side * 0.5f;
+        const auto thickness = juce::jmax(1.15f, 1.5f * u);
+
+        juce::Path glyph;
+        glyph.startNewSubPath(ox + 7.0f * u, oy + 11.0f * u);
+        glyph.lineTo(ox + 7.0f * u, oy + 8.5f * u);
+        glyph.addCentredArc(ox + 12.0f * u, oy + 8.5f * u, 5.0f * u, 5.0f * u, 0.0f,
+                            juce::MathConstants<float>::pi,
+                            juce::MathConstants<float>::twoPi, false);
+        glyph.lineTo(ox + 17.0f * u, oy + 11.0f * u);
+        glyph.addRoundedRectangle(ox + 5.5f * u, oy + 11.0f * u, 13.0f * u, 8.5f * u,
+                                  1.6f * u);
 
         g.setColour(ink);
-        g.drawRoundedRectangle(body, 1.4f, 1.4f);
-
-        juce::Path shackle;
-        shackle.addCentredArc(c.x, c.y - h * 0.10f, w * 0.24f, h * 0.40f, 0.0f,
-                              -juce::MathConstants<float>::halfPi,
-                              juce::MathConstants<float>::halfPi, true);
-        g.strokePath(shackle, juce::PathStrokeType {1.4f});
+        g.strokePath(glyph, juce::PathStrokeType {thickness, juce::PathStrokeType::curved,
+                                                  juce::PathStrokeType::rounded});
     }
 
-    // carregar: uma folha com o canto dobrado. a pasta dizia "directoria"; o que
-    // a tecla faz e' abrir um ficheiro.
-    static void paintFolderGlyph(juce::Graphics& g,
-                                 const juce::Rectangle<float>& bounds,
-                                 juce::Colour ink) {
-        const auto w = juce::jmin(bounds.getWidth() * 0.46f, 17.0f);
-        const auto h = w * 1.24f;
-        const auto x = bounds.getCentreX() - w * 0.5f;
-        const auto y = bounds.getCentreY() - h * 0.5f;
-        const auto fold = w * 0.36f;
-
-        juce::Path sheet;
-        sheet.startNewSubPath(x, y);
-        sheet.lineTo(x + w - fold, y);
-        sheet.lineTo(x + w, y + fold);
-        sheet.lineTo(x + w, y + h);
-        sheet.lineTo(x, y + h);
-        sheet.closeSubPath();
-        sheet.startNewSubPath(x + w - fold, y);
-        sheet.lineTo(x + w - fold, y + fold);
-        sheet.lineTo(x + w, y + fold);
-
-        g.setColour(ink);
-        g.strokePath(sheet, juce::PathStrokeType {1.4f, juce::PathStrokeType::curved,
-                                                  juce::PathStrokeType::butt});
-    }
-
-    void drawKnobBody(juce::Graphics& g, juce::Point<float> centre, float radius) {
-        const auto rim = juce::Rectangle<float> {centre.x - radius, centre.y - radius,
-                                                  radius * 2.0f, radius * 2.0f};
-
-        for (int i = 2; i >= 1; --i) {
-            const auto spread = static_cast<float>(i);
-            g.setColour(palette::alpha(juce::Colours::black, 0.14f - 0.04f * spread));
-            g.fillEllipse(rim.expanded(spread).translated(0.0f, 2.0f));
-        }
-
-        g.setGradientFill(juce::ColourGradient {
-            palette::knobTop, centre.translated(0.0f, -radius * 0.55f),
-            palette::knobBottom, centre.translated(0.0f, radius * 0.60f), false});
-        g.fillEllipse(rim);
-
-        g.setColour(palette::alpha(palette::knobEdge, 0.85f));
-        g.drawEllipse(rim.reduced(0.5f), 1.2f);
-        g.setColour(palette::alpha(palette::ivory, 0.08f));
-        g.drawEllipse(rim.reduced(3.0f), 1.0f);
-
-        // sem ponto central: o ponteiro diz onde esta' o valor, e um ponto ao
-        // meio so' competia com ele.
-    }
 };
 
 } // namespace opcoda

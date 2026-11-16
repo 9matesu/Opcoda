@@ -70,13 +70,23 @@ public:
         choiceLabels_ = spec.choiceLabels;
 
         if (!choiceLabels_.isEmpty()) {
-            menuButton_.setButtonText("");
-            menuButton_.setName(juce::String {spec.spokenName} + ": escolher valor");
-            menuButton_.setTooltip("Escolher " + juce::String {spec.title} + " na lista");
-            menuButton_.getProperties().set("uiIcon", "chevron");
-            menuButton_.getProperties().set("uiLook", "icon");
-            menuButton_.onClick = [this] { showChoiceMenu(); };
-            addAndMakeVisible(menuButton_);
+            // **detent dial ate' cinco posicoes; lista acima disso.** girar um
+            // knob de doze paradas e' pior que ler a lista, e o design system ja'
+            // tinha fechado essa decisao do lado do dropdown. o dial so' entra
+            // onde a roda nao perde: poucas posicoes, todas visiveis no anel.
+            const auto choices = choiceLabels_.size();
+            if (choices <= 5) {
+                slider_.getProperties().set("uiDetents", choices);
+            } else {
+                hasMenu_ = true;
+                menuButton_.setButtonText("");
+                menuButton_.setName(juce::String {spec.spokenName} + ": escolher valor");
+                menuButton_.setTooltip("Escolher " + juce::String {spec.title} + " na lista");
+                menuButton_.getProperties().set("uiIcon", "chevron");
+                menuButton_.getProperties().set("uiLook", "icon");
+                menuButton_.onClick = [this] { showChoiceMenu(); };
+                addAndMakeVisible(menuButton_);
+            }
         }
 
         slider_.addListener(this);
@@ -106,9 +116,8 @@ public:
 
         const int valueHeight = tight ? 18 : 22;
         auto valueRow = area.removeFromBottom(valueHeight);
-        value_.setBounds(valueRow.reduced(2, 0));
 
-        if (choiceLabels_.isEmpty()) {
+        if (!hasMenu_) {
             value_.setBounds(valueRow.reduced(2, 0));
         } else {
             // o caret ocupa a ponta direita do valor; o texto recua para nao
@@ -132,8 +141,7 @@ public:
 
         const bool tight = getHeight() < 112;
         const int titleHeight = tight ? 14 : 17;
-        const auto font = fonts().sans(tight ? 10.5f : 12.0f, true)
-                              .withExtraKerningFactor(0.10f);
+        const auto font = fonts().sans(tight ? 10.5f : 12.0f, true);
 
         juce::GlyphArrangement glyphs;
         glyphs.addLineOfText(font, title_, 0.0f, 0.0f);
@@ -224,6 +232,7 @@ private:
     juce::Slider slider_;
     juce::Label value_;
     juce::TextButton menuButton_;
+    bool hasMenu_ {false};
     juce::String title_;
     juce::String icon_;
     juce::Colour titleColour_ {palette::textSub};
