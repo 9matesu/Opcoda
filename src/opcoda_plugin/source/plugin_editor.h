@@ -1,18 +1,21 @@
-#pragma once
+﻿#pragma once
 
 #include "byte_display.h"
 #include "choice_control.h"
 #include "display_panel.h"
 #include "envelope_view.h"
+#include "file_field.h"
 #include "filter_view.h"
 #include "keyboard.h"
 #include "knob.h"
 #include "lfo_view.h"
 #include "look_and_feel.h"
+#include "mini_slider.h"
 #include "module_folder_tab.h"
 #include "output_meter.h"
 #include "palette.h"
 #include "plugin_processor.h"
+#include "ui_animation.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -27,22 +30,6 @@
 
 namespace opcoda {
 
-// editor de tamanho fixo: 1180x760, sem redimensionamento.
-//
-// **a janela fixa e' uma decisao de produto, nao uma limitacao.** com o tamanho
-// amarrado, cada peca tem um lugar garantido: o ecra domina, os knobs tem 96 px
-// de disco e o texto nao e' o que sobra de um layout elastico. a F023 pedia um
-// minimo de 480x434 para o caso de o host encolher; esse caso deixou de existir
-// quando o redimensionamento saiu.
-//
-// as faixas, de cima para baixo: header de chapa, ecra com tira de vistas a' direita,
-// tira de navegacao, abas de modulo, painel de knobs. o master (volume, medidor
-// stereo) ocupa a coluna da direita ate' ao fundo, e o teclado fica em baixo, a'
-// esquerda do medidor.
-//
-// **sem MAIN e sem OUT nas abas.** a MAIN repetia onze parametros que ja' vivem nos
-// modulos, e o OUT tinha um volume que passou a ser o master sempre visivel. cada
-// parametro aparece uma vez, no modulo a que pertence.
 class PluginEditor : public juce::AudioProcessorEditor,
                      private juce::Timer,
                      private juce::ValueTree::Listener,
@@ -59,20 +46,26 @@ public:
     bool keyPressed(const juce::KeyPress& key) override;
     bool keyStateChanged(bool isKeyDown) override;
 
-    // devolve o foco ao teclado virtual. o standalone chama isto quando fecha o
-    // ecra de configuracao: sem ele as teclas seguintes ficavam a falar com a
-    // janela e o instrumento parecia surdo por causa de uma janela que ja' nao
-    // esta' a' vista.
+    void setStandaloneChrome(bool on) {
+        chromeInset_ = 0;
+        chromeRightInset_ = on ? 72 : 0;
+        windowDraggable_ = on;
+        resized();
+        repaint();
+    }
+
+    void setOnThemeRequested(std::function<void()> callback) {
+        onThemeRequested_ = std::move(callback);
+        themeButton_.setVisible(onThemeRequested_ != nullptr);
+    }
+
     void focusPlayKeyboard();
 
-    // troca de chapa a meio da sessao: traduz as cores que os controlos tinham
-    // fixado e manda repintar. quem pinta a partir da paleta le ja' os valores
-    // novos no proximo quadro.
     void refreshTheme();
 
-    // o clique nao rouba o foco ao teclado: sem isto, trocar de vista calava as
-    // teclas do computador e o instrumento parecia avariado.
     void mouseDown(const juce::MouseEvent& event) override;
+    void mouseDrag(const juce::MouseEvent& event) override;
+    void mouseUp(const juce::MouseEvent& event) override;
 
     bool isInterestedInFileDrag(const juce::StringArray& files) override {
         return accepts(files);
@@ -100,14 +93,14 @@ private:
     void buildParameterPanel();
     void buildKeyboard();
 
+    void animateButtons();
+
     void handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
                       float velocity) override;
     void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNoteNumber,
                        float velocity) override;
+    void setPendingNote(int note, bool on);
 
-    // acende no teclado do editor as teclas que o MIDI do host esta' a premir.
-    // o estado do teclado continua a ser a unica fonte do desenho: o MIDI entra
-    // por ele com a guarda ligada, para nao voltar a disparar a nota no motor.
     void mirrorIncomingNotes();
     bool mirroringNotes_ {false};
     std::uint64_t mirroredLow_ {0};
@@ -117,10 +110,9 @@ private:
     void refresh();
     void refreshTelemetry(const PluginProcessor::SourceInfo& info);
 
-    // a janela e' fixa: os chips de formato e tamanho existem sempre que haja
-    // conteudo. nao ha' decisao de largura para combinar com a de conteudo.
-    void updateHeaderVisibility();
-    void updateFooterVisibility();
+    [[nodiscard]] int designHeight() const;
+    void applyWindowSize();
+
     void updateStatusVisibility();
 
     void pushTransportAnchor();
@@ -131,8 +123,6 @@ private:
     void moveRegionTo(std::uint64_t address);
     [[nodiscard]] float readPosition() const;
 
-    // leitura crua de um parametro, para o preview do display. O valor nao passa
-    // pelo slider: o que se mostra e' o que o host tem, incluindo automacao.
     [[nodiscard]] float rawParameter(const char* id, float fallback) const;
 
     static void makePlainLabel(juce::Label& label,
@@ -142,9 +132,6 @@ private:
 
     void chooseFile();
 
-    // a janela encolheu 10 %: o desenho continua a pensar em 1180x760 e este
-    // canvas aplica a escala. todos os filhos vivem nele, por isso as
-    // coordenadas do layout nao mudam -- so' o pixel final.
     class DesignCanvas : public juce::Component {
     public:
         std::function<void(juce::Graphics&)> onPaint;
@@ -184,13 +171,12 @@ private:
 
     juce::MidiKeyboardState keyboardState_;
     OpcodaKeyboard keyboard_;
+    juce::TextButton keyboardToggle_;
+    bool keyboardOpen_ {true};
 
     DisplayPanel display_;
     ByteDisplay grid_;
 
-    // visualizadores dos modulos ENV e FILTER: o grafico ocupa a esquerda do
-    // painel de parametros e os knobs recuam para a direita quando a aba deles
-    // esta' aberta.
     EnvelopeView envelopeView_;
     FilterView filterView_;
     LfoView lfoView_;
@@ -200,14 +186,11 @@ private:
     juce::TextButton viewHexButton_;
     juce::TextButton viewEntropyButton_;
     juce::TextButton viewMatrixButton_;
-    juce::TextButton zoomOutButton_;
-    juce::TextButton zoomInButton_;
-    juce::TextButton zoomFitButton_;
 
-    // tira horizontal por baixo do ecra: transporte a' esquerda, paginas do hex
-    // ao centro. o hold vive colado ao play, como um par de transporte.
     juce::TextButton playButton_;
     juce::TextButton holdButton_;
+    MiniSlider pitchRandSlider_;
+    MiniSlider scanSpeedSlider_;
     juce::TextButton pageUpButton_;
     juce::TextButton pageDownButton_;
     juce::TextButton homeButton_;
@@ -216,22 +199,18 @@ private:
     void updateViewButtons();
 
     juce::Label status_;
-    juce::Label positionReadout_;
-    juce::Label offsetReadout_;
 
-    juce::Label fileName_;
-    juce::Label formatTag_;
-    juce::Label fileSize_;
+    // campo do ficheiro: pasta, nome, tamanho e formato no mesmo sulco.
+    FileField fileField_;
 
-    juce::TextButton loadButton_;
-
-    // medidor stereo no canto inferior direito, com o volume ao lado. e' o master
-    // da mesa: o unico sitio onde a saida se ve e se controla.
     OutputMeter meter_;
 
     juce::TextButton presetPrevButton_;
     juce::TextButton presetNameButton_;
     juce::TextButton presetNextButton_;
+    juce::TextButton themeButton_;
+    juce::TextButton brandButton_;
+    std::function<void()> onThemeRequested_;
     std::unique_ptr<juce::FileChooser> presetChooser_;
     juce::String currentPresetName_ {"Init"};
     int currentFactoryIndex_ {0};
@@ -248,11 +227,6 @@ private:
     void loadPresetFromFile();
     void savePresetToFile();
 
-    // -- desfazer (Ctrl+Z) --
-    // um retrato do estado por gesto, nao por evento: um arrasto de knob dispara
-    // dezenas de mudancas e um retrato de cada uma enchia a pilha de passos que
-    // ninguem distingue. o retrato que se guarda e' o do inicio do gesto, por isso
-    // desfazer devolve o valor de antes e nao o penultimo tick.
     void pushUndoSnapshot();
     void settleUndo();
     void undoLast();
@@ -264,23 +238,24 @@ private:
     bool undoPending_ {false};
     bool restoringUndo_ {false};
 
-    // o evento de parametro pode chegar de uma thread que nao a de interface: a
-    // automacao do host escreve por setValueNotifyingHost e o listener do
-    // ValueTree corre na thread de quem escreveu. tirar o retrato ali' alocava
-    // XML fora da interface; fica a marcacao e o retrato sai no timer.
     std::atomic<bool> undoFromAudio_ {false};
 
-    // cinco modulos visiveis. OUT existe no enum porque o volume precisa de um
-    // Knob; nao tem aba, e o knob mora no master. KEYS saiu: do teclado ficou
-    // so' o glide, no GRAIN, e a escala e a tonica vivem no teclado.
-    enum class ParamModule { grain, envelope, filter, mod, keys, out };
+    // notas locais ainda nao confirmadas pelo audio: o espelho nao as toca.
+    std::uint64_t pendingOnLow_ {0};
+    std::uint64_t pendingOnHigh_ {0};
+    std::uint64_t pendingOffLow_ {0};
+    std::uint64_t pendingOffHigh_ {0};
+
+    // hover da marca no header, para a animacao de chegada.
+    float lastBrandHover_ {0.0f};
+
+    enum class ParamModule { grain, envelope, filter, mod, out };
     ParamModule activeModule_ {ParamModule::grain};
     std::vector<std::unique_ptr<Knob>> knobs_;
     std::vector<std::unique_ptr<ChoiceControl>> controls_;
+    // um animador por botao de TextButton. os do ChoiceControl ficam dentro dele.
+    std::vector<std::unique_ptr<PressHover>> buttonHovers_;
 
-    // celula do painel: um knob ou um controle de escolha. o painel de cada
-    // modulo e' uma grelha de celulas, e uma celula pode ocupar mais de uma
-    // coluna: a onda do LFO e' larga, o tipo de filtro e' um bloco de icones.
     struct Cell {
         Knob* knob {nullptr};
         ChoiceControl* control {nullptr};
@@ -290,21 +265,32 @@ private:
     struct ModuleGrid {
         std::vector<std::vector<Cell>> rows {};
         int columns {1};
-        // largura maxima da celula: acima dela a grelha encolhe e alinha-se ao
-        // centro, para os knobs nao ficarem esbarrados nas bordas do painel.
         int maxCellWidth {0};
     };
 
     std::vector<ModuleGrid> moduleGrids_;
     Knob* masterKnob_ {nullptr};
+    Knob* masterPanKnob_ {nullptr};
+    Knob* masterStereoKnob_ {nullptr};
+    Knob* masterLevelKnob_ {nullptr};
+    Knob* modRateKnob_ {nullptr};
+    ChoiceControl* modDivControl_ {nullptr};
+    bool modSyncOn_ {false};
 
     void layoutModuleGrid(const ModuleGrid& grid, juce::Rectangle<int> area);
+    void updateModSyncLayout();
+
+    // geometria da ultima grelha desenhada, para o paint por os filetes.
+    juce::Rectangle<int> gridArea_;
+    int gridCellWidth_ {0};
+    int gridRowHeight_ {0};
+    int gridColumns_ {0};
+    int gridRows_ {0};
 
     ModuleFolderTab moduleGrainButton_ {"grainMod", "Grain module"};
     ModuleFolderTab moduleEnvelopeButton_ {"envMod", "Envelope module"};
     ModuleFolderTab moduleFilterButton_ {"filterMod", "Filter module"};
     ModuleFolderTab moduleModButton_ {"modMod", "Modulation module"};
-    ModuleFolderTab moduleKeysButton_ {"keysMod", "Keyboard and tuning module"};
 
     void buildModuleTabs();
     void updateModuleTabs();
@@ -316,12 +302,23 @@ private:
     juce::Rectangle<int> screenBezelBounds_;
     juce::Rectangle<int> railBounds_;
     juce::Rectangle<int> moduleRowBounds_;
+    juce::Rectangle<int> moduleTabsBounds_;
     juce::Rectangle<int> parameterPanelBounds_;
     juce::Rectangle<int> masterBayBounds_;
     juce::Rectangle<int> keyboardBayBounds_;
 
     // filete vertical entre o grupo do preset e o grupo do ficheiro no header.
     int headerDividerX_ {-1};
+
+    // o corpo do synth (ecra + painel + master), sem a baia do teclado.
+    juce::Rectangle<int> mainBodyBounds_;
+
+    int chromeInset_ {0};
+    int chromeRightInset_ {0};
+
+    bool windowDraggable_ {false};
+    bool draggingWindow_ {false};
+    juce::Point<int> windowDragOffset_ {};
 
     // escala do desenho: calculada no construtor a partir da area util do monitor.
     float uiScale_ {0.9f};

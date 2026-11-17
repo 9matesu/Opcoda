@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/curve.h"
 #include "opcoda_core/dsp/granular_engine.h"
@@ -28,16 +28,9 @@ std::vector<float> sineSource(float toneHz, float amplitude, float seconds) {
     return samples;
 }
 
-// grao longo, densidade baixa: o filtro ve' um tom quase continuo e o ensaio
-// mede a resposta, nao o agendamento.
 GranularParams toneParams(float cutoffHz) {
     GranularParams params;
-    // 100 ms e' um grao de cada vez nesta densidade: o ensaio mede o tanh do
-    // filtro, e nao a soma de janelas sobrepostas. o valor fica abaixo do maximo
-    // de proposito, para a medicao nao mudar se o knob do grao crescer outra vez.
     params.grainSizeMs = 100.0f;
-    // densidade alta: 8 janelas por segundo deixam o tom quase sempre presente, e
-    // a media de 20 blocos apanha poucas pausas entre graos.
     params.densityGrainsPerSec = 8.0f;
     params.position = 0.5f;
     params.spray = 0.0f;
@@ -89,8 +82,6 @@ float peak(const std::vector<float>& samples) {
     return worst;
 }
 
-// magnitude de uma componente por correlacao directa. nao ha FFT no nucleo e o
-// ensaio so precisa de dois bins.
 double magnitudeAt(const std::vector<float>& samples, double frequency) {
     double real = 0.0;
     double imaginary = 0.0;
@@ -109,8 +100,6 @@ double magnitudeAt(const std::vector<float>& samples, double frequency) {
 TEST(Filter, KeytrackMovesCutoffOneOctavePerOctave) {
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
-    // com material: sem fonte o processBlock sai antes do calculo dos
-    // coeficientes, e o corte efectivo nunca seria escrito.
     const auto source = sineSource(220.0f, 0.1f, 0.1f);
     engine.setSource(source.data(), source.size());
 
@@ -148,9 +137,6 @@ TEST(Filter, SlopeTwentyFourAttenuatesTwiceInDbPerOctave) {
     const float rmsTwentyFour = rms(renderedTwentyFour.samples);
 
     ASSERT_GT(rmsTwelve, 1.0e-6f);
-    // duas oitavas acima do corte: 12 dB/oitava da' -24 dB e 24 dB/oitava da'
-    // -48 dB, um quarto em amplitude. a folga e' para o Q e a soma de graos, nao
-    // para metade da atenuacao.
     EXPECT_LT(rmsTwentyFour, rmsTwelve * 0.15f);
 }
 
@@ -164,9 +150,6 @@ TEST(Filter, DriveAddsHarmonicsAndStopsAtTheCeiling) {
     const auto cleanOut = render(clean, source, 90, 70);
     const auto drivenOut = render(driven, source, 90, 70);
 
-    // a 24 dB o teto do clip e' 0,40: o pico para *nele*, e o drive nao deixa o
-    // material passar do limite (o limiter fica depois, como rede). o EXPECT_NEAR
-    // tambem apanha o silencio, que passaria num EXPECT_LE.
     EXPECT_NEAR(peak(drivenOut.samples), 0.40f, 0.02f);
 
     const double cleanFundamental = magnitudeAt(cleanOut.samples, 220.0);
@@ -176,14 +159,10 @@ TEST(Filter, DriveAddsHarmonicsAndStopsAtTheCeiling) {
 
     ASSERT_GT(cleanFundamental, 1.0e-6);
     ASSERT_GT(drivenFundamental, 1.0e-6);
-    // a terceira harmonica existe no limpo (o filtro nao e' ideal) e cresce muito
-    // com o drive: e' a definicao mensuravel de "ganhou harmonicas".
     EXPECT_GT(drivenThird / drivenFundamental, 5.0 * (cleanThird / cleanFundamental));
 }
 
 TEST(Envelope, CurveMinusOneIsExponential) {
-    // 0,25^(1/8) = 0,8409 e 0,75^(1/8) = 0,9647: sobe depressa e aproxima
-    // devagar. contra 0,25 da rampa nao e' variacao de alguns por cento.
     EXPECT_NEAR(curveShape(0.25f, -1.0f), 0.8408964f, 1.0e-5f);
     EXPECT_NEAR(curveShape(0.75f, -1.0f), 0.9646786f, 1.0e-5f);
     EXPECT_GT(curveShape(0.25f, -1.0f), 0.25f + 0.1f);
@@ -197,8 +176,6 @@ TEST(Envelope, CurvePlusOneIsLogarithmic) {
 }
 
 TEST(Envelope, CurvesReachTheEngine) {
-    // a curva nao pode viver so na funcao pura: com ataque de 10 ms e um bloco de
-    // 48 amostras a 48 kHz, tres blocos sao 30 % do estagio.
     const auto levelAfterThreeBlocks = [](float curve) {
         GranularEngine engine;
         engine.prepare(kSampleRate, 48);
@@ -226,10 +203,6 @@ TEST(Envelope, CurvesReachTheEngine) {
 }
 
 TEST(GranularEngine, GrainAtTheEndOfTheSourceStillSounds) {
-    // O canto direito do mapa de entropia levava POSITION a 1,0, e o grao morria
-    // na primeira amostra: o instrumento emudecia e parecia avariado. O inicio
-    // recua pelo comprimento da janela, e o ensaio fixa isso. O piso e' a ordem
-    // de grandeza do material, nao um valor que o silencio tambem satisfaz.
     const auto source = sineSource(440.0f, 0.5f, 2.0f);
 
     auto params = toneParams(20000.0f);
@@ -250,8 +223,6 @@ TEST(GranularEngine, GrainAtTheEndOfTheSourceStillSounds) {
 }
 
 TEST(GranularEngine, GrainAtTheEndKeepsTheLevelOfTheMiddle) {
-    // Nao basta sair do silencio: o recuo nao pode ser um corte de nivel. O fim
-    // do material toca com o mesmo nivel do meio, nao apenas com metade.
     const auto source = sineSource(440.0f, 0.5f, 2.0f);
 
     auto params = toneParams(20000.0f);
@@ -269,9 +240,6 @@ TEST(GranularEngine, GrainAtTheEndKeepsTheLevelOfTheMiddle) {
 }
 
 TEST(GranularEngine, PositionStillChoosesTheMaterial) {
-    // O recuo do inicio podia ser um clamp que colava tudo na posicao 0: a saida
-    // ficava audivel e o knob morto. Material com dois tons, um em cada metade,
-    // mostra que a posicao ainda escolhe o que se le.
     auto source = sineSource(220.0f, 0.5f, 1.0f);
     const auto high = sineSource(880.0f, 0.5f, 1.0f);
     source.insert(source.end(), high.begin(), high.end());
@@ -295,9 +263,6 @@ TEST(GranularEngine, PositionStillChoosesTheMaterial) {
 }
 
 TEST(GranularEngine, GrainLongerThanTheSourceStillSoundsAndMoves) {
-    // Regiao curta com pitch alto: o grao pediria mais material do que existe.
-    // Sem o tecto da metade do material, o unico inicio valido era zero e o knob
-    // de posicao e o spray ficavam mortos.
     const auto source = sineSource(333.0f, 0.5f, 0.5f);
 
     auto params = toneParams(20000.0f);
@@ -326,9 +291,6 @@ TEST(GranularEngine, GrainLongerThanTheSourceStillSoundsAndMoves) {
 }
 
 TEST(GranularEngine, NanSprayDoesNotPoisonTheReadIndex) {
-    // spray NaN atravessava o clamp da posicao (std::clamp nao sanea NaN) e ia
-    // parar a um static_cast para indice de leitura, que e' indefinido. o
-    // paramatro tem de ser saneado antes de tocar no buffer.
     const auto source = sineSource(440.0f, 0.5f, 1.0f);
 
     auto params = toneParams(20000.0f);
@@ -338,8 +300,6 @@ TEST(GranularEngine, NanSprayDoesNotPoisonTheReadIndex) {
 
     const auto rendered = render(params, source, 16, 4);
     ASSERT_FALSE(rendered.samples.empty());
-    // o spray invalido e' lido como zero: o instrumento toca, em vez de morrer
-    // num indice indefinido.
     EXPECT_GT(rms(rendered.samples), 0.02f);
     for (const float value : rendered.samples) {
         EXPECT_TRUE(std::isfinite(value));

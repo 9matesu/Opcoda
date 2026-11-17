@@ -1,4 +1,4 @@
-#include "hex_grid.h"
+﻿#include "hex_grid.h"
 
 #include "opcoda_core/disasm/x86_disasm.h"
 
@@ -19,9 +19,6 @@ char toAscii(std::uint8_t byte) {
     return (byte >= 0x20 && byte < 0x7F) ? static_cast<char>(byte) : '.';
 }
 
-// -- cores do desmontador --
-// um disassembler colore por classe de simbolo: o mnemonico diz a accao, o
-// registo diz onde, o numero diz quanto. tres tintas chegam; o resto e' pontuacao.
 
 bool isNumberToken(const juce::String& token) {
     if (token.isEmpty()) {
@@ -64,8 +61,6 @@ bool isPunctuation(juce::juce_wchar c) {
 
 juce::Colour asmInkFor(const juce::String& token, bool first) {
     if (first) {
-        // "db" e' o que o desmontador escreve quando nao reconhece o opcode:
-        // fica apagado de proposito, para nao se confundir com codigo lido.
         return (token == "db" || token == "bad") ? palette::textMuted : palette::accentWarn;
     }
     if (token.length() == 1 && isPunctuation(token[0])) {
@@ -101,8 +96,6 @@ void HexGrid::setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fi
     bytes_ = bytes;
     fileSize_ = fileSize;
 
-    // ficheiro novo recomeca no inicio. o offset da viewport e' apenas nosso: sem
-    // isto, o ficheiro seguinte abria a meio do anterior.
     topByte_ = 0;
     rebuildMetrics();
     clampViewport();
@@ -129,9 +122,6 @@ void HexGrid::setRegion(std::uint64_t start, std::uint64_t end) {
 void HexGrid::setReadHead(std::uint64_t address) {
     readHead_ = address;
 
-    // **nada de scroll aqui.** a cabeca anda com o knob e com o transporte, e uma
-    // janela que a segue sozinha briga com o rato. a barra de rolagem e o clique
-    // dizem onde a pessoa quer estar.
     repaint();
 }
 
@@ -227,9 +217,6 @@ void HexGrid::rebuildMetrics() {
     const auto bodyHeight = juce::jmax(0.0f, area.getHeight() - kHeaderHeight);
     metrics_.rows = juce::jmax(1, static_cast<int>(std::floor(bodyHeight / kRowHeight)));
 
-    // oito digitos chegam ate' 4 GB. o loop conta os digitos que o ficheiro pede
-    // e so' sobe acima de oito quando o endereco nao cabe -- antes comecava em 8 e
-    // somava, o que dava 14 digitos num ficheiro de 3 MB.
     metrics_.gutterDigits = 8;
     if (fileSize_ > 0) {
         auto remaining = fileSize_ - 1;
@@ -241,10 +228,6 @@ void HexGrid::rebuildMetrics() {
         metrics_.gutterDigits = juce::jmax(8, needed);
     }
 
-    // a grelha ocupa a largura do ecra em vez de se encostar a' esquerda. o
-    // endereco leva ~16%, os bytes ~40%, o ASCII ~15% e o ASM o resto; as
-    // celulas esticam para preencher o que sobra. e' o que torna um dump de 16
-    // bytes legivel numa janela de 1180 em vez de deixar metade do ecra vazio.
     const auto visibleRows = static_cast<std::uint64_t>(metrics_.rows) * kBytesPerRow;
     metrics_.showRail = fileSize_ > visibleRows;
     const auto railSpace = metrics_.showRail ? kRailWidth + kRailGap : 0.0f;
@@ -310,9 +293,6 @@ std::uint64_t HexGrid::addressAt(juce::Point<float> position) const {
         return none;
     }
 
-    // as dezasseis celulas sao testadas uma a uma: o bloco e' continuo, mas o
-    // teste por celula dispensa aritmetica de vao e cobre o caso do clique
-    // entre celulas.
     for (std::uint64_t column = 0; column < kBytesPerRow; ++column) {
         const auto cell = cellRect(column, row);
         if (position.x < cell.getX() || position.x >= cell.getRight()) {
@@ -391,8 +371,6 @@ void HexGrid::mouseDown(const juce::MouseEvent& event) {
         onUserScrolled();
     }
 
-    // barra de rolagem: salto directo. clicar no polegar tambem salta porque a
-    // barra e' curta e o polegar e' o indicador, nao um alvo de precisao.
     if (metrics_.showRail && metrics_.rail.expanded(4.0f).contains(event.position)) {
         draggingRail_ = true;
         scrollToFraction((event.position.y - metrics_.rail.getY()) /
@@ -400,21 +378,47 @@ void HexGrid::mouseDown(const juce::MouseEvent& event) {
         return;
     }
 
-    const auto address = addressAt(event.position);
-    if (address != std::numeric_limits<std::uint64_t>::max() && onCellActivated != nullptr) {
-        onCellActivated(address);
-    }
+    anchor_ = addressAt(event.position);
+    selecting_ = false;
 }
 
 void HexGrid::mouseDrag(const juce::MouseEvent& event) {
     if (draggingRail_) {
         scrollToFraction((event.position.y - metrics_.rail.getY()) /
                          juce::jmax(1.0f, metrics_.rail.getHeight()));
+        return;
     }
+
+    if (anchor_ == std::numeric_limits<std::uint64_t>::max()) {
+        return;
+    }
+
+    const auto address = addressAt(event.position);
+    if (address == std::numeric_limits<std::uint64_t>::max() || address == anchor_) {
+        return;
+    }
+
+    selecting_ = true;
+    selStart_ = std::min(anchor_, address);
+    selEnd_ = std::max(anchor_, address);
+    repaint();
 }
 
 void HexGrid::mouseUp(const juce::MouseEvent&) {
     draggingRail_ = false;
+
+    if (selecting_ && onRegionSelected != nullptr) {
+        onRegionSelected(selStart_, selEnd_ + 1);
+    } else if (anchor_ != std::numeric_limits<std::uint64_t>::max() &&
+               onCellActivated != nullptr) {
+        onCellActivated(anchor_);
+    }
+
+    anchor_ = std::numeric_limits<std::uint64_t>::max();
+    if (selecting_) {
+        selecting_ = false;
+        repaint();
+    }
 }
 
 void HexGrid::mouseDoubleClick(const juce::MouseEvent& event) {
@@ -432,25 +436,18 @@ void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
         onUserScrolled();
     }
 
-    // ctrl: salto de um quarto do ficheiro. e' o "rolar rapidamente" para um
-    // ficheiro de 12 MB, onde uma linha por entalhe seriam milhares de voltas.
     if (event.mods.isCtrlDown()) {
         const auto rows = static_cast<int>(metrics_.rows);
         scrollByLines(wheel.deltaY > 0.0f ? -rows * 16 : rows * 16);
         return;
     }
 
-    // velocidade exponencial: cada entalhe seguido dentro de 320 ms multiplica o
-    // passo por 1.7, ate' 32x; uma pausa maior volta ao passo de base. e' o que
-    // torna a roda agil num ficheiro grande sem perder o andamento linha a linha.
     const auto now = juce::Time::getMillisecondCounter();
     if (now - lastWheelMs_ > 320) {
         wheelBoost_ = 1.0;
     }
     lastWheelMs_ = now;
 
-    // shift multiplica por quatro; a roda de precisao manda fracoes e o
-    // acumulador evita saltos a meio do gesto.
     wheelAccumulator_ += static_cast<double>(wheel.deltaY) *
                          (event.mods.isShiftDown() ? 12.0 : 3.0) * wheelBoost_;
     wheelBoost_ = juce::jmin(wheelBoost_ * 1.7, 32.0);
@@ -472,7 +469,7 @@ void HexGrid::paint(juce::Graphics& g) {
 
     if (fileSize_ == 0 || bytes_ == nullptr || bytes_->empty()) {
         g.setColour(palette::textOnDarkSub);
-        g.drawText("SEM BINARIO", bounds.reduced(kPadding, 0.0f), juce::Justification::centred,
+        g.drawText("Sem binário", bounds.reduced(kPadding, 0.0f), juce::Justification::centred,
                    false);
         return;
     }
@@ -515,9 +512,6 @@ void HexGrid::paintColumnHeader(juce::Graphics& g) {
 }
 
 void HexGrid::paintReadingColumns(juce::Graphics& g) {
-    // as duas colunas de leitura sao superficies proprias: caixa opaca com
-    // contorno, pintada uma vez. antes eram faixas translucidas por linha, e a
-    // grade da parede de digitos aparecia por dentro delas.
     const auto draw = [&g](juce::Rectangle<float> column) {
         const auto box = column.expanded(5.0f, 0.0f);
         g.setColour(palette::display);
@@ -538,8 +532,6 @@ void HexGrid::paintRow(juce::Graphics& g, int row) {
     const auto top = metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight;
     const auto area = getLocalBounds().toFloat().reduced(kPadding);
 
-    // a grade vive no endereco e nos bytes. as colunas de leitura tem caixa
-    // propria e nenhuma linha passa por tras delas.
     g.setColour(palette::alpha(palette::displayBorder, 0.45f));
     g.drawHorizontalLine(juce::roundToInt(top), area.getX(), metrics_.bytes.getRight());
 
@@ -589,9 +581,6 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
         const auto touched = byteAddress == readHead_;
 
-        // a parede de digitos le-se toda no mesmo marfim: sem listras, sem
-        // apagar o que esta' fora da regiao. o ambar fica para o byte da
-        // cabeca de leitura, que e' a selecao.
         if (touched) {
             g.setColour(palette::alpha(palette::accent, 0.18f));
             g.fillRoundedRectangle(cell.reduced(1.0f, 3.0f), 2.0f);
@@ -648,9 +637,6 @@ void HexGrid::rebuildAsmIfNeeded() {
         return;
     }
 
-    // a varredura comeca no topo da janela e corre duas linhas alem do fundo:
-    // a instrucao que comecou na ultima linha visivel precisa de aparecer, e a
-    // que cruzou a fronteira do topo sai cortada, como em qualquer dump.
     const auto span = static_cast<std::uint64_t>(metrics_.rows + 2) * kBytesPerRow;
     const auto fromTop = juce::jmin(topByte_, fileSize_ - 1);
     const auto window = juce::jmin(span, fileSize_ - fromTop);
@@ -721,8 +707,6 @@ void HexGrid::paintAsm(juce::Graphics& g, int row) {
 
     if (started == nullptr) {
         if (previous != nullptr && previous->address + previous->length > address) {
-            // a instrucao comeca na linha de cima e continua aqui: os bytes
-            // aparecem na coluna deles, e o texto fica so' uma marca.
             g.setFont(fonts().mono(11.0f));
             g.setColour(palette::alpha(palette::textOnDarkSub, 0.55f));
             g.drawText("...", band.reduced(4.0f, 0.0f), juce::Justification::centredLeft,
@@ -749,8 +733,6 @@ void HexGrid::paintAsmText(juce::Graphics& g,
 
     const auto font = fonts().mono(11.5f);
 
-    // token a token, com a tinta da classe. a pontuacao (virgula, parenteses
-    // rectos, sinais) corre separada para poder ficar apagada.
     juce::AttributedString run;
     run.setJustification(juce::Justification::centredLeft);
     run.setWordWrap(juce::AttributedString::none);
@@ -794,8 +776,6 @@ void HexGrid::paintAsmText(juce::Graphics& g,
 }
 
 juce::Rectangle<float> HexGrid::cellRect(std::uint64_t column, int row) const {
-    // bloco unico: os 16 bytes correm seguidos, sem o vao que partia a linha em
-    // dois grupos de oito.
     const auto x = metrics_.bytes.getX() + static_cast<float>(column) * metrics_.cellAdvance;
     return {x, metrics_.bytes.getY() + static_cast<float>(row) * kRowHeight, metrics_.cellWidth,
             kRowHeight};

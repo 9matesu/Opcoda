@@ -1,4 +1,4 @@
-add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
+﻿add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 
 # Tipografia embebida. Os ficheiros ja vem reduzidos pelo tools/vendor_fonts.py, que
 # os corta aos caracteres que a interface escreve e mantem a hinting: 183 KB no
@@ -13,8 +13,8 @@ juce_add_binary_data(OpcodaFonts
     HEADER_NAME OpcodaFonts.h
     NAMESPACE BinaryData
     SOURCES
-        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Medium.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Semibold.ttf)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
 
 # O icone da janela vai por BinaryData: o standalone carrega o mesmo PNG que
 # alimenta o .ico do executavel, e a janela, a barra de tarefas e o ficheiro no
@@ -28,6 +28,16 @@ juce_add_binary_data(OpcodaAssets
     NAMESPACE OpcodaAssets
     SOURCES
         ${CMAKE_SOURCE_DIR}/resources/icons/opcoda-icon-256.png)
+
+# A marca da casa em SVG. Fica como dados binários pela mesma razão das fontes:
+# o desenho canónico é o ficheiro, e copiá-lo à mão para um Path dava duas verdades
+# que divergiam na primeira alteração de trajecto.
+juce_add_binary_data(OpcodaBrand
+    HEADER_NAME OpcodaBrand.h
+    NAMESPACE OpcodaBrand
+    SOURCES
+        ${CMAKE_SOURCE_DIR}/resources/brand/logo-light.svg
+        ${CMAKE_SOURCE_DIR}/resources/brand/bloodworm-trax.png)
 
 juce_add_plugin(Opcoda
     COMPANY_NAME "Opcoda"
@@ -81,12 +91,12 @@ target_sources(Opcoda
         source/look_and_feel.h
         source/palette.h
         source/palette.cpp
-        source/keyboard.h
         source/module_folder_tab.h
         source/knob.h
         source/choice_control.cpp
         source/choice_control.h
         source/animator.h
+        source/ui_animation.h
         source/display_panel.h
         source/hex_grid.cpp
         source/hex_grid.h
@@ -106,6 +116,7 @@ target_link_libraries(Opcoda
     PRIVATE
         OpcodaFonts
         OpcodaAssets
+        OpcodaBrand
         opcoda_core
         juce::juce_audio_processors
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois

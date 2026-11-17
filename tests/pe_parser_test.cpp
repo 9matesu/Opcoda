@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/pe/pe_parser.h"
 #include "pe_builder.h"
@@ -61,8 +61,6 @@ TEST(PeParser, RejectsSectionTablePastEndOfFile) {
 }
 
 TEST(PeParser, TruncatedFileIsRejectedNotCrashed) {
-    // ficheiro bem formado mas cortado a meio: o parser tem de recusar, e o
-    // ensaio de borda do T3 conta a rejeicao como sucesso.
     PeBuilder builder;
     for (std::size_t length = 1; length < builder.bytes.size(); ++length) {
         const auto result = parse(builder.bytes.data(), length);
@@ -95,8 +93,6 @@ TEST(PeParser, ParsesValidImage) {
 }
 
 TEST(PeParser, SingleRepeatedByteHasZeroEntropy) {
-    // byte unico repetido tem so um simbolo, logo zero bits por byte. e' o piso
-    // da escala: um .rsrc de icone comprido aparece perto de zero.
     PeBuilder builder;
     builder.fillTextWith(0x41);
     const auto result = parse(builder.bytes.data(), builder.bytes.size());
@@ -116,8 +112,6 @@ TEST(PeParser, UniformDistributionOfFourBytesIsTwoBits) {
 }
 
 TEST(PeParser, EachSectionIsMeasuredIndependently) {
-    // duas seccoes com conteudo distinto: se a entropia fosse medida sobre o
-    // ficheiro inteiro ou sobre o intervalo errado, as duas davam o mesmo valor.
     PeBuilder builder;
     const auto secondOffset = static_cast<std::uint32_t>(PeBuilder::kTotalSize);
     builder.grow(0x100);
@@ -137,8 +131,6 @@ TEST(PeParser, EachSectionIsMeasuredIndependently) {
 }
 
 TEST(PeParser, ZeroRawSizeSectionKeepsEntropyZero) {
-    // .bss e' so virtual: SizeOfRawData zero. medir a partir do offset daria a
-    // entropia do resto do ficheiro, logo a seccao fica em zero.
     PeBuilder builder;
     builder.addSection(".bss", 0, 0);
 
@@ -150,8 +142,6 @@ TEST(PeParser, ZeroRawSizeSectionKeepsEntropyZero) {
 }
 
 TEST(PeParser, ErrorCodesAreStable) {
-    // os nomes de erro aparecem na interface e no relatorio; mudar aqui e'
-    // mudanca visivel para o utilizador.
     EXPECT_STREQ(toString(PeError::kOk), "E_OK");
     EXPECT_STREQ(toString(PeError::kBadMz), "E_BAD_MZ");
     EXPECT_STREQ(toString(PeError::kBadPe), "E_BAD_PE");
@@ -160,10 +150,6 @@ TEST(PeParser, ErrorCodesAreStable) {
 }
 
 TEST(PeParser, HandlesEveryByteValueWithoutCrash) {
-    // varredura ampla: nenhum byte isolado pode derrubar o parser. a assercao
-    // anterior verificava `ok() || error != kOk`, verdadeira para todos os valores
-    // de PeError, e nunca falhava. o que se quer e' um estado bem formado, e nao
-    // qualquer coisa.
     PeBuilder reference;
     reference.fillTextWithGradient(0x00, 16);
 
@@ -187,8 +173,6 @@ TEST(PeParser, HandlesEveryByteValueWithoutCrash) {
 }
 
 TEST(PeParser, TruncatedAtEveryLength) {
-    // cortar o ficheiro em cada comprimento rejeita ou aceita, mas nunca acede
-    // fora do buffer. e' o ensaio de borda do T3.
     PeBuilder builder;
     const auto full = builder.bytes.size();
     for (std::size_t length = 0; length <= full; length += 7) {

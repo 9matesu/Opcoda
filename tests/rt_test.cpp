@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/rt/atomic_param.h"
 #include "opcoda_core/rt/spsc_ring.h"
@@ -23,8 +23,6 @@ TEST(AtomicParam, SmoothesTowardsTarget) {
     param.store(1.0f);
     const float target = param.loadForAudio();
 
-    // rampa com coeficiente 0.5 avanca metade da distancia por passo. o historico
-    // fica com o consumidor, logo quem chama mantem `current`.
     float current = 0.0f;
     current = AtomicParam<float>::nextSmoothed(current, target, 0.5f);
     EXPECT_NEAR(current, 0.5f, 1e-6f);
@@ -35,8 +33,6 @@ TEST(AtomicParam, SmoothesTowardsTarget) {
 }
 
 TEST(AtomicParam, TargetSurvivesSmoothing) {
-    // o atomico guarda o alvo, nao o valor suavizado: ler durante a rampa tem de
-    // devolver o que a interface escreveu.
     AtomicParam<float> param {0.0f};
     param.store(1.0f);
     float current = 0.0f;
@@ -46,8 +42,6 @@ TEST(AtomicParam, TargetSurvivesSmoothing) {
 }
 
 TEST(AtomicParam, CrossesThreadsWithoutCorruption) {
-    // o contrato acquire/release e' o que a constitution exige: sem trava, sem
-    // espera, e o valor lido e' sempre um valor valido.
     AtomicParam<int> param {0};
     constexpr int kIterations = 200000;
 
@@ -122,8 +116,6 @@ TEST(SpscRing, MaintainsFifoOrder) {
 }
 
 TEST(SpscRing, TransfersManyItemsAcrossThreads) {
-    // produtor e consumidor reais: e' o caminho de migracao de amostra do parser
-    // para o DSP descrito em 06-metodologia-arquitetura.md.
     SpscRing<std::uint32_t, 256> ring;
     constexpr std::uint32_t kTotal = 100000;
     std::uint32_t received = 0;

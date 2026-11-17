@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/rt/note_tracker.h"
 
@@ -44,9 +44,6 @@ TEST(NoteTracker, CountsChords) {
 }
 
 TEST(NoteTracker, StrayNoteOffCannotSilenceForever) {
-    // os hosts reenviam o estado inicial no primeiro bloco, e alguns mandam
-    // note-off sem note-on. sem o piso em zero, sounding() ficava falso para
-    // sempre e o instrumento nunca mais tocava.
     NoteTracker tracker;
     for (int i = 0; i < 5; ++i) {
         tracker.handle(noteOff(60));
@@ -83,9 +80,6 @@ TEST(NoteTracker, SustainDoesNotHideStillHeldKeys) {
 }
 
 TEST(NoteTracker, IsHeldFollowsTheKeysNotThePedal) {
-    // o teclado do editor acende o que esta' fisicamente premido. com o pedal em
-    // baixo a nota continua a soar mas a tecla ja' subiu -- e a tecla nao pode
-    // ficar acesa, senao o desenho diz o contrario do que a mao fez.
     NoteTracker tracker;
     tracker.handle(sustain(true));
     tracker.handle(noteOn(60));
@@ -127,8 +121,6 @@ TEST(NoteTracker, ControllersAreClampedAndFlagged) {
 }
 
 TEST(NoteTracker, OnlyTheControllerThatMovedIsDirty) {
-    // o bug que isto guarda: mexer so' no mod wheel marcava densidade e posicao
-    // como alteradas, e o processador escrevia os dois com o ultimo valor (zero).
     NoteTracker tracker;
     tracker.setController(2, 0.4f);
     EXPECT_TRUE(tracker.controllerDirty(2));
@@ -195,8 +187,6 @@ TEST(NoteTracker, RetriggerDoesNotDuplicateOnTheStack) {
     tracker.handle(noteOn(60));
     EXPECT_EQ(tracker.activeNote(), 60);
 
-    // se o retrigger empilhasse 60 duas vezes, largar a ultima tecla devolvia 60
-    // outra vez em vez de 64.
     tracker.handle(noteOff(60));
     EXPECT_EQ(tracker.activeNote(), 64);
 }

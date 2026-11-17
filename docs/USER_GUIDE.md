@@ -56,8 +56,8 @@ região exata e a seção PE mais próxima.
 O teclado virtual cobre cinco oitavas a partir de Dó3. As teclas do computador
 `A W S E D F T G Y H U J K` tocam notas. `K` também leva o foco ao teclado.
 
-O módulo `KEYS` quantiza a nota para a escala e a tônica escolhidas. `GLIDE`
-desliza entre notas no tempo definido. O pedal de sustain segura a nota.
+O `GLIDE`, no módulo `GRAIN`, desliza entre notas no tempo definido. A nota
+afina direto, sem quantização por escala. O pedal de sustain segura a nota.
 
 ## Presets
 

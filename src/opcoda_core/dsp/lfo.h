@@ -1,12 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <cmath>
 #include <cstdint>
 
 namespace opcoda::dsp {
 
-// alvo do lfo, na ordem do choice da UI. como FilterType, a ordem e' contrato:
-// trocar muda o som de sessoes salvas.
 enum class LFOTarget : std::uint8_t {
     kPitch = 0,
     kDensity,
@@ -26,8 +24,6 @@ enum class LFOWave : std::uint8_t {
 [[nodiscard]] const char* lfoTargetName(LFOTarget target) noexcept;
 [[nodiscard]] const char* lfoWaveName(LFOWave wave) noexcept;
 
-// fora de faixa vira o primeiro da lista. chega como indice de choice, e indice
-// corrompido tem de soar, nao calar. mesma regra do sanitizeFilterType.
 [[nodiscard]] inline LFOTarget sanitizeLFOTarget(LFOTarget target) noexcept {
     return (target <= LFOTarget::kPosition) ? target : LFOTarget::kPitch;
 }
@@ -36,12 +32,6 @@ enum class LFOWave : std::uint8_t {
     return (wave <= LFOWave::kSampleHold) ? wave : LFOWave::kSine;
 }
 
-// divisao musical do lfo sincronizado, na ordem do choice. a ordem e' contrato.
-//
-// a divisao diz quantas notas daquele valor cabem numa batida, e e' isso que
-// cyclesPerBeat devolve: 1/4 = 1 ciclo por batida, 1/8 = 2, 1/16 = 4. pontuada
-// multiplica o comprimento por 1,5, tercina por 2/3. 1/1 tem 0,25 porque um
-// compasso 4/4 leva quatro batidas.
 inline constexpr int kLFODivCount = 12;
 
 [[nodiscard]] inline int sanitizeLFODiv(int div) noexcept {
@@ -83,8 +73,6 @@ inline constexpr int kLFODivCount = 12;
     }
 }
 
-// bpm invalido cai para 120: sem transporte o lfo tem de continuar a oscilar,
-// e nao parar nem dividir por zero.
 [[nodiscard]] inline double sanitizeBpm(double bpm) noexcept {
     return (std::isfinite(bpm) && bpm > 0.0 && bpm <= 1000.0) ? bpm : 120.0;
 }
@@ -93,8 +81,6 @@ inline constexpr int kLFODivCount = 12;
     return cyclesPerBeat(div) * sanitizeBpm(bpm) / 60.0;
 }
 
-// a forma e' amostrada em `steps` patamares por ciclo: floor(fase * passos) / passos.
-// 16 ja' e' "sem quantizacao", a diferenca para a onda continua e' inaudivel.
 [[nodiscard]] inline int sanitizeLFOSteps(int steps) noexcept {
     return (steps < 1) ? 1 : ((steps > 16) ? 16 : steps);
 }
@@ -107,30 +93,14 @@ inline constexpr int kLFODivCount = 12;
     return std::floor(phase * static_cast<double>(n)) / static_cast<double>(n);
 }
 
-// lfo e' funcao pura do tempo absoluto, nao um oscilador com estado por amostra.
-// a fase avanca uma vez por bloco e o valor em qualquer instante do bloco sai de
-// valueAt com o offset em amostras.
-//
-// sem wrap na fase: o indice do ciclo do S&H e' o floor dela. S&H por splitmix64
-// do indice, inteiro puro — bit-identico entre compiladores, ao contrario do sin
-// de libm.
 class LFO {
 public:
     void reset() noexcept { phase_ = 0.0; }
 
-    // fase derivada do transporte, quando o modo sync esta' ligado. avancar
-    // depois do set e' inofensivo: o proximo bloco volta a derivar.
     void setPhase(double phase) noexcept { phase_ = phase; }
 
-    // avanca a fase em rate*numSamples/sr voltas, SEM wrap. uma vez por bloco, no
-    // fim do processBlock, e nos dois caminhos de saida: o lfo e' tempo absoluto e
-    // marcha mesmo em silencio. sem wrap de proposito, senao o indice do ciclo do
-    // S&H seria sempre zero. phase_ e' sempre o inicio do bloco corrente.
     void advance(float rateHz, int numSamples, double sampleRate) noexcept;
 
-    // valor bipolar no instante offsetSamples dentro do bloco corrente. passar o
-    // offset da voz da o valor onde o grao nasce, e nao o do inicio do bloco:
-    // a 20 Hz com bloco de 256, os dois estao a 0,13 ciclos de distancia.
     [[nodiscard]] float valueAt(LFOWave wave,
                                float rateHz,
                                int offsetSamples,
@@ -140,12 +110,8 @@ public:
     // valor no inicio do bloco: densidade e cutoff, que sao por bloco e nao por grao.
     [[nodiscard]] float blockValue(LFOWave wave, int steps = 16) const noexcept;
 
-    // so para teste e debug: fase em voltas, sem wrap. thread de audio, como o
-    // resto do motor. o display le a telemetria.
     [[nodiscard]] double phase() const noexcept { return phase_; }
 
-    // a forma em funcao da fase, para quem desenha a curva (a vista MOD) sem
-    // duplicar a matematica das ondas no lado da interface.
     [[nodiscard]] static float shapeAt(LFOWave wave, double phase) noexcept {
         return waveAt(wave, phase);
     }

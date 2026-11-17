@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 
@@ -13,9 +13,6 @@ namespace {
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlock = 128;
 
-// niveis do envelope sem depender do agendamento de graos: sem material o
-// applyGate corre na mesma e gateLevel() e' observavel. mede-se a maquina de
-// estados, nao o som.
 std::vector<float> traceLevels(GranularParams params, int blocks, bool sounding = true) {
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
@@ -34,8 +31,6 @@ std::vector<float> traceLevels(GranularParams params, int blocks, bool sounding 
 } // namespace
 
 TEST(EnvelopeAdsr, AttackReachesOneInAttackTime) {
-    // attack de 10 ms a 48 kHz sao 480 amostras: 3 blocos de 128 nao chegam, 4
-    // passam. no meio o nivel fica estritamente entre 0 e 1, nem binario nem preso.
     GranularParams params;
     params.attackSeconds = 0.01f;
 
@@ -48,8 +43,6 @@ TEST(EnvelopeAdsr, AttackReachesOneInAttackTime) {
 }
 
 TEST(EnvelopeAdsr, DecayFallsToSustain) {
-    // attack rapido para sair do caminho, decay de 50 ms ate sustain 0,4. o meio
-    // ancora a queda gradual, o fim ancora o alvo exato.
     GranularParams params;
     params.attackSeconds = 0.001f;
     params.decaySeconds = 0.05f;
@@ -64,8 +57,6 @@ TEST(EnvelopeAdsr, DecayFallsToSustain) {
 }
 
 TEST(EnvelopeAdsr, SustainHolds) {
-    // sustain 0,3 por 100 blocos: nem sobe para 1 nem escorrega para 0. e' o que
-    // separa sustain de decay lento.
     GranularParams params;
     params.attackSeconds = 0.001f;
     params.decaySeconds = 0.005f;
@@ -77,12 +68,7 @@ TEST(EnvelopeAdsr, SustainHolds) {
     }
 }
 
-// ancora o ataque a partir do nivel corrente. o edge guard (nao re-disparar em
-// decay/sustain) e' ancorado pelo teste seguinte.
 TEST(EnvelopeAdsr, RepeatedSoundingDoesNotRestart) {
-    // o processador chama setSounding(true) a cada bloco enquanto ha nota. se isso
-    // re-disparasse o ataque, a nota nunca saia do ataque: 60 re-ancoras por segundo.
-    // duas chamadas seguidas dao o mesmo que uma: o disparo e' na aresta.
     GranularEngine once;
     once.prepare(kSampleRate, kBlock);
     once.setSounding(true);
@@ -107,9 +93,6 @@ TEST(EnvelopeAdsr, RepeatedSoundingDoesNotRestart) {
 }
 
 TEST(EnvelopeAdsr, SoundingDuringDecayDoesNotRestartAttack) {
-    // mesma chamada repetida: se re-disparasse o ataque, nenhuma nota chegava ao
-    // decay e o sustain nunca existia. com aresta, a chamada repetida e' no-op e o
-    // decay continua a cair.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
 
@@ -122,8 +105,6 @@ TEST(EnvelopeAdsr, SoundingDuringDecayDoesNotRestartAttack) {
 
     std::vector<float> left(kBlock, 0.0f);
     std::vector<float> right(kBlock, 0.0f);
-    // attack de 1 ms fecha no primeiro bloco: 10 blocos de decay descem sem chegar
-    // ao sustain.
     for (int block = 0; block < 10; ++block) {
         engine.processBlock(left.data(), right.data(), kBlock, params);
     }
@@ -141,8 +122,6 @@ TEST(EnvelopeAdsr, SoundingDuringDecayDoesNotRestartAttack) {
 }
 
 TEST(EnvelopeAdsr, ReleaseTakesReleaseTime) {
-    // solta no sustain cheio com release de 50 ms: a meio, parcial; no fim, zero
-    // exato. o release conta do nivel de soltura, e 20 blocos de 128 cobrem 2400.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
 
@@ -177,9 +156,6 @@ TEST(EnvelopeAdsr, ReleaseTakesReleaseTime) {
 }
 
 TEST(EnvelopeAdsr, RetriggerDuringReleaseHasNoStep) {
-    // solta a meio do ataque e prime outra vez antes de fechar: o ataque novo parte
-    // do nivel corrente e nunca desce. voltar a zero seria o degrau que o envelope
-    // existe para impedir.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
 
@@ -216,8 +192,6 @@ TEST(EnvelopeAdsr, RetriggerDuringReleaseHasNoStep) {
 }
 
 TEST(EnvelopeAdsr, ReleaseFromSilenceStaysSilent) {
-    // soltar sem nunca ter tocado nao produz som: o release parte do zero e fica
-    // no zero.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
 
@@ -233,8 +207,6 @@ TEST(EnvelopeAdsr, ReleaseFromSilenceStaysSilent) {
 }
 
 TEST(EnvelopeAdsr, NaNEnvelopeParamsAreSafe) {
-    // NaN do host nao pode travar a maquina nem sair no barramento: tempos voltam
-    // aos defaults, sustain a 1,0, e tudo continua finito.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
     engine.setSounding(true);
@@ -265,8 +237,6 @@ TEST(EnvelopeAdsr, NaNEnvelopeParamsAreSafe) {
     // com os defaults aplicados a nota abre: o envelope nao ficou preso.
     EXPECT_FLOAT_EQ(engine.gateLevel(), 1.0f);
 
-    // release com NaN tambem fecha sem NaN: sem esta fase o saneador do
-    // releaseSeconds nunca corria.
     engine.setSounding(false);
     for (int block = 0; block < 40; ++block) {
         engine.processBlock(left.data(), right.data(), 256, params);
@@ -281,8 +251,6 @@ TEST(EnvelopeAdsr, NaNEnvelopeParamsAreSafe) {
 }
 
 TEST(EnvelopeAdsr, ZeroAttackIsOneSampleNotDivZero) {
-    // attack zero e' o mais rapido sem divisao por zero: uma amostra. e' escolha
-    // do utilizador, nao defeito do mecanismo.
     GranularParams params;
     params.attackSeconds = 0.0f;
 

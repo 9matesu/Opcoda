@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/curve.h"
@@ -6,7 +6,6 @@
 #include "opcoda_core/dsp/lfo.h"
 #include "opcoda_core/dsp/limiter.h"
 #include "opcoda_core/dsp/mod_matrix.h"
-#include "opcoda_core/dsp/scale.h"
 #include "opcoda_core/dsp/window.h"
 
 #include <algorithm>
@@ -27,8 +26,6 @@ struct GranularParams {
     float volumeDb {0.0f};
     float pan {0.0f};
     WindowType window {WindowType::kHann};
-    // envelope no mix, nao por grao. ataque e release partem do nivel atual
-    // para nao criar degrau.
     float attackSeconds {0.005f};
     float decaySeconds {0.1f};
     float sustainLevel {1.0f};
@@ -37,13 +34,9 @@ struct GranularParams {
     float attackCurve {0.0f};
     float decayCurve {0.0f};
     float releaseCurve {0.0f};
-    // dois filtros em serie por voz. tipo invalido cai em passa-baixa para soar,
-    // nao calar. corte 20..20000 Hz, Q 0,5..12. os defaults sao transparentes.
     FilterType f1type {FilterType::kLowPass};
     float f1cutoffHz {20000.0f};
     float f1q {0.7071f};
-    // filtro 1: 0 = 12 dB/oitava, 1 = 24 dB com um segundo biquad em serie.
-    // drive satura antes; keytrack e f1env movem o corte em oitavas.
     int f1Slope {0};
     float f1DriveDb {0.0f};
     float f1Keytrack {0.0f};
@@ -51,37 +44,21 @@ struct GranularParams {
     FilterType f2type {FilterType::kLowPass};
     float f2cutoffHz {20000.0f};
     float f2q {0.7071f};
-    // lfo: depth 0 nao muda nada. escalas: pitch +-12 st, posicao +-0,25,
-    // densidade 0,5x..1,5x, cutoff +-2 oitavas.
     float lforateHz {1.0f};
     float lfodepth {0.0f};
     LFOTarget lfotarget {LFOTarget::kPitch};
     LFOWave lfowave {LFOWave::kSine};
-    // nivel do grao, depois do volume. volume = saida; level = quanto cada grao
-    // contribui.
     float grainLevel {1.0f};
-    // largura stereo na saida, mid/side. 1.0 e' o material como veio; 0 colapsa
-    // para mono; 2 dobra o side. o mid fica intocado, por isso o centro nao anda.
     float widthStereo {1.0f};
     // detune por grao, 0..12 st. zero desliga.
     float pitchRandomSemitones {0.0f};
-    // nota da pilha mono. -1 desliga; 60 (Do4) e' razao 1,0. a escala quantiza
-    // antes da taxa, e root e' a tonica (0 = Do).
     int noteNumber {-1};
-    ScaleType scale {ScaleType::kChromatic};
-    int scaleRoot {0};
-    // portamento em segundos. o tempo e' o da travessia inteira, nao depende do
-    // intervalo.
     float glideSeconds {0.0f};
-    // lfo no tempo do host: em sync a taxa vem de lfoDiv e do bpm, e a fase de
-    // hostPpq. ppq < 0 ou NaN cai para 120 bpm.
     bool lfoSync {false};
     int lfoDiv {2};
     int lfoSteps {16};
     double hostBpm {120.0};
     double hostPpq {-1.0};
-    // matriz de 8 rotas, no estado do projeto. nao e' automatizavel; o motor
-    // aplica a uma copia dos parametros por bloco.
     ModMatrix modMatrix {};
     // fontes medidas pelo plugin: velocidade, mod wheel e os dois CCs, 0..1.
     float velocity {1.0f};
@@ -96,25 +73,16 @@ struct Grain {
     double readStep {};
     int remaining {};
     int windowIndex {};
-    // espera antes do grao, em amostras, e escala que leva o indice do grao a'
-    // tabela de 4096 pontos: (4096-1)/(grainLength-1), para o ultimo indice cair
-    // em 4095 e a janela fechar em zero tambem nos graos curtos.
     int delay {0};
     double windowScale {0.0};
     int writeIndex {0};
     float gain {};
     float panLeft {};
     float panRight {};
-    // a tabela com que o grao nasceu. trocar a janela no meio de um grao de 2 s
-    // saltava o envelope; o grao novo usa a tabela nova e o antigo termina na dele.
     const float* window {nullptr};
 };
 
-// -- telemetria --
-// dados para desenhar um grao onde ele esta' lendo.
 struct GrainView {
-    // indice da voz. os slots sao compactados a cada publish, entao o slot 0 de
-    // um bloco pode ser a voz 3 no bloco seguinte. o rastro segue a voz.
     int voice {-1};
 
     float position {0.0f}; ///< fracao do material, 0..1.
@@ -122,29 +90,16 @@ struct GrainView {
     float phase {0.0f};    ///< 0..1 dentro da janela do grao.
 };
 
-// estado dos graos para a interface. nao pode usar fila: quem publica e' a
-// thread de audio, e fila aloca. vai por atomico, um por campo.
-//
-// um seqlock seria a resposta obvia e daria corrida de dados no leitor. com um
-// atomico por campo nao ha corrida, mas os tres numeros de um grao podem vir de
-// blocos diferentes. para desenho, tudo bem.
-//
-// o count tambem pode atrasar. o leitor nao deve ler os slots como "os graos de
-// agora"; le como foto do ultimo publish.
 class GrainTelemetry {
 public:
     // igual a GranularEngine::kMaxVoices, checado em baixo.
     static constexpr int kMaxVoices = 8;
 
-    // store que trava nao serve. no msvc x64 um store relaxado e' movss, mas isso
-    // e' da plataforma, nao do standard.
     static_assert(std::atomic<float>::is_always_lock_free,
                   "store relaxado nao pode travar: o portao C e' probatorio");
     static_assert(std::atomic<int>::is_always_lock_free,
                   "idem para o count, que e' o que o leitor sincroniza com");
 
-    // thread de audio, uma vez por bloco. compacta os graos ativos para a frente
-    // para o count servir de indice.
     void publish(const std::array<Grain, kMaxVoices>& voices) noexcept {
         int count = 0;
 
@@ -154,13 +109,9 @@ public:
                 continue;
             }
 
-            // a voz vai antes do resto. quem le um count novo sabe que a voz veio
-            // com ele.
             voice_[static_cast<std::size_t>(count)].store(static_cast<int>(voice),
                                                            std::memory_order_relaxed);
 
-            // position vem 0..1, mas com pitch alto passa de 1. recorta para o
-            // grao nao sair do ecra. isfinite antes do clamp: clamp(NaN) e' NaN.
             position_[static_cast<std::size_t>(count)].store(
                 static_cast<float>(std::isfinite(grain.position)
                                        ? std::clamp(grain.position, 0.0, 1.0)
@@ -172,8 +123,6 @@ public:
                 std::isfinite(grain.gain) ? grain.gain : 0.0f,
                 std::memory_order_relaxed);
 
-            // fase = windowIndex / (windowIndex + remaining). grao terminado tem
-            // os dois a zero; nesse caso, zero.
             const auto total = grain.windowIndex + grain.remaining;
             phase_[static_cast<std::size_t>(count)].store(
                 total > 0 ? static_cast<float>(grain.windowIndex) / static_cast<float>(total)
@@ -183,8 +132,6 @@ public:
             ++count;
         }
 
-        // release no count. o leitor usa acquire: quem ve o count ve os campos
-        // escritos antes.
         count_.store(count, std::memory_order_release);
     }
 
@@ -219,34 +166,20 @@ public:
 class GranularEngine {
 public:
     static constexpr int kMaxVoices = 8;
-    // dois segundos no maior sample rate que um host entrega (384 kHz). o teto em
-    // amostras so' existe para o int nao transbordar com taxa absurda; o limite
-    // que o utilizador ve' e' o de milissegundos.
     static constexpr int kMaxGrainSamples = 768000;
     static constexpr float kMaxGrainMs = 2000.0f;
     static constexpr float kMinGrainMs = 1.0f;
 
-    // **a janela e' uma tabela fixa, nao o grao.** encher 96 mil pontos por bloco
-    // enquanto o knob de tamanho se mexia custava mais do que o proprio audio;
-    // uma tabela fina lida por escala da' o mesmo envelope e cabe na cache.
     static constexpr int kWindowTableSamples = 4096;
 
-    // escala que leva o indice do grao (0..length-1) aos 4096 pontos da tabela.
-    // o ultimo indice tem de cair em 4095: com 4096/length, um grao de 2 amostras
-    // terminava no pico da Hann e o corte ouvia-se. publica para o ensaio poder
-    // afirmar a borda sem depender do audio.
     [[nodiscard]] static constexpr double windowScaleForLength(int length) noexcept {
         return (length > 1) ? static_cast<double>(kWindowTableSamples - 1) /
                                   static_cast<double>(length - 1)
                             : 0.0;
     }
 
-    // pontos da curva de entropia. publico porque a interface precisa saber
-    // quantos pontos cabem.
     static constexpr std::size_t kMaxEntropyPoints {1024};
 
-    // a telemetria tem o seu proprio limite. se os dois divergirem, o read()
-    // devolve um numero que o publish nunca escreveu.
     static_assert(GrainTelemetry::kMaxVoices == kMaxVoices,
                   "GrainTelemetry::kMaxVoices tem de ser igual a kMaxVoices");
 
@@ -258,9 +191,6 @@ public:
             return;
         }
         sampleRate_ = sampleRate;
-        // a capacidade do haas e' derivada da taxa: sem isto ficava presa a'
-        // taxa do prepare, e encolher a capacidade com o ponteiro de escrita
-        // adiantado escrevia fora do array.
         haasCapacity_ = std::clamp(static_cast<int>(sampleRate_ * 0.012), 1,
                                    kHaasMaxSamples - 2);
         haasWritePos_ = 0;
@@ -268,15 +198,8 @@ public:
     }
     [[nodiscard]] double sampleRate() const noexcept { return sampleRate_; }
 
-    // thread de audio apenas, chamado de drainIncomingQueue. a interface manda
-    // material pela fila SPSC; nunca chama isto. os campos escritos aqui nao sao
-    // atomicos.
     void setSource(const float* samples, std::size_t count) noexcept;
 
-    // igual, mas recebe a curva de entropia ja' reduzida. quem calcula e'
-    // pe::reduceToColumns, na interface. aqui nao se calcula nada: seria O(regiao)
-    // dentro do processBlock, e arrastar a regiao repetia a conta a cada evento.
-    // sem curva, o motor usa 4,0 bits e segue.
     void setSource(const float* samples,
                    std::size_t count,
                    const float* entropyCurve,
@@ -285,24 +208,11 @@ public:
     [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
     [[nodiscard]] std::size_t sourceSize() const noexcept { return sourceCount_; }
 
-    // envelope no mix, nao por voz. as vozes nascem e morrem sozinhas; a nota
-    // manda na saida. abrir e fechar de uma vez e' degrau, e degrau e' estalo.
-    //
-    // setSounding e' aresta: true so na subida, false so na descida. o
-    // processador chama a cada bloco, entao nivel reancoraria o ataque.
-    // isSounding devolve o comando, nao a fase.
     void setSounding(bool on) noexcept;
     [[nodiscard]] bool isSounding() const noexcept { return soundingCmd_; }
 
-    // nivel do envelope. o teste le isto para medir o envelope sem depender do
-    // agendamento de graos.
     [[nodiscard]] float gateLevel() const noexcept { return envelopeLevel_; }
 
-    // fase e progresso do estagio corrente, para a interface desenhar o ponto
-    // vivo do ADSR. so' o nivel nao chegava: com ele o ponto sabia a altura mas
-    // nao onde estava em largura, e saltava de estagio sem transicao.
-    // o indice segue EnvelopePhase (0 idle, 1 attack, 2 decay, 3 sustain,
-    // 4 release); devolve-se int para o enum continuar privado.
     [[nodiscard]] int envelopePhaseIndex() const noexcept {
         return static_cast<int>(envelopePhase_);
     }
@@ -311,23 +221,13 @@ public:
     // semitons do glide, para o teste. em producao ninguem le.
     [[nodiscard]] double glideSemitones() const noexcept { return glideSemitones_; }
 
-    // corte do filtro 1 no ultimo calculo, ja' com lfo, keytrack e envelope.
-    // para o ensaio de keytrack.
     [[nodiscard]] float f1CutoffHz() const noexcept { return lastF1Cutoff_; }
 
-    // o mesmo para o filtro 2: e' a segunda curva do visualizador e tem de mostrar
-    // o corte modulado, nao o do knob.
     [[nodiscard]] float f2CutoffHz() const noexcept { return lastF2Cutoff_; }
 
-    // duracao do ultimo grao, para os ensaios medirem o que o motor aplicou e
-    // nao o que o gerador devia ter dado.
     [[nodiscard]] int lastGrainLengthSamples() const noexcept { return lastGrainLength_; }
 
-    // semente fixa por omissao: mesma fonte e mesmos parametros, mesmo som. quem
-    // quiser outra nuvem chama setSeed com o relogio.
     static constexpr std::uint64_t kDefaultSeed = 0x9E3779B97F4A7C15ull;
-    // reinicia a nuvem. so' antes do processamento: nem a semente nem o serial
-    // sao atomicos, e mexer neles com o audio a correr e' corrida de dados.
     void setSeed(std::uint64_t seed) noexcept {
         seed_ = seed;
         grainSerial_ = 0;
@@ -336,8 +236,6 @@ public:
 
     // fase do lfo, para os ensaios de sync. so a thread de audio escreve.
     [[nodiscard]] double lfoPhase() const noexcept { return lfo_.phase(); }
-    // valor bipolar do lfo no inicio do bloco: o ponto vivo do visualizador de
-    // MOD le o mesmo numero que a matriz usou, nao uma segunda conta na interface.
     [[nodiscard]] float lfoBlockValue() const noexcept { return lastLfoValue_; }
 
     void processBlock(float* left, float* right, int numSamples,
@@ -350,12 +248,8 @@ public:
     [[nodiscard]] const GrainTelemetry& telemetry() const noexcept { return telemetry_; }
 
 private:
-    // idle e sustain sao paradas. attack, decay e release andam a taxa fixa por
-    // amostra; nao ha mola nem velocidade guardada.
     enum class EnvelopePhase : std::uint8_t { idle, attack, decay, sustain, release };
 
-    // lfo ja' saneado, uma vez por bloco. passado por valor para o caminho quente
-    // nao revalidar por grao.
     struct LFOSettings {
         float rateHz {1.0f};
         float depth {0.0f};
@@ -373,19 +267,11 @@ private:
                     const LFOSettings& lfo) noexcept;
     void applyGate(float* left, float* right, int numSamples,
                    const GranularParams& params) noexcept;
-    // mid/side na saida, com rampa do bloco anterior para o alvo: sem a rampa a
-    // automacao ouve-se como ziper no limite do bloco. acima de 1.0 o canal
-    // direito atrasa (haas), que e' o spread que material mono nao tem.
     void applyStereoWidth(float* left, float* right, int numSamples,
                           float targetWidth) noexcept;
 
-    // teto duro do drive, no barramento: cada grao ja' passou pelo tanh, mas a
-    // soma de oito vozes pode passar do tecto, e e' aqui que ele morde. a largura
-    // vem depois e pode voltar a levantar o pico; o limiter fecha a cadeia.
     void applyDriveClip(float* left, float* right, int numSamples,
                         float driveDb) noexcept;
-    // glide em semitons, uma vez por bloco. linear no tempo: a distancia nao
-    // muda a duracao.
     void updateGlide(const GranularParams& params, int numSamples) noexcept;
     // matriz aplicada a copia dos parametros. fontes: params e estado do motor.
     void applyModMatrix(GranularParams& params, float lfoValue) noexcept;
@@ -398,10 +284,6 @@ private:
 
     std::array<Grain, kMaxVoices> voices_ {};
 
-    // uma tabela por tipo de janela, preenchida uma vez no prepare. a troca de
-    // tipo no caminho de audio vira um ponteiro, e nao 4096 cos no callback. o
-    // tamanho sai do enum e nao de um 4 escrito a mao: um tipo novo antes de
-    // kBlackman mudaria a contagem e o indice estouraria o array.
     static constexpr std::size_t kWindowTypeCount =
         static_cast<std::size_t>(WindowType::kBlackman) + 1;
     std::array<std::array<float, kWindowTableSamples>, kWindowTypeCount> windowTables_ {};
@@ -416,8 +298,6 @@ private:
     double glideTarget_ {0.0};
     double glideRemaining_ {0.0};
 
-    // offset entre fase livre e fase do ppq, fixado quando o sync liga. evita
-    // degrau na troca; o seek do host continua a saltar.
     double syncPhaseOffset_ {0.0};
     bool syncEngaged_ {false};
 
@@ -429,11 +309,7 @@ private:
     Limiter limiterLeft_ {};
     Limiter limiterRight_ {};
 
-    // estado por voz: cada voz esta noutro ponto da sua historia. coeficientes
-    // sao iguais para as oito e ficam em cache por bloco.
     std::array<Biquad, kMaxVoices> filterA_ {};
-    // segundo estagio do filtro 1 no slope de 24 dB. estado proprio, senao
-    // processar duas vezes no mesmo biquad nao vira cascata.
     std::array<Biquad, kMaxVoices> filterA2_ {};
     std::array<Biquad, kMaxVoices> filterB_ {};
     BiquadCoeffs coeffsA_ {};
@@ -450,16 +326,11 @@ private:
     bool soundingCmd_ {false};
     EnvelopePhase envelopePhase_ {EnvelopePhase::idle};
     float releaseStartLevel_ {0.0f};
-    // fase do estagio (0..1) e nivel de partida do ataque. com curva 0, o laco
-    // antigo manda e estes dois so acompanham.
     float stagePhase_ {0.0f};
     float attackStartLevel_ {0.0f};
 
     // semente e o que o ultimo grao recebeu da nuvem.
     std::uint64_t seed_ {kDefaultSeed};
-    // o estado do sorteio e' por grao. antes nascia sempre de `seed_ + voz`, e a
-    // mesma voz repetia o mesmo spray, o mesmo detune e o mesmo spread: a nuvem
-    // ficava presa numa roda de oito valores em vez de variar ao longo do tempo.
     std::uint64_t grainSerial_ {0};
     int lastGrainLength_ {0};
 
@@ -467,8 +338,6 @@ private:
     float lastWidth_ {1.0f};
     // teto do clip do drive, com rampa entre blocos para a automacao nao estalar.
     float lastClipCeiling_ {1.0f};
-    // linha de atraso do haas, no canal direito. array fixo; a capacidade
-    // efetiva depende da taxa e sai em prepare().
     static constexpr int kHaasMaxSamples {4096};
     std::array<float, kHaasMaxSamples> haasBuffer_ {};
     int haasWritePos_ {0};
@@ -477,8 +346,6 @@ private:
 
     GrainTelemetry telemetry_ {};
 
-    // fase em voltas, sempre no inicio do bloco. avanca no fim, mesmo em
-    // silencio: o lfo e' tempo absoluto.
     LFO lfo_ {};
     float lastLfoValue_ {0.0f};
 };

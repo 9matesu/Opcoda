@@ -1,8 +1,4 @@
-// portao C no caminho real: a troca de material entre interface e audio nao pode
-// alocar.
-// reproduz a topologia do plugin com o nucleo real, duas threads e o guard. o que
-// se prova e' a propriedade de tempo real da troca, nao o empacotamento JUCE.
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/rt/alloc_guard.h"
@@ -22,8 +18,6 @@ using opcoda::rt::SpscRing;
 
 namespace {
 
-// espelha o plugin: a interface e' dona da memoria, a fila carrega ponteiro cru,
-// e o buffer so e' liberado depois de a thread de audio devolver o ponteiro.
 class SampleExchange {
 public:
     using Buffer = std::shared_ptr<const std::vector<float>>;
@@ -81,8 +75,6 @@ std::vector<float> makeSamples(std::size_t count, float seed) {
 } // namespace
 
 TEST(SampleExchange, AudioThreadAllocatesNothingDuringSwap) {
-    // o teste do portao C: trocar material e processar um bloco, com a janela
-    // marcada, nao pode custar uma alocacao.
     SampleExchange exchange;
     GranularEngine engine;
     engine.prepare(44100.0, 256);
@@ -110,8 +102,6 @@ TEST(SampleExchange, AudioThreadAllocatesNothingDuringSwap) {
         }
     });
 
-    // thread de interface: publica material novo sem parar, como o utilizador a
-    // arrastar ficheiros.
     for (int i = 0; i < 200; ++i) {
         EXPECT_TRUE(exchange.publish(makeSamples(40000 + (i * 137), static_cast<float>(i))));
         exchange.releaseReturned();
@@ -128,11 +118,6 @@ TEST(SampleExchange, AudioThreadAllocatesNothingDuringSwap) {
 }
 
 TEST(SampleExchange, OldBufferIsOnlyReleasedAfterEngineMovedOn) {
-    // o bug que este handshake evita: a interface liberar o buffer antigo enquanto
-    // a thread de audio ainda le.
-    // o invariante e' de quem segura a referencia, nao do dado: enquanto o audio
-    // aponta para o antigo, ele nao sai; depois da troca o motor aponta para o novo
-    // e o antigo pode sair. o resto e' confirmar que o motor trocou de material.
     SampleExchange exchange;
     GranularEngine engine;
     engine.prepare(44100.0, 256);
@@ -146,22 +131,16 @@ TEST(SampleExchange, OldBufferIsOnlyReleasedAfterEngineMovedOn) {
     const auto* second = exchange.drainOnto(engine);
     ASSERT_NE(second, nullptr);
 
-    // o motor passou a ler o material novo, e nao o antigo. e' isso que torna
-    // seguro liberar o antigo.
     EXPECT_EQ(second->size(), 16384u);
     EXPECT_NE(first, second);
     EXPECT_EQ(engine.sourceSize(), 16384u);
 
-    // o material antigo tinha o dobro do tamanho do novo: se o motor ainda
-    // apontasse para ele, sourceSize acusava.
     EXPECT_NE(engine.sourceSize(), first->size());
 
     exchange.releaseReturned();
 }
 
 TEST(SampleExchange, RejectsPublishWhenQueueIsFull) {
-    // fila cheia significa que a thread de audio ainda nao consumiu. recusar e' o
-    // comportamento correcto: crescer custava o contrato de tempo real.
     SampleExchange exchange;
     int accepted = 0;
     for (int i = 0; i < 16; ++i) {

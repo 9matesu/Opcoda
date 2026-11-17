@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "fonts.h"
 #include "knob.h"
@@ -10,14 +10,6 @@
 
 namespace opcoda {
 
-// parametro de escolha como tecla, nao como knob.
-//
-// **girar um knob de duas a doze posicoes e' pior do que ler a lista.** o valor
-// atual fica escrito e o clique abre o menu com os rotulos reais. o titulo com
-// glifo fica em cima, como no knob, e o valor vive numa fenda baixa e larga no
-// centro da celula -- campo de escolha, nao disco. e' ainda um juce::Button:
-// foco, teclado e o AccessibilityHandler vem de graca, como no knob que ele
-// substitui.
 class ChoiceButton : public juce::Button {
 public:
     ChoiceButton(juce::AudioProcessorValueTreeState& state, const Knob::Spec& spec)
@@ -43,9 +35,6 @@ public:
     }
 
     void setOnDark(bool on) {
-        // a fenda e' um sulco no painel: mais escura que a chapa. numa baia
-        // escura, onde o sulco nao tem para onde descer, ela inverte para um
-        // banho de branco. o texto acompanha.
         titleColour_ = on ? palette::textOnDarkSub : palette::textSub;
         textColour_ = palette::ivory;
         slotFill_ = on ? palette::alpha(palette::ivory, 0.10f) : palette::charcoalDeep;
@@ -92,9 +81,6 @@ public:
                                            static_cast<float>(titleHeight)},
                    juce::Justification::centredLeft, false);
 
-        // corpo: uma fenda de escolha, baixa e larga. o azulejo quadrado que aqui
-        // estava (do tamanho do disco do knob) lia-se como um knob sem escala;
-        // um campo horizontal diz "da' para escolher" antes de o caret se ver.
         constexpr float kSlotHeight {30.0f};
         const float slotWidth = juce::jmin(bounds.getWidth() - 4.0f, 104.0f);
         const auto slot =

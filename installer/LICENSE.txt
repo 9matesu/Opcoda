@@ -1,0 +1,64 @@
+OPCODA - END USER LICENSE AGREEMENT
+
+Version: 1.0 (bundled with Opcoda 0.1.0)
+
+1. License Grant
+Subject to the terms of this Agreement, bloodwormtrax grants you a
+personal, non-exclusive, non-transferable license to install and use the
+Opcoda software (the "Software") for your own musical and audio productions.
+
+2. Permitted Use
+- Use the VST3 plugin inside your digital audio workstation (DAW).
+- Use the standalone application to play and design audio material.
+- Export and publish works that contain audio produced with the Software,
+  without royalty payments to the author.
+
+3. Restrictions
+You may not redistribute, sublicense, modify, or reverse engineer the
+Software, except to the extent permitted by applicable law. You may not
+remove or alter any proprietary notices contained in the Software.
+
+4. Intellectual Property
+The Software is owned by bloodwormtrax and is protected by copyright and
+other intellectual property laws. This Agreement does not transfer
+ownership of the Software to you.
+
+5. Updates
+bloodwormtrax may release updates and new versions of the Software. This
+Agreement applies to such updates unless accompanied by a new license.
+
+6. Warranty Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NON-INFRINGEMENT. THE AUTHOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE
+ERROR-FREE OR UNINTERRUPTED.
+
+7. Limitation of Liability
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DAMAGES, INCLUDING DIRECT,
+INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES, ARISING OUT OF THE USE OR
+INABILITY TO USE THE SOFTWARE, INCLUDING LOSS OF DATA.
+
+8. Privacy
+The installer does not collect or transmit any personal data. The Software
+does not perform network requests. Any future telemetry will be optional
+and subject to explicit consent. For details, see
+https://bloodwormtrax.neocities.org/privacy.
+
+9. Support
+Support and information are available at
+https://bloodwormtrax.neocities.org.
+
+10. Termination
+This license terminates automatically if you breach any term of this
+Agreement. On termination, you must stop using and uninstall the Software.
+
+11. Governing Law
+This Agreement is governed by the laws of [JURISDICTION].
+
+12. Acceptance
+By clicking "Install", you acknowledge that you have read and accept this
+Agreement. If you do not accept, click "Cancel" to exit the installer.
+
+---
+Terms of Use: https://bloodwormtrax.neocities.org/terms
+Privacy Policy: https://bloodwormtrax.neocities.org/privacy

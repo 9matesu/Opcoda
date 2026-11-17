@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/pe/byte_to_sample.h"
@@ -32,9 +32,6 @@ float hannCoefficient(std::size_t index, std::size_t length) {
     return static_cast<float>(0.5 * (1.0 - std::cos(2.0 * 3.14159265358979323846 * t)));
 }
 
-// magnitude no bin k de uma FFT radix-2 com janela blackman-harris, no protocolo
-// do ensaio T1. implementacao propria: a FFT nao entra no caminho de audio e nao
-// vale uma dependencia de runtime.
 void blackmanHarris(std::vector<double>& window, std::size_t length) {
     window.resize(length);
     if (length <= 1) {
@@ -97,9 +94,6 @@ void magnitudeSpectrum(const std::vector<float>& signal,
 }
 
 std::vector<float> renderRaw(const std::vector<std::uint8_t>& bytes, int numSamples) {
-    // controle negativo do T1: a mesma conversao, sem motor granular e sem
-    // condicionamento. precisa de 44100 amostras e o PE sintetico tem 768 bytes,
-    // logo o ficheiro e' repetido: e' o que um .exe grande faria.
     std::vector<std::uint8_t> tiled;
     tiled.reserve(static_cast<std::size_t>(numSamples));
     while (tiled.size() < static_cast<std::size_t>(numSamples)) {
@@ -156,8 +150,6 @@ double lowBandPeakDb(const std::vector<double>& magnitudes) {
 } // namespace
 
 TEST(T1DcAttenuation, BinaryWithStrongOffsetIsAttenuatedByFortyDecibels) {
-    // criterio T1: o bin DC da saida tratada fica pelo menos 40 dB abaixo do
-    // mesmo bin da leitura bruta.
     PeBuilder builder;
     // preenche .text com gradiente cujo valor medio fica muito longe de zero.
     builder.fillTextWithGradient(200, 20);
@@ -197,9 +189,6 @@ TEST(T1DcAttenuation, SubTwentyHertzStaysBelowMinusSixtyDbfs) {
 }
 
 TEST(T1DcAttenuation, DcBlockerRemovesPureConstantSignal) {
-    // isolamento da cadeia: um sinal constante tem de sair sem nivel medio, sem
-    // depender do agendador granular. a transiente de partida decai com R^n, logo
-    // mede-se o regime depois de acomodar.
     DcBlocker blocker;
     blocker.setSampleRate(kSampleRate);
     blocker.prepare();
@@ -230,8 +219,6 @@ TEST(T1DcAttenuation, ToSamplesMapsByteRangeToUnitInterval) {
     ASSERT_EQ(samples.size(), data.size());
     EXPECT_NEAR(samples[0], -1.0f, 1e-6f);
     EXPECT_NEAR(samples[3], 1.0f, 1e-6f);
-    // 127 e 128 sao os bytes mais proximos do zero, e nenhum e' exactamente
-    // zero: e' o offset que o DC-blocker existe para remover.
     EXPECT_NEAR(samples[1], -0.5f / 127.5f, 1e-6f);
     EXPECT_NEAR(samples[2], 0.5f / 127.5f, 1e-6f);
 }

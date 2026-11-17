@@ -1,12 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <atomic>
 #include <type_traits>
 
 namespace opcoda::rt {
 
-// o atômico guarda o ALVO que a interface escreveu. o histórico da rampa fica
-// com o consumidor, em nextSmoothed, porque o atômico não guarda estado.
 template <typename T>
 class AtomicParam {
     static_assert(std::is_trivially_copyable_v<T>, "AtomicParam exige tipo trivial");

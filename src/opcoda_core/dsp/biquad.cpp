@@ -1,4 +1,4 @@
-#include "opcoda_core/dsp/biquad.h"
+﻿#include "opcoda_core/dsp/biquad.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,15 +24,8 @@ BiquadCoeffs makeBiquadCoeffs(FilterType type,
                               float cutoffHz,
                               float q,
                               double sampleRate) noexcept {
-    // saneamento antes da trigonometria: NaN ou fora de faixa nao pode chegar ao
-    // sin/cos, dali sai coeficiente NaN e o filtro envenena o barramento. Q
-    // trunca em [0,5, 12]: abaixo o pico some, acima o anel vira apito.
     const double sr = (std::isfinite(sampleRate) && sampleRate > 0.0) ? sampleRate : 44100.0;
-    // piso duplo: sr absurda poria nyquist abaixo de 20 e o clamp sairia com
-    // lo > hi, pre-condicao violada.
     const double nyquist = std::max(sr * 0.49, 20.0);
-    // o NaN cai no min() com nyquist, e nao em 20000 cru: 20000 acima de
-    // nyquist dobrava a frequencia em vez de passar, finito e errado.
     const double cutoff = std::min(std::isfinite(cutoffHz)
                                        ? std::clamp(static_cast<double>(cutoffHz), 20.0, nyquist)
                                        : 20000.0,
@@ -82,8 +75,6 @@ BiquadCoeffs makeBiquadCoeffs(FilterType type,
     coeffs.a1 = static_cast<float>(a1 / a0);
     coeffs.a2 = static_cast<float>(a2 / a0);
 
-    // ultima rede: se ainda saiu nao-finito, devolve passagem. melhor filtro
-    // que vira fio do que filtro que vira NaN.
     if (!std::isfinite(coeffs.b0 + coeffs.b1 + coeffs.b2 + coeffs.a1 + coeffs.a2)) {
         return BiquadCoeffs{};
     }
@@ -104,10 +95,6 @@ float Biquad::process(float x, const BiquadCoeffs& coeffs) noexcept {
     x1_ = x;
     y2_ = y1_;
     y1_ = y;
-    // snap nos ESTADOS, nao so na saida: a cauda estaciona em subnormal e cada
-    // operacao em x86 sem FTZ custa 10-100x. zerar so o y nao adianta, porque
-    // y1_/y2_ guardavam o denormal e a amostra seguinte o ressuscitava.
-    // FTZ via _controlfp nao serve: o flag e' da thread, e no VST3 a thread e' do host.
     if (std::fabs(y1_) < 1e-15f) {
         y1_ = 0.0f;
     }

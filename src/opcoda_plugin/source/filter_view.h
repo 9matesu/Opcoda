@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "fonts.h"
 #include "palette.h"
@@ -11,15 +11,6 @@
 
 namespace opcoda {
 
-// resposta dos dois filtros, desenhada a partir dos mesmos coeficientes que o
-// audio usa.
-//
-// **nao e' um grafico decorativo.** a curva sai de dsp::makeBiquadCoeffs com o
-// tipo, o corte, o Q e o slope ligados aos knobs, e a linha viva usa o corte que
-// o motor ja' modulou com keytrack, envelope e lfo. o que se ve e' o que sai.
-//
-// duas pegas: a do filtro 1 e a do filtro 2. no eixo x o corte, no eixo y o Q --
-// o gesto que se faz num filtro, sem passar por quatro knobs.
 class FilterView final : public juce::Component,
                          private juce::AudioProcessorValueTreeState::Listener {
 public:
@@ -38,8 +29,6 @@ public:
     void setLive(float cutoff1, float cutoff2);
 
 private:
-    // a curva segue os knobs mesmo sem audio: mover o corte tem de mexer o
-    // desenho no mesmo quadro.
     void parameterChanged(const juce::String&, float) override { repaint(); }
 
     enum class Handle : std::uint8_t { none, first, second };
@@ -61,8 +50,6 @@ private:
     [[nodiscard]] float xForHz(float hz, const juce::Rectangle<float>& plot) const;
     [[nodiscard]] float hzForX(float x, const juce::Rectangle<float>& plot) const;
     [[nodiscard]] float yForDb(float db, const juce::Rectangle<float>& plot) const;
-    // dB da cadeia (filtro 1 com o slope dele, depois filtro 2) num ponto. os
-    // cortes entram por parametro para a linha viva poder usar os modulados.
     [[nodiscard]] static float responseDb(const Response& geometry, float hz, float cutoff1,
                                           float cutoff2);
     [[nodiscard]] float valueOf(const char* id) const;

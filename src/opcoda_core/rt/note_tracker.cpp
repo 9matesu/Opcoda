@@ -1,12 +1,10 @@
-#include "opcoda_core/rt/note_tracker.h"
+﻿#include "opcoda_core/rt/note_tracker.h"
 
 #include <algorithm>
 
 namespace opcoda::rt {
 
 void NoteTracker::pushHeld(int note) noexcept {
-    // retrigger da mesma nota move-a para o topo em vez de duplicar: senao o
-    // fallback mentiria com a pilha cheia de copias.
     removeHeld(note);
     if (heldCount_ >= kMaxHeldNotes) {
         for (int i = 1; i < kMaxHeldNotes; ++i) {
@@ -56,9 +54,6 @@ void NoteTracker::handle(const Event& event) noexcept {
             const int note = event.number & 0x7F;
             pushHeld(note);
             activeNote_ = note;
-            // a velocidade da ultima tecla e' fonte da matriz, e e' a que dispara
-            // o ataque no instrumento mono. notaOff nao a apaga, senao a cauda
-            // perdia a fonte a meio.
             activeVelocity_ = std::clamp(static_cast<float>(event.value & 0x7F) / 127.0f, 0.0f, 1.0f);
             break;
         }
@@ -70,13 +65,7 @@ void NoteTracker::handle(const Event& event) noexcept {
                 removeHeld(note);
                 pushSustained(note);
                 ++sustained_;
-                // mantem a altura: mudar ao largar a tecla seria um salto sem
-                // nota nova.
             } else {
-                // **nota-off sem nota-on nao conta.** um arrasto rapido pelo
-                // teclado pode perder o note-on na fila; descontar aí deixava a
-                // contagem abaixo do que esta' premido e o gate fechava com
-                // teclas na mao. a pilha e' a unica fonte da contagem.
                 removeHeld(note);
                 if (activeNote_ == note && heldCount_ > 0) {
                     activeNote_ = heldNotes_[static_cast<std::size_t>(heldCount_ - 1)];
@@ -87,8 +76,6 @@ void NoteTracker::handle(const Event& event) noexcept {
 
         case Event::Kind::sustain:
             sustain_ = event.value >= 64;
-            // soltar o pedal solta tudo o que estava preso. as teclas ainda
-            // premidas continuam a soar, e a ultima delas volta a mandar.
             if (!sustain_) {
                 sustained_ = 0;
                 sustainedCount_ = 0;
@@ -111,9 +98,6 @@ void NoteTracker::handle(const Event& event) noexcept {
             break;
     }
 
-    // nota-off sem nota-on vem de hosts que reenviam o estado inicial no primeiro
-    // bloco. a contagem sai da pilha, nunca de incrementos soltos: um evento
-    // perdido na fila deixava de haver contagem e sim um numero que mentia.
     pressed_ = heldCount_;
     sustained_ = std::max(sustained_, 0);
     sounding_ = pressed_ > 0 || sustained_ > 0;
@@ -128,8 +112,6 @@ void NoteTracker::reset() noexcept {
     sustainedCount_ = 0;
     activeNote_ = 60;
     activeVelocity_ = 1.0f;
-    // reset esquece tambem os CCs. deixar valores para tras faria o proximo CC
-    // chegar ao host com estado de antes, invisivel para quem depura.
     for (auto& value : controllers_) {
         value = 0.0f;
     }

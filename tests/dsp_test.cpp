@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/dc_blocker.h"
 #include "opcoda_core/dsp/granular_engine.h"
@@ -46,8 +46,6 @@ TEST(DcBlocker, AttenuationAtDcIsEffectivelyInfinite) {
 }
 
 TEST(DcBlocker, RemovesConstantOffset) {
-    // offset de 0,5 tem de sair sem nivel medio. y[0] = 0,5 decai com R^n, entao
-    // a media so vale em regime: medir com o decaimento dentro nao serve.
     DcBlocker blocker;
     blocker.setSampleRate(kSampleRate);
     blocker.prepare();
@@ -83,8 +81,6 @@ TEST(DcBlocker, TransientDecaysMonotonically) {
 }
 
 TEST(DcBlocker, AttenuatesVeryLowFrequencies) {
-    // 1a ordem, 6 dB/octava, corte em ~12 Hz: 5 Hz cai ~8 dB, 1 Hz ~21 dB. o T1
-    // cobra -60 dBFS de energia na banda, nao -60 dB numa frequencia isolada.
     DcBlocker blocker;
     blocker.setSampleRate(kSampleRate);
     const double gain1Hz = blocker.gainDbAt(1.0);
@@ -193,8 +189,6 @@ TEST(Limiter, ResetRestoresUnityGain) {
 }
 
 TEST(Window, HannAndBlackmanAreZeroAtTheEdges) {
-    // Hann e Blackman zeram nas bordas, o que evita clique na sobreposicao.
-    // Hamming vale 0,08 de proposito: e' alternativa, nao o padrao do MVP.
     for (auto type : {WindowType::kHann, WindowType::kBlackman}) {
         std::vector<float> window(256);
         fillWindow(type, window.data(), 256);
@@ -236,8 +230,6 @@ TEST(Window, HandlesDegenerateInput) {
 }
 
 TEST(Window, NamesAreStable) {
-    // os nomes aparecem na interface, entao sao contrato visivel. contrato em
-    // ingles, pela F015.
     EXPECT_STREQ(windowName(WindowType::kHann), "Hann");
     EXPECT_STREQ(windowName(WindowType::kGaussian), "Gaussian");
     EXPECT_STREQ(windowName(WindowType::kHamming), "Hamming");
@@ -266,12 +258,8 @@ TEST(GranularEngine, PrepareWithoutSourceIsSilent) {
 TEST(GranularEngine, ProducesAudioFromSyntheticSource) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
-    // o motor so toca com nota. antes do gate nao havia esta chamada e ele
-    // granulava sozinho com material carregado.
     engine.setSounding(true);
 
-    // senoide sintetica de 4096 amostras: nao depende de .exe real, fica rapida
-    // e deterministica.
     std::vector<float> source(4096);
     for (std::size_t i = 0; i < source.size(); ++i) {
         source[i] = std::sin(2.0f * static_cast<float>(M_PI) * 440.0f *
@@ -284,8 +272,6 @@ TEST(GranularEngine, ProducesAudioFromSyntheticSource) {
     params.densityGrainsPerSec = 50.0f;
     params.position = 0.5f;
 
-    // densidade em graos por segundo: 50/s a 44,1 kHz poe o primeiro grao por
-    // volta do bloco 20. renderiza 1 s e mede o pico acumulado.
     std::vector<float> left(256, 0.0f);
     std::vector<float> right(256, 0.0f);
     float peak = 0.0f;
@@ -301,9 +287,6 @@ TEST(GranularEngine, ProducesAudioFromSyntheticSource) {
 TEST(GranularEngine, RespectsGrainSizeBounds) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
-    // fonte de 5 s: a metade tem de valer 2,5 s para o tecto de 2 s ser o que
-    // morde. com fonte mais curta o recorte da metade agia primeiro e o ensaio
-    // media outro limite (esse caso tem ensaio proprio abaixo).
     const auto sourceCount = static_cast<std::size_t>(kSampleRate * 5.0);
     std::vector<float> source(sourceCount, 0.0f);
     for (std::size_t i = 0; i < sourceCount; ++i) {
@@ -319,8 +302,6 @@ TEST(GranularEngine, RespectsGrainSizeBounds) {
     std::vector<float> left(256);
     std::vector<float> right(256);
 
-    // acima do teto de 2 s ainda produz, sem estourar o buffer pre-alocado --
-    // mas fica nos 2 s, nao nos 5 s pedidos.
     float peak = 0.0f;
     for (int block = 0; block < 220; ++block) {
         engine.processBlock(left.data(), right.data(), 256, params);
@@ -329,16 +310,10 @@ TEST(GranularEngine, RespectsGrainSizeBounds) {
             peak = std::max(peak, std::abs(sample));
         }
     }
-    // dois segundos, o teto que o utilizador ve' no knob. literal de proposito:
-    // escrito a partir da constante, o ensaio aceitaria qualquer teto novo.
     const auto expected = static_cast<int>(2.0 * kSampleRate);
     EXPECT_EQ(engine.lastGrainLengthSamples(), expected);
-    // o grao clampado tem de soar: so' o comprimento nao distingue um motor que
-    // aceita o valor e cala a voz.
     EXPECT_GT(peak, 0.01f) << "o grao no tecto ficou mudo";
 
-    // o piso: 1 ms, o menor valor que o knob entrega. abaixo disso o motor nao
-    // pode encurtar para zero nem dividir por um comprimento invalido.
     GranularEngine floorEngine;
     floorEngine.prepare(kSampleRate, 256);
     floorEngine.setSounding(true);
@@ -354,9 +329,6 @@ TEST(GranularEngine, RespectsGrainSizeBounds) {
 }
 
 TEST(GranularEngine, GrainNeverTakesMoreThanHalfTheSource) {
-    // a fonte tem 2 s, logo o tecto da metade vale 1 s: o grao de 2 s pedido tem
-    // de encolher para 1 s, e nao para o tecto de milissegundos. era este recorte
-    // que a fonte de 5 s escondia.
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
     engine.setSounding(true);
@@ -384,14 +356,10 @@ TEST(GranularEngine, GrainNeverTakesMoreThanHalfTheSource) {
 }
 
 TEST(GranularEngine, LongGrainStaysAliveForTheWholeLength) {
-    // 1,5 s de grao. o teto antigo de 100 ms matava o som no primeiro decimo e o
-    // knob parecia nao fazer nada acima disso.
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
     engine.setSounding(true);
 
-    // seno, e nao uma constante: o dc_blocker da saida corta material continuo e
-    // o ensaio leria silencio mesmo com o grao vivo.
     const auto sourceCount = static_cast<std::size_t>(kSampleRate * 4.0);
     std::vector<float> source(sourceCount, 0.0f);
     for (std::size_t i = 0; i < sourceCount; ++i) {
@@ -402,8 +370,6 @@ TEST(GranularEngine, LongGrainStaysAliveForTheWholeLength) {
 
     GranularParams params;
     params.grainSizeMs = 1500.0f;
-    // um grao por segundo: a medicao tem de apanhar o mesmo grao ja' velho, e nao
-    // um recem-nascido que esconderia um motor que consome dois blocos por bloco.
     params.densityGrainsPerSec = 1.0f;
     params.position = 0.0f;
     params.spray = 0.0f;
@@ -411,10 +377,6 @@ TEST(GranularEngine, LongGrainStaysAliveForTheWholeLength) {
     std::vector<float> left(256, 0.0f);
     std::vector<float> right(256, 0.0f);
 
-    // mede a 1,9 s do arranque. o unico grao antes disso nasceu em ~1,0 s, logo
-    // tem 0,9 s de vida: um grao de 1,5 s chega vivo, um de 100 ms ja' morreu ha'
-    // muito, e um motor que renderiza cada grao duas vezes por bloco (bug de
-    // 27/10/2026) matava-o aos 0,75 s. o grao seguinte so' nasce em ~2,0 s.
     const int blocksUntilMeasurement = static_cast<int>(kSampleRate * 1.9 / 256.0);
     for (int block = 0; block < blocksUntilMeasurement; ++block) {
         engine.processBlock(left.data(), right.data(), 256, params);
@@ -432,10 +394,6 @@ TEST(GranularEngine, LongGrainStaysAliveForTheWholeLength) {
 }
 
 TEST(GrainWindow, MappingClosesTheEnvelopeOnTheLastSample) {
-    // o grao de N amostras le a tabela com passo (4096-1)/(N-1): o ultimo indice
-    // tem de cair em 4095, onde a Hann vale zero. o ensaio le a tabela a serio em
-    // vez de repetir a conta da funcao; a formula antiga (4096/N) deixava o rabo
-    // do grao curto no pico da janela (2 amostras caiam no indice 2048, valor 1).
     std::array<float, GranularEngine::kWindowTableSamples> hann {};
     fillWindow(WindowType::kHann, hann.data(),
                static_cast<int>(GranularEngine::kWindowTableSamples));
@@ -449,8 +407,6 @@ TEST(GrainWindow, MappingClosesTheEnvelopeOnTheLastSample) {
         EXPECT_LT(hann[lastIndex], 1.0e-4f)
             << "o ultimo indice do grao de " << length << " nao fecha a janela";
 
-        // a formula antiga, para comparar: num grao de 2 ou 3 amostras o ultimo
-        // indice chegava perto do pico e ouvia-se o corte.
         const auto oldIndex = static_cast<std::size_t>(
             std::min(static_cast<double>(length - 1) * 4096.0 / static_cast<double>(length),
                      kLastIndex));
@@ -464,10 +420,6 @@ TEST(GrainWindow, MappingClosesTheEnvelopeOnTheLastSample) {
 }
 
 TEST(GranularEngine, AGrainLivesAsLongAsItsLength) {
-    // 200 ms a 44,1 kHz sao 8820 amostras, ~35 blocos de 256. o motor renderizava
-    // cada grao duas vezes por bloco (um passe antes do nascimento, outro depois,
-    // ambos sobre todas as vozes) e consumia dois blocos de vida por bloco: o grao
-    // morria em ~17. o grao longo nao era longo por isso.
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
 
@@ -537,8 +489,6 @@ TEST(GranularEngine, VoicePoolIsBounded) {
 }
 
 TEST(GranularEngine, DeterministicAcrossRuns) {
-    // mesmo material e mesmos params, mesmo bloco. e' o que torna T1 e T2
-    // reproduziveis.
     const auto render = [] {
         GranularEngine engine;
         engine.prepare(kSampleRate, 256);
@@ -570,9 +520,6 @@ TEST(GranularEngine, HandlesNullBuffers) {
 }
 
 TEST(GranularEngine, GrainSweepsBoundedFractionOfSource) {
-    // regressao: o avanco por amostra e' a taxa dividida pelo comprimento da
-    // fonte. somar a taxa crua a posicao normalizada varria o arquivo em duas
-    // amostras e zerava a saida.
 GranularEngine engine;
     engine.prepare(kSampleRate, 256);
     engine.setSounding(true);
@@ -591,8 +538,6 @@ GranularEngine engine;
     params.pitchSemitones = 0.0f;
     params.spray = 0.0f;
 
-    // a 1x, 1764 amostras andam 1764/65536 = 2,7% do arquivo. a varredura errada
-    // matava o grao no primeiro bloco.
     std::vector<float> left(256, 0.0f);
     std::vector<float> right(256, 0.0f);
     for (int block = 0; block < 8; ++block) {
@@ -630,16 +575,12 @@ TEST(GranularEngine, ResetSilencesVoices) {
 }
 
 namespace {
-// fonte constante e nivelada: pior caso para estalo, porque um degrau de saida
-// aparece nitido no meio de um sinal sem envelope.
 struct GateRig {
     static constexpr double kSampleRate = 48000.0;
     static constexpr int kBlock = 128;
 
     GateRig() {
         engine.prepare(kSampleRate, kBlock);
-        // sem setGateSeconds: os defaults (attack 5 ms, release 50 ms) ja sao o
-        // comportamento antigo, e o release novo e' mais longo que a rampa antiga.
         source.assign(8192, 0.75f);
         engine.setSource(source.data(), source.size());
         params.densityGrainsPerSec = 60.0f;
@@ -673,8 +614,6 @@ struct GateRig {
 TEST(GranularEngineGate, SilentUntilSounding) {
     GateRig rig;
 
-    // sem nota o motor consome blocos e nao devolve som. antes do gate o plugin
-    // granulava sozinho assim que havia ficheiro carregado.
     rig.process(8);
     EXPECT_LT(rig.peak(), 1.0e-6f);
 }
@@ -684,15 +623,11 @@ TEST(GranularEngineGate, OpensAndClosesWithTheNote) {
     rig.engine.setSounding(true);
     EXPECT_TRUE(rig.engine.isSounding());
 
-    // a 60 graos/s o primeiro grao nasce dezenas de blocos depois: precisa de
-    // tempo renderizado.
     rig.process(80);
     EXPECT_GT(rig.peak(), 1.0e-4f);
 
     rig.engine.setSounding(false);
     EXPECT_FALSE(rig.engine.isSounding());
-    // release de 50 ms a 48 kHz sao 2400 amostras: 24 blocos de 128 fecham com
-    // folga. oito blocos, que bastavam para a rampa de 5 ms, deixariam cauda.
     rig.process(24);
     EXPECT_LT(rig.peak(), 1.0e-6f);
 }
@@ -706,8 +641,6 @@ TEST(GranularEngineGate, RampIsGradualAndNotBinary) {
     rig.process(1);
     const float afterOneBlock = rig.engine.gateLevel();
 
-    // 5 ms a 48 kHz sao 240 amostras: um bloco de 128 deixa a rampa a meio. um
-    // gate binario chegaria a 1 aqui, e esse degrau e' que estala.
     EXPECT_GT(afterOneBlock, 0.4f) << "a rampa subiu devagar demais: " << afterOneBlock;
     EXPECT_LT(afterOneBlock, 1.0f) << "a rampa parece binaria";
 
@@ -720,8 +653,6 @@ TEST(GranularEngineGate, RampIsGradualAndNotBinary) {
     EXPECT_GT(closing, 0.0f) << "fechou de uma vez, sem rampa";
     EXPECT_LT(closing, 1.0f);
 
-    // release de 50 ms: 20 blocos de 128 cobrem as 2400 amostras. o nivel fecha
-    // em zero exato, porque o release conta a partir do nivel de soltura.
     rig.process(20);
     EXPECT_FLOAT_EQ(rig.engine.gateLevel(), 0.0f);
 }
@@ -747,19 +678,9 @@ TEST(GranularEngineGate, ResetClosesGate) {
     rig.process(8);
     EXPECT_LT(rig.peak(), 1.0e-6f);
 }
-// ---------------------------------------------------------------------------
-// telemetria dos graos
-//
-// o display le estes numeros para desenhar cada grao onde ele le o material. o
-// que importa aqui nao e' o desenho: e' que o publish nunca minta sobre quantos
-// graos existem nem sobre onde estao.
-// ---------------------------------------------------------------------------
 
 namespace {
 
-// array de graos com as vozes indicadas vivas. as mortas ficam em 0,99 de
-// proposito: e' o que sobraria se o publish escrevesse no indice da voz em vez
-// de compactar, e e' isso que distingue as duas implementacoes.
 std::array<Grain, GranularEngine::kMaxVoices> voicesWith(
     const std::vector<int>& activeVoiceIndices,
     double positionStep = 0.1) {
@@ -775,8 +696,6 @@ std::array<Grain, GranularEngine::kMaxVoices> voicesWith(
         auto& grain = voices[static_cast<std::size_t>(voice)];
         grain.active = true;
         grain.position = position;
-        // o ganho sobe com a voz: com valor igual em todas, um erro de slot nao
-        // aparece no ganho. 0,25 a 1,0; o motor nao passa de ~0,25 com 0 dB.
         grain.gain = 0.25f + 0.25f * static_cast<float>(grainCount);
         grain.windowIndex = 250;
         grain.remaining = 750;
@@ -796,11 +715,6 @@ std::array<GrainView, GrainTelemetry::kMaxVoices> readAll(
 } // namespace
 
 TEST(GrainTelemetry, EachPublishedGrainCarriesItsOwnVoiceIndex) {
-    // **a identidade e' o indice da voz, nunca a posicao no array.** o publish
-    // compacta os activos para a frente, entao o slot diz a ordem, nao o grao.
-    // um display ligado ao slot saltaria de grao sempre que um morresse.
-    // nota: publica quatro graos nas vozes 0, 2, 3 e 5; a resposta tem de ser
-    // 0, 2, 3, 5, e nao 0, 1, 2, 3.
     GrainTelemetry telemetry;
     telemetry.publish(voicesWith({0, 2, 3, 5}));
 
@@ -815,8 +729,6 @@ TEST(GrainTelemetry, EachPublishedGrainCarriesItsOwnVoiceIndex) {
 }
 
 TEST(GrainTelemetry, VoiceIndexStaysWithTheGrainAcrossPublishes) {
-    // a mesma voz, com posicao diferente em cada bloco, continua a reportar o
-    // mesmo indice: e' o que deixa o display seguir o grao entre quadros.
     GrainTelemetry telemetry;
 
     auto first = voicesWith({1, 4});
@@ -845,9 +757,6 @@ TEST(GrainTelemetry, VoiceIndexStaysWithTheGrainAcrossPublishes) {
 }
 
 TEST(GrainTelemetry, AVoiceThatDiesFreesItsSlotForAnotherVoice) {
-    // a voz 3 termina e a 6 nasce no mesmo bloco. as duas caem no slot 0 do
-    // publish, porque compactam, e so a identidade diz que sao graos diferentes.
-    // sem ela o display lia o mesmo grao a saltar e desenhava uma cauda falsa.
     auto before = voicesWith({3});
     GrainTelemetry telemetry;
     telemetry.publish(before);
@@ -866,8 +775,6 @@ TEST(GrainTelemetry, AVoiceThatDiesFreesItsSlotForAnotherVoice) {
 }
 
 TEST(GrainTelemetry, NaNGainIsPublishedAsZeroAndNotAsNaN) {
-    // o clamp nao trata NaN - clamp(NaN) devolve NaN. um NaN publicado apaga o
-    // brilho do grao sem erro nenhum, e o guard isfinite e' o que segura isto.
     auto voices = voicesWith({0});
     voices[0].gain = std::numeric_limits<float>::quiet_NaN();
 
@@ -882,8 +789,6 @@ TEST(GrainTelemetry, NaNGainIsPublishedAsZeroAndNotAsNaN) {
 }
 
 TEST(GrainTelemetry, NaNPositionIsPublishedAsZeroAndNotAsNaN) {
-    // mesma historia do ganho: NaN na posicao manda o grao para fora do ecra sem
-    // erro. guard isfinite.
     auto voices = voicesWith({0});
     voices[0].position = std::numeric_limits<double>::quiet_NaN();
 
@@ -898,8 +803,6 @@ TEST(GrainTelemetry, NaNPositionIsPublishedAsZeroAndNotAsNaN) {
 }
 
 TEST(GrainTelemetry, ActiveGrainsAreCompactedToTheFront) {
-    // vozes 1, 2 e 3 soam, a 0 esta parada. o count lido tem de servir de indice:
-    // slots 0, 1 e 2 sao as vozes 1, 2 e 3. escrever no indice da voz traria a 0.
     GrainTelemetry telemetry;
     telemetry.publish(voicesWith({1, 2, 3}));
 
@@ -911,18 +814,12 @@ TEST(GrainTelemetry, ActiveGrainsAreCompactedToTheFront) {
     EXPECT_FLOAT_EQ(views[1].position, 0.2f);
     EXPECT_FLOAT_EQ(views[2].position, 0.3f);
 
-    // o ganho tambem tem de vir no slot certo: sem estas linhas o gain ficava sem
-    // cobertura e podia ser achatado sem ninguem ver.
     EXPECT_FLOAT_EQ(views[0].gain, 0.25f);
     EXPECT_FLOAT_EQ(views[1].gain, 0.5f);
     EXPECT_FLOAT_EQ(views[2].gain, 0.75f);
 }
 
 TEST(GrainTelemetry, InactiveVoicesInTheMiddleDoNotTakeASlot) {
-    // vozes 0, 2, 3 e 5 soam, com paradas no meio. escrever no indice da voz daria
-    // um slot parado e tres activos.
-    // nota: com as oito vozes activas a compactacao e o indice coincidem, e este
-    // teste passava com a compactacao estragada.
     GrainTelemetry telemetry;
     telemetry.publish(voicesWith({0, 2, 3, 5}));
 
@@ -935,8 +832,6 @@ TEST(GrainTelemetry, InactiveVoicesInTheMiddleDoNotTakeASlot) {
     EXPECT_FLOAT_EQ(views[2].position, 0.3f);
     EXPECT_FLOAT_EQ(views[3].position, 0.4f);
 
-    // o ganho segue a voz, para o erro de slot aparecer mesmo quando as posicoes
-    // batem certo.
     EXPECT_FLOAT_EQ(views[0].gain, 0.25f);
     EXPECT_FLOAT_EQ(views[1].gain, 0.5f);
     EXPECT_FLOAT_EQ(views[2].gain, 0.75f);
@@ -944,8 +839,6 @@ TEST(GrainTelemetry, InactiveVoicesInTheMiddleDoNotTakeASlot) {
 }
 
 TEST(GrainTelemetry, PhaseIsWindowIndexOverTheGrainLength) {
-    // 250 de 1000 e' um quarto da janela: windowIndex e remaining somam o
-    // comprimento original do grao.
     GrainTelemetry telemetry;
     telemetry.publish(voicesWith({0}));
 
@@ -956,12 +849,6 @@ TEST(GrainTelemetry, PhaseIsWindowIndexOverTheGrainLength) {
 }
 
 TEST(GrainTelemetry, GrainWithNoWindowProgressPublishesZeroPhaseAndNotNaN) {
-    // **o GranularEngine nunca chega aqui:** o startGrain poe remaining =
-    // comprimento e o renderVoice limpa active antes dos dois contadores zerarem
-    // juntos. o guard existe porque o publish e' publico e recebe array do
-    // chamador, logo tem de valer sozinho.
-    // um NaN nao rebenta: propaga-se para a posicao do desenho e some com o unico
-    // sinal de que ha graos.
     auto voices = voicesWith({0});
     voices[0].windowIndex = 0;
     voices[0].remaining = 0;
@@ -977,8 +864,6 @@ TEST(GrainTelemetry, GrainWithNoWindowProgressPublishesZeroPhaseAndNotNaN) {
 }
 
 TEST(GrainTelemetry, PositionRunningPastTheEndIsClampedToOne) {
-    // grao com pitch a subir passa de 1,0 e so volta por wrap. publicar o valor
-    // cru punha-o fora do ecra a direita, e o drawRoutine saltava para o ecra inteiro.
     auto voices = voicesWith({0});
     voices[0].position = 1.4;
 
@@ -992,8 +877,6 @@ TEST(GrainTelemetry, PositionRunningPastTheEndIsClampedToOne) {
 }
 
 TEST(GrainTelemetry, ReadLeavesSlotsPastTheCountUntouched) {
-    // o out do editor vive entre quadros: um read que escrevesse tudo deixaria
-    // graos velhos no ecra. o contrato e' preencher so os slots devolvidos.
     GrainTelemetry telemetry;
     telemetry.publish(voicesWith({0, 1, 2}));
 
@@ -1011,9 +894,6 @@ TEST(GrainTelemetry, ReadLeavesSlotsPastTheCountUntouched) {
 }
 
 TEST(GrainTelemetry, AGrainThatDiesInALaterBlockIsNoLongerPublished) {
-    // o publish corre no fim de cada bloco: um grao que morre no bloco seguinte ja
-    // nao pode estar publicado, senao o display mostrava-o parado, igual a um vivo.
-    // nota: 20 ms a 44,1 kHz sao 882 amostras, um pouco mais de tres blocos de 256.
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
 
@@ -1031,8 +911,6 @@ TEST(GrainTelemetry, AGrainThatDiesInALaterBlockIsNoLongerPublished) {
     std::vector<float> right(256, 0.0f);
     std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
 
-    // a densidade vive no acumulador de fase: o grao nao nasce em bloco fixo, o
-    // teste espera que ele apareca.
     int blocksUntilBorn = 0;
     while (engine.telemetry().read(views) == 0 && blocksUntilBorn < 60) {
         engine.processBlock(left.data(), right.data(), 256, params);
@@ -1041,8 +919,6 @@ TEST(GrainTelemetry, AGrainThatDiesInALaterBlockIsNoLongerPublished) {
     ASSERT_LT(blocksUntilBorn, 60) << "nenhum grao nasceu em 60 blocos";
     ASSERT_EQ(engine.telemetry().read(views), 1) << "esperava um grao vivo";
 
-    // 882 amostras contra 256 por bloco: cinco blocos dao 1280, mais do que o grao
-    // precisa mesmo nascendo no fim do bloco em que foi publicado.
     constexpr int kGrainBlocks = 5;
     int blocksAlive = 0;
     while (engine.telemetry().read(views) > 0 && blocksAlive < kGrainBlocks) {
@@ -1089,9 +965,6 @@ TEST(GrainTelemetry, ProcessBlockPublishesTheGrainsItRendered) {
     std::array<GrainView, GrainTelemetry::kMaxVoices> views {};
     count = engine.telemetry().read(views);
 
-    // **o count tem de bater com o motor, nao com o intervalo.** o clamp garante
-    // [0, 1], entao um teste de intervalo passa mesmo com o publish a escrever
-    // zero. activeVoiceCount diz se o numero desenhado e' o numero renderizado.
     EXPECT_EQ(count, engine.activeVoiceCount());
 
     for (int i = 0; i < count; ++i) {
@@ -1103,10 +976,6 @@ TEST(GrainTelemetry, ProcessBlockPublishesTheGrainsItRendered) {
         EXPECT_TRUE(std::isfinite(view.gain));
     }
 
-    // **a posicao obedece a identidade fechada, nao a um intervalo.** com spray e
-    // pitch a zero: posicao - position == fase * comprimento / sourceCount.
-    // um teste de intervalo teria tolerancia maior que a variacao, e ate uma
-    // permutacao dos oito slots passaria.
     const double grainLength = 0.040 * kSampleRate; // comprimento do grao em amostras
     for (int i = 0; i < count; ++i) {
         const auto& view = views[static_cast<std::size_t>(i)];
@@ -1118,8 +987,6 @@ TEST(GrainTelemetry, ProcessBlockPublishesTheGrainsItRendered) {
 }
 
 TEST(GrainTelemetry, ClosingTheMaterialStopsPublishingGrains) {
-    // sem material o caminho devolve antes de renderizar, e o publish foi posto
-    // la tambem. sem ele os graos do ultimo bloco ficariam no ecra para sempre.
     GranularEngine engine;
     engine.prepare(kSampleRate, 512);
 

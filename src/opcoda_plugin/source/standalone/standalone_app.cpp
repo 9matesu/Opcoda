@@ -1,4 +1,4 @@
-#include "standalone_window.h"
+﻿#include "standalone_window.h"
 
 #include "../look_and_feel.h"
 #include "../palette.h"
@@ -9,13 +9,6 @@
 namespace opcoda {
 namespace {
 
-// Aplicacao do standalone. Substitui a StandaloneFilterApp do JUCE, que criava a
-// StandaloneFilterWindow com a barra do sistema, o botao "Options" e o dialogo de
-// audio do AudioDeviceSelectorComponent.
-//
-// **o LookAndFeel e' o da chapa em toda a app.** assim os menus de escolha, os
-// avisos e o ecra de configuracao saem da mesma linguagem; no VST3 nada disto
-// acontece, porque o LookAndFeel global e' do host e nos nao lhe tocamos.
 class StandaloneApp final : public juce::JUCEApplication {
 public:
     StandaloneApp() = default;
@@ -78,11 +71,6 @@ public:
     }
 
 private:
-    // Sem um audioSetup guardado, o JUCE nao liga nenhuma entrada MIDI e o
-    // instrumento parece surdo com um teclado USB ligado. na primeira execucao
-    // ficam todas ligadas; o ecra de configuracao mostra-as e desliga o que o
-    // utilizador nao quiser, e a escolha persiste no .settings. e' a mesma
-    // politica do autoOpenMidiDevices, que o JUCE so' usa no telemovel.
     static void openMidiInputsOnFirstRun(juce::StandalonePluginHolder& holder) {
         if (holder.settings == nullptr || holder.settings->containsKey("audioSetup")) {
             return;

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 
@@ -16,12 +16,8 @@ using opcoda::dsp::GranularParams;
 namespace {
 constexpr double kSampleRate = 44100.0;
 
-// piso de audibilidade: um grao audivel fica ordens acima, um mix emudecido
-// fica abaixo. sem o piso, 5.6e-7 passava no EXPECT_GT e media-se arredondamento.
 constexpr float kAudibleFloor {0.01f};
 
-// renderiza blocks blocos de 256 de uma senoide de 440 Hz com o gate aberto.
-// motor fresco por chamada: vozes e acumulador de disparo nao vazam entre ensaios.
 std::vector<float> renderSine(float grainLevel, int blocks = 200) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
@@ -61,14 +57,10 @@ float peakOf(const std::vector<float>& buffer) {
 } // namespace
 
 TEST(GrainLevel, ScalesOutput) {
-    // nivel 1.0 e' o comportamento antigo: o ganho do grao sai so do volume em dB.
-    // o piso garante som audivel antes de medir proporcao.
     const auto full = renderSine(1.0f);
     const auto fullPeak = peakOf(full);
     ASSERT_GT(fullPeak, kAudibleFloor) << "sem som audivel, nada para medir";
 
-    // metade do nivel, metade do pico. tolerancia 0,05 porque o pre-limiter fica em
-    // ~0,1-0,2, uma ordem abaixo do teto, e portanto na regiao linear.
     const auto half = renderSine(0.5f);
     const auto halfPeak = peakOf(half);
     ASSERT_GT(halfPeak, kAudibleFloor);
@@ -77,8 +69,6 @@ TEST(GrainLevel, ScalesOutput) {
 }
 
 TEST(GrainLevel, ZeroIsSilent) {
-    // nivel zero zera o ganho de todo grao que nasce: o motor processa, o gate abre,
-    // e nada sai. e' o que separa nivel (por voz) de mute do host (global).
     const auto out = renderSine(0.0f);
     for (const auto sample : out) {
         EXPECT_FLOAT_EQ(sample, 0.0f);
@@ -86,8 +76,6 @@ TEST(GrainLevel, ZeroIsSilent) {
 }
 
 TEST(GrainLevel, AboveOneClampsToOne) {
-    // acima de 1.0 trunca: o processamento e' deterministico, os buffers tem de
-    // ser bit-identicos.
     EXPECT_EQ(renderSine(1.5f), renderSine(1.0f));
 }
 
@@ -100,9 +88,6 @@ TEST(GrainLevel, NegativeClampsToSilence) {
 }
 
 TEST(PitchRandom, ChangesVoices) {
-    // o detune e' por grao e usa a sequencia do spray: com 6 semitons de faixa cada
-    // grao le noutro sitio da senoide. exige maioria diferente, porque um ULP
-    // passaria e nao provava detune nenhum.
     const auto render = [](float pitchRandom) {
         GranularEngine engine;
         engine.prepare(kSampleRate, 256);
@@ -140,8 +125,6 @@ TEST(PitchRandom, ChangesVoices) {
             ++differing;
         }
     }
-    // seis semitons movem quase todo sample: a maioria tem de diferir. o limiar e'
-    // folgado de proposito: barra detune de mentira, nao detune pequeno.
     EXPECT_GT(differing, plain.size() / 2) << "diferiram " << differing << " de "
                                            << plain.size();
 
@@ -196,8 +179,6 @@ TEST(PitchRandom, AboveTwelveClampsToTwelve) {
 
 namespace {
 
-// renderiza com um so parametro NaN por vez, nos dois canais. isolar importa:
-// com os dois juntos, uma falha nao diz qual saneador regrediu.
 void renderNaNParam(bool nanLevel, bool nanDetune) {
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
@@ -220,8 +201,6 @@ void renderNaNParam(bool nanLevel, bool nanDetune) {
     std::vector<float> right(256, 0.0f);
     for (int block = 0; block < 40; ++block) {
         engine.processBlock(left.data(), right.data(), 256, params);
-        // os dois canais acumulam value * grain.gain com estados independentes de
-        // DC-blocker, gate e limiter: checar so o esquerdo deixava o direito envenenar.
         for (const auto sample : left) {
             ASSERT_TRUE(std::isfinite(sample)) << "NaN no esquerdo, bloco " << block;
         }
@@ -234,20 +213,14 @@ void renderNaNParam(bool nanLevel, bool nanDetune) {
 } // namespace
 
 TEST(GrainParams, NaNLevelDoesNotPoisonOutput) {
-    // nivel NaN vira silencio do grao, nao volume cheio: um ganho NaN envenenaria
-    // a mistura e sairia no barramento.
     renderNaNParam(true, false);
 }
 
 TEST(GrainParams, NaNDetuneDoesNotPoisonOutput) {
-    // detune NaN vira zero: um readStep NaN envenenava a posicao e o cast para
-    // size_t na leitura era indefinido.
     renderNaNParam(false, true);
 }
 
 TEST(GrainParams, NaNPitchDoesNotPoisonOutput) {
-    // o pitch vinha sem guarda: pow(2, NaN) = NaN, e o clamp, que nao trata NaN,
-    // devolvia NaN adiante. zero e' fail-open e mantem a afinacao antiga.
     GranularEngine engine;
     engine.prepare(kSampleRate, 256);
     engine.setSounding(true);

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/entropy/shannon_entropy.h"
 
@@ -14,8 +14,6 @@ TEST(ShannonEntropy, EmptyInputIsZero) {
 }
 
 TEST(ShannonEntropy, SingleRepeatedByteIsZero) {
-    // alvo do artigo: bloco de 1024 bytes identicos da H = 0, porque um unico
-    // simbolo concentra toda a probabilidade.
     const std::vector<std::uint8_t> data(1024, std::uint8_t{0x5A});
     EXPECT_NEAR(shannonBitsPerByte(data.data(), data.size()), 0.0, 1e-12);
 }
@@ -59,9 +57,6 @@ TEST(ShannonEntropy, NeverExceedsTheoreticalMaximum) {
 }
 
 TEST(ShannonEntropy, OffsetVersionMatchesSlice) {
-    // a versao com offset tem de concordar com o recorte equivalente: 16 bytes de
-    // um simbolo (H = 0) e depois 8 simbolos distintos (H = log2(8) = 3). o corte
-    // em 16 separa as partes: a cauda da 3,0 e o todo da 1,918.
     std::vector<std::uint8_t> data(16, std::uint8_t{0x7F});
     const std::uint8_t distinct[] = {1, 2, 3, 4, 5, 6, 7, 8};
     data.insert(data.end(), std::begin(distinct), std::end(distinct));
@@ -71,8 +66,6 @@ TEST(ShannonEntropy, OffsetVersionMatchesSlice) {
     EXPECT_NEAR(fromOffset, shannonBitsPerByte(tail.data(), tail.size()), 1e-12);
     EXPECT_NEAR(fromOffset, 3.0, 1e-9);
 
-    // os 24 bytes todos: 16 iguais a 0x7F e 8 distintos. p = 2/3 e 1/12 por
-    // simbolo, o que da H = -(2/3)log2(2/3) - 8*(1/12)log2(1/12) = 1,918.
     const auto whole = shannonBitsPerByte(data.data(), data.size());
     EXPECT_NEAR(whole, 1.9182958340544896, 1e-9);
     EXPECT_GT(std::abs(whole - fromOffset), 1.0);

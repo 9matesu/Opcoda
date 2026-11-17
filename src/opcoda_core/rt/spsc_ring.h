@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <atomic>
 #include <cstddef>
@@ -6,9 +6,6 @@
 
 namespace opcoda::rt {
 
-// um produtor, um consumidor, sem alocação e sem trava. o consumidor recebe dado
-// velho ou novo, nunca leitura parcial nem espera: é o que elimina a inversão de
-// prioridade entre a thread de interface e a de áudio.
 template <typename T, std::size_t Capacity>
 class SpscRing {
     static_assert(Capacity >= 2, "Capacidade mínima de 2 para distinguir cheio de vazio");
@@ -63,9 +60,6 @@ private:
 
     T slots_[Capacity] {};
 
-    // um bloco de cache line por índice: são escritos por threads diferentes em
-    // cadência alta, e sem a separação há false sharing. o bloco não declara
-    // alignas porque o MSVC emite C4324 e o portão A trata warning como erro.
     static constexpr std::size_t kCacheLineBytes = 64;
 
     std::atomic<std::size_t> writeIndex_ {0};

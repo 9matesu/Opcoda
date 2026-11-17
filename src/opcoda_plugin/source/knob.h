@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include "fonts.h"
 #include "look_and_feel.h"
 #include "palette.h"
+#include "ui_animation.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -12,22 +13,7 @@
 
 namespace opcoda {
 
-// knob: rotulo em cima, slider rotativo no meio, valor em baixo.
-//
-// o corpo e' desenhado pelo LookAndFeel, uma vez e fixo. arco de valor, ponteiro,
-// anel de foco e texto sao desenhados por cima, porque dependem do valor e do
-// foco.
-//
-// **os knobs sao juce::Slider de verdade, nao desenho customizado.** e' o que da
-// foco por teclado, ajuste com setas e AccessibilityHandler, os criterios de
-// docs/10-acessibilidade-w3c.md. o corpo e' so o fundo: quem opera e tem o foco
-// continua a ser o Slider.
-//
-// **parametros de escolha levam dropdown.** girar um knob de quatro a doze
-// posicoes e' pior que escolher numa lista: o caret ao lado do valor abre o menu
-// com os rotulos reais, e o slider continua a responder a roda e as setas para
-// quem prefere o gesto continuo.
-class Knob : public juce::Component, private juce::Slider::Listener {
+class Knob : public juce::Component, private juce::Slider::Listener, private juce::Timer {
 public:
     struct Spec {
         const char* paramId;
@@ -35,26 +21,15 @@ public:
         const char* spokenName;  // nome acessivel, descritivo
         float defaultValue;
         std::function<juce::String(float)> format;
-        // so para choices: rotulos na ordem do AudioParameterChoice. com a lista,
-        // o valor mostra o rotulo em vez do numero. o attachment ja poe o
-        // intervalo 0..N-1 com passo 1, por isso aqui so falta o texto.
         juce::StringArray choiceLabels {};
-        // glifo desenhado ao lado do titulo. a 10 px diz o que o knob faz antes
-        // de o nome se ler: e' a mesma lingua dos icones dos modulos.
         const char* icon {nullptr};
     };
 
-    // sem parametro de tamanho: o editor posiciona por celula e o knob ajusta-se
-    // em resized(). um tamanho aqui seria uma segunda fonte da verdade.
     Knob(juce::AudioProcessorValueTreeState& state, const Spec& spec)
         : attachment_(makeAttachment(state, spec, slider_)) {
         title_ = spec.title;
+        getProperties().set("paramId", spec.paramId);
         icon_ = spec.icon != nullptr ? spec.icon : "";
-        value_.setJustificationType(juce::Justification::centred);
-        value_.setFont(fonts().sans(13.0f));
-        value_.setColour(juce::Label::textColourId, palette::textDark);
-        value_.setInterceptsMouseClicks(false, false);
-
         slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         slider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         slider_.setVelocityBasedMode(false);
@@ -64,16 +39,12 @@ public:
         addAndMakeVisible(slider_);
 
         setName(spec.spokenName);
-        addAndMakeVisible(value_);
+        setHelpText(spec.spokenName);
 
         format_ = spec.format;
         choiceLabels_ = spec.choiceLabels;
 
         if (!choiceLabels_.isEmpty()) {
-            // **detent dial ate' cinco posicoes; lista acima disso.** girar um
-            // knob de doze paradas e' pior que ler a lista, e o design system ja'
-            // tinha fechado essa decisao do lado do dropdown. o dial so' entra
-            // onde a roda nao perde: poucas posicoes, todas visiveis no anel.
             const auto choices = choiceLabels_.size();
             if (choices <= 5) {
                 slider_.getProperties().set("uiDetents", choices);
@@ -90,88 +61,110 @@ public:
         }
 
         slider_.addListener(this);
-        // valor inicial vem do parametro e nao do zero do slider: quem cria o
-        // editor depois do estado do host ja entra com o valor carregado.
-        showValue(slider_.getValue());
 
-        setSize(100, 140);
+        hover_.attach(slider_, [this](float h, float) {
+            slider_.getProperties().set("uiHover", static_cast<double>(h));
+            repaint();
+        });
+
+        showValue(slider_.getValue());
     }
 
-    // teclas de chapa clara e carvao escura: os rotulos do knob trocam de tinta
-    // quando o knob vive no mestre, que e' uma tira escura. textSub sobre carvao
-    // seria texto invisivel.
+    ~Knob() override { stopTimer(); }
+
     void setOnDark(bool on) {
-        titleColour_ = on ? palette::textOnDarkSub : palette::textSub;
-        value_.setColour(juce::Label::textColourId,
-                         on ? palette::ivory : palette::textDark);
+        onDark_ = on;
         repaint();
     }
 
     void resized() override {
         auto area = getLocalBounds();
-        const bool tight = getHeight() < 112;
-        const int titleHeight = tight ? 14 : 17;
-        area.removeFromTop(titleHeight);
+        const bool titled = area.getHeight() >= 64;
+        if (titled) {
+            area.removeFromTop(13);
+        }
         area.removeFromTop(1);
 
-        const int valueHeight = tight ? 18 : 22;
-        auto valueRow = area.removeFromBottom(valueHeight);
+        constexpr int maxDiameter {64};
+        const auto diameter = std::max(
+            18, std::min(maxDiameter, std::min(area.getWidth() - 4, area.getHeight() - 2)));
+        disc_ = area.withSizeKeepingCentre(diameter, diameter).toFloat();
+        slider_.setBounds(disc_.toNearestInt());
 
-        if (!hasMenu_) {
-            value_.setBounds(valueRow.reduced(2, 0));
-        } else {
-            // o caret ocupa a ponta direita do valor; o texto recua para nao
-            // ficar debaixo dele.
-            menuButton_.setBounds(valueRow.removeFromRight(18).withSizeKeepingCentre(16, 16));
-            value_.setBounds(valueRow.reduced(2, 0));
+        if (hasMenu_) {
+            auto menuArea = disc_.removeFromRight(15).removeFromBottom(15);
+            menuButton_.setBounds(menuArea.toNearestInt());
         }
-
-        // teto de diametro: 96 px de slider, que dao disco visual de ~91 px. acima
-        // disso o arco encosta na celula e a escala perde a leitura.
-        constexpr int maxDiameter {96};
-        const auto diameter = juce::jmax(
-            16, juce::jmin(maxDiameter, juce::jmin(area.getWidth(), area.getHeight())));
-        slider_.setBounds(area.withSizeKeepingCentre(diameter, diameter));
     }
 
     void paint(juce::Graphics& g) override {
         if (getWidth() <= 0 || getHeight() <= 0 || title_.isEmpty()) {
             return;
         }
+        if (getHeight() < 64) {
+            return;
+        }
 
-        const bool tight = getHeight() < 112;
-        const int titleHeight = tight ? 14 : 17;
-        const auto font = fonts().sans(tight ? 10.5f : 12.0f, true);
-
+        const auto font = type::captionFont();
         juce::GlyphArrangement glyphs;
         glyphs.addLineOfText(font, title_, 0.0f, 0.0f);
         const auto textWidth = glyphs.getBoundingBox(0, -1, false).getWidth();
 
-        const float glyphSize = tight ? 10.0f : 12.0f;
+        constexpr float glyphSize {10.0f};
         const float gap = icon_.isEmpty() ? 0.0f : 4.0f;
         const auto total = (icon_.isEmpty() ? 0.0f : glyphSize) + gap + textWidth;
         const auto left = static_cast<float>(getWidth()) * 0.5f - total * 0.5f;
-        const auto row = juce::Rectangle<float> {
-            0.0f, 0.0f, static_cast<float>(getWidth()), static_cast<float>(titleHeight)};
+        const auto row = juce::Rectangle<float> {0.0f, 0.0f, static_cast<float>(getWidth()), 13.0f};
 
         auto textLeft = left;
         if (!icon_.isEmpty()) {
             OpcodaLookAndFeel::paintGlyph(
                 g, icon_,
-                juce::Rectangle<float> {left, row.getCentreY() - glyphSize * 0.5f,
-                                        glyphSize, glyphSize},
-                titleColour_, false);
+                juce::Rectangle<float> {left, row.getCentreY() - glyphSize * 0.5f, glyphSize,
+                                        glyphSize},
+                titleInk(), false);
             textLeft += glyphSize + gap;
         }
 
-        g.setColour(titleColour_);
+        g.setColour(titleInk());
         g.setFont(font);
-        g.drawText(title_, juce::Rectangle<float> {textLeft, row.getY(), textWidth,
-                                                   row.getHeight()},
+        g.drawText(title_, juce::Rectangle<float> {textLeft, row.getY(), textWidth, row.getHeight()},
                    juce::Justification::centredLeft, false);
     }
 
+    void paintOverChildren(juce::Graphics& g) override {
+        if (disc_.getWidth() < 20.0f || valueText_.isEmpty()) {
+            return;
+        }
+
+        const auto hover = hover_.hover();
+        const auto flash = flash_;
+
+        if (hover > 0.01f) {
+            g.setColour(palette::alpha(palette::ivory, 0.05f * hover));
+            g.fillEllipse(disc_.expanded(1.5f));
+        }
+
+        const auto centre = disc_.getCentre();
+        const auto fontSize = juce::jlimit(8.0f, type::body, disc_.getWidth() * 0.17f);
+        const auto right = hasMenu_ ? 15.0f : 2.0f;
+        auto textArea = juce::Rectangle<float> {
+            disc_.getX() + 2.0f, centre.y - fontSize * 0.62f,
+            disc_.getWidth() - 2.0f - right, fontSize * 1.24f};
+
+        auto ink = valueInk().interpolatedWith(palette::ivory, 0.35f * hover);
+        ink = ink.interpolatedWith(palette::accent, 0.55f * flash);
+        drawFitted(g, valueText_, textArea, fontSize, ink);
+    }
+
 private:
+    [[nodiscard]] juce::Colour titleInk() const noexcept {
+        return onDark_ ? palette::textOnDarkSub : palette::textSub;
+    }
+    [[nodiscard]] juce::Colour valueInk() const noexcept {
+        return onDark_ ? palette::ivory : palette::textDark;
+    }
+
     static std::unique_ptr<juce::SliderParameterAttachment> makeAttachment(
         juce::AudioProcessorValueTreeState& state, const Spec& spec, juce::Slider& slider) {
         auto* parameter = state.getParameter(spec.paramId);
@@ -181,10 +174,30 @@ private:
                    : nullptr;
     }
 
+    static void drawFitted(juce::Graphics& g,
+                           const juce::String& text,
+                           juce::Rectangle<float> area,
+                           float maxSize,
+                           juce::Colour ink) {
+        auto size = maxSize;
+        auto font = fonts().sans(size);
+        const auto widthOf = [&font](const juce::String& value) {
+            juce::GlyphArrangement glyphs;
+            glyphs.addLineOfText(font, value, 0.0f, 0.0f);
+            return glyphs.getBoundingBox(0, -1, false).getWidth();
+        };
+        while (size > 7.5f && widthOf(text) > area.getWidth()) {
+            size -= 0.5f;
+            font = fonts().sans(size);
+        }
+        g.setFont(font);
+        g.setColour(ink);
+        g.drawText(text, area, juce::Justification::centred, false);
+    }
+
     void sliderValueChanged(juce::Slider* changed) override {
         if (changed == &slider_) {
             showValue(slider_.getValue());
-            repaint();
         }
     }
 
@@ -201,14 +214,10 @@ private:
         }
 
         menu.showMenuAsync(
-            juce::PopupMenu::Options().withTargetComponent(&menuButton_)
-                .withMinimumWidth(140),
+            juce::PopupMenu::Options().withTargetComponent(&menuButton_).withMinimumWidth(140),
             [this](int result) {
                 if (result > 0) {
-                    // sendNotificationSync e nao setValue: o attachment escreve
-                    // no parametro e o host fica a saber, como no gesto do knob.
-                    slider_.setValue(static_cast<double>(result - 1),
-                                     juce::sendNotificationSync);
+                    slider_.setValue(static_cast<double>(result - 1), juce::sendNotificationSync);
                 }
             });
     }
@@ -224,18 +233,34 @@ private:
         } else if (format_) {
             text = format_(static_cast<float>(value));
         }
-        if (text.isNotEmpty() && text != value_.getText()) {
-            value_.setText(text, juce::dontSendNotification);
+
+        if (text.isNotEmpty() && text != valueText_) {
+            valueText_ = text;
+            flash_ = 1.0f;
+            startTimerHz(60);
+            repaint();
         }
     }
 
+    void timerCallback() override {
+        flash_ -= 0.22f;
+        if (flash_ <= 0.0f) {
+            flash_ = 0.0f;
+            stopTimer();
+        }
+        repaint();
+    }
+
     juce::Slider slider_;
-    juce::Label value_;
     juce::TextButton menuButton_;
+    PressHover hover_;
     bool hasMenu_ {false};
+    bool onDark_ {false};
     juce::String title_;
     juce::String icon_;
-    juce::Colour titleColour_ {palette::textSub};
+    juce::String valueText_;
+    juce::Rectangle<float> disc_ {};
+    float flash_ {0.0f};
     std::unique_ptr<juce::SliderParameterAttachment> attachment_;
     std::function<juce::String(float)> format_;
     juce::StringArray choiceLabels_;

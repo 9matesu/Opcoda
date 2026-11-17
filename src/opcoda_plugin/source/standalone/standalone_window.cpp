@@ -1,10 +1,14 @@
-#include "standalone_window.h"
+﻿#include "standalone_window.h"
 
 #include "../plugin_editor.h"
 
 #include "OpcodaAssets.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
+
+#if JUCE_WINDOWS
+#include <windows.h>
+#endif
 
 namespace opcoda {
 
@@ -17,18 +21,21 @@ StandaloneWindow::Body::Body(juce::StandalonePluginHolder& holder) {
 
     if (editor_ != nullptr) {
         addAndMakeVisible(*editor_);
+        if (auto* pluginEditor = dynamic_cast<PluginEditor*>(editor_.get())) {
+            pluginEditor->setStandaloneChrome(true);
+        }
         preferredWidth_ = editor_->getWidth();
         preferredHeight_ = editor_->getHeight();
     }
 
     settings_ = std::make_unique<SettingsScreen>(holder.deviceManager);
 
-    // **a chapa troca-se em SETTINGS > THEMES e vale para a janela toda.** o
-    // editor e' um filho do corpo, mas a barra de titulo e' do DocumentWindow:
-    // sem este aviso, metade da janela ficava com a tinta anterior.
     settings_->onThemeChanged = [this] {
         if (auto* editor = dynamic_cast<PluginEditor*>(editor_.get())) {
             editor->refreshTheme();
+        }
+        if (settings_ != nullptr) {
+            settings_->refreshPalette();
         }
         if (auto* lnf =
                 dynamic_cast<OpcodaLookAndFeel*>(&juce::LookAndFeel::getDefaultLookAndFeel())) {
@@ -41,15 +48,16 @@ StandaloneWindow::Body::Body(juce::StandalonePluginHolder& holder) {
         repaint();
     };
 
-    // as teclas que o ecra de configuracao nao usa tocam no editor, e o foco
-    // volta ao teclado virtual quando ele fecha: escolher a placa com uma nota
-    // presa e' o caso normal, e fechar os ajustes nao pode calar o instrumento.
     settings_->onUnhandledKey = [this](const juce::KeyPress& key) {
         return editor_ != nullptr && editor_->keyPressed(key);
     };
     settings_->onKeyStateChanged = [this](bool isKeyDown) {
         return editor_ != nullptr && editor_->keyStateChanged(isKeyDown);
     };
+    if (auto* pluginEditor = dynamic_cast<PluginEditor*>(editor_.get())) {
+        pluginEditor->setOnThemeRequested([this] { openSettings(); });
+    }
+
     settings_->onClosed = [this] {
         if (auto* editor = dynamic_cast<PluginEditor*>(editor_.get())) {
             editor->focusPlayKeyboard();
@@ -70,6 +78,41 @@ void StandaloneWindow::Body::resized() {
     }
 }
 
+void StandaloneWindow::Body::childBoundsChanged(juce::Component* child) {
+    if (child != editor_.get() || editor_ == nullptr) {
+        return;
+    }
+    const auto width = editor_->getWidth();
+    const auto height = editor_->getHeight();
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    if (width == getWidth() && height == getHeight()) {
+        return;
+    }
+    preferredWidth_ = width;
+    preferredHeight_ = height;
+    setSize(width, height);
+    if (auto* window = findParentComponentOfClass<juce::DocumentWindow>()) {
+        const auto border = window->getBorderThickness();
+        window->setSize(width + border.getLeftAndRight(),
+                        height + border.getTopAndBottom());
+        auto bounds = window->getBounds();
+        if (auto* display = juce::Desktop::getInstance()
+                                .getDisplays()
+                                .getDisplayForRect(bounds)) {
+            const auto area = display->userBounds;
+            if (bounds.getBottom() > area.getBottom()) {
+                bounds.setY(area.getBottom() - bounds.getHeight());
+            }
+            if (bounds.getRight() > area.getRight()) {
+                bounds.setX(area.getRight() - bounds.getWidth());
+            }
+            window->setBounds(bounds);
+        }
+    }
+}
+
 void StandaloneWindow::Body::openSettings() {
     if (settings_ != nullptr) {
         settings_->open();
@@ -80,46 +123,37 @@ void StandaloneWindow::Body::openSettings() {
 StandaloneWindow::StandaloneWindow(juce::String title,
                                    juce::Colour background,
                                    std::unique_ptr<juce::StandalonePluginHolder> holder)
-    : DocumentWindow(std::move(title), background, minimiseButton | closeButton),
+    : DocumentWindow(std::move(title), background, 0),
       holder_(std::move(holder)) {
     setUsingNativeTitleBar(false);
-    setTitleBarHeight(kTitleHeight);
-    setTitleBarButtonsRequired(minimiseButton | closeButton, false);
+    setTitleBarHeight(0);
     setResizable(false, false);
 
-    // so' o icone: a palavra SETTINGS era uma placa na barra da janela, e o
-    // glifo das tres barras diz a mesma coisa em 34 px.
-    settingsButton_.setButtonText("");
-    settingsButton_.setName("Settings");
-    settingsButton_.setTooltip("Audio and MIDI settings");
-    settingsButton_.getProperties().set("uiIcon", "settings");
-    settingsButton_.getProperties().set("uiLook", "rail");
-    settingsButton_.onClick = [this] {
-        if (body_ != nullptr) {
-            body_->openSettings();
-        }
-    };
-    // a janela nao e' um pai de componentes normal; o proprio StandaloneFilterWindow
-    // do JUCE faz o mesmo com o botao Options.
-    juce::Component::addAndMakeVisible(settingsButton_);
+    closeButton_.setName("Fechar");
+    closeButton_.setTooltip("Fechar o Opcoda");
+    closeButton_.onClick = [this] { closeButtonPressed(); };
+    minimiseButton_.setName("Minimizar");
+    minimiseButton_.setTooltip("Minimizar");
+    minimiseButton_.onClick = [this] { minimiseButtonPressed(); };
+    addAndMakeVisible(closeButton_);
+    addAndMakeVisible(minimiseButton_);
 
     auto body = std::make_unique<Body>(*holder_);
     body_ = body.get();
     setContentOwned(body.release(), false);
 
-    // a moldura de 1 px do ResizableWindow conta para o tamanho: sem isto o
-    // editor de 1180x760 ficava cortado 2 px a' direita e em baixo.
+    closeButton_.toFront(false);
+    minimiseButton_.toFront(false);
+
     const auto border = getBorderThickness();
     setSize(body_->preferredWidth() + border.getLeftAndRight(),
-            body_->preferredHeight() + border.getTopAndBottom() + kTitleHeight);
+            body_->preferredHeight() + border.getTopAndBottom());
     restoreWindowPosition();
 }
 
 StandaloneWindow::~StandaloneWindow() {
     saveWindowPosition();
 
-    // o editor e o ecra saem primeiro: o processador (dentro do holder) tem de
-    // os ver morrer.
     clearContentComponent();
     body_ = nullptr;
     holder_.reset();
@@ -128,14 +162,35 @@ StandaloneWindow::~StandaloneWindow() {
 void StandaloneWindow::resized() {
     DocumentWindow::resized();
 
-    const auto titleBar = getTitleBarArea();
-    // a tecla fica a' esquerda das teclas da janela, com o mesmo compasso: 34 px
-    // de lado e a mesma folga de 4 px ao canto.
-    constexpr int kButton {34};
-    constexpr int kWindowButtons {2 * kButton + 4};
-    constexpr int kGap {8};
-    settingsButton_.setBounds(titleBar.getRight() - kWindowButtons - kGap - kButton,
-                              titleBar.getY() + 4, kButton, titleBar.getHeight() - 8);
+    const auto place = [this](juce::Button& button, int x, int size) {
+        // centrado no cabecalho de 48 px, encostado a' direita.
+        button.setBounds(x, (48 - size) / 2, size, size);
+    };
+    const int closeX =
+        getWidth() - windowChrome::kTrafficPad - windowChrome::kTrafficSize;
+    place(closeButton_, closeX, windowChrome::kTrafficSize);
+    place(minimiseButton_, closeX - windowChrome::kTrafficSize -
+                               windowChrome::kTrafficGap,
+          windowChrome::kTrafficSize);
+    applyRoundedCorners();
+}
+
+void StandaloneWindow::applyRoundedCorners() {
+#if JUCE_WINDOWS
+    auto* peer = getPeer();
+    if (peer == nullptr) {
+        return;
+    }
+    auto* hwnd = static_cast<HWND>(peer->getNativeHandle());
+    if (hwnd == nullptr || getWidth() < 32 || getHeight() < 32) {
+        return;
+    }
+    constexpr int kRadius {12};
+    if (HRGN region = ::CreateRoundRectRgn(0, 0, getWidth() + 1, getHeight() + 1,
+                                            kRadius * 2, kRadius * 2)) {
+        ::SetWindowRgn(hwnd, region, TRUE);
+    }
+#endif
 }
 
 void StandaloneWindow::applyTaskbarIcon() {
@@ -167,8 +222,6 @@ void StandaloneWindow::restoreWindowPosition() {
         return;
     }
 
-    // setBoundsConstrained e nao setTopLeftPosition: se o monitor onde a janela
-    // estava foi desligado, a posicao guardada punha-a fora do ecra.
     setBoundsConstrained(
         juce::Rectangle<int> {x, y, getWidth(), getHeight()});
 }
@@ -186,9 +239,6 @@ void StandaloneWindow::saveWindowPosition() {
 }
 
 juce::Image StandaloneWindow::makeWindowIcon() {
-    // o icone e' o material: a onda que os bytes fazem, sobre a chapa preta. vem
-    // do PNG gerado por tools/make-icon.ps1 e embebido no binario, por isso a
-    // janela, a barra de tarefas e o ficheiro no explorer mostram a mesma onda.
     int iconSize {0};
     if (auto* data = OpcodaAssets::getNamedResource("opcodaicon256_png", iconSize)) {
         const auto image = juce::ImageFileFormat::loadFrom(

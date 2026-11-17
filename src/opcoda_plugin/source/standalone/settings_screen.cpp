@@ -1,4 +1,4 @@
-#include "settings_screen.h"
+﻿#include "settings_screen.h"
 
 #include <array>
 #include <cmath>
@@ -6,11 +6,9 @@
 namespace opcoda {
 namespace {
 
-// etiqueta de seccao: 8,5 px, espacada. o creme ja' tem muita tinta escura; a
-// etiqueta tem de se ler como um indice e nao como um valor.
 void paintSectionLabel(juce::Graphics& g, const char* text, juce::Rectangle<int> area) {
     g.setColour(palette::textSub);
-    g.setFont(fonts().sans(8.5f, true).withExtraKerningFactor(0.16f));
+    g.setFont(type::captionFont().withExtraKerningFactor(type::trackingCaps));
     g.drawText(text, area, juce::Justification::centredLeft, false);
 }
 
@@ -22,8 +20,6 @@ juce::String formatMs(double samples, double rate) {
     return rate > 0.0 ? juce::String(1000.0 * samples / rate, 1) + " ms" : juce::String {"-"};
 }
 
-// String (double, 0) nao quer dizer "zero casas decimais": o JUCE le o zero
-// como "escolhe tu", e saia "1.36135 %". o arredondamento e' feito aqui.
 juce::String formatInteger(double value) {
     return juce::String(juce::roundToInt(value));
 }
@@ -42,9 +38,6 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
     midiTab_.onClick = [this] { selectPage(Page::midi); };
     themesTab_.onClick = [this] { selectPage(Page::themes); };
 
-    // as duas chapas: uma tecla por tema, com o estado no proprio botao. nao ha'
-    // previa em miniatura — o painel inteiro muda por tras e a previa e' o
-    // instrumento.
     for (auto* row : {&darkTheme_, &classicTheme_}) {
         row->getProperties().set("uiLook", "row");
         row->setClickingTogglesState(true);
@@ -64,9 +57,6 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
     doneButton_.onClick = [this] { close(); };
     addAndMakeVisible(doneButton_);
 
-    // o painel de controlo do motor (ASIO) so' existe em alguns drivers. quando
-    // nao existe, o botao nao aparece: um botao morto ensina a desconfiar dos
-    // que estao vivos. tecla "bar" para se ler como accao e nao como etiqueta.
     controlPanel_.getProperties().set("uiLook", "bar");
     controlPanel_.onClick = [this] {
         if (auto* device = devices_.getCurrentAudioDevice()) {
@@ -85,6 +75,8 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
         box->setJustificationType(juce::Justification::centredLeft);
         addChildComponent(*box);
     }
+
+    refreshPalette();
 
     driverBox_.onChange = [this] {
         if (applying_) {
@@ -155,7 +147,7 @@ juce::Rectangle<int> SettingsScreen::panelBounds() const {
 }
 
 juce::Rectangle<int> SettingsScreen::bodyBounds() const {
-    return panel_.withTrimmedTop(112).withTrimmedBottom(64).reduced(kInset, 0);
+    return panel_.withTrimmedTop(120).withTrimmedBottom(68).reduced(kInset, 0);
 }
 
 void SettingsScreen::resized() {
@@ -170,9 +162,9 @@ void SettingsScreen::resized() {
 
     const auto body = bodyBounds();
     auto y = body.getY() + 4;
-    const auto comboWidth = juce::jmin(460, juce::jmax(160, body.getWidth() - 180));
+    const auto comboWidth = juce::jmin(520, juce::jmax(180, body.getWidth() - 200));
     for (auto* box : {&driverBox_, &outputBox_, &rateBox_, &bufferBox_}) {
-        box->setBounds(body.getX() + 180, y, comboWidth, 30);
+        box->setBounds(body.getX() + 180, y, comboWidth, 34);
         y += kRowPitch;
     }
 
@@ -185,13 +177,23 @@ void SettingsScreen::resized() {
         rowY += 34;
     }
 
-    // a lista de temas segue o mesmo compasso das entradas MIDI: uma tecla por
-    // linha, a largura do corpo. a descricao de cada uma vive no paint.
     darkTheme_.setBounds(body.getX(), body.getY() + 42, body.getWidth(), 42);
     classicTheme_.setBounds(body.getX(), body.getY() + 100, body.getWidth(), 42);
 }
 
 //==============================================================================
+void SettingsScreen::refreshPalette() {
+    const auto ink = palette::currentTheme == palette::Theme::dark
+                         ? palette::textOnDark
+                         : palette::textDark;
+    for (auto* box : {&driverBox_, &outputBox_, &rateBox_, &bufferBox_}) {
+        if (box->findColour(juce::ComboBox::textColourId) != ink) {
+            box->setColour(juce::ComboBox::textColourId, ink);
+        }
+    }
+    repaint();
+}
+
 void SettingsScreen::paint(juce::Graphics& g) {
     g.fillAll(palette::alpha(juce::Colours::black, 0.62f));
 
@@ -224,11 +226,9 @@ void SettingsScreen::paint(juce::Graphics& g) {
                              panel.getRight());
     }
 
-    // o cabecalho diz o que o ecra e'. sem marca: a caixa "Op" saiu do header do
-    // editor e da barra da janela, e aqui era uma terceira.
     g.setColour(palette::textOnDark);
     g.setFont(fonts().sans(11.0f, true).withExtraKerningFactor(0.20f));
-    g.drawText("SETTINGS",
+    g.drawText("Settings",
                juce::Rectangle<int> {juce::roundToInt(panel.getX()) + kInset, panel_.getY(),
                                      240, kHeaderHeight},
                juce::Justification::centredLeft, false);
@@ -241,17 +241,14 @@ void SettingsScreen::paint(juce::Graphics& g) {
     const auto body = bodyBounds();
 
     if (page_ == Page::audio) {
-        constexpr std::array<const char*, 4> labels {"DRIVER", "OUTPUT", "SAMPLE RATE", "BUFFER"};
+        constexpr std::array<const char*, 4> labels {"Driver", "Output", "Sample rate", "Buffer"};
         auto y = body.getY() + 4;
         for (const auto* label : labels) {
             paintSectionLabel(g, label, {body.getX(), y, 170, 30});
             y += kRowPitch;
         }
 
-        // canais: leitura, nao escolha. o Opcoda e' um sintetizador e nao tem
-        // entrada; dizer 2 out / 0 in evita a pergunta de porque e' que nao ha'
-        // um campo de entrada nesta lista.
-        paintSectionLabel(g, "CHANNELS", {body.getX(), y, 170, 30});
+        paintSectionLabel(g, "Channels", {body.getX(), y, 170, 30});
         g.setColour(palette::textDark);
         g.setFont(fonts().sans(11.0f));
         g.drawText("2 out / 0 in", juce::Rectangle<int> {body.getX() + 180, y, 200, 30},
@@ -259,15 +256,13 @@ void SettingsScreen::paint(juce::Graphics& g) {
 
         paintStatus(g);
     } else if (page_ == Page::themes) {
-        paintSectionLabel(g, "THEME", {body.getX(), body.getY() + 4, 300, 18});
+        paintSectionLabel(g, "Theme", {body.getX(), body.getY() + 4, 300, 18});
         g.setColour(palette::textMuted);
         g.setFont(fonts().sans(9.5f));
         g.drawText("The whole instrument changes at once; the choice is saved.",
                    juce::Rectangle<int> {body.getX(), body.getY() + 22, body.getWidth(), 16},
                    juce::Justification::centredLeft, false);
 
-        // a descricao de cada chapa fica por baixo do nome, recuada 16 px para
-        // alinhar com o texto da tecla e nao com o rebordo.
         const auto note = [&g](juce::Rectangle<int> row, const juce::String& text) {
             g.setColour(palette::textMuted);
             g.setFont(fonts().sans(9.0f));
@@ -279,7 +274,7 @@ void SettingsScreen::paint(juce::Graphics& g) {
         note(darkTheme_.getBounds(), "Graphite and white. No colour anywhere.");
         note(classicTheme_.getBounds(), "Cream, charcoal and burnt orange. The 2025 face.");
     } else {
-        paintSectionLabel(g, "MIDI INPUTS", {body.getX(), body.getY() + 4, 300, 18});
+        paintSectionLabel(g, "MIDI inputs", {body.getX(), body.getY() + 4, 300, 18});
         g.setColour(palette::textMuted);
         g.setFont(fonts().sans(9.5f));
         g.drawText("Keyboards ticked here play the instrument.",
@@ -315,7 +310,7 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
     g.drawHorizontalLine(area.getY(), static_cast<float>(area.getX()),
                          static_cast<float>(area.getRight()));
 
-    paintSectionLabel(g, "DEVICE", {area.getX(), area.getY() + 10, 200, 16});
+    paintSectionLabel(g, "Device", {area.getX(), area.getY() + 10, 200, 16});
 
     auto* device = devices_.getCurrentAudioDevice();
     g.setColour(palette::textDark);
@@ -339,8 +334,6 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
                    juce::Justification::centredLeft, true);
     }
 
-    // cpu: a mesma escada do medidor de saida, porque e' a mesma pergunta
-    // ("quanto e' que isto ainda tem?").
     const auto load = juce::jlimit(0.0, 1.0, devices_.getCpuUsage());
     const auto bar = juce::Rectangle<int> {area.getX() + 34, area.getY() + 80, 200, 8};
 
@@ -379,8 +372,6 @@ bool SettingsScreen::keyPressed(const juce::KeyPress& key) {
 }
 
 bool SettingsScreen::keyStateChanged(bool isKeyDown) {
-    // a tecla que sobe tambem tem de chegar ao editor, senao a nota que ficou
-    // presa enquanto o ecra abriu nunca mais larga.
     return onKeyStateChanged != nullptr ? onKeyStateChanged(isKeyDown) : false;
 }
 
@@ -419,9 +410,6 @@ void SettingsScreen::selectPage(Page page) {
     repaint();
 }
 
-// troca de chapa: o tema muda, fica guardado, e a arvore deste ecra volta a
-// apanhar as tintas que os componentes tinham fixado antes da troca. o editor e'
-// avisado por onThemeChanged, que percorre a arvore dele da mesma maneira.
 void SettingsScreen::chooseTheme(palette::Theme theme) {
     palette::setTheme(theme);
     palette::saveTheme(theme);

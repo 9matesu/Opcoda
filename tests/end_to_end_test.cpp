@@ -1,7 +1,4 @@
-// fecha a S1: o caminho completo, do binario em disco ao audio renderizado.
-// sem JUCE: parse -> toSamples -> motor granular -> DC-blocker -> limiter. prova
-// que um .exe real vira som, nao que o plugin o empacota.
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/pe/byte_to_sample.h"
@@ -91,11 +88,6 @@ AudioStats stats(const std::vector<float>& signal) {
     return result;
 }
 
-// o caminho do transporte: o binario entra, a regiao e' percorrida sem uma nota
-// MIDI, e sai audio.
-// reproduz o PluginProcessor::processBlock, nao o plugin: este executavel nao
-// linka JUCE e a cadeia do nucleo e' a mesma. prova que o transporte comanda o
-// motor, nao que o botao esta ligado.
 std::vector<float> renderThroughTransport(const std::vector<std::uint8_t>& bytes,
                                           int blocks = 200,
                                           std::vector<float>* headPositions = nullptr) {
@@ -115,8 +107,6 @@ std::vector<float> renderThroughTransport(const std::vector<std::uint8_t>& bytes
 
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
-    // a engine NUNCA recebe setSounding(true) nesta cadeia: o gate e' aberto so'
-    // pelo transporte, e e' isso que o teste prova.
     engine.setSource(samples.data(), samples.size());
 
     GranularParams params;
@@ -166,8 +156,6 @@ TEST(EndToEnd, RealExecutableBecomesAudio) {
 }
 
 TEST(EndToEnd, OutputHasNoDcOffset) {
-    // a media da saida e' o que o DC-blocker existe para zerar. um .exe real tem
-    // byte medio muito longe de 127.5, logo sem filtro a media ficava visivel.
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
     ASSERT_FALSE(bytes.empty());
 
@@ -189,8 +177,6 @@ TEST(EndToEnd, OutputHasNoDcOffset) {
 }
 
 TEST(EndToEnd, CorruptedBinaryIsRejectedWithTypedError) {
-    // um .exe real corrompido tem de ser recusado com codigo, e nao lido fora dos
-    // limites: e' o ramo de erro do BPMN.
     auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
     ASSERT_FALSE(bytes.empty());
 
@@ -208,8 +194,6 @@ TEST(EndToEnd, TruncatedRealBinaryIsRejected) {
     bytes.resize(bytes.size() / 2);
     const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
 
-    // metade do ficheiro pode passar (a .text comeca no fim dos cabecalhos) ou
-    // falhar, mas nunca le alem do que sobrou.
     if (parsed.ok()) {
         for (std::size_t i = 0; i < parsed.image.numberOfSections; ++i) {
             const auto& section = parsed.image.sections[i];
@@ -221,9 +205,6 @@ TEST(EndToEnd, TruncatedRealBinaryIsRejected) {
 }
 
 TEST(EndToEnd, TransportPlayProducesAudioWithoutMidi) {
-    // historia 1 da specs/008-transporte-e-vistas: quem abre o Opcoda pela
-    // primeira vez nao tem teclado MIDI, e sem isto nao ha forma de ouvir o
-    // material. e' a prova de que o caminho existe.
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
     ASSERT_FALSE(bytes.empty()) << "notepad.exe nao encontrado";
 
@@ -237,17 +218,12 @@ TEST(EndToEnd, TransportPlayProducesAudioWithoutMidi) {
         << "o transporte produziu audio mudo; o gate nao foi aberto pelo transporte";
     EXPECT_LE(measured.peak, 1.0f) << "limitador deixou passar acima do teto";
 
-    // a cabeca andou. sem esta asercao o teste passa com um transporte parado a
-    // devolver sempre a mesma posicao, que e' o modo de falha mais provavel.
     ASSERT_EQ(heads.size(), 200u);
     EXPECT_GT(heads.back(), heads.front());
     EXPECT_LT(heads.back(), 1.0f);
 }
 
 TEST(EndToEnd, StalledTransportIsSilent) {
-    // o contrario do teste anterior, pelo mesmo motivo: transporte parado tem de
-    // ser mudo. se falhasse, o de cima passava sem gate nenhum, porque a rampa do
-    // motor ja' teria aberto a porta sozinha.
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
     ASSERT_FALSE(bytes.empty());
 

@@ -1,9 +1,4 @@
-// os presets de fabrica sao valores crus na unidade do parametro. um digito
-// trocado atravessa convertTo0to1 e sai recortado em silencio (o "Cloud" com
-// attack 40 em vez de 0,4 soava errado sem erro nenhum).
-// este ensaio prende a tabela aos intervalos do createParameterLayout: se um lado
-// mudar, o outro acusa.
-
+﻿
 #include "opcoda_plugin/source/factory_presets.h"
 
 #include "opcoda_core/dsp/granular_engine.h"
@@ -75,8 +70,6 @@ TEST(FactoryPresets, AllValuesWithinLayoutRanges) {
 }
 
 TEST(FactoryPresets, NamesAreUniqueAndNonEmpty) {
-    // o menu mostra o nome e o editor usa-o como identidade: dois "Cloud" davam
-    // um tick ambiguo e um nome vazio um botao sem texto.
     std::set<std::string> seen;
     for (const auto& preset : factoryPresets()) {
         EXPECT_NE(preset.name, nullptr);
@@ -86,8 +79,6 @@ TEST(FactoryPresets, NamesAreUniqueAndNonEmpty) {
 }
 
 TEST(FactoryPresets, InitIsAllDefaults) {
-    // o primeiro preset e' o zero auditavel: cada campo tem de ser o default do
-    // layout, para "voltar ao Init" ter significado.
     const auto& init = factoryPresets()[0];
     EXPECT_STREQ(init.name, "Init");
     EXPECT_FLOAT_EQ(init.grain, 40.0f);

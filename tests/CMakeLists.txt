@@ -34,7 +34,6 @@ add_executable(opcoda_tests
     adsr_test.cpp
     filter_test.cpp
     lfo_test.cpp
-    scale_test.cpp
     character_test.cpp
     mod_matrix_test.cpp
     stereo_width_test.cpp

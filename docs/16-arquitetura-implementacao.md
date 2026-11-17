@@ -1,4 +1,4 @@
-# 16. Arquitetura de implementação
+﻿# 16. Arquitetura de implementação
 
 Este documento registra as decisões de implementação que não estão em
 `06-metodologia-arquitetura.md`, que descreve a arquitetura proposta na fase de
@@ -273,12 +273,13 @@ referência do `RangedAudioParameter`, não a da árvore inteira.
 
 O nome acessível de cada controle é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
-seria inútil para quem navega por leitor de tela. Os **63 parâmetros** vivem em
-cinco módulos (GRAIN, ENV, FILTER, MOD, KEYS), com uma faixa visível de cada
+seria inútil para quem navega por leitor de tela. Os **61 parâmetros** vivem em
+quatro módulos (GRAIN, ENV, FILTER, MOD), com uma faixa visível de cada
 vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
 controles numa linha. A aba MAIN saiu porque repetia os onze parâmetros de grão;
 a aba OUT saiu porque volume e pan formam o master persistente na coluna escura
-da direita, ao lado do medidor de saída. A aba CLOUD saiu com a nuvem de grãos:
+da direita, ao lado do medidor de saída. A aba KEYS saiu: a nota afina direto,
+sem escala nem tônica, e o glide ficou no GRAIN. A aba CLOUD saiu com a nuvem de grãos:
 os três parâmetros que a alimentavam foram retirados do motor. Cada controle
 aparece uma vez, no campo
 semântico a que pertence: GRAIN separa grão, playback e mix; ENV separa tempos e
@@ -287,7 +288,7 @@ do roteamento. A legenda e o filete desenham o campo, e a largura de cada um
 segue o número de controles que contém.
 
 Os parâmetros de escolha deixaram de ser knobs. Window, tipos e inclinação do
-filtro, alvo, forma, sincronismo e divisão do LFO, escala e tônica passam a
+filtro, alvo, forma, sincronismo e divisão do LFO passam a
 campos de escolha: um chip escuro, baixo e largo, com o valor escrito e um
 chevron à direita. O clique abre o `PopupMenu` com os rótulos reais e o
 `ParameterAttachment` mantém o campo em sincronia com o host. O chip fica na
@@ -324,11 +325,10 @@ caberem com o rótulo inteiro.
 ### A janela fixa e as quatro vistas
 
 O chassi fecha em 1180×760 e não aceita redimensionamento (`setResizable(false,
-false)`). O display ocupa a faixa superior de 380 px, com uma rail vertical de
-62 px à direita para as vistas e o zoom; as seis abas de módulo encostam
-directamente no display, sem tira de navegação pelo meio; os controles e a coluna
-mestra de 168 px preenchem o meio; o teclado de 84 px e o rodapé fecham o
-desenho. O layout foi escrito para estes números e não tem um caminho
+false)`). O display ocupa a faixa superior de 288 px, com os chips de vista na
+faixa de secção e os zooms no canto do ecrã; as quatro abas de módulo encostam
+no display, sem tira de navegação pelo meio; os controles e a coluna mestra de
+104 px preenchem o meio; o teclado de 62 px fecha o desenho. O layout foi escrito para estes números e não tem um caminho
 alternativo — a guarda de `resized()` contra o primeiro rectângulo 0×0 é a única
 excepção. A coluna mestra cresceu de 116 para 168 px quando pan e volume passaram
 a dividi-la, e as leituras de POS e REG subiram para a tira superior do visor,
@@ -438,14 +438,135 @@ Ficou só `hasSource() && hasPlayableRegion()`: o transporte que o botão comand
 o do instrumento. A leitura de `VOICES` saiu do rodapé — era ela que tremia — e o
 número continua na telemetria, sem caixa onde piscar.
 
-**As agulhas do visor são brancas, rectas e opacas.** O `preview` do display
-deixou de desenhar barrinhas arredondadas de cor: a densidade vira um comb de
-2,5 px de espessura com 3 a 16 dentes, o spray um banho com dois filetes, a
-posição uma linha de 2,6 px a toda a altura e o grão a silhueta da janela
-escolhida — Hann, Gaussian, Hamming ou Blackman, com as mesmas expressões do
-motor. O pitch inclina a silhueta, o pitch spread desenha duas cópias mais
-fracas, o level manda na opacidade e o pan desloca o ponto do topo. O desenho é
-limitado à área visível, para a silhueta não aparecer meio cortada na posição 0.
+**A agulha do visor é uma, e leva os efeitos dos parâmetros.** O `preview` saiu
+do display em 484407c e voltou agora, porque o ecrã mostrava o material e
+escondia o que o instrumento estava a fazer com ele. A posição é a cabeça de
+leitura — o transporte quando anda, o knob `POSITION` quando está parado — e
+sobre ela desenham-se o spray, a densidade, o tamanho do grão, o pitch, o nível
+e o pan. O spray é uma banda com dois filetes de 1 px; a densidade é um pente de
+3 a 16 dentes no pé do ecrã; o grão é a silhueta da janela escolhida (Hann,
+Gaussian, Hamming ou Blackman, com as expressões fechadas do motor), com a
+largura calculada no tempo — 40 ms num ecrã que mostra 2 s ocupam 2 % da
+largura, e não uma constante; o pitch inclina a silhueta, o pitch spread desenha
+duas cópias mais fracas, o nível manda na opacidade e o pan desloca um ponto no
+topo. A agulha tem 3 px de corpo, halo de 10 px a 9 %, losango de 5,5 px na
+cabeça e 8 px no pé, porque a janela foge para 0,9 e um traço de 2 px chegava ao
+ecrã com 1,8. Os efeitos assentam em 70 ms de meia-vida, e o desenho limita-se
+à área visível, para a silhueta não aparecer meio cortada na posição 0.
+
+**A janela do standalone deixou de ter barra.** O `drawDocumentWindowTitleBar`
+pinta-se com a cor do chassis e não leva filete: a janela passa a ser uma peça
+só, e as luzes de fechar e minimizar desceram para a esquerda, em círculos de
+12 px a 22 % de marfim — a convenção do macOS, que até aqui só existia no
+argumento `positionTitleBarButtonsOnLeft`, sempre `false` no Windows. O botão de
+ajustes ficou ao lado delas, não no canto oposto. No VST3 não há barra nem
+luzes: quem desenha a moldura é o anfitrião.
+
+**O teclado é flat, preto e branco.** `OpcodaKeyboard` sobrescreve
+`drawWhiteNote` e `drawBlackNote` — que no JUCE 8 são virtuais do componente, e
+não do LookAndFeel — e pinta cada tecla com uma cor só: branca `#dcdcde`, preta
+`#161618`, separadas por um filete de 1 px. Saiu o degradê, a face mais clara em
+cima da tecla preta e o nome da nota a cada oitava; o estado lê-se pela luz, e o
+foco e o MIDI continuam a vir do `MidiKeyboardComponent`.
+
+**O campo do ficheiro é uma peça.** `FileField` junta a pasta, o nome, o tamanho,
+o formato e o chevron num sulco só, como no preview; o clique em qualquer ponto
+abre o seletor. Antes eram quatro objectos soltos no cabeçalho, e liam-se como
+quatro controlos.
+
+**O cabeçalho ganhou peso e o painel perdeu.** A faixa subiu de 44 para 56 px
+e o campo de ficheiro passou a 420×32 px, centrado; o painel de parâmetros cedeu
+a diferença, com o disco limitado a 64 px e a célula a 86 px. Os módulos
+regressaram ao painel como glifos de 26 px, e as vistas ficaram sozinhas na
+espinha. O transporte centrou-se no rodapé do ecrã com triângulo e cadeado
+preenchidos, e a janela do grão virou quatro interruptores de 26×13 px.
+
+**A densidade é linear de 0 a 100.** O parâmetro vive entre 1 e 200 grãos por
+segundo; a conversão `(valor - 1)/1,99` alimenta o pente, o halo, a poça de luz
+e a espessura da agulha. A meia-vida do interpolador caiu para 35 ms, de modo
+que o desenho acompanha o parâmetro sem o atraso que antes se via.
+
+**O teclado fechado deixou de desenhar caixa.** A baia recolhida mede 14 px e
+pinta-se como chassis; o Mais/Menos do teclado continua centrado, e a altura
+libertada volta ao painel sem deixar uma barra preta solta no rodapé. Os
+endereços da régua passaram a monoespaçada, e o arrasto da janela restringiu-se
+ao cabeçalho por coordenadas de ecrã.
+
+**A hierarquia assenta num ecrã e num painel.** As vistas voltaram para dentro
+do ecrã, empilhadas à esquerda sobre o vidro, e a espinha exterior desapareceu;
+os módulos desceram para dentro do painel, empilhados à esquerda dos knobs, com
+glifos de 30 px. O vidro passou a ocupar a região toda, sem bisel nem sombra
+interna. O teclado deixou de pertencer ao
+corpo do synth: passou a faixa de largura inteira abaixo do painel e do master,
+destacável pela tira MIDI, e a baia fechada não desenha caixa. O ecra ficou com
+uma única superfície — fundo, sem moldura dupla — e o transport centrou-se no
+rodapé. O ícone do hex passou de "0x" a uma grade de bytes, e as lupas de zoom
+ganharam anel e cabo cheios.
+
+**O output passou a duas barras.** O medidor de segmentos com escala em dB era
+uma caixa dentro da caixa do master; agora são duas barras de 3 px, L e R, com
+o rótulo Master por cima, como no preview.html. Os nomes deixaram o maiúsculo:
+Opcoda, Size, Density, Play, Hold, Master. Ao passar o rato sobre a marca, o
+ cabeçalho mostra o logótipo da Bloodworm Trax e `bloodworm trax | Opcoda`.
+
+**A matriz de modulação é uma tabela seca.** Cabeçalho Source / Target / Amount,
+oito linhas, sem índices, pontos, setas ou filetes; ficam os combos com chevron e
+o amount bipolar com o zero ao centro. A entropia passou a desenhar menos colunas
+quando o material todo está à vista — barras largas — e uma coluna por pixel
+quando o zoom se aproxima. A onda subiu para 376 px, com corpo a 10 %, núcleo de
+RMS a 30 % e textura a 34 %. O teclado passou a cama de carvão para que as teclas
+pretas, desenhadas em carvão profundo, deixassem de desaparecer.
+
+**A matriz de modulação é uma tabela.** Cabeçalho Source / Target / Amount,
+oito linhas com índice, ponto de origem, seta e amount bipolar com o zero ao
+centro; os combos são texto sem caixa com chevron. O ecrã de ajustes seguiu a
+mesma normalização de caixa e de maiúsculas.
+
+**A hierarquia assenta agora numa espinha.** Vistas e módulos partilham a
+mesma coluna de 50 px, à esquerda do corpo, com os oito controlos colados. As
+duas tiras anteriores — uma dentro do ecrã, outra dentro do painel — exigiam dois
+alinhamentos e produziam duas caixas; a espinha é uma só geometria, medida antes
+do ecrã e do painel. O display sobe para 352 px e o disco do knob desce para 64
+px: a onda passa a ser o objeto de maior peso visual, e os parâmetros perdem o
+protagonismo que não lhes compete.
+
+**A onda mostra as amostras, não só o envelope.** O envelope min/max de ruído
+uniforme é um rectângulo, por mais suave que seja o preenchimento. A silhueta
+fica como chão a 5 %, o núcleo de RMS a 16 %, e 2 400 amostras reais são
+desenhadas uma a uma por cima, a 16 % de `waveHigh`. O navegador inferior deixa
+de ser reservado quando o material todo cabe no ecrã; a faixa volta para o
+envelope.
+
+**Os botões perderam a caixa.** `drawButtonBackground` pinta apenas o hover, e o
+estado ativo passa a viver na cor do glifo. O mesmo vale para `ModuleFolderTab`.
+As molduras do ecrã, do painel, da coluna master e dos três gráficos de módulo
+foram reduzidas a fundo e, quando muito, um filete — a interface deixou de
+empilhar outlined boxes. A janela ganha canto arredondado por `SetWindowRgn` e
+passa a arrastar pelo cabeçalho, já que a barra de título não existe.
+
+**Os módulos desceram para dentro do painel.** As quatro teclas (GRAIN, ENV,
+FILTER, MOD) eram um segmented control centrado numa faixa de 28 px acima do
+painel de parâmetros. Passaram a uma coluna de 62 px dentro do painel, à
+esquerda, com um filete a separar do material — a mesma gramática do trilho de
+vistas dentro do ecrã. A faixa desapareceu, o painel ganhou 28 px de altura e a
+grelha recuperou a largura que a coluna do painel lhe tomava.
+
+**A hierarquia veio do grid.** O painel de parâmetros deixou de limitar a
+largura da célula: a grelha passa a encher a largura disponível, o disco tem 96
+px de teto e a célula desce para 124 px, com o valor dentro do arco. As
+escolhas de ícones empilham-se numa coluna (`ChoiceControl`), e o cabeçalho
+ganhou três pesos: marca à esquerda, campo do ficheiro no centro, preset à
+direita. O transporte alinhou-se com a grelha, não com a borda do ecrã.
+
+**A vista hex ganhou selecção e secções.** O arrasto com o botão esquerdo
+seleciona um intervalo e escreve a região; o clique continua a mover a cabeça. No
+topo direito, um selector com as secções do PE salta para o endereço. O ícone da
+vista passou de hexágono a `0x`, o prefixo do hexadecimal.
+
+**A onda ganhou corpo.** O envelope de picos é um bloco quando o material é
+ruído a' escala cheia -- e' o caso de um .exe. A silhueta passou a ter um núcleo
+de RMS por baixo, a 30%, que devolve a dinâmica das secções; sem ele, o zoom
+longe era um rectângulo.
 
 **A escala do medidor saiu do aperto.** O piso desceu de -60 para -48 dB e os
 rótulos passaram a 0, -12, -24, -36 e -48, centrados no traço e limitados dentro
@@ -697,18 +818,26 @@ valendo: **o harness não gerava texto**, e todo o texto — rótulos, valores, 
 é desenhado em código, porque texto gerado por modelo sai com letra errada e não há
 como corrigir sem regenerar. A regra passou a aplicar-se a tudo, não só ao texto.
 
-**O corpo do knob são três círculos.** Aro serrilhado, face recuada e ponto de
-origem. São eles que separam "disco" de "botão rotativo": o aro lê-se como pega, a
-face mais escura recua, e o ponto no centro marca a origem, que é o que se vê num
-knob real. A luz vem de cima e da esquerda e o gradiente é diagonal, não radial a
-partir do centro — um radial simétrico daria um disco sem direção, e sem direção não
-se lê como superfície redonda.
+**A onda voltou ao desenho do preview.** A silhueta é um corpo a 14 % com dois
+filetes de 1 px em cima e em baixo, e o corpo respira com o nível do envelope
+publicado pela thread de áudio; a agulha leva uma poça de luz que acende com a
+mesma grandeza. O contorno do núcleo de RMS e a linha central saíram, e com eles
+a moldura que se via em volta do ruído.
 
-**O serrilhado é um `Path` memorizado por posição**, não 36 chamadas de `drawLine`
-por knob. São seis knobs a 60 Hz, e 216 chamadas de linha por quadro para desenhar
-textura fixa é o trabalho que o `Path` existe para evitar. A comparação do cache é
-dos dois valores e não só do raio: o mesmo raio com o centro noutro sítio é um
-serrilhado na posição errada.
+**O knob é arco, ponto e valor dentro.** O corpo com gradiente, o aro serrilhado e
+a face recuada saíram em 484407c: a 96 px pesavam mais que o número, e o painel
+parecia um pedalboard. Ficou o arco de fundo, o arco de valor e o ponto, e o
+número entrou no disco — até então vivia numa linha própria por baixo, e essa
+linha custava 22 px de altura a cada célula. A célula desceu de 148 para 108 px e
+o diâmetro tem teto de 76 px, o que devolveu duas filas ao GRAIN sem apertar o
+texto. O valor ajusta o corpo até 7,5 px para caber no disco, e o hover acende um
+halo a 4,5 % e engrossa o arco 12 %.
+
+**O hover é animado, não comutado.** Um botão que acende em degrau lê-se como um
+clique que não aconteceu; `ui_animation.h` mantém o hover e a pressão como
+grandezas entre 0 e 1, com 45 e 30 ms de meia-vida, e o `LookAndFeel` mistura as
+cores por esse número. Cada animador tem temporizador próprio, que só corre
+enquanto o valor se move, e morre antes do botão no destrutor do editor.
 
 **O estado ligado do botão não é só cor.** `#ff9a00` sobre `#c2c6c9` dá 2,4:1, e
 sem segunda pista o botão de transporte falha o 1.4.3. O ligado ganha uma barra de

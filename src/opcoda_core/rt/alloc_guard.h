@@ -1,12 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <cstddef>
 
 namespace opcoda::rt {
 
-// o operator new global consulta esta flag. o motor marca entrada e saida de
-// process(), e qualquer alocacao dentro da janela e' bug de tempo real.
-// e' o portao C virado codigo, nao revisao manual.
 namespace alloc_guard {
 
 [[nodiscard]] bool inAudioThread() noexcept;

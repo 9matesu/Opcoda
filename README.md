@@ -1,4 +1,4 @@
-<!-- abre aqui: o que e, como rodar -->
+﻿<!-- abre aqui: o que e, como rodar -->
 
 # Opcoda
 
@@ -33,8 +33,8 @@ entropia e matriz de modulação.
 - Ingestão de PE com validação de limites e erros tipados (`E_BAD_MZ`,
   `E_BAD_PE`, `E_TRUNCATED`, `E_OOB`, `E_TOO_MANY_SECTIONS`).
 - Motor granular de oito vozes, janelas Hann, Gauss, Hamming e Blackman.
-- 63 parâmetros automatizáveis: grão, largura estéreo, envelope ADSR com
-  curvas, dois filtros biquad em série, LFO, teclado e uma matriz de
+- 61 parâmetros automatizáveis: grão, largura estéreo, envelope ADSR com
+  curvas, dois filtros biquad em série, LFO, glide e uma matriz de
   modulação de 8 rotas editável no display.
 - Matriz de modulação com oito rotas e oito fontes.
 - Presets de fábrica e arquivos `.opcoda` para carregar e salvar.
@@ -43,8 +43,8 @@ entropia e matriz de modulação.
   ASCII e ASM, entropia e matriz de modulação. A coluna ASM desmonta material
   64 bits com um decodificador próprio no núcleo, sem biblioteca externa, e
   escreve com cor por classe de símbolo numa fonte monoespaçada.
-- Forma de onda de uma tinta só: o corpo e o contorno delimitam o envelope em
-  qualquer zoom, e a rail de vistas é de teclas simples, só com o glifo.
+- Forma de onda de uma tinta só: a silhueta do envelope, sem contorno e sem
+  fundo, e os chips de vista na faixa de secção.
 - Curva de entropia em janelas de pelo menos 256 bytes, para que o eixo de 0 a 8
   bits continue verdadeiro em qualquer zoom.
 - Ícone próprio: a onda que os bytes fazem, verde-água sobre preto, dentro do
@@ -151,7 +151,7 @@ parâmetro (no Standalone; no *host*, o desfazer é o do *host*). O clique num
 controle não tira o foco do teclado: tocar notas continua a funcionar em qualquer
 vista, e o MIDI que chega do *host* acende as teclas do teclado virtual.
 
-As abas `GRAIN`, `ENV`, `FILTER`, `MOD` e `KEYS` mostram ícone e nome. Em
+As abas `GRAIN`, `ENV`, `FILTER` e `MOD` mostram ícone e nome. Em
 `ENV` e `FILTER`, o painel abre com o desenho do que se ouve — a forma do ADSR
 com o ponto vivo do envelope, e a resposta dos dois biquads com o corte já
 modulado — e os knobs ficam à direita, menores. As pegas do desenho mudam os
@@ -159,7 +159,7 @@ mesmos parâmetros: no envelope, os cantos dão ataque, decay/sustain e release,
 as pegas de meio de segmento dobram as curvas; no filtro, cada pega dá corte (na
 horizontal) e Q (na vertical). Nem todo parâmetro é um disco: a janela do grão, a
 forma e o alvo do LFO e o tipo e a inclinação dos filtros são teclas e tiras de
-ícones, e a escala e a tónica são cursores com dentes. No filtro, os cinco
+ícones, e a divisão do LFO é um cursor com dentes. No filtro, os cinco
 controles de cada fila alinham-se numa grelha de cinco colunas iguais: tipo,
 corte, Q, inclinação e drive na primeira; tipo, corte, Q, keytrack e envelope na
 segunda.

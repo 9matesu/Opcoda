@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/dsp/mod_matrix.h"
@@ -66,8 +66,6 @@ TEST(Matrix, InvalidRouteIsIgnored) {
     ModSourceValues values;
     values.lfo = 1.0f;
 
-    // fonte ou destino vazio nao modula; amount NaN vale zero, e nao propaga NaN
-    // para o parametro.
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPitch, values), 0.0f);
     EXPECT_FLOAT_EQ(matrixOffset(matrix, ModDest::kPan, values), 0.0f);
 }
@@ -129,16 +127,12 @@ TEST(Matrix, EngineAppliesRouteToFilterCutoff) {
     // amount 1 a 5 oitavas: 100 Hz * 32.
     EXPECT_NEAR(engine.f1CutoffHz(), 3200.0f, 2.0f);
 
-    // sem rota o corte fica no declarado, e a matriz nao deixa rasto entre blocos
-    // (o params e' copiado por bloco).
     params.modMatrix = ModMatrix {};
     engine.processBlock(left.data(), right.data(), 256, params);
     EXPECT_NEAR(engine.f1CutoffHz(), 100.0f, 0.5f);
 }
 
 TEST(Matrix, WidthDestinationSurvivesTheWordRoundTrip) {
-    // o destino novo entrou no fim do enum: os indices antigos continuam
-    // validos, e o 13 tem de voltar como kWidth.
     const auto matrix = matrixWith({route(ModSource::kLfo, ModDest::kWidth, 0.5f)});
     const ModMatrixArray words = toArray(matrix);
     EXPECT_EQ(words[1], static_cast<int>(ModDest::kWidth));
@@ -149,10 +143,6 @@ TEST(Matrix, WidthDestinationSurvivesTheWordRoundTrip) {
 }
 
 TEST(Matrix, EngineAppliesRouteToStereoWidth) {
-    // prova de ligacao do destino novo, a mesma que o corte tem: amount 1 a 1
-    // oitava leva a largura a 2.0, e com pan ao centro o unico efeito que resta
-    // e' o haas — canais iguais na origem, separados na saida. sem a rota, a
-    // saida continua mono.
     std::vector<float> material(24000);
     for (std::size_t i = 0; i < material.size(); ++i) {
         material[i] = 0.3f * std::sin(static_cast<float>(i) * 0.05f);

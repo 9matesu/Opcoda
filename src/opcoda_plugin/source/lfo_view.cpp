@@ -1,4 +1,4 @@
-#include "lfo_view.h"
+﻿#include "lfo_view.h"
 
 #include <cmath>
 
@@ -6,9 +6,7 @@ namespace opcoda {
 namespace {
 
 constexpr int kPoints {256};
-// **um ciclo, nao dois.** com dois ciclos a bolinha percorria so' metade da
-// largura (a fase e' de uma volta) e lia-se como fora de sincronia com a curva.
-constexpr int kCycles {1};
+constexpr int kCycles {2};
 
 } // namespace
 
@@ -38,6 +36,15 @@ float LfoView::valueOf(const char* id) const {
     return 0.0f;
 }
 
+float LfoView::rateHz() const {
+    const auto rate = juce::jlimit(0.01f, 20.0f, valueOf("lforate"));
+    if (valueOf("lfosync") <= 0.5f) {
+        return rate;
+    }
+    const auto div = juce::roundToInt(valueOf("lfodiv"));
+    return static_cast<float>(dsp::syncedRateHz(div, 120.0));
+}
+
 juce::Colour LfoView::inkFor(dsp::LFOTarget target) const noexcept {
     switch (target) {
         case dsp::LFOTarget::kCutoff:
@@ -60,8 +67,6 @@ void LfoView::setLive(float phase, float value) {
     lastLiveMs_ = now;
 
     const auto wrapped = phase - std::floor(phase);
-    // desenrola a fase: 0,99 -> 0,01 vale +0,02 de avanco, nao -0,98. o valor
-    // acumulado e' o que a mola segue; o desenho volta a ler em volta.
     float step = wrapped - rawPhasePrev_;
     rawPhasePrev_ = wrapped;
     if (step > 0.5f) {
@@ -76,7 +81,12 @@ void LfoView::setLive(float phase, float value) {
         valueEased_.jumpTo(value);
         liveSeen_ = true;
     } else {
-        phaseContinuous_ += step;
+        if (std::abs(step) > 1e-7f) {
+            phaseContinuous_ += step;
+        } else {
+            // fase parada (sem audio a correr): avanca ao ritmo do LFO.
+            phaseContinuous_ += rateHz() * static_cast<float>(delta);
+        }
         phaseEased_.set(phaseContinuous_);
         valueEased_.set(value);
     }
@@ -103,9 +113,7 @@ void LfoView::paint(juce::Graphics& g) {
 
     // -- ecra afundado --
     g.setColour(palette::display);
-    g.fillRoundedRectangle(bezel, 3.0f);
-    g.setColour(palette::displayBorder);
-    g.drawRoundedRectangle(bezel.reduced(0.5f), 3.0f, 1.0f);
+    g.fillRoundedRectangle(bezel, 6.0f);
 
     const auto wave = dsp::sanitizeLFOWave(
         static_cast<dsp::LFOWave>(juce::roundToInt(valueOf("lfowave"))));
@@ -115,21 +123,20 @@ void LfoView::paint(juce::Graphics& g) {
     const auto steps = juce::roundToInt(valueOf("lfosteps"));
 
     const auto centreY = plot.getCentreY();
-    // duas amplitudes: a forma cheia e' a referencia (o lfo existe sempre, mesmo
-    // com profundidade zero); a curva viva e' a que o motor aplica, encolhida
-    // pela profundidade. uma linha chata em DEPTH 0 lia-se como vista avariada.
     const auto shapeAmplitude = plot.getHeight() * 0.42f;
     const auto liveAmplitude = shapeAmplitude * depth;
-    const auto xFor = [&plot](float phase) {
-        return plot.getX() + (phase / static_cast<float>(kCycles)) * plot.getWidth();
-    };
+    // a onda corre com a fase viva: dois ciclos visiveis, o de agora a' esquerda.
+    const auto scroll = liveSeen_
+                            ? std::fmod(static_cast<float>(livePhase_),
+                                        static_cast<float>(kCycles))
+                            : 0.0f;
     const auto yFor = [centreY](float value, float amplitude) {
         return centreY - value * amplitude;
     };
 
-    // guias de profundidade e linha zero: dizem o quanto o lfo mexe antes de
-    // ele mexer. sem profundidade a forma e' uma linha, e e' isso que deve ler.
     g.setColour(palette::displayGrid);
+    const juce::Graphics::ScopedSaveState save(g);
+    g.reduceClipRegion(plot.toNearestInt());
     for (int i = 1; i < 4; ++i) {
         const auto y = plot.getY() + plot.getHeight() * static_cast<float>(i) / 4.0f;
         g.drawHorizontalLine(juce::roundToInt(y), plot.getX(), plot.getRight());
@@ -137,14 +144,12 @@ void LfoView::paint(juce::Graphics& g) {
     g.setColour(palette::alpha(palette::textOnDarkSub, 0.28f));
     g.drawHorizontalLine(juce::roundToInt(centreY), plot.getX(), plot.getRight());
 
-    // -- a forma, dois ciclos --
-    // referencia: a forma cheia, tenue.
     juce::Path shape;
     for (int i = 0; i < kPoints; ++i) {
         const auto t = static_cast<float>(i) / static_cast<float>(kPoints - 1);
-        const auto phase = t * static_cast<float>(kCycles);
+        const auto phase = scroll + t * static_cast<float>(kCycles);
         const auto value = dsp::LFO::shapeAt(wave, dsp::quantizeLFOPhase(phase, steps));
-        const auto x = xFor(phase);
+        const auto x = plot.getX() + t * plot.getWidth();
         const auto y = yFor(value, shapeAmplitude);
         if (i == 0) {
             shape.startNewSubPath(x, y);
@@ -152,17 +157,17 @@ void LfoView::paint(juce::Graphics& g) {
             shape.lineTo(x, y);
         }
     }
-    g.setColour(palette::alpha(palette::textOnDarkSub, 0.30f));
-    g.strokePath(shape, juce::PathStrokeType {1.0f, juce::PathStrokeType::curved,
+    g.setColour(palette::alpha(palette::textOnDarkSub, 0.45f));
+    g.strokePath(shape, juce::PathStrokeType {1.4f, juce::PathStrokeType::curved,
                                               juce::PathStrokeType::rounded});
 
     // a curva viva: o que a profundidade deixa passar.
     juce::Path path;
     for (int i = 0; i < kPoints; ++i) {
         const auto t = static_cast<float>(i) / static_cast<float>(kPoints - 1);
-        const auto phase = t * static_cast<float>(kCycles);
+        const auto phase = scroll + t * static_cast<float>(kCycles);
         const auto value = dsp::LFO::shapeAt(wave, dsp::quantizeLFOPhase(phase, steps));
-        const auto x = xFor(phase);
+        const auto x = plot.getX() + t * plot.getWidth();
         const auto y = yFor(value, liveAmplitude);
         if (i == 0) {
             path.startNewSubPath(x, y);
@@ -181,20 +186,6 @@ void LfoView::paint(juce::Graphics& g) {
     g.setColour(palette::alpha(inkFor(target), 0.92f));
     g.strokePath(path, juce::PathStrokeType {2.0f, juce::PathStrokeType::curved,
                                              juce::PathStrokeType::rounded});
-
-    // -- fase de agora, no primeiro ciclo --
-    if (liveSeen_) {
-        const auto dotPhase = livePhase_ - std::floor(livePhase_);
-        const auto x = xFor(dotPhase);
-        g.setColour(palette::alpha(inkFor(target), 0.25f));
-        g.drawVerticalLine(juce::roundToInt(x), plot.getY(), plot.getBottom());
-
-        const auto point = juce::Point<float> {x, yFor(liveValue_, liveAmplitude)};
-        g.setColour(palette::alpha(inkFor(target), 0.30f));
-        g.fillEllipse(juce::Rectangle<float> {16.0f, 16.0f}.withCentre(point));
-        g.setColour(palette::ivory);
-        g.fillEllipse(juce::Rectangle<float> {7.0f, 7.0f}.withCentre(point));
-    }
 }
 
 } // namespace opcoda

@@ -1,4 +1,4 @@
-#include "opcoda_core/pe/pe_parser.h"
+﻿#include "opcoda_core/pe/pe_parser.h"
 
 #include "opcoda_core/entropy/shannon_entropy.h"
 
@@ -143,9 +143,6 @@ PeParseResult parse(const std::uint8_t* data, std::size_t size) noexcept {
             return result;
         }
 
-        // a secao tem fim proprio, rawOffset + rawSize. medir ate ao fim do
-        // ficheiro pegaria o material das secoes seguintes. secao sem dados
-        // brutos, como .bss, fica com entropia zero.
         section.entropy = entropy::shannonBitsPerByte(
             data, size, section.rawOffset, section.rawSize);
 

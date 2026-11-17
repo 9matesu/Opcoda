@@ -90,6 +90,13 @@ build-release/
 *.lot
 *.out
 *.toc
+docs/manual/*.log
+
+# Instalador: o .iss, a EULA, a arte e o README ficam; o output, o payload e
+# o redistribuivel descarregado sao residuos de build (30 MB + 24 MB).
+installer/Output/
+installer/stage/
+installer/redist/
 
 # *.log fica restrito a docs/ de proposito: e' uma extensao generica, e um
 # *.log global esconderia logs de build ou de teste que sao uteis ver.

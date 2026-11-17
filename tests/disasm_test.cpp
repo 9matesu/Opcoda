@@ -1,4 +1,4 @@
-#include "opcoda_core/disasm/x86_disasm.h"
+﻿#include "opcoda_core/disasm/x86_disasm.h"
 
 #include <gtest/gtest.h>
 
@@ -14,8 +14,6 @@ using opcoda::disasm::decode;
     return decode(bytes.data(), bytes.size());
 }
 
-// gerador xorshift fixo: sem dependencia de <random>, a sequencia e' a mesma em
-// qualquer maquina e qualquer revisao da biblioteca.
 class DeterministicRandom {
 public:
     explicit DeterministicRandom(std::uint64_t seed) noexcept : state_ {seed | 1u} {}
@@ -36,8 +34,6 @@ private:
 } // namespace
 
 TEST(Disasm, DecodesThePrologueOfAFunction) {
-    // 48 89 4C 24 08           mov qword ptr [rsp+8], rcx
-    // 48 83 EC 28              sub rsp, 0x28
     const auto first = decodeBytes({0x48, 0x89, 0x4C, 0x24, 0x08});
     EXPECT_EQ(first.length, 5u);
     EXPECT_STREQ(first.text.data(), "mov qword ptr [rsp+0x8], rcx");
@@ -115,8 +111,6 @@ TEST(Disasm, ThePaddingNopReadsItsMemoryOperand) {
 }
 
 TEST(Disasm, UnknownOpcodesFallBackToOneByte) {
-    // C4 (VEX) e D8 (FPU) caem em db e consomem um byte: a leitura re-sincroniza
-    // no proximo opcode reconhecido.
     const auto vex = decodeBytes({0xC4, 0xE2, 0x7D, 0x18, 0x00});
     EXPECT_EQ(vex.length, 1u);
     EXPECT_STREQ(vex.text.data(), "db 0xC4");
@@ -154,9 +148,6 @@ TEST(Disasm, RandomBytesNeverReadPastTheBuffer) {
 }
 
 TEST(Disasm, LinearSweepAlwaysAdvances) {
-    // uma varredura linear sobre bytes quaisquer avanca sempre: a soma dos
-    // comprimentos tem de chegar ao fim do buffer (ou parar por dados
-    // truncados), e nunca o programa trava a incrementar zero.
     DeterministicRandom random {0x5DADu};
     for (int trial = 0; trial < 400; ++trial) {
         const auto count = static_cast<std::size_t>(64 + (random.next() % 256));

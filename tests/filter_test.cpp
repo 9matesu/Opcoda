@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/biquad.h"
 #include "opcoda_core/dsp/granular_engine.h"
@@ -24,11 +24,6 @@ namespace {
 constexpr double kSampleRate = 44100.0;
 constexpr int kBlock = 256;
 
-// amplitude em regime de uma senoide filtrada: descarta os primeiros 4000 samples
-// e mede o pico dos ultimos 1000. com a transiente dentro media-se a partida,
-// nao o ganho em regime.
-// nota: vale para Q <= 2. com Q = 12 em 100 Hz, tau ~1680 e 4000 amostras
-// deixam ~9 % de transiente; quem precisar de Q alto aumenta o descarte junto.
 float steadyPeak(FilterType type, float cutoffHz, float q, float toneHz,
                  double sampleRate = kSampleRate) {
     BiquadCoeffs coeffs = makeBiquadCoeffs(type, cutoffHz, q, sampleRate);
@@ -49,8 +44,6 @@ float steadyPeak(FilterType type, float cutoffHz, float q, float toneHz,
 } // namespace
 
 TEST(Biquad, LowPassPassesLowRejectsHigh) {
-    // 100 Hz passa perto de 1; 10 kHz com corte em 1 kHz cai mais de 40 dB.
-    // duas oitavas e meia por decada a 12 dB/oitava dao folga para a margem.
     EXPECT_NEAR(steadyPeak(FilterType::kLowPass, 1000.0f, 0.7071f, 100.0f), 1.0, 0.05);
     EXPECT_LT(steadyPeak(FilterType::kLowPass, 1000.0f, 0.7071f, 10000.0f), 0.01f);
 }
@@ -61,8 +54,6 @@ TEST(Biquad, HighPassPassesHighRejectsLow) {
 }
 
 TEST(Biquad, CoefficientsFollowSampleRate) {
-    // corte hardcoded em 44,1 kHz ou cache sem a taxa dariam a mesma resposta nas
-    // duas taxas; a 48 kHz a matematica e' outra.
     EXPECT_NEAR(steadyPeak(FilterType::kLowPass, 1000.0f, 0.7071f, 100.0f, 48000.0), 1.0,
                 0.05);
     EXPECT_LT(steadyPeak(FilterType::kLowPass, 1000.0f, 0.7071f, 10000.0f, 48000.0),
@@ -70,8 +61,6 @@ TEST(Biquad, CoefficientsFollowSampleRate) {
 }
 
 TEST(Biquad, BandPassPeaksAtCenter) {
-    // pico a 0 dB no centro por construcao (b0 = alpha), bordas caem. relativo,
-    // nao absoluto, para nao depender da aritmetica exata do livro.
     const auto center = steadyPeak(FilterType::kBandPass, 1000.0f, 1.0f, 1000.0f);
     EXPECT_NEAR(center, 1.0, 0.15);
     EXPECT_LT(steadyPeak(FilterType::kBandPass, 1000.0f, 1.0f, 100.0f), center / 3.0f);
@@ -97,9 +86,6 @@ TEST(Biquad, ResetClearsRinging) {
 }
 
 TEST(Biquad, ExtremeSettingsStayFiniteAndBounded) {
-    // extremos de corte e Q com os piores sinais: DC cheio e alternancia a
-    // nyquist, cada um no seu laco. |y| < 100 nao prova estabilidade - um Q
-    // legitimo da 12x - so que nunca da NaN nem explode: e' rede contra fuga.
     for (const auto type :
          {FilterType::kLowPass, FilterType::kHighPass, FilterType::kBandPass, FilterType::kNotch}) {
         for (const auto cutoff : {20.0f, 20000.0f}) {
@@ -125,8 +111,6 @@ TEST(Biquad, ExtremeSettingsStayFiniteAndBounded) {
 }
 
 TEST(Biquad, LongSilenceSnapsToExactZero) {
-    // sem snap a cauda estaciona em subnormal e cada operacao custa 10-100x.
-    // Q=12 a 1 kHz e depois 200 mil amostras: muito alem das ~7 mil necessarias.
     BiquadCoeffs coeffs = makeBiquadCoeffs(FilterType::kLowPass, 1000.0f, 12.0f, kSampleRate);
     Biquad filter;
     for (int i = 0; i < 5000; ++i) {
@@ -144,8 +128,6 @@ TEST(Biquad, LongSilenceSnapsToExactZero) {
 }
 
 TEST(Biquad, NaNInputsBecomeWire) {
-    // NaN em corte ou Q nao sai no barramento: vira passagem (corte 20 kHz) com Q
-    // de Butterworth, e a senoide passa finita.
     BiquadCoeffs coeffs = makeBiquadCoeffs(FilterType::kLowPass,
                                            std::numeric_limits<float>::quiet_NaN(),
                                            std::numeric_limits<float>::quiet_NaN(), kSampleRate);
@@ -161,8 +143,6 @@ TEST(Biquad, NaNInputsBecomeWire) {
     // passagem em 20 kHz sobre DC de 0,5: o nivel sobrevive quase inteiro.
     EXPECT_GT(peak, 0.4f);
 
-    // e "vira passagem" e' literal: os cinco coeficientes sao bit-identicos aos
-    // do passa-baixa explicito em 20 kHz. outro corte passava no pico e ninguem via.
     const BiquadCoeffs explicitWire =
         makeBiquadCoeffs(FilterType::kLowPass, 20000.0f, 0.7071f, kSampleRate);
     EXPECT_FLOAT_EQ(coeffs.b0, explicitWire.b0);
@@ -173,9 +153,6 @@ TEST(Biquad, NaNInputsBecomeWire) {
 }
 
 TEST(Biquad, NaNCutoffRespectsNyquistAtLowSampleRates) {
-    // o NaN cai em 20000 cru, e 20000 acima de Nyquist (sr = 32 kHz) dobrava a
-    // frequencia em vez de passar: finito e errado, que a rede de nao-finito nao
-    // pegava. com o min() contra Nyquist, 100 Hz passa e o coeff bate com 15680 Hz.
     constexpr double kLowSr = 32000.0;
     const BiquadCoeffs nanCutoff = makeBiquadCoeffs(
         FilterType::kLowPass, std::numeric_limits<float>::quiet_NaN(), 0.7071f, kLowSr);
@@ -203,8 +180,6 @@ TEST(Biquad, NaNCutoffRespectsNyquistAtLowSampleRates) {
 }
 
 TEST(Biquad, InvalidTypeFallsBackToLowPass) {
-    // indice corrompido de choice vira passa-baixa, nao erro nem silencio: tem de
-    // soar. o saneador e' a mesma funcao que o motor usa na chave do cache.
     const auto bad = static_cast<FilterType>(99);
     EXPECT_EQ(sanitizeFilterType(bad), FilterType::kLowPass);
     EXPECT_EQ(sanitizeFilterType(FilterType::kNotch), FilterType::kNotch);
@@ -224,8 +199,6 @@ TEST(Biquad, InvalidTypeFallsBackToLowPass) {
 }
 
 TEST(Biquad, InvalidTypeIsLowPassNotWire) {
-    // o sanitize garante o mapeamento, mas nao prova que o som e' de passa-baixa:
-    // um fio tambem passa 100 Hz. a perna de 10 kHz distingue.
     BiquadCoeffs coeffs = makeBiquadCoeffs(static_cast<FilterType>(99), 1000.0f, 0.7071f,
                                            kSampleRate);
     Biquad filter;
@@ -292,8 +265,6 @@ float renderFilteredPeak(FilterType f1type,
 } // namespace
 
 TEST(FilterChain, LowPassAt100HzKills440HzSine) {
-    // referencia transparente (20 kHz) contra corte em 100 Hz sobre 440 Hz: mais
-    // de 20 dB de diferenca. fonte em meia escala para o limiter ficar linear.
     const auto open = renderFilteredPeak(FilterType::kLowPass, 20000.0f, FilterType::kLowPass,
                                          20000.0f, 0.5f);
     ASSERT_GT(open, 0.01f) << "referencia muda, nada para comparar";
@@ -304,8 +275,6 @@ TEST(FilterChain, LowPassAt100HzKills440HzSine) {
 }
 
 TEST(FilterChain, HighPassAt10kHzSilences440HzSine) {
-    // teoria: (440/10000)^2 = 0,0019 (-54 dB). limiar 0,01 (-40 dB), 14 dB de
-    // folga. de proposito nao 0,05: 1a ordem daria 0,044 e o ensaio separa 6 de 12.
     const auto open = renderFilteredPeak(FilterType::kLowPass, 20000.0f, FilterType::kLowPass,
                                          20000.0f, 0.5f);
     ASSERT_GT(open, 0.01f);
@@ -316,8 +285,6 @@ TEST(FilterChain, HighPassAt10kHzSilences440HzSine) {
 }
 
 TEST(FilterChain, SecondFilterInSeriesFilters) {
-    // todos os outros ensaios de cadeia fecham o primeiro e abrem o segundo. aqui
-    // e' o contrario: primeiro aberto, segundo fechado, e o silencio prova os dois.
     const auto open = renderFilteredPeak(FilterType::kLowPass, 20000.0f, FilterType::kLowPass,
                                          20000.0f, 0.5f);
     ASSERT_GT(open, 0.01f);
@@ -328,10 +295,6 @@ TEST(FilterChain, SecondFilterInSeriesFilters) {
 }
 
 TEST(FilterChain, ResonanceRisesWithQ) {
-    // tom no corte: Q alto ressoa mais que Q baixo. fonte baixa para o pico nao
-    // bater no limiter.
-    // dois motores frescos, mesma fonte, so o Q difere: copiar nao da, a
-    // telemetria tem atomics.
     GranularEngine low;
     low.prepare(kSampleRate, kBlock);
     low.setSounding(true);
@@ -347,8 +310,6 @@ TEST(FilterChain, ResonanceRisesWithQ) {
     low.setSource(source.data(), source.size());
     high.setSource(source.data(), source.size());
 
-    // params separados por motor: mutar o objeto partilhado entre dois processBlock
-    // alternados funciona, mas esconde qual motor viu qual valor.
     GranularParams lowParams;
     lowParams.grainSizeMs = 10.0f;
     lowParams.densityGrainsPerSec = 50.0f;
@@ -379,8 +340,6 @@ TEST(FilterChain, ResonanceRisesWithQ) {
 }
 
 TEST(FilterChain, BandPassLetsCenterThroughEngine) {
-    // BP e Notch so existiam no unitario: um erro no switch ou no sanitize mapeava
-    // tudo para passa-baixa e ninguem via. 1 kHz no centro tem de sobreviver.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
     engine.setSounding(true);
@@ -413,8 +372,6 @@ TEST(FilterChain, BandPassLetsCenterThroughEngine) {
 }
 
 TEST(FilterChain, NotchRemovesCenterThroughEngine) {
-    // o dual do anterior: notch em 1 kHz sobre tom de 1 kHz afunda em relacao a
-    // referencia aberta. um Notch mapeado para LP passava em tudo.
     const auto open = renderFilteredPeak(FilterType::kLowPass, 20000.0f, FilterType::kLowPass,
                                          20000.0f, 0.5f);
 
@@ -446,15 +403,10 @@ TEST(FilterChain, NotchRemovesCenterThroughEngine) {
             peak = std::max(peak, std::abs(sample));
         }
     }
-    // rejeicao estreita sobre material de banda larga: afunda, mas nao zera,
-    // porque o resto do espectro passa. a razao ancora que o filtro mexe.
     EXPECT_LT(peak, open) << "aberto=" << open << " rejeitado=" << peak;
 }
 
 TEST(FilterChain, CutoffChangeMidStreamApplies) {
-    // o caminho sujo do cache: um cache travado ou surdo passava verde, porque os
-    // outros ensaios usam params constantes. aqui o corte muda a meio e a segunda
-    // metade tem de cair.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
     engine.setSounding(true);
@@ -487,8 +439,6 @@ TEST(FilterChain, CutoffChangeMidStreamApplies) {
     float secondHalf = 0.0f;
     for (int block = 0; block < 100; ++block) {
         engine.processBlock(left.data(), right.data(), kBlock, params);
-        // os 10 primeiros blocos sao transicao: trocar coeficiente com estado
-        // carregado da solavanco. a partir do 10 so resta o regime.
         if (block < 10) {
             continue;
         }
@@ -503,14 +453,6 @@ TEST(FilterChain, CutoffChangeMidStreamApplies) {
 }
 
 TEST(FilterChain, ReusedVoiceStartsClean) {
-    // sem o zero no startGrain o grao novo herdava a cauda congelada do slot: voz
-    // inativa nao renderiza, o filtro nao decai, e com Q=12 a cauda entrava audivel.
-    // comparar bursts nao serve (o grao de 40 ms dura ~10 tau) nem o pico no ataque
-    // (0,106 contra 0,057, margem fina). o que distingue e' grao lendo silencio:
-    // com zero, entrada zero e estado zero dao zero.
-    // protocolo: fase densa, morte por setSource(nullptr, 0), 30 blocos de quiesce,
-    // densidade de volta, mede os 8 primeiros blocos. 0,755 sem zero contra ~0 com
-    // zero; o limiar de 0,05 tem margem dos dois lados.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
     engine.setSounding(true);
@@ -543,15 +485,11 @@ TEST(FilterChain, ReusedVoiceStartsClean) {
     const std::vector<float> silence(16384, 0.0f);
     engine.setSource(silence.data(), silence.size());
 
-    // quiesce com densidade zero: DCB, gate e limiter assentam e os filtros
-    // congelam (voz inativa nao renderiza). so as caudas ficam quentes.
     params.densityGrainsPerSec = 0.0f;
     for (int block = 0; block < 30; ++block) {
         engine.processBlock(left.data(), right.data(), kBlock, params);
     }
 
-    // densidade de volta: os primeiros graos nascem sobre as caudas congeladas, e
-    // com zero a soma e' exatamente zero.
     params.densityGrainsPerSec = 200.0f;
     float peak = 0.0f;
     int maxActive = 0;
@@ -562,8 +500,6 @@ TEST(FilterChain, ReusedVoiceStartsClean) {
             peak = std::max(peak, std::abs(sample));
         }
     }
-    // prova de que houve graos para herdar: sem renderizacao o silencio e' vazio
-    // e o ensaio nao prova nada.
     EXPECT_GT(maxActive, 0) << "nenhum grao nasceu na fase de silencio";
     EXPECT_LT(peak, 0.05f) << "pico=" << peak << ": cauda fantasma tocando sozinha";
 }

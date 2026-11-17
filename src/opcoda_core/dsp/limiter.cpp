@@ -1,4 +1,4 @@
-#include "opcoda_core/dsp/limiter.h"
+﻿#include "opcoda_core/dsp/limiter.h"
 
 #include <cmath>
 
@@ -47,9 +47,6 @@ float Limiter::process(float sample) noexcept {
     const float coefficient = (target < gain_) ? attackCoef_ : releaseCoef_;
     gain_ = target + coefficient * (gain_ - target);
 
-    // o ganho suavizado sozinho deixa passar acima do teto enquanto o ataque nao
-    // converge. o clamp e' o que faz o limitador limitar, e e' o teto que o T1
-    // mede. custo: alguns dB de distorcao no ataque.
     float output = sample * gain_;
     if (output > ceiling_) {
         output = ceiling_;

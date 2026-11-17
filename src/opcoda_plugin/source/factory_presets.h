@@ -1,32 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <array>
 
 namespace opcoda {
 
-// dez presets de fabrica. sao pontos de partida, nao demos mixadas. cada valor
-// esta na unidade do parametro (ms, hz, indice de choice) e dentro da faixa do
-// layout. a tabela e' a fonte; nao ha sanitize depois dela. pares por id, nao
-// por ordem do layout: a ordem muda, o id nao.
-//
-// a ordem dos campos segue a do createParameterLayout, e nao e' decorativa: o
-// inicializador designado do C++20 exige os designadores na ordem de declaracao,
-// e a lista abaixo fica presa a ela.
-//
-// afinados por raciocinio, nao por ouvido. cloud = densidade alta e ataque
-// longo; shimmer = +12 st com hp; pulse = s&h quadrada na densidade; drone =
-// scan lento com lp; grit = bp estreito com detune. quem tem ouvido ajusta.
-//
-// os quatro ultimos existem por um motivo pratico: os seis primeiros sao
-// texturais, e quem abre o instrumento a espera de um pad, um teclado, um baixo
-// ou um pluck nao tinha por onde comecar. o que os separa e' a sobreposicao,
-// density x grain / 1000: 7,0 graos no pad (corpo continuo), 3,0 no teclado,
-// 2,8 no pluck (o grao e' o gesto) e 2,1 no baixo. nos tres tonais o filtro 1
-// faz o trabalho, com keytrack e envelope.
-//
-// o pad nao usa detune aleatorio largo. pitchrand e' um desvio por grao, nao
-// por voz: 5 st nao engrossa o som, desafina-o contra si proprio. a espessura
-// vem do grao longo e da largura, que nao mexem na afinacao.
 struct FactoryPreset {
     const char* name;
     // grain, density, position, spray, pitch, volume
@@ -150,13 +127,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .lfodepth = 0.7f,
           .lfotarget = 1.0f,
           .lfowave = 2.0f},
-        // pad: grao no maximo (100 ms) e 70 graos/s para sete sobrepostos, que e'
-        // o que faz corpo e nao chuvisco. a afinacao fica estavel de proposito --
-        // spray 1,5 %, pitchrand zero -- e a espessura vem da largura 1,5 e do
-        // envelope longo. o ataque de 1,5 s
-        // com curva +0,35 fica baixo e floresce no fim, que e' o gesto do pad.
-        // filtro 1 em 3,2 khz com drive leve, e o filtro 2 em high-pass a 70 hz
-        // limpa o rumo que o material binario traz.
         {.name = "Pad",
          .grain = 100.0f,
           .density = 70.0f,
@@ -179,9 +149,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .lfotarget = 2.0f,
           .width = 1.5f,
           .glide = 0.15f},
-        // teclado: grao curto e denso para o ataque ter corpo, decay de 250 ms com
-        // sustain em 25 %, e o corte a abrir no ataque com f1env +0,5 (meio curso
-        // de +-5 oitavas). slope de 24 dB porque aqui o filtro e' o timbre.
         {.name = "Keys",
          .grain = 30.0f,
           .density = 100.0f,
@@ -197,11 +164,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .f1keytrack = 0.5f,
           .f1env = 0.5f,
           .width = 1.2f},
-        // pluck: o envelope e' o som. ataque de 2 ms, decay de 350 ms a zero com
-        // curva -0,7 (cai depressa e arrasta a cauda, em vez de rampa), release
-        // curto. o corte sai de 700 hz e abre ate' ~6,6 khz com f1env +0,65,
-        // fechando junto com o envelope -- o "tchau" do pluck. 140 graos/s de 20 ms
-        // dao 2,8 sobrepostos, o suficiente para o ataque ter corpo sem virar pad.
         {.name = "Pluck",
          .grain = 20.0f,
           .density = 140.0f,
@@ -220,9 +182,6 @@ inline const std::array<FactoryPreset, 10>& factoryPresets() {
           .f1keytrack = 0.8f,
           .f1env = 0.65f,
           .width = 1.15f},
-        // baixo: -24 st para descer duas oitavas, filtro quase fechado com
-        // keytrack cheio (uma oitava de corte por oitava de nota) e glide de 40 ms.
-        // width 0,8 fecha o lado sem colapsar em mono.
         {.name = "Bass",
          .grain = 30.0f,
           .density = 70.0f,

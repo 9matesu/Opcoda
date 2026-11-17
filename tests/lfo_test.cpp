@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/dsp/lfo.h"
@@ -22,9 +22,6 @@ namespace {
 constexpr double kSampleRate = 44100.0;
 constexpr int kBlock = 256;
 
-// maior diferenca absoluta entre dois buffers. piso de audibilidade, nao de
-// sinal: sem ele 1 ULP satisfazia um teste chamado "Audible". so o canal
-// esquerdo: o pan e' estatico e a diferenca aparece igual nos dois.
 float maxAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
     float worst = 0.0f;
     for (std::size_t i = 0; i < a.size() && i < b.size(); ++i) {
@@ -36,8 +33,6 @@ float maxAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
 } // namespace
 
 TEST(LFO, AllWavesStayBipolar) {
-    // nenhuma forma sai de [-1, 1]: o LFO multiplica afinacao, posicao e
-    // densidade, e um valor fora da faixa estoura o alvo.
     for (const auto wave : {LFOWave::kSine, LFOWave::kTri, LFOWave::kSaw, LFOWave::kSquare,
                             LFOWave::kSampleHold}) {
         LFO lfo;
@@ -51,8 +46,6 @@ TEST(LFO, AllWavesStayBipolar) {
 }
 
 TEST(LFO, SpotValues) {
-    // ancoras fechadas das quatro formas periodicas: se a fase ou a forma mudarem
-    // de convencao, quebra aqui, nao num ouvido a 60 Hz.
     LFO lfo;
     EXPECT_FLOAT_EQ(lfo.valueAt(LFOWave::kSine, 1.0f, 0, 48000.0), 0.0f);
     EXPECT_NEAR(lfo.valueAt(LFOWave::kSine, 1.0f, 12000, 48000.0), 1.0f, 1e-6);
@@ -65,8 +58,6 @@ TEST(LFO, SpotValues) {
 }
 
 TEST(LFO, SampleHoldIsDeterministicPerCycle) {
-    // mesmo ciclo, mesmo valor, em instancias diferentes: nao ha estado de RNG.
-    // e nem todos os ciclos sao iguais, senao o S&H era DC com outro nome.
     LFO first;
     LFO second;
     first.advance(1.0f, 48000 * 3 + 100, 48000.0);
@@ -77,8 +68,6 @@ TEST(LFO, SampleHoldIsDeterministicPerCycle) {
     bool varied = false;
     float previous = first.blockValue(LFOWave::kSampleHold);
     for (int cycle = 0; cycle < 100; ++cycle) {
-        // 48000 + 173 amostras por iteracao: um ciclo e um quebrado, cai sempre num
-        // ciclo diferente. avancar um ciclo exato repetiria o mesmo para sempre.
         first.advance(1.0f, 48000 + 173, 48000.0);
         const auto value = first.blockValue(LFOWave::kSampleHold);
         EXPECT_GE(value, -1.0f);
@@ -90,8 +79,6 @@ TEST(LFO, SampleHoldIsDeterministicPerCycle) {
 }
 
 TEST(LFO, AdvanceCountsWholeCycles) {
-    // 1 Hz a 48 kHz em 48000 amostras e' uma volta exata: a fase marca 1,0 sem
-    // wrap (o indice do ciclo do S&H precisa dela inteira) e o seno repete o zero.
     LFO lfo;
     lfo.advance(1.0f, 48000, 48000.0);
     EXPECT_DOUBLE_EQ(lfo.phase(), 1.0);
@@ -111,9 +98,6 @@ TEST(LFO, NamesCoverAllTargetsAndWaves) {
 }
 
 TEST(LFO, InvalidTargetAndWaveFallBack) {
-    // indice corrompido de choice vira o primeiro da lista, nao erro: tem de soar.
-    // mesma regra do sanitizeFilterType. fronteira exata (4/5, logo apos o ultimo
-    // valido) mais um valor absurdo.
     EXPECT_EQ(sanitizeLFOTarget(static_cast<LFOTarget>(99)), LFOTarget::kPitch);
     EXPECT_EQ(sanitizeLFOWave(static_cast<LFOWave>(99)), LFOWave::kSine);
     EXPECT_EQ(sanitizeLFOTarget(static_cast<LFOTarget>(4)), LFOTarget::kPitch);
@@ -123,8 +107,6 @@ TEST(LFO, InvalidTargetAndWaveFallBack) {
 }
 
 TEST(LFO, RateZeroFreezesPhase) {
-    // taxa zero congela a fase: vira offset estatico, uso legitimo (detune fixo sem
-    // tocar no knob). sem este ensaio, tratar 0 como "pula o LFO" passava em tudo.
     LFO lfo;
     lfo.advance(1.0f, 24000, 48000.0);
     const auto frozen = lfo.phase();
@@ -174,17 +156,12 @@ std::vector<float> renderLFO(float depth,
 } // namespace
 
 TEST(LFOEngine, DepthZeroIsIdentity) {
-    // com depth 0, taxa/forma/alvo malucos nao mudam nada: tudo multiplica por
-    // zero. e' o que garante que o LFO desligado preserva o T1 bit a bit.
     const auto plain = renderLFO(0.0f, LFOTarget::kPitch);
     EXPECT_EQ(plain, renderLFO(0.0f, LFOTarget::kCutoff, LFOWave::kSquare, 20.0f));
     EXPECT_EQ(plain, renderLFO(0.0f, LFOTarget::kDensity, LFOWave::kSampleHold, 0.0f));
 }
 
 TEST(LFOEngine, PitchTargetIsAudible) {
-    // +-12 st a 2 Hz em 200 blocos movem cada grao para outro sitio da senoide.
-    // o piso de 1e-3 barra placebo de 1 ULP: o nome diz audivel, e com picos em
-    // 0,1 e' audivel com folga.
     const auto dry = renderLFO(0.0f, LFOTarget::kPitch);
     const auto wet = renderLFO(1.0f, LFOTarget::kPitch);
     ASSERT_FALSE(dry.empty());
@@ -196,8 +173,6 @@ TEST(LFOEngine, PitchTargetIsAudible) {
 }
 
 TEST(LFOEngine, DensityTargetChangesSpawning) {
-    // densidade modulada muda o agendamento: mesma fonte, mesmos graos, e so o
-    // quando muda. sem diferenca aqui o alvo density e' placebo.
     const auto dry = renderLFO(0.0f, LFOTarget::kDensity);
     const auto wet = renderLFO(1.0f, LFOTarget::kDensity);
     ASSERT_EQ(dry.size(), wet.size());
@@ -219,9 +194,6 @@ TEST(LFOEngine, PositionTargetIsAudible) {
 }
 
 TEST(LFOEngine, SampleHoldModulatesThroughEngine) {
-    // o S&H aparecia em finitude e em profundidade zero, mas nunca modulando: um
-    // waveAt(kSampleHold) que devolvesse DC passava em tudo. aqui tem de mover o
-    // som de um jeito diferente do seno.
     const auto sine = renderLFO(1.0f, LFOTarget::kPitch, LFOWave::kSine, 2.0f);
     const auto held = renderLFO(1.0f, LFOTarget::kPitch, LFOWave::kSampleHold, 2.0f);
     ASSERT_EQ(sine.size(), held.size());
@@ -229,9 +201,6 @@ TEST(LFOEngine, SampleHoldModulatesThroughEngine) {
 }
 
 TEST(LFOEngine, GarbageEnumsThroughEngineStayFinite) {
-    // o sanitize e' testado em unidade, mas ninguem provava que o motor o chama: um
-    // indice 99 caia no return 0.0f do waveAt ou num switch sem cobertura. aqui o
-    // 99 soa finito e igual ao default saneado.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
     engine.setSounding(true);
@@ -266,9 +235,6 @@ TEST(LFOEngine, GarbageEnumsThroughEngineStayFinite) {
 }
 
 TEST(LFOEngine, AllWavesStayFiniteThroughEngine) {
-    // todas as formas, inclusive quadrada e S&H com degraus, passam pelo motor sem
-    // NaN em todos os alvos: cada um recebe o degrau por caminho diferente (pitch
-    // soma, densidade multiplica, cutoff expoe, posicao desloca).
     for (const auto target :
          {LFOTarget::kPitch, LFOTarget::kDensity, LFOTarget::kCutoff, LFOTarget::kPosition}) {
         for (const auto wave :
@@ -322,8 +288,6 @@ TEST(Lfo, SyncedEighthAt140BpmIsFourPointSixSixSevenHertz) {
 }
 
 TEST(Lfo, DottedIsThreeHalves) {
-    // a pontuada dura 1,5x a base, entao os ciclos por batida sao 2/3 e a razao
-    // entre eles da os 1,5 prometidos.
     const double base = opcoda::dsp::cyclesPerBeat(3);      // 1/8
     const double dotted = opcoda::dsp::cyclesPerBeat(8);    // 1/8 pontuada
     EXPECT_NEAR(base / dotted, 1.5, 1e-9);
@@ -336,8 +300,6 @@ TEST(Lfo, TripletIsTwoThirds) {
 }
 
 TEST(Lfo, StepsQuantizesIntoFlatPlateaus) {
-    // a serra torna os patamares exatos: com 4 degraus as fases dao 0, 1/4, 1/2,
-    // 3/4 e a serra devolve -1, -0.5, 0, 0.5. quatro valores, mais um seria degrau a mais.
     LFO lfo;
     const double rate = 1.0;
     const int samplesPerCycle = 4800;
@@ -360,8 +322,6 @@ TEST(Lfo, SyncWithoutTransportUsesFallbackBpm) {
 }
 
 TEST(Lfo, ModeChangeKeepsPhaseContinuous) {
-    // free -> sync fixa um offset para a fase nao saltar. o ppq e' de proposito
-    // grande e fora de tempo: sem offset a fase saltava para 2*ppq.
     GranularEngine engine;
     engine.prepare(kSampleRate, kBlock);
 

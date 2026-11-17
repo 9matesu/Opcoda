@@ -1,21 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include "juce_gui_basics/juce_gui_basics.h"
 
-// **tokens de duas chapas.** o instrumento tem dois temas: DARK, a chapa de
-// grafite em que o sinal e' branco, e CLASSIC, a chapa creme com laranja que o
-// instrumento usou ate' 13/11/2026. os dois partilham os mesmos nomes: quem
-// pinta pede `palette::accent` e nao sabe em que tema esta'.
-//
-// **por referencias e nao por constantes.** os tokens eram `inline const` e o
-// tema era uma decisao de compilacao. passa a haver um `Tokens` activo e cada
-// nome e' uma referencia para o membro — o call site nao muda, e trocar de tema
-// e' uma atribuicao. as cores ficam nao-const de proposito: um `Colour` nao
-// guarda o seu dono, e o que muda e' o valor para onde a referencia aponta.
-//
-// o tema escolhe-se em SETTINGS > THEMES e fica guardado em
-// `%APPDATA%/Opcoda/theme.txt`, por isso o instrumento abre sempre como foi
-// deixado. um tema novo entra aqui como mais uma funcao `Tokens ...Tokens()`.
 namespace opcoda::palette {
 
 enum class Theme { dark, classic };
@@ -23,6 +9,7 @@ enum class Theme { dark, classic };
 struct Tokens {
     juce::Colour chassis, chassisDark, chassisBorder, header, faceplate, faceplateLight,
         faceplateDark, charcoal, charcoalDeep, panelBg, subPanel, valBox;
+    juce::Colour toolbarTop, toolbarBottom, hair, knobTrack, waveBody, regionFill;
     juce::Colour knobTop, knobBottom, knobEdge, brass, rust, sage, ivory;
     juce::Colour display, displayPanel, displayBorder, displayGrid;
     juce::Colour textDark, textSub, textMuted, textField, textOnDark, textOnDarkSub;
@@ -33,74 +20,70 @@ struct Tokens {
     juce::Colour rail;
 };
 
-// -- o tema escuro, monocromatico --
-// **um so' material e uma so' tinta.** nao ha' matiz em lado nenhum: o que era
-// verde-agua passou a branco, e o que era aviso ou erro distingue-se por
-// luminosidade (branco no tecto) e nunca por cor. o texto e a forma dizem o
-// estado; a cor so' diz o quanto.
 inline Tokens darkTokens() {
     Tokens t {};
-    t.chassis = juce::Colour {0xff0e0e0e};
-    t.chassisDark = juce::Colour {0xff070707};
-    t.chassisBorder = juce::Colour {0xff2c2c2c};
-    t.header = juce::Colour {0xff151515};
-    t.faceplate = juce::Colour {0xff171717};
-    t.faceplateLight = juce::Colour {0xff1e1e1e};
-    t.faceplateDark = juce::Colour {0xff0b0b0b};
-    t.charcoal = juce::Colour {0xff202020};
-    t.charcoalDeep = juce::Colour {0xff080808};
-    t.panelBg = juce::Colour {0xff1c1c1c};
-    t.subPanel = juce::Colour {0xff232323};
-    t.valBox = juce::Colour {0xff2a2a2a};
+    t.chassis = juce::Colour {0xff1b1b1d};
+    t.chassisDark = juce::Colour {0xff111111};
+    t.chassisBorder = juce::Colour {0xff37373a};
+    t.header = juce::Colour {0xff2a2a2c};
+    t.faceplate = juce::Colour {0xff202022};
+    t.faceplateLight = juce::Colour {0xff262628};
+    t.faceplateDark = juce::Colour {0xff161618};
+    t.charcoal = juce::Colour {0xff2c2c2e};
+    t.charcoalDeep = juce::Colour {0xff161618};
+    t.panelBg = juce::Colour {0xff202022};
+    t.subPanel = juce::Colour {0xff262628};
+    t.valBox = juce::Colour {0xff2c2c2e};
 
-    t.knobTop = juce::Colour {0xff3a3a3a};
-    t.knobBottom = juce::Colour {0xff111111};
-    t.knobEdge = juce::Colour {0xff5c5c5c};
-    t.brass = juce::Colour {0xff9a9a9a};
-    // o arco do valor e' a leitura mais forte do painel: branco, um passo abaixo
-    // do marfim para o ponteiro continuar a ser o ponto mais claro.
-    t.rust = juce::Colour {0xffededed};
-    t.sage = juce::Colour {0xff7a7a7a};
-    t.ivory = juce::Colour {0xfff4f4f4};
+    t.toolbarTop = juce::Colour {0xff333335};
+    t.toolbarBottom = juce::Colour {0xff2a2a2c};
+    t.hair = juce::Colour {0x12ffffff};
+    t.knobTrack = juce::Colour {0x38ffffff};
+    t.waveBody = juce::Colour {0xffc9c9cb};
+    t.regionFill = juce::Colour {0x0fffffff};
 
-    t.display = juce::Colour {0xff000000};
-    t.displayPanel = juce::Colour {0xff050505};
-    t.displayBorder = juce::Colour {0xff262626};
-    t.displayGrid = juce::Colour {0x16ffffff};
+    t.knobTop = juce::Colour {0xff2c2c2e};
+    t.knobBottom = juce::Colour {0xff161618};
+    t.knobEdge = juce::Colour {0xff37373a};
+    t.brass = juce::Colour {0xff9a9a9e};
+    t.rust = juce::Colour {0xffe8e8e8};
+    t.sage = juce::Colour {0xff6f6f74};
+    t.ivory = juce::Colour {0xffdcdcde};
 
-    t.textDark = juce::Colour {0xfff1f1f1};
-    t.textSub = juce::Colour {0xffb8b8b8};
-    t.textMuted = juce::Colour {0xff8a8a8a};
-    t.textField = juce::Colour {0xffd6d6d6};
-    t.textOnDark = juce::Colour {0xffededed};
-    t.textOnDarkSub = juce::Colour {0xffa6a6a6};
+    t.display = juce::Colour {0xff0c0c0d};
+    t.displayPanel = juce::Colour {0xff161618};
+    t.displayBorder = juce::Colour {0xff37373a};
+    t.displayGrid = juce::Colour {0x0dffffff};
 
-    t.focusRing = juce::Colour {0xffe6e6e6};
+    t.textDark = juce::Colour {0xffdcdcde};
+    t.textSub = juce::Colour {0xff9a9a9e};
+    t.textMuted = juce::Colour {0xff6f6f74};
+    t.textField = juce::Colour {0xff9a9a9e};
+    t.textOnDark = juce::Colour {0xffdcdcde};
+    t.textOnDarkSub = juce::Colour {0xff9a9a9e};
+
+    t.focusRing = juce::Colour {0xffe8e8e8};
 
     t.accent = juce::Colour {0xffe8e8e8};
-    t.accentSoft = juce::Colour {0xfff7f7f7};
+    t.accentSoft = juce::Colour {0xfff0f0f0};
     t.accentWarn = juce::Colour {0xffffffff};
-    t.ok = juce::Colour {0xffbfbfbf};
-    t.okBright = juce::Colour {0xfff2f2f2};
+    t.ok = juce::Colour {0xff9a9a9e};
+    t.okBright = juce::Colour {0xffdcdcde};
     t.error = juce::Colour {0xffffffff};
     t.errorLight = juce::Colour {0xffffffff};
 
-    t.waveLow = juce::Colour {0xff8c8c8c};
+    t.waveLow = juce::Colour {0xff8c8c8e};
     t.waveHigh = juce::Colour {0xffe8e8e8};
 
-    t.meterBed = juce::Colour {0xff080808};
-    t.meterGreen = juce::Colour {0xff8a8a8a};
+    t.meterBed = juce::Colour {0xff161618};
+    t.meterGreen = juce::Colour {0xff9a9a9e};
     t.meterAmber = juce::Colour {0xffc4c4c4};
     t.meterRed = juce::Colour {0xffffffff};
 
-    t.rail = juce::Colour {0xff121212};
+    t.rail = juce::Colour {0xff161618};
     return t;
 }
 
-// -- o tema classico, de 2025 a 13/11/2026 --
-// chapa creme, carvao nas janelas e laranja queimado como sinal. fica inteiro,
-// valor por valor, para o instrumento poder voltar a' cara com que foi desenhado
-// sem ninguem reescrever a paleta de memoria.
 inline Tokens classicTokens() {
     Tokens t {};
     t.chassis = juce::Colour {0xff171512};
@@ -115,6 +98,13 @@ inline Tokens classicTokens() {
     t.panelBg = juce::Colour {0xff26231e};
     t.subPanel = juce::Colour {0xff302c25};
     t.valBox = juce::Colour {0xff38332b};
+
+    t.toolbarTop = t.faceplateLight;
+    t.toolbarBottom = t.faceplate;
+    t.hair = juce::Colour {0x12ffffff};
+    t.knobTrack = juce::Colour {0x38ffffff};
+    t.waveBody = t.sage;
+    t.regionFill = juce::Colour {0x0fffffff};
 
     t.knobTop = juce::Colour {0xff3b352c};
     t.knobBottom = juce::Colour {0xff161310};
@@ -158,14 +148,10 @@ inline Tokens classicTokens() {
     return t;
 }
 
-// o tema activo e o anterior: o anterior e' o mapa de tradução para as cores que
-// os componentes guardaram em `setColour` antes da troca (ver applyToTree).
 inline Tokens active {darkTokens()};
 inline Tokens previous {darkTokens()};
 inline Theme currentTheme {Theme::dark};
 
-// um nome por token, todos referencias para o tema activo. quem pinta nao sabe
-// em que tema esta' e nao precisa de saber.
 inline juce::Colour& chassis = active.chassis;
 inline juce::Colour& chassisDark = active.chassisDark;
 inline juce::Colour& chassisBorder = active.chassisBorder;
@@ -178,6 +164,12 @@ inline juce::Colour& charcoalDeep = active.charcoalDeep;
 inline juce::Colour& panelBg = active.panelBg;
 inline juce::Colour& subPanel = active.subPanel;
 inline juce::Colour& valBox = active.valBox;
+inline juce::Colour& toolbarTop = active.toolbarTop;
+inline juce::Colour& toolbarBottom = active.toolbarBottom;
+inline juce::Colour& hair = active.hair;
+inline juce::Colour& knobTrack = active.knobTrack;
+inline juce::Colour& waveBody = active.waveBody;
+inline juce::Colour& regionFill = active.regionFill;
 
 inline juce::Colour& knobTop = active.knobTop;
 inline juce::Colour& knobBottom = active.knobBottom;
@@ -223,24 +215,13 @@ inline juce::Colour alpha(juce::Colour colour, float opacity) {
     return colour.withAlpha(opacity);
 }
 
-// troca de tema. guarda o anterior antes de escrever, para applyToTree poder
-// traduzir as cores que os componentes ja' tinham guardado, e avisa quem ouve
-// (o editor) para se redesenhar.
 void setTheme(Theme theme);
 
-// o que ja' esta' guardado em %APPDATA%/Opcoda/theme.txt, ou DARK se o ficheiro
-// nao existir ou estiver estragado.
 Theme loadSavedTheme();
 void saveTheme(Theme theme);
 
-// a cor antiga do mesmo papel: procura `colour` na tabela anterior e devolve o
-// valor correspondente na activa. o que nao for um token fica como esta'.
 juce::Colour translate(juce::Colour colour);
 
-// percorre a arvore e traduz as cores fixadas por setColour. sem isto, um tema
-// trocado a meio da sessao deixava etiquetas e combos com a tinta do tema
-// anterior. os componentes que pintam a partir da paleta nao precisam disto:
-// leem o valor novo no proximo paint.
 void applyToTree(juce::Component& root);
 
 } // namespace opcoda::palette

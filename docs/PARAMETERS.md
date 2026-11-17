@@ -61,12 +61,10 @@ estéreo e as 24 células da matriz.
 | `lfodiv` | LFO DIV | escolha | 1/1 a 1/64, pontuados e tercinas | 1/4 | Divisão no modo Sync. |
 | `lfosteps` | LFO STEPS | inteiro | 1 a 16 | 16 | Quantização em degraus; 16 = sem quantização. |
 
-## Teclado e escala
+## Glide
 
 | ID | Controle | Unidade | Faixa | Padrão | Comportamento |
 | --- | --- | --- | --- | --- | --- |
-| `scale` | SCALE | escolha | 12 escalas | Chromatic | Quantiza a nota. |
-| `root` | ROOT | escolha | C a B | C | Tônica da escala. |
 | `glide` | GLIDE | s | 0 a 2 | 0 | Portamento entre notas. |
 
 ## Matriz de modulação

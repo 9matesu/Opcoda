@@ -1,4 +1,4 @@
-#include "opcoda_core/rt/alloc_guard.h"
+﻿#include "opcoda_core/rt/alloc_guard.h"
 
 #include <cstddef>
 #include <cstdlib>
@@ -7,8 +7,6 @@
 namespace opcoda::rt::alloc_guard {
 namespace {
 
-// por thread: a janela e' da thread de audio, e alocacoes da thread principal
-// durante o teste nao contam como violacao.
 thread_local bool tlsInAudioThread = false;
 thread_local std::size_t tlsWindowCount = 0;
 

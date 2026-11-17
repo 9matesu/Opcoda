@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 #include "opcoda_core/rt/alloc_guard.h"
@@ -17,8 +17,6 @@ using opcoda::rt::Transport;
 
 namespace {
 
-// corre `body` com a janela de audio marcada e devolve as alocacoes ocorridas
-// dentro dela. e' o portao C como assercao automatica.
 template <typename Body>
 std::size_t allocationsInsideAudioWindow(Body&& body) {
     ScopedAudioThread scope;
@@ -35,8 +33,6 @@ TEST(AllocGuard, WindowStartsEmpty) {
 }
 
 TEST(AllocGuard, FlagsAllocationMadeInsideWindow) {
-    // prova que o guard funciona: alocar dentro da janela tem de ser detectado,
-    // senao o portao C nao protege nada.
     const auto violations = allocationsInsideAudioWindow([] {
         auto* leaked = new int[64];
         leaked[0] = 1;
@@ -46,8 +42,6 @@ TEST(AllocGuard, FlagsAllocationMadeInsideWindow) {
 }
 
 TEST(AllocGuard, IgnoresAllocationOutsideWindow) {
-    // a flag e' por thread: alocar na thread principal nao e' violacao. corre numa
-    // thread nova para nao herdar a contagem de um teste anterior.
     std::vector<double> temporary;
     std::thread worker([&] {
         temporary.resize(1024);
@@ -58,8 +52,6 @@ TEST(AllocGuard, IgnoresAllocationOutsideWindow) {
 }
 
 TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
-    // o teste que importa: o caminho real de audio, com material carregado, nao
-    // pode alocar nada dentro do callback.
     constexpr double kSampleRate = 44100.0;
     constexpr int kBlock = 256;
 
@@ -80,8 +72,6 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     GranularParams params;
     params.densityGrainsPerSec = 120.0f;
     params.grainSizeMs = 20.0f;
-    // f020 ligado: drive, 24 dB, as tres curvas e tres rotas. sem isto o guard
-    // media o motor de antes da matriz e nao provava o caminho novo.
     params.f1DriveDb = 18.0f;
     params.f1Slope = 1;
     params.f1Keytrack = 1.0f;
@@ -93,8 +83,6 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
     params.modMatrix.routes[0] = {ModSource::kLfo, ModDest::kCutoff1, 0.5f};
     params.modMatrix.routes[1] = {ModSource::kEnvelope, ModDest::kPitch, 0.25f};
     params.modMatrix.routes[2] = {ModSource::kVelocity, ModDest::kDensity, 0.5f};
-    // largura stereo fora do atalho: 1.0 sai cedo, e o guard tem de medir o
-    // laco mid/side a valer. a rota a kWidth exerce o destino novo tambem.
     params.widthStereo = 2.0f;
     params.modMatrix.routes[3] = {ModSource::kCc71, ModDest::kWidth, 0.5f};
 
@@ -109,10 +97,6 @@ TEST(AllocGuard, EngineProcessBlockDoesNotAllocate) {
 }
 
 TEST(AllocGuard, SustainedPlaybackStaysClean) {
-    // 5 segundos de audio sintetico a 128 amostras por bloco, o menor orcamento do
-    // ensaio T2. a alocacao, se existisse, aparecia em qualquer bloco; os 5
-    // minutos continuos do criterio sao do T2 no host (docs/07), que mede p99 e
-    // xruns, nao o operator new.
     constexpr double kSampleRate = 44100.0;
     constexpr int kBlock = 128;
     constexpr int kBlocks = (5 * 44100) / kBlock;
@@ -147,10 +131,6 @@ TEST(AllocGuard, SustainedPlaybackStaysClean) {
 }
 
 TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
-    // o caminho novo: transporte em reproducao, com o gate aberto por ele e nao
-    // por nota nenhuma.
-    // e' a razao de o transporte estar no nucleo. na thread de interface esta
-    // assercao nao verificava nada, e o portao C falava de um caminho nunca medido.
     constexpr double kSampleRate = 44100.0;
     constexpr int kBlock = 256;
 
@@ -177,11 +157,6 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
 
     const auto violations = allocationsInsideAudioWindow([&] {
         for (int block = 0; block < 200; ++block) {
-            // a ordem e' a de PluginProcessor::processBlock: advance primeiro,
-            // depois o gate, e o gate usa o MESMO booleano que decidiu o advance.
-            // reler o atomico duas vezes abria uma janela entre o advance e o
-            // setSounding: um STOP nesse intervalo dava posicao de um estado e gate
-            // de outro, e o sintoma era ate' um bloco de audio parado.
             const auto playing = transport.isPlaying();
             if (playing) {
                 params.position = transport.advance(kBlock, playing);
@@ -190,9 +165,6 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
             engine.processBlock(left.data(), right.data(), kBlock, params);
         }
 
-        // a fase de release tambem corre dentro da janela: parar a meio e
-        // processar mais 20 blocos exercita o braco release, que os 200 acima
-        // nunca tocam porque o gate so abre.
         transport.stop();
         for (int block = 0; block < 20; ++block) {
             engine.setSounding(transport.isPlaying());
@@ -207,10 +179,6 @@ TEST(AllocGuard, TransportDrivenPlaybackDoesNotAllocate) {
     EXPECT_GT(transport.positionFraction(), 0.0f);
 }
 
-// o setSource de quatro argumentos e' o caminho de audio, e nao aloca nem mede.
-// o guard e' cego ao custo de CPU: o setSource antigo media a entropia da regiao
-// inteira dentro de processBlock sem alocar (histograma de pilha), e este teste
-// passava com 12 milhoes de operacoes dentro da janela. o TSan tambem nao via.
 TEST(AllocGuard, PublishingAPrecomputedCurveAllocatesNothing) {
     constexpr double kSampleRate = 44100.0;
     constexpr int kBlock = 256;

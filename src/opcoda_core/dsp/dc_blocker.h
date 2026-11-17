@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 
 namespace opcoda::dsp {
 
 class DcBlocker {
 public:
-    // R = 0,9983 corta em ~12 Hz a 44,1 kHz. R = 0,995 cortaria em 35 Hz, fora
-    // da faixa de 10 a 15 Hz. o ensaio T1 mede a faixa, nao o coeficiente.
     static constexpr float kDefaultR = 0.9983f;
 
     void setSampleRate(double sampleRate) noexcept;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "fonts.h"
 #include "palette.h"
@@ -12,20 +12,6 @@
 
 namespace opcoda {
 
-// envelope ADSR desenhado: a forma que o motor aplica ao mix, com o ponto vivo
-// em cima do que esta' a soar.
-//
-// **os knobs passam a secundarios.** um ADSR tem quatro numeros e uma forma; ler
-// a forma nos numeros e' o que se fazia, e obrigava a imaginar. aqui a forma e' o
-// objeto e os numeros sao o ajuste fino.
-//
-// **reactivo ao clique.** tres pegas de canto mudam os tempos e o sustain, e tres
-// pegas a meio dos segmentos dobram a curva de cada um -- os mesmos sete
-// parametros que os knobs mostram, sem um knob a mais.
-//
-// **sincronizado.** o ponto vivo vem do audio (nivel, fase e progresso do
-// estagio), nao de um temporizador da interface: mostra o envelope que esta' a
-// soar, com o mesmo atraso de um bloco que o resto do display.
 class EnvelopeView final : public juce::Component,
                            private juce::AudioProcessorValueTreeState::Listener {
 public:
@@ -44,8 +30,6 @@ public:
     void setLive(float level, float stage, int phase);
 
 private:
-    // um knob a mexer tem de mexer a forma: sem isto o desenho so' acordava no
-    // arrasto da propria pega e no audio a soar, e o ADSR parecia congelado.
     void parameterChanged(const juce::String&, float) override { repaint(); }
 
     // pegas: os tres cantos e o meio de cada segmento.

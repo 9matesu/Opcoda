@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "animator.h"
 #include "fonts.h"
@@ -23,8 +23,6 @@
 
 namespace opcoda {
 
-// letras e a linha dos numeros nao tem codigo nomeado no JUCE: chegam com keyCode
-// zero e o caracter em getTextCharacter(). KeyPress::aKey nao existe.
 [[nodiscard]] inline bool isTypedCharacter(const juce::KeyPress& key, char character) noexcept {
     if (key.getKeyCode() != 0) {
         return false;
@@ -45,21 +43,6 @@ namespace opcoda {
     return static_cast<juce::juce_wchar>(key.getKeyCode()) == want;
 }
 
-// o display do material, em tres leituras: forma de onda, hex e entropia.
-//
-// **a forma de onda e' o protagonista.** o desenho passou a ter corpo: envelope
-// preenchido com gradiente, nucleo de rms, silhueta colorida por entropia e um
-// banho de profundidade. sem grelha por baixo, o material le-se como audio e nao
-// como um grafico.
-//
-// a vista HEX e' o HexGrid, que vive como filho e ocupa o ecra todo: endereco,
-// bytes, ASCII e a coluna ASM. a faixa de entropia que morava por baixo saiu --
-// o mapa do ficheiro inteiro ja' vive no overview, e a faixa partia o ecra em
-// duas metades que competiam pela mesma largura.
-//
-// a vista ENTROPY leva colunas proprias com um minimo de 256 bytes cada: a
-// entropia de Shannon de uma coluna menor nunca chega ao topo do eixo, e no
-// zoom fundo a curva desabava toda para zero.
 class ByteDisplay : public juce::Component {
 public:
     enum class ViewMode {
@@ -69,11 +52,33 @@ public:
         matrix,    // tecla 4
     };
 
+    struct ParamPreview {
+        float position {0.5f};
+        float spray {0.0f};
+        float density {20.0f};
+        float grainMs {40.0f};
+        float pitchSpread {0.0f};
+        float pan {0.0f};
+        float sampleRate {48000.0f};
+        int window {0};
+        float pitchSemitones {0.0f};
+        float level {1.0f};
+
+        [[nodiscard]] bool operator==(const ParamPreview& other) const noexcept {
+            return position == other.position && spray == other.spray &&
+                   density == other.density && grainMs == other.grainMs &&
+                   pitchSpread == other.pitchSpread && pan == other.pan &&
+                   sampleRate == other.sampleRate && window == other.window &&
+                   pitchSemitones == other.pitchSemitones && level == other.level;
+        }
+    };
+
     ByteDisplay();
 
     void setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize);
     void setSections(const std::vector<PluginProcessor::SourceInfo::SectionInfo>& sections) {
         sections_ = sections;
+        rebuildSectionCombo();
         repaint();
     }
     void setRegion(std::uint64_t start, std::uint64_t end);
@@ -94,12 +99,43 @@ public:
         const bool wasAnimated = playheadAnimated_;
         playheadAnimated_ = visible;
 
-        // parado e sem mudanca: nao repinta. enquanto anda, a agulha mexe-se e o
-        // tickAnimation trata do repaint.
         if (already && wasAnimated == visible) {
             return;
         }
         repaint();
+    }
+
+    void setParamPreview(const ParamPreview& preview) {
+        if (previewValid_ && preview_ == preview) {
+            return;
+        }
+        if (!previewValid_) {
+            sprayE_.jumpTo(preview.spray);
+            densityE_.jumpTo(preview.density);
+            sizeE_.jumpTo(preview.grainMs);
+            pitchSpreadE_.jumpTo(preview.pitchSpread);
+            levelE_.jumpTo(preview.level);
+            pitchE_.jumpTo(preview.pitchSemitones);
+            panE_.jumpTo(preview.pan);
+            previewValid_ = true;
+        }
+        preview_ = preview;
+        sprayE_.set(preview.spray);
+        densityE_.set(preview.density);
+        sizeE_.set(preview.grainMs);
+        pitchSpreadE_.set(preview.pitchSpread);
+        levelE_.set(preview.level);
+        pitchE_.set(preview.pitchSemitones);
+        panE_.set(preview.pan);
+        repaint();
+    }
+
+    // nivel do envelope publicado pela thread de audio: a onda respira com ele.
+    void setLiveLevel(float level) {
+        if (std::abs(level - liveLevel_) > 0.004f) {
+            liveLevel_ = level;
+            repaint();
+        }
     }
 
     void setGrains(const std::array<dsp::GrainView, dsp::GrainTelemetry::kMaxVoices>& views,
@@ -108,18 +144,15 @@ public:
     void setMode(ViewMode mode);
     [[nodiscard]] ViewMode mode() const noexcept { return mode_; }
 
-    // a coluna ASM do hex so' faz sentido em material de 64 bits; o editor liga
-    // a chave quando o formato do material o diz.
     void setDisassemblyEnabled(bool enabled) { hex_.setDisassemblyEnabled(enabled); }
 
-    // liga as 24 celulas da matriz aos parametros do APVTS. uma vez, no
-    // construtor do editor, depois de a arvore existir.
     void attachModParameters(juce::AudioProcessorValueTreeState& state) {
         matrix_.attach(state);
     }
 
-    // marcadores de sessao: alt+click alterna no endereco, click perto da
-    // bandeira salta. nao sao estado do projeto; morrem com o material novo.
+    // a linha temporaria da matriz: o parametro que o focu do editor revela.
+    void setSelectedModDest(dsp::ModDest dest) { matrix_.setSelectedDest(dest); }
+
     void toggleBookmarkAt(std::uint64_t address);
 
     void zoomIn();
@@ -137,6 +170,8 @@ public:
     void tickAnimation(float deltaSeconds);
 
     std::function<void(std::uint64_t address)> onAddressActivated;
+    // intervalo seleccionado na grelha de bytes (end exclusivo).
+    std::function<void(std::uint64_t start, std::uint64_t end)> onRegionSelected;
     std::function<void()> onSnapRequested;
     std::function<void()> onToggleTransport;
     std::function<void()> onSnapRequestedFromKey;
@@ -164,10 +199,12 @@ public:
 private:
     void rebuildColumnsIfNeeded();
     [[nodiscard]] std::uint32_t columnCountForWidth() const noexcept;
+    [[nodiscard]] std::uint32_t entropyColumnCount() const noexcept;
 
-    // colunas da vista ENTROPY: com o minimo de bytes por coluna, o eixo de
-    // 8 bits continua honesto em qualquer zoom.
     void rebuildEntropyColumnsIfNeeded();
+
+    // a navegacao de seccoes da vista hex: um combo com as seccoes do PE.
+    void rebuildSectionCombo();
 
     void applyModeVisibility();
 
@@ -176,13 +213,8 @@ private:
 
     [[nodiscard]] static int entropyBucket(float bits) noexcept;
 
-    // reamostra o envelope a' resolucao da tela: um maximo e um minimo por
-    // pixel. com uma coluna por byte em zoom-out o path fazia zigzag sub-pixel
-    // e o preenchimento abria riscos verticais.
     void resampleEnvelope(int pixels);
 
-    // bandeiras dos marcadores: triangulo no topo e fio ate' a base, nas vistas
-    // de onda e de entropia, e no overview.
     void paintBookmarks(juce::Graphics& g, const juce::Rectangle<float>& area);
     [[nodiscard]] std::uint64_t bookmarkAt(
         float x, const juce::Rectangle<float>& area) const noexcept;
@@ -192,12 +224,12 @@ private:
     void paintGrains(juce::Graphics& g, const juce::Rectangle<float>& area);
     void paintGrainsInHex(juce::Graphics& g);
 
-    void paintReadHead(juce::Graphics& g, const juce::Rectangle<float>& area);
-    void paintPlayhead(juce::Graphics& g, const juce::Rectangle<float>& area);
+    void paintParamPreview(juce::Graphics& g, const juce::Rectangle<float>& area);
 
     static constexpr float kPlayheadHalfLife {0.030f};
     static constexpr float kReadHeadHalfLife {0.060f};
     static constexpr float kModeHalfLife {0.090f};
+    static constexpr float kPreviewHalfLife {0.035f};
 
     static constexpr float kGrainCoreWidth {2.0f};
     static constexpr float kGrainGlowWidth {7.0f};
@@ -210,6 +242,14 @@ private:
     Eased readHeadFraction_;
     Eased playheadFraction_;
     Eased modeFade_;
+
+    Eased sprayE_ {};
+    Eased densityE_ {};
+    Eased sizeE_ {};
+    Eased pitchSpreadE_ {};
+    Eased levelE_ {};
+    Eased pitchE_ {};
+    Eased panE_ {};
 
     view::GrainTrailSet grainTrails_ {};
 
@@ -227,14 +267,13 @@ private:
     static constexpr float kAxisHeight {12.0f};
     static constexpr float kAxisInset {22.0f};
     static constexpr float kRulerHeight {16.0f};
-    static constexpr float kOverviewHeight {30.0f};
+    static constexpr float kOverviewHeight {20.0f};
     static constexpr std::uint64_t kMinViewBytes {64};
-    // a entropia de uma coluna de menos de 256 bytes nunca chega a 8 bits: com
-    // menos que isto o eixo da vista mente e o zoom desinfla a curva.
     static constexpr std::uint64_t kEntropyColumnBytes {256};
 
     HexGrid hex_;
     ModMatrixView matrix_;
+    juce::ComboBox sectionCombo_;
 
     // marcadores: enderecos absolutos, ordenados. sessao, nao projeto.
     std::vector<std::uint64_t> bookmarks_;
@@ -242,10 +281,9 @@ private:
     // envelope reamostrado por pixel, reaproveitado entre repaints.
     std::vector<float> pixelMax_;
     std::vector<float> pixelMin_;
+    // hull: maximo corrido de +-2 px que fecha as valas de um pixel.
     std::vector<float> hullMax_;
     std::vector<float> hullMin_;
-    // nucleo de rms por pixel: e' o que da' corpo a' onda. sem ele, material
-    // saturado desenha um bloco; com ele, le-se a dinamica como num audio gravado.
     std::vector<float> pixelRms_;
     std::vector<float> hullRms_;
 
@@ -261,11 +299,12 @@ private:
     std::uint64_t pendingScrub_ {std::numeric_limits<std::uint64_t>::max()};
     bool playheadVisible_ {false};
 
-    ViewMode mode_ {ViewMode::waveform};
+    ParamPreview preview_ {};
+    bool previewValid_ {false};
+    float liveLevel_ {0.0f};
 
-    // velocidade da roda nas vistas: consecutiva multiplica, pausa devolve. o
-    // multiplicador e' o mesmo para zoom e deslocamento, para a mao nao ter de
-    // reaprender o gesto entre vistas.
+    ViewMode mode_ {ViewMode::matrix};
+
     float wheelBoost_ {1.0f};
     std::uint32_t lastWheelMs_ {0};
     [[nodiscard]] float nextWheelBoost() noexcept {
@@ -280,8 +319,6 @@ private:
         return boost;
     }
 
-    // o primeiro material carregado centraliza o hex na cabeca uma vez. depois
-    // disso o topo e' do utilizador (era o follow por grao que fazia o ecra saltar).
     bool hexHeadScrolled_ {false};
 
     float viewStart_ {0.0f};
@@ -292,6 +329,8 @@ private:
     bool overviewDrag_ {false};
 
     [[nodiscard]] juce::Rectangle<float> overviewBounds() const noexcept;
+
+    [[nodiscard]] bool overviewShown() const noexcept;
     [[nodiscard]] juce::Rectangle<float> plotBounds() const noexcept;
     [[nodiscard]] juce::Rectangle<float> entropyPlotBounds() const noexcept;
 
@@ -301,8 +340,6 @@ private:
     bool overviewValid_ {false};
     void rebuildOverviewIfNeeded();
 
-    // cache da vista ENTROPY: refeita quando a regiao, a largura ou o zoom
-    // mudam. independente do cache da onda, que quer resolucao maxima.
     std::vector<pe::Column> entropyColumns_ {};
     std::uint64_t entropyRegionStart_ {0};
     std::uint64_t entropyRegionEnd_ {0};
@@ -313,9 +350,9 @@ private:
 
     void paintRuler(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
     void paintOverview(juce::Graphics& g);
-    // os pontos da amostra entram com o zoom: o alpha e' o peso que a leitura
-    // detalhada tem sobre o envelope desenhado, e a mistura e' o que torna o
-    // zoom continuo.
+    void paintNoiseTexture(juce::Graphics& g, const juce::Rectangle<float>& plotArea,
+                           std::uint64_t viewStartByte, std::uint64_t viewEndByte);
+
     void paintSampleDots(juce::Graphics& g,
                          const juce::Rectangle<float>& plotArea,
                          std::uint64_t viewStartByte,

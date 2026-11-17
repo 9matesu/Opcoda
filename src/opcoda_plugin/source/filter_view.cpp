@@ -1,4 +1,4 @@
-#include "filter_view.h"
+﻿#include "filter_view.h"
 
 #include "opcoda_core/dsp/biquad.h"
 
@@ -26,8 +26,6 @@ dsp::FilterType typeOf(int index) {
     return dsp::sanitizeFilterType(static_cast<dsp::FilterType>(juce::jlimit(0, 3, index)));
 }
 
-// |H(e^jw)| do biquad, em dB. mesma conta do filtro: coeficientes normalizados
-// por a0, resposta avaliada no circulo unitario.
 float biquadDb(const dsp::BiquadCoeffs& c, float hz, double sampleRate) {
     const auto w = juce::MathConstants<double>::twoPi * static_cast<double>(hz) / sampleRate;
     const auto cosw = std::cos(w);
@@ -233,8 +231,6 @@ void FilterView::mouseDrag(const juce::MouseEvent& event) {
     const auto dx = static_cast<float>(event.getDistanceFromDragStartX());
     const auto dy = static_cast<float>(event.getDistanceFromDragStartY());
 
-    // o eixo x e' logaritmico: a largura toda vale as tres decadas de 20 Hz a
-    // 20 kHz, por isso um pixel vale a mesma proporcao em qualquer zona.
     const auto cutoff = juce::jlimit(
         kMinHz, kMaxHz,
         startCutoff_ * std::pow(kMaxHz / kMinHz, dx / juce::jmax(1.0f, geometry.plot.getWidth())));
@@ -274,9 +270,7 @@ void FilterView::paint(juce::Graphics& g) {
 
     const auto bezel = getLocalBounds().toFloat();
     g.setColour(palette::display);
-    g.fillRoundedRectangle(bezel, 3.0f);
-    g.setColour(palette::displayBorder);
-    g.drawRoundedRectangle(bezel.reduced(0.5f), 3.0f, 1.0f);
+    g.fillRoundedRectangle(bezel, 6.0f);
 
     const auto buildPath = [&](float cutoff1, float cutoff2) {
         juce::Path path;
@@ -294,8 +288,6 @@ void FilterView::paint(juce::Graphics& g) {
         return path;
     };
 
-    // o corpo e a linha viva seguem o corte modulado -- e' o que se ouve. a linha
-    // cheia fica nos knobs, para se ver de onde o corte saiu.
     const auto live1 = liveCutoff1_ > 0.0f ? liveCutoff1_ : geometry.cutoff1;
     const auto live2 = liveCutoff2_ > 0.0f ? liveCutoff2_ : geometry.cutoff2;
     const auto modulated = std::abs(live1 - geometry.cutoff1) > 0.5f
@@ -304,9 +296,6 @@ void FilterView::paint(juce::Graphics& g) {
     const auto bodyPath = buildPath(modulated ? live1 : geometry.cutoff1,
                                     modulated ? live2 : geometry.cutoff2);
 
-    // o corpo por baixo da curva. sem ele o ecra fica um campo escuro com um
-    // risco em cima, porque o filtro de fabrica corta a 20 kHz e a resposta e'
-    // plana quase toda a largura.
     {
         juce::Path filled {bodyPath};
         filled.lineTo(plot.getRight(), plot.getBottom());
@@ -316,8 +305,6 @@ void FilterView::paint(juce::Graphics& g) {
         g.fillPath(filled);
     }
 
-    // grelha por cima do corpo: por baixo, o banho de laranja apagava as linhas
-    // de 0 e -12 dB, que sao as que se leem num filtro.
     g.setColour(palette::displayGrid);
     for (const auto hz : {100.0f, 1000.0f, 10000.0f}) {
         const auto x = xForHz(hz, plot);
@@ -355,9 +342,6 @@ void FilterView::paint(juce::Graphics& g) {
         const auto disc = juce::Rectangle<float> {size, size}.withCentre(centre);
         g.setColour(bright ? palette::ivory : palette::accentSoft);
         if (second) {
-            // filtro 2: aro vazado. com os dois cortes no mesmo sitio -- o caso
-            // de fabrica, 20 kHz nos dois -- a pega cheia do filtro 1 escondia a
-            // do filtro 2 e so' uma parecia existir.
             g.fillEllipse(disc);
             g.setColour(palette::display);
             g.fillEllipse(disc.reduced(2.0f));

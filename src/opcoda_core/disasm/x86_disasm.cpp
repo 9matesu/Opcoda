@@ -1,11 +1,8 @@
-#include "opcoda_core/disasm/x86_disasm.h"
+﻿#include "opcoda_core/disasm/x86_disasm.h"
 
 namespace opcoda::disasm {
 namespace {
 
-// escrita num buffer fixo: o que nao cabe, cai fora. nenhuma funcao daqui
-// retorna erro porque a coluna ASM desenha texto e texto cortado e' o pior
-// caso; o comprimento da instrucao, esse, nunca depende do texto.
 class Writer {
 public:
     explicit Writer(std::array<char, 80>& text) noexcept : buffer_ {text} {
@@ -121,8 +118,6 @@ const char* const kReg32[16] {"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "
                               "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"};
 const char* const kReg16[16] {"ax",   "cx",   "dx",   "bx",   "sp",   "bp",   "si",   "di",
                               "r8w",  "r9w",  "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"};
-// sem REX, os indices 4..7 sao os meios-registos (ah..bh); com REX sao os
-// novos (spl..dil) e r8b..r15b.
 const char* const kReg8Low[8] {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"};
 const char* const kReg8Rex[16] {"al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil",
                                 "r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b"};
@@ -132,9 +127,6 @@ const char* const kShift[8] {"rol", "ror", "rcl", "rcr", "shl", "shr", "sal", "s
 const char* const kCondition[16] {"o",  "no", "b",  "ae", "e",  "ne", "be", "a",
                                   "s",  "ns", "p",  "np", "l",  "ge", "le", "g"};
 
-// indice de registo das formas com registo embutido no opcode (50-5F, 90-97,
-// B0-BF, bswap): o bit B do REX soma oito. sem ele, "41 50" (push r8) lia-se
-// como "push rax".
 [[nodiscard]] std::uint8_t opcodeRegister(std::uint8_t low3, std::uint8_t rex) noexcept {
     return static_cast<std::uint8_t>(low3 | ((rex & 0x1) != 0 ? 8u : 0u));
 }
@@ -151,9 +143,6 @@ struct Rm {
     bool ripRelative {false};
 };
 
-// le modrm + sib + deslocamento, sempre no modo longo. o prefixo 67 e'
-// consumido antes; enderecamento de 32 bits e' raro no material e cai no caso
-// geral de 64 bits, com o comprimento certo na mesma.
 [[nodiscard]] bool readModRm(Reader& reader, std::uint8_t rex, Rm& out) noexcept {
     std::uint8_t modrm = 0;
     if (!reader.byte(modrm)) {
@@ -584,8 +573,6 @@ Decoded decode(const std::uint8_t* data, std::size_t size) noexcept {
     } else if (opcode == 0x9D) {
         writer.add("popf");
     } else if (opcode >= 0xA0 && opcode <= 0xA3) {
-        // mov moffs: A0 al<-[m], A1 eAX<-[m], A2 [m]<-al, A3 [m]<-eAX. o
-        // endereco e' de 64 bits no modo longo e sai inteiro no texto.
         std::uint64_t address = 0;
         if (!reader.imm64(address)) {
             return out;

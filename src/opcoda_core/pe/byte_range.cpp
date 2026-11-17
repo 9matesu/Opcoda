@@ -1,4 +1,4 @@
-#include "opcoda_core/pe/byte_range.h"
+﻿#include "opcoda_core/pe/byte_range.h"
 
 #include <limits>
 
@@ -21,8 +21,6 @@ std::uint64_t nearestSectionStart(std::uint64_t start,
         return start;
     }
 
-    // sem secao com dados, o melhor inicio e' o proprio `start`. o chamador
-    // trata disso em vez de inventar um destino.
     std::uint64_t best = start;
     auto bestDistance = std::numeric_limits<std::uint64_t>::max();
 
@@ -69,17 +67,12 @@ ByteRange sectionSnapToggle(const ByteRange& current,
                             const std::uint32_t* offsets,
                             const std::uint32_t* sizes,
                             std::size_t count) noexcept {
-    // ja alinhado: volta a regiao exata. `exact` vazio significa que nunca
-    // houve escolha exata, e nao ha' para onde voltar.
     if (isSectionAligned(current, offsets, sizes, count)) {
         return exact.empty() ? current : exact;
     }
 
     const auto start = nearestSectionStart(current.start, offsets, sizes, count);
 
-    // nearestSectionStart devolveu o proprio inicio: nao ha secao com dados.
-    // devolver a regiao atual e' mais honesto do que trocar o material do
-    // utilizador, e alinhar ao fim do ficheiro seria pior.
     if (start == current.start) {
         return current;
     }

@@ -1,4 +1,4 @@
-#include "opcoda_core/pe/byte_range.h"
+﻿#include "opcoda_core/pe/byte_range.h"
 
 #include <gtest/gtest.h>
 
@@ -46,8 +46,6 @@ TEST(ClampByteRange, RejectsAStartPastTheEndOfTheFile) {
     EXPECT_FALSE(opcoda::pe::clampByteRange(range, 2000));
 }
 
-// janela que comeca exactamente no fim do ficheiro nao tem bytes, e inicio igual
-// ao tamanho e' o caso que um "menor ou igual" aceitaria.
 TEST(ClampByteRange, RejectsAStartExactlyAtTheEndOfTheFile) {
     ByteRange range {2000, 2000};
     EXPECT_FALSE(opcoda::pe::clampByteRange(range, 2000));
@@ -73,20 +71,12 @@ TEST(NearestSectionStart, PicksTheClosestStart) {
 }
 
 TEST(NearestSectionStart, SkipsSectionsWithoutRawData) {
-    // .bss fica entre .data e .reloc e nao tem bytes em disco. alinhar a ele
-    // daria uma janela vazia, o mesmo que nao ter janela.
     constexpr std::array<std::uint32_t, 3> offsets {1024, 8192, 8300};
     constexpr std::array<std::uint32_t, 3> sizes {7168, 0, 108};
 
-    // perto do .reloc (8300, 108 bytes): e' o mais proximo com dados. o .bss a
-    // 8192 esta' mais perto em bytes e mesmo assim nao entra, porque alinhar a
-    // uma seccao sem dados daria uma janela de zero.
     EXPECT_EQ(opcoda::pe::nearestSectionStart(8299, offsets.data(), sizes.data(), sizes.size()),
               8300u);
 
-    // 8200 fica entre o .bss (8192, sem dados) e o .reloc (8300). sem o salto,
-    // 8192 estava a 8 bytes e ganhava; alinhar a uma seccao vazia daria janela de
-    // zero bytes.
     EXPECT_EQ(opcoda::pe::nearestSectionStart(8200, offsets.data(), sizes.data(), sizes.size()),
               8300u);
 }
@@ -117,8 +107,6 @@ TEST(IsSectionAligned, RejectsAWindowThatStartsInsideASection) {
     constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
     constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
 
-    // comeca dentro de .text e acaba no fim dela: nao e' a seccao, e' uma janela
-    // dentro dela. confundir os dois fazia o alinhamento alternar sem sair.
     EXPECT_FALSE(opcoda::pe::isSectionAligned({2000, 8192}, offsets.data(), sizes.data(),
                                               offsets.size()));
 }
@@ -148,8 +136,6 @@ TEST(SectionSnapToggle, ReturnsTheExactWindowWhenAlreadyAligned) {
     constexpr std::array<std::uint32_t, 2> offsets {1024, 8192};
     constexpr std::array<std::uint32_t, 2> sizes {7168, 2048};
 
-    // ja' alinhado em .text: volta a janela exacta. e' o que torna o duplo clique
-    // reversivel.
     const auto result = opcoda::pe::sectionSnapToggle({1024, 8192}, {2000, 7000}, 10240,
                                                       offsets.data(), sizes.data(),
                                                       offsets.size());
@@ -157,8 +143,6 @@ TEST(SectionSnapToggle, ReturnsTheExactWindowWhenAlreadyAligned) {
     EXPECT_EQ(result.end, 7000u);
 }
 
-// sem janela exacta guardada nao ha' para onde voltar. devolve a regiao actual
-// em vez de inventar um destino, que seria pior do que nao fazer nada.
 TEST(SectionSnapToggle, StaysPutWhenAlignedWithNoExactWindowToReturnTo) {
     constexpr std::array<std::uint32_t, 1> offsets {1024};
     constexpr std::array<std::uint32_t, 1> sizes {7168};
@@ -182,9 +166,6 @@ TEST(SectionSnapToggle, SkipsSectionsWithoutRawDataWhenAligning) {
     EXPECT_EQ(result.end, 8408u);
 }
 
-// ficheiro sem nenhuma seccao com dados nao tem para onde alinhar. devolve a
-// janela actual, e nao o ficheiro inteiro: alinhar ao fim trocava o material sem
-// o utilizador pedir.
 TEST(SectionSnapToggle, KeepsTheWindowWhenThereIsNoSectionToAlignTo) {
     constexpr std::array<std::uint32_t, 2> offsets {0, 0};
     constexpr std::array<std::uint32_t, 2> sizes {0, 0};

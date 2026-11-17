@@ -1,4 +1,4 @@
-#include "opcoda_core/pe/byte_to_position.h"
+﻿#include "opcoda_core/pe/byte_to_position.h"
 #include "opcoda_core/pe/byte_range.h"
 
 #include <gtest/gtest.h>
@@ -25,16 +25,10 @@ TEST(PositionForByte, StartOfTheRegionReadsAtZero) {
 }
 
 TEST(PositionForByte, AMiddleByteMapsToItsShareOfTheRegion) {
-    // metade da regiao em bytes e' metade da fraccao. sem o -1 no denominador o
-    // meio cairia em 0.4995, e o erro so aparecia longe das pontas.
     EXPECT_NEAR(positionForByte(kStart + 499, region()), 499.0 / 999.0, 1e-12);
 }
 
 TEST(PositionForByte, TheLastByteNeverMapsToOne) {
-    // o caso que justifica o modulo viver no nucleo. posicao 1.0 e' silencio:
-    // granular_engine.cpp desliga a voz com `index + 1 >= sourceCount`, o que em
-    // 1.0 e' sempre verdade. se o ultimo byte devolvesse 1.0, o clique mais a
-    // direita da grelha calava o instrumento sem aviso.
     const auto last = positionForByte(region().end - 1, region());
 
     EXPECT_LT(last, 1.0);
@@ -42,16 +36,12 @@ TEST(PositionForByte, TheLastByteNeverMapsToOne) {
 }
 
 TEST(PositionForByte, TheHighestAddressWithSoundIsTheSecondToLast) {
-    // end - 2 e' o ultimo endereco que o motor le de facto: ainda ha uma amostra
-    // seguinte para interpolar.
     const auto address = byteForPosition(positionForByte(region().end - 2, region()), region());
 
     EXPECT_EQ(address, region().end - 2);
 }
 
 TEST(PositionForByte, NoAddressInTheRegionEverReachesOne) {
-    // varre a regiao inteira. um unico 1.0 seria o mesmo defeito mascarado pelo
-    // alinhamento.
     for (std::uint64_t i = 0; i < kLength; ++i) {
         const auto position = positionForByte(kStart + i, region());
         ASSERT_GE(position, 0.0) << "endereco " << i;
@@ -72,8 +62,6 @@ TEST(PositionForByte, AByteAfterTheRegionIsClampedToItsEnd) {
 }
 
 TEST(PositionForByte, ARegionTooShortToInterpolateReadsAtZero) {
-    // uma regiao de uma amostra nao tem amostra seguinte, e nao ha fraccao que a
-    // faca soar. zero, nao divisao por zero.
     const ByteRange single {kStart, kStart + 1};
 
     EXPECT_DOUBLE_EQ(positionForByte(kStart, single), 0.0);
@@ -101,8 +89,6 @@ TEST(ByteForPosition, ZeroReadsTheFirstByteOfTheRegion) {
 }
 
 TEST(ByteForPosition, OneFallsBackToAnAddressThatStillHasASound) {
-    // um POSITION posto a mao em 1.0, ou vindo da automacao do host, nao pode
-    // cair no fim do material: o motor desligaria a voz.
     const auto address = byteForPosition(1.0, region());
 
     EXPECT_LT(address, region().end);
@@ -111,10 +97,6 @@ TEST(ByteForPosition, OneFallsBackToAnAddressThatStillHasASound) {
 }
 
 TEST(ByteForPosition, IsTheExactInverseOfPositionForByte) {
-    // fecha exacto em todos os enderecos com leitura possivel. a posicao passa a
-    // float e o resultado e' arredondado, o que centra o erro em zero; truncar,
-    // como o motor faz, deslocava o cursor em 63 enderecos em mil.
-    // o laco vai ate length - 2: o ultimo byte nao fecha, e fecha para o penultimo.
     for (std::uint64_t i = 0; i + 1 < kLength; ++i) {
         const auto address = kStart + i;
         EXPECT_EQ(byteForPosition(positionForByte(address, region()), region()), address)
@@ -123,9 +105,6 @@ TEST(ByteForPosition, IsTheExactInverseOfPositionForByte) {
 }
 
 TEST(ByteForPosition, TheVeryLastByteOfTheFileSharesItsPositionWithItsPredecessor) {
-    // end - 1 nao tem posicao propria: a fraccao seria 1.0 e o motor desligaria a
-    // voz. fica entao no mesmo sitio que end - 2. e' a unica perda do caminho
-    // inverso, e esta declarada em vez de ser arredondamento casual.
     const auto secondToLast = positionForByte(region().end - 2, region());
     const auto last = positionForByte(region().end - 1, region());
 
@@ -134,9 +113,6 @@ TEST(ByteForPosition, TheVeryLastByteOfTheFileSharesItsPositionWithItsPredecesso
 }
 
 TEST(ByteForPosition, StaysWithinHalfAByteOfTheIndexTheEngineTruncates) {
-    // o motor trunca o indice para escolher a amostra. o endereco devolvido e' o
-    // mais proximo desse indice, e nao o indice: e' a unica diferenca entre o
-    // cursor e o som, e nunca passa de meio byte.
     for (std::uint64_t i = 0; i < kLength; i += 13) {
         const auto position = positionForByte(kStart + i, region());
         const auto engineIndex =
@@ -154,8 +130,6 @@ TEST(ByteForPosition, AnEmptyOrShortRegionReturnsItsStart) {
 }
 
 TEST(ByteForPosition, APositionFromTheHostIsClampedBeforeItBecomesAnAddress) {
-    // o parametro vem de um float que o host pode empurrar para fora. negativo nao
-    // pode transbordar o endereco para o fim do ficheiro.
     EXPECT_EQ(byteForPosition(-3.0, region()), kStart);
     EXPECT_LT(byteForPosition(7.5, region()), region().end);
 }
@@ -179,8 +153,6 @@ TEST(RegionColumnsInRow, AWholeRowInsideTheRegionFillsEveryColumn) {
 }
 
 TEST(RegionColumnsInRow, ARegionStartingMidRowStartsAtThatColumn) {
-    // o caso que a captura de ecra nao mostra de forma confiavel: a regiao comeca
-    // em 0x308, coluna 8 da linha 0x300.
     const ByteRange region {0x308, 0x408};
 
     const auto span = regionColumnsInRow(0x300, kColumns, region);
@@ -231,8 +203,6 @@ TEST(RegionColumnsInRow, AnEmptyRegionHasNoColumnsAnywhere) {
 }
 
 TEST(RegionColumnsInRow, ARowOfZeroBytesHasNoColumns) {
-    // grelha estreita ao ponto de a linha nao ter bytes nao pode devolver banda
-    // de largura zero, que se desenhava como um risco.
     const ByteRange region {0x300, 0x400};
 
     EXPECT_TRUE(regionColumnsInRow(0x300, 0, region).empty());
@@ -248,9 +218,6 @@ TEST(RegionColumnsInRow, ARegionStartingAtTheVeryFirstByteCoversTheWholeRow) {
 }
 
 TEST(RegionColumnsInRow, TheSpanNeverReachesOutsideTheRow) {
-    // a banda e' desenhada com cellRect, que so conhece colunas de 0 a 15. uma
-    // regiao maior que a linha tem de ser cortada em 16, senao o rectangulo sai da
-    // grelha e pinta o gutter.
     const ByteRange region {0, 0x100000};
 
     const auto span = regionColumnsInRow(0x300, kColumns, region);
@@ -272,9 +239,6 @@ TEST(RegionColumnsInRow, ARowNearTheEndOfTheAddressSpaceIsStillMeasured) {
 }
 
 TEST(RegionColumnsInRow, ARowWhoseEndWouldOverflowIsEmptyRatherThanWrapped) {
-    // offset + tamanho e' a soma que a constitution manda conferir sem transbordo.
-    // aqui transbordaria, e o resultado errado seria uma banda sobre a regiao em
-    // vez de nenhuma.
     const auto near = std::numeric_limits<std::uint64_t>::max() - 4;
     const ByteRange region {0, near};
 

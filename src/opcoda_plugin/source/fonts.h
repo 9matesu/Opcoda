@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "palette.h"
 
@@ -8,23 +8,6 @@
 
 namespace opcoda {
 
-// tipografia do Opcoda: Switzer para texto e numeros, entre 9 e 11 px. o corte
-// Medio e' o corpo e o Semibold os rotulos; a familia e' um grotesco suico com
-// formas fechadas, e a 9 px a linha cabe onde a Inter Display precisava de folga.
-//
-// **a monoespacada voltou, so' para o desmontador.** a JetBrains Mono tinha
-// saido porque os numeros do mostrador pareciam apertados, e continuam na
-// Switzer: a coluna ASM e' o unico lugar onde a largura fixa e' a informacao
-// (mnemonicos e operandos alinham na vertical). vem do sistema, como reserva
-// declarada, para nao juntar um binario de fonte ao programa por causa de uma
-// coluna de texto.
-//
-// Switzer vem da Fontshare sob a FFL (resources/fonts/Switzer-FFL.txt) e chega
-// reduzida a'quilo que a interface escreve por tools/vendor_fonts.py.
-//
-// **a fonte vem por Typeface::Ptr e nao por nome**, para nao depender de busca por
-// nome e depois por estilo. se faltar um ficheiro, a fonte do sistema serve e
-// ninguem avisa -- um binario que nao abre por causa de uma fonte e' pior.
 struct Fonts {
     juce::Typeface::Ptr sansRegular;
     juce::Typeface::Ptr sansStrong;
@@ -33,9 +16,6 @@ struct Fonts {
         return sansRegular != nullptr;
     }
 
-    // a fabrica de que a interface depende: todas as fontes passam por aqui. era
-    // metodo de BoxedLabel, que morreu; ficou por ser o unico caminho para a fonte
-    // embebida.
     [[nodiscard]] juce::Font sans(float height, bool strong = false) const {
         if (const auto& face = strong ? sansStrong : sansRegular) {
             return juce::Font {juce::FontOptions {face}.withHeight(height)};
@@ -51,18 +31,12 @@ struct Fonts {
     }
 
 private:
-    // o caminho sem typeface embebida: nome do sistema. FontOptions e' imutavel e
-    // nao tem setTypefaceName, por isso o nome vai no construtor.
     [[nodiscard]] static juce::Font fallbackSans(float height, bool strong) {
         return juce::Font {juce::FontOptions {juce::Font::getDefaultSansSerifFontName(), height,
                                               strong ? juce::Font::bold : juce::Font::plain}};
     }
 };
 
-// carrega uma vez e devolve sempre a mesma. o resultado vive num static para o
-// typeface ficar registado enquanto o plugin viver: createSystemTypefaceFor
-// desregista quando o ultimo Ptr morre, e um Font sem o typeface cai na
-// substitute.
 inline const Fonts& fonts() {
     static const Fonts loaded = [] {
         const auto load = [](const char* data, int size) {
@@ -71,12 +45,33 @@ inline const Fonts& fonts() {
                        : nullptr;
         };
 
-        return Fonts {load(BinaryData::SwitzerMedium_ttf, BinaryData::SwitzerMedium_ttfSize),
-                       load(BinaryData::SwitzerSemibold_ttf,
-                            BinaryData::SwitzerSemibold_ttfSize)};
+        return Fonts {load(BinaryData::InterDisplayMedium_ttf, BinaryData::InterDisplayMedium_ttfSize),
+                       load(BinaryData::InterDisplaySemiBold_ttf,
+                            BinaryData::InterDisplaySemiBold_ttfSize)};
     }();
 
     return loaded;
 }
+
+namespace type {
+constexpr float caption {9.5f};
+constexpr float body {11.0f};
+constexpr float title {12.5f};
+constexpr float display {14.0f};
+constexpr float data {11.0f};
+constexpr float trackingCaps {0.10f};
+constexpr float trackingTitle {0.16f};
+constexpr float trackingDisplay {-0.02f};
+
+inline juce::Font captionFont(bool strong = true) { return fonts().sans(caption, strong); }
+inline juce::Font bodyFont(bool strong = false) { return fonts().sans(body, strong); }
+inline juce::Font titleFont() {
+    return fonts().sans(title, true).withExtraKerningFactor(trackingTitle);
+}
+inline juce::Font displayFont() {
+    return fonts().sans(display, true).withExtraKerningFactor(trackingDisplay);
+}
+inline juce::Font dataFont() { return fonts().mono(data); }
+} // namespace type
 
 } // namespace opcoda

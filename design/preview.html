@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -118,18 +118,16 @@ html,body{margin:0;background:#111;color:var(--text);font-family:var(--font);
 .led{width:5px;height:5px;border-radius:50%;background:var(--accent)}
 .telemetry .sp{flex:1}
 
-/* ---- abas de modulo: segmented control central ------------------------- */
-.tabstrip{height:34px;flex:none;display:flex;align-items:center;justify-content:center;
-  background:var(--panel);border-bottom:1px solid var(--hair)}
-.segmented{display:flex;gap:2px;padding:2px;background:var(--sunken);border-radius:6px;
-  border:1px solid #0d0d0e}
-.segmented button{height:21px;padding:0 13px;border:0;border-radius:4px;background:transparent;
+/* ---- modulos: coluna a' esquerda do painel ----------------------------- */
+.rail{width:62px;flex:none;display:flex;flex-direction:column;gap:4px;
+  border-right:1px solid var(--hair);padding-right:12px;margin-right:0}
+.rail button{flex:1;min-height:0;border:0;border-radius:4px;background:transparent;
   color:var(--text3);font-family:var(--font);font-size:9px;font-weight:600;letter-spacing:.09em;
   text-transform:uppercase;cursor:default;
-  background-image:linear-gradient(180deg,transparent,transparent)}
-.segmented button:hover{color:var(--text2)}
-.segmented button.on{color:var(--text);background-image:linear-gradient(180deg,#58585c,#454548);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 1px 2px rgba(0,0,0,.4)}
+  background-image:linear-gradient(90deg,transparent,transparent)}
+.rail button:hover{color:var(--text2);background:rgba(255,255,255,.03)}
+.rail button.on{color:var(--text);background-image:linear-gradient(90deg,#58585c,#454548);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.13),0 1px 2px rgba(0,0,0,.4)}
 
 /* ---- painel de parametros --------------------------------------------- */
 .panel{flex:1;min-height:0;display:flex;padding:14px 12px 10px;gap:12px;background:var(--bg)}
@@ -191,6 +189,43 @@ html,body{margin:0;background:#111;color:var(--text);font-family:var(--font);
 .zoom .knobwrap{width:96px;height:96px;margin:6px 0}
 .zoom figcaption{font-size:9px;color:var(--text3)}
 .old .knobwrap{opacity:.5}
+
+/* ---- controlos: slider, chave, medidor, campo e teclado ------------------ */
+.spec-row{display:flex;gap:18px;align-items:flex-end;margin-top:14px}
+.spec{flex:1;display:flex;flex-direction:column;gap:8px;align-items:center;min-width:0}
+.spec.wide{flex:1.6}
+.spec-lbl{font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+
+.slider{position:relative;height:3px;width:100%;background:var(--sunken);border-radius:2px}
+.slider i{position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:2px}
+.slider b{position:absolute;top:50%;width:8px;height:15px;transform:translate(-50%,-50%);
+  background:var(--text);border-radius:2px}
+
+.toggle{display:flex;align-items:center;gap:9px;height:28px;padding:0 10px 0 6px;
+  background:var(--sunken);border:1px solid #0d0d0e;border-radius:6px}
+.toggle i{position:relative;width:26px;height:14px;border-radius:7px;background:var(--raise);
+  box-shadow:inset 0 0 0 1px var(--hair)}
+.toggle i:after{content:"";position:absolute;right:2px;top:2px;width:10px;height:10px;
+  border-radius:50%;background:var(--accent)}
+.toggle span{font-size:9.5px;color:var(--text)}
+
+.meter{height:4px;width:100%;border-radius:2px;background:var(--sunken);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);opacity:.85}
+
+.filefield{display:flex;align-items:center;gap:6px;height:22px;width:100%;min-width:230px;
+  padding:0 8px;background:var(--sunken);border:1px solid #0d0d0e;border-radius:4px;
+  font-size:10.5px}
+.filefield .ic{color:var(--text3)}
+.filefield .name{flex:1;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.filefield .meta{color:var(--text3);font-size:9.5px}
+
+.keyboard{position:relative;height:58px;width:100%}
+.keys.flat{position:relative;height:100%;display:flex;gap:1px}
+.keys.flat .wkey{background:var(--text);border-radius:0 0 2px 2px}
+.keys.flat .bkey{background:var(--sunken);border-radius:0;box-shadow:none;width:14px}
+
+.marks{display:flex;align-items:flex-end;gap:18px;min-height:66px}
+.marks img{display:block;width:auto;height:auto}
 </style>
 </head>
 <body>
@@ -268,19 +303,14 @@ html,body{margin:0;background:#111;color:var(--text);font-family:var(--font);
       </div>
     </section>
 
-    <!-- abas de modulo -->
-    <div class="tabstrip">
-      <div class="segmented" id="tabs">
-        <button class="on">Grain</button>
-        <button>Envelope</button>
-        <button>Filter</button>
-        <button>Mod</button>
-        <button>Out</button>
-      </div>
-    </div>
-
     <!-- painel -->
     <section class="panel">
+      <nav class="rail" id="tabs">
+        <button class="on">Grain</button>
+        <button>Env</button>
+        <button>Filter</button>
+        <button>Mod</button>
+      </nav>
       <div class="modules" id="modules"></div>
       <aside class="master">
         <div style="font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--text3)">Master</div>
@@ -319,6 +349,60 @@ html,body{margin:0;background:#111;color:var(--text);font-family:var(--font);
         <figure class="zoom"><div class="knobwrap" data-knob="64"></div><figcaption>knob contínuo</figcaption></figure>
         <figure class="zoom"><div class="knobwrap" data-knob="50" data-detents="5"></div><figcaption>detent dial · 5</figcaption></figure>
         <figure class="zoom old"><div class="knobwrap" data-knob="64" data-old="1"></div><figcaption>atual</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Controlos — estado, hover e medida</h2>
+      <p>Slider, cursor de detentes, chave, medidor estéreo e campo de ficheiro. O hover é uma grandeza animada entre 0 e 1, não um degrau: o banho acende em 45 ms e o botão afunda no clique.</p>
+      <div class="spec-row">
+        <div class="spec">
+          <span class="spec-lbl">Slider</span>
+          <div class="slider"><i style="width:62%"></i><b style="left:62%"></b></div>
+        </div>
+        <div class="spec">
+          <span class="spec-lbl">Detent dial</span>
+          <div class="knobwrap" data-knob="40" data-detents="5"></div>
+        </div>
+        <div class="spec">
+          <span class="spec-lbl">Chave</span>
+          <div class="toggle"><i></i><span>24 dB</span></div>
+        </div>
+      </div>
+      <div class="spec-row">
+        <div class="spec wide">
+          <span class="spec-lbl">Medidor estéreo</span>
+          <div class="meter"><i style="width:72%"></i></div>
+          <div class="meter"><i style="width:48%"></i></div>
+        </div>
+        <div class="spec wide">
+          <span class="spec-lbl">Campo de ficheiro</span>
+          <div class="filefield">
+            <span class="ic" data-icon="folder"></span>
+            <span class="name">notepad.exe</span>
+            <span class="meta">1,2 MB</span>
+            <span class="meta">PE64</span>
+            <span class="ic" data-icon="chevron"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Teclado — flat, preto e branco</h2>
+      <p>Sem gradiente e sem sombra: a tecla é uma cor só, e o estado lê-se pela luz. A tecla branca apaga para cinza quando premida; a preta acende para carvão.</p>
+      <div class="keyboard"><div class="keys flat" id="keys2"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Marca</h2>
+      <p>As duas crescentes de <code>resources/brand/logo-light.svg</code>, na tinta do tema. A mesma peça na title bar, no cabeçalho e no estado vazio do display.</p>
+      <div class="marks">
+        <img src="../resources/brand/logo-light.svg" width="16" height="16" alt="">
+        <img src="../resources/brand/logo-light.svg" width="22" height="22" alt="">
+        <img src="../resources/brand/logo-light.svg" width="32" height="32" alt="">
+        <img src="../resources/brand/logo-light.svg" width="48" height="48" alt="">
+        <img src="../resources/brand/logo-light.svg" width="64" height="64" alt="">
       </div>
     </div>
   </div>
@@ -393,7 +477,7 @@ board.innerHTML=Object.entries(P).slice(0,40).map(([k])=>
    Knob. Arco de 270 graus comecando a 135. trilho 1.5, valor 2, ponto 2.5.
    data-detents=N desenha os dentes nas posicoes e o valor assenta nelas.
 --------------------------------------------------------------------------- */
-function knobHtml(value01,detents,focus){
+function knobHtml(value01,detents,text){
   const S=100,cx=50,cy=50,r=38;
   const a0=135, sweep=270;
   const ang=t=>a0+t*sweep;
@@ -424,11 +508,17 @@ function knobHtml(value01,detents,focus){
     }
   }
   const [dx,dy]=pt(ang(value01));
+  // **o valor vive dentro do arco.** abaixo do disco era uma segunda legenda a
+  // competir com o nome do parametro; aqui le-se no sitio que se esta' a olhar.
+  const label=text?`<text x="${cx}" y="${cy}" text-anchor="middle"
+    dominant-baseline="central" font-size="10.5" fill="var(--text)"
+    style="font-variant-numeric:tabular-nums">${text}</text>`:'';
   return `<svg viewBox="0 0 ${S} ${S}">
     <path d="${arc(0,1)}" fill="none" stroke="var(--knob-track)" stroke-width="1.5" stroke-linecap="round"/>
     <path d="${arc(0,Math.max(value01,0.001))}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
     ${ticks}
     <circle cx="${dx.toFixed(2)}" cy="${dy.toFixed(2)}" r="2.6" fill="var(--accent)"/>
+    ${label}
   </svg>`;
 }
 
@@ -474,11 +564,11 @@ const cells=[
   ['Window','Hann','',0.0,5,'gr/s']
 ];
 const mod=document.getElementById('modules');
+const inner=(val,unit)=>`${val}${unit?`<tspan fill="var(--text3)" font-size="8"> ${unit}</tspan>`:''}`;
 mod.innerHTML=cells.map(([label,val,unit,v,detents])=>
   `<div class="cell">
      <span class="k-label">${label}</span>
-     <div class="knobwrap">${detents?knobHtml(0,detents):knobHtml(v)}</div>
-     <span class="k-value">${val}${unit?`<i>${unit}</i>`:''}</span>
+     <div class="knobwrap">${detents?knobHtml(0,detents,inner(val,unit)):knobHtml(v,0,inner(val,unit))}</div>
    </div>`).join('');
 
 document.querySelectorAll('#modules [data-icon]').forEach(el=>{el.innerHTML=iconSvg(el.dataset.icon,16);el.style.display='flex'});
@@ -557,16 +647,21 @@ drawWave();
 addEventListener('resize',drawWave);
 
 /* teclado: 14 teclas brancas e as pretas nos lugares certos */
-const keys=document.getElementById('keys');
-let kh='';
-const blackAfter=[0,1,3,4,5,7,8,10,11,12];
-for(let i=0;i<14;i++)kh+=`<div class="wkey"></div>`;
-keys.innerHTML=kh;
-const kw=keys.getBoundingClientRect().width/14;
-blackAfter.forEach(i=>{
-  const b=document.createElement('div');b.className='bkey';
-  b.style.left=(i*kw+kw-11)+'px';keys.appendChild(b);
-});
+function buildKeys(el,count,blackWidth){
+  if(!el) return;
+  let html='';
+  for(let i=0;i<count;i++)html+='<div class="wkey"></div>';
+  el.innerHTML=html;
+  const kw=el.getBoundingClientRect().width/count;
+  const blackAfter=[0,1,3,4,5,7,8,10,11,12];
+  blackAfter.forEach(i=>{
+    if(i>=count) return;
+    const b=document.createElement('div');b.className='bkey';
+    b.style.left=(i*kw+kw-blackWidth)+'px';el.appendChild(b);
+  });
+}
+buildKeys(document.getElementById('keys'),14,22);
+buildKeys(document.getElementById('keys2'),14,14);
 
 /* o device tem 1180 de projeto. se a janela for menor, encolhe-se para caber --
    o desenho nao muda, so a ampliacao da vista. */

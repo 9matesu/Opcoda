@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/pe/pe_parser.h"
 #include "pe_builder.h"
@@ -12,16 +12,9 @@ using opcoda::pe::parse;
 using opcoda::pe::toString;
 using opcoda::test::PeBuilder;
 
-// as 50 mutacoes do T3.
-// o portao D exige 100% das entradas malformadas rejeitadas com erro tipado. sem
-// libFuzzer nesta maquina (docs/17), sao 50 entradas fixas que corroem cada campo.
-// cada mutacao confirma o erro esperado e, quando aceita, os limites da imagem.
 
 namespace {
 
-// invariantes de qualquer imagem que o parser aceite. nao sao documentacao: sao
-// o que o resto do nucleo assume ao ler PeImage, e viola-las da leitura fora do
-// buffer a jusante.
 void expectImageWithinFile(const opcoda::pe::PeParseResult& result, std::size_t size) {
     ASSERT_TRUE(result.ok()) << toString(result.error);
     ASSERT_LE(result.image.numberOfSections, 96u);
@@ -93,10 +86,6 @@ void coffOptionalHeaderMaxUint16(PeBuilder& b) { b.writeU16(PeBuilder::kCoffOffs
 // --- tabela de secoes -----------------------------------------------------
 
 void tableSecondSectionCountRaises(PeBuilder& b) {
-    // anuncia 64 secoes num ficheiro com espaco para uma: a tabela comeca em
-    // 0xF8, 40 bytes por entrada, 64 entradas acabam em 0xF8 + 2560, muito alem
-    // dos 0x300. com 8 ainda cabia (0xF8 + 320 = 0x238) e o parser devolvia E_OK.
-    // o limite e' a soma, nao o numero de secoes.
     b.writeU16(PeBuilder::kCoffOffset + 2, 64);
 }
 void tableRawSizeMax24Bit(PeBuilder& b) {
@@ -127,8 +116,6 @@ void tableSecondSectionRawOffsetPastFile(PeBuilder& b) {
     b.writeU32(PeBuilder::kTableOffset + PeBuilder::kEntrySize + 20, 0x00FFFFFFu);
 }
 void tableZeroRawSizeStaysAccepted(PeBuilder& b) {
-    // nao e' rejeicao: secao sem dados brutos, como .bss, e' valida. entra na
-    // lista porque o portao D conta tambem o que o parser deve aceitar.
     b.writeU32(PeBuilder::kTableOffset + 16, 0);
     b.writeU32(PeBuilder::kTableOffset + 20, 0);
 }
@@ -140,9 +127,6 @@ void tableSizeOfImageZero(PeBuilder& b) { b.writeU32(PeBuilder::kOptionalOffset 
 
 void truncateAtHalfFile(PeBuilder& b) { b.bytes.resize(PeBuilder::kTotalSize / 2); }
 void truncateJustAfterSignature(PeBuilder& b) {
-    // corta logo depois dos 4 bytes da assinatura. a assinatura fica dentro do
-    // ficheiro, mas o parser exige os 4 + 20 do COFF para a validar, e o ficheiro
-    // acaba antes: o erro e' de e_lfanew, nao de assinatura.
     b.bytes.resize(PeBuilder::kCoffOffset + 4);
 }
 void truncateInsideSectionTable(PeBuilder& b) { b.bytes.resize(PeBuilder::kTableOffset + 20); }
@@ -155,8 +139,6 @@ void truncateInsideText(PeBuilder& b) { b.bytes.resize(PeBuilder::kHeaderEnd + 1
 } // namespace
 
 TEST(PeMutation, FiftyMutationsNeverCrashAndStayTyped) {
-    // a lista e o ensaio. cada entrada declara o erro que espera, e o teste falha
-    // se vier outro, kOk incluido.
     const Mutation mutations[] = {
         // DOS header
         {"dos/magic-first-lowercase", dosFlipFirstMagicByte, PeError::kBadMz},
@@ -231,8 +213,6 @@ TEST(PeMutation, FiftyMutationsNeverCrashAndStayTyped) {
             << mutation.name << ": esperava " << toString(mutation.expected)
             << " e o parser devolveu " << toString(result.error);
 
-        // os limites so se confirmam quando o parser aceita: numa rejeicao nao ha
-        // imagem para verificar.
         if (result.ok()) {
             expectImageWithinFile(result, builder.bytes.size());
         }
@@ -240,8 +220,6 @@ TEST(PeMutation, FiftyMutationsNeverCrashAndStayTyped) {
 }
 
 TEST(PeMutation, AcceptedMutationsStillRespectFileBounds) {
-    // as quatro mutacoes que o parser aceita tem de dar imagem utilizavel. sao as
-    // que mais valem: um parser permissivo aceitaria, e o nucleo lia alem do fim.
     const Mutation accepted[] = {
         {"table/virtual-size-all-ones", tableVirtualSizeAllOnes, PeError::kOk},
         {"table/virtual-address-all-ones", tableVirtualAddressAllOnes, PeError::kOk},
@@ -260,9 +238,6 @@ TEST(PeMutation, AcceptedMutationsStillRespectFileBounds) {
 }
 
 TEST(PeMutation, NoMutationLeaksSectionsBeyondFile) {
-    // varredura de um bit sobre todos os bytes que o parser le. o limite e' o
-    // tamanho real do buffer (0x300): um literal aqui passava do fim e o assert do
-    // vector aparecia em vez do parser.
     PeBuilder reference;
     reference.fillTextWithGradient(0x00, 16);
     const std::size_t scanBytes = reference.bytes.size();
@@ -287,8 +262,6 @@ TEST(PeMutation, NoMutationLeaksSectionsBeyondFile) {
         }
     }
 
-    // uma varredura que so rejeitasse nao provava nada; uma que so aceitasse
-    // provava que o parser recusa o valido. queremos as duas.
     EXPECT_GT(accepted, 0) << "nenhuma mutacao de 1 bit foi aceite: o parser recusou ate o que e legitimo";
     EXPECT_GT(rejected, 0) << "nenhuma mutacao de 1 bit foi rejeitada: o parser nao esta a verificar nada";
 }

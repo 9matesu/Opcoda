@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 
 #include "opcoda_core/dsp/granular_engine.h"
 
@@ -27,8 +27,6 @@ struct StereoBlock {
     std::vector<float> right;
 };
 
-// corre `blocks` blocos com a largura pedida e devolve o ultimo. os primeiros
-// blocos sao ralo: os graos ainda a nascer. no fim ha' energia dos dois lados.
 StereoBlock run(float width, int blocks = 48) {
     const auto material = source();
     GranularEngine engine;
@@ -40,8 +38,6 @@ StereoBlock run(float width, int blocks = 48) {
     params.grainSizeMs = 20.0f;
     params.densityGrainsPerSec = 40.0f;
     params.position = 0.5f;
-    // pan fora do centro: com pan 0 os dois canais sao iguais e o side e' zero,
-    // o que tornaria o teste cego a largura.
     params.pan = 0.5f;
     params.widthStereo = width;
 
@@ -53,9 +49,6 @@ StereoBlock run(float width, int blocks = 48) {
 }
 
 TEST(StereoWidth, IdentityKeepsTheMidUntouched) {
-    // comparar duas corridas com a mesma largura era tautologico: nunca podia
-    // falhar. o que o desenho promete e' que a largura mexe no side e nunca no
-    // mid, por isso o ensaio compara a soma dos canais entre duas larguras.
     const auto normal = run(1.0f);
     const auto narrow = run(0.5f);
 
@@ -67,8 +60,6 @@ TEST(StereoWidth, IdentityKeepsTheMidUntouched) {
         narrowMid += std::abs(narrow.left[i] + narrow.right[i]);
         normalSide += std::abs(normal.left[i] - normal.right[i]);
     }
-    // ha' de existir side: com mid puro as duas larguras davam o mesmo por
-    // vacuidade.
     EXPECT_GT(normalSide, 1.0f);
     EXPECT_NEAR(narrowMid, normalMid, normalMid * 0.02f);
 }
@@ -79,14 +70,10 @@ TEST(StereoWidth, MonoCollapsesBothChannels) {
     for (std::size_t i = 0; i < mono.left.size(); ++i) {
         peakDifference = std::max(peakDifference, std::abs(mono.left[i] - mono.right[i]));
     }
-    // mid/side com width 0 da' mid nos dois canais; a diferenca residual e' o
-    // ruido de denormais, nao estereo.
     EXPECT_LT(peakDifference, 1.0e-4f);
 }
 
 TEST(StereoWidth, NarrowingScalesTheSideDown) {
-    // mid/side puro, sem haas (o atraso so' existe acima de 1.0): meia largura
-    // da' meia diferenca entre canais.
     const auto normal = run(1.0f);
     const auto narrow = run(0.5f);
 
@@ -102,9 +89,6 @@ TEST(StereoWidth, NarrowingScalesTheSideDown) {
 }
 
 TEST(StereoWidth, WideAddsHaasSpread) {
-    // com pan ao centro o mid/side nao faz nada (side = 0), e a unica diferenca
-    // que resta e' o atraso do haas no canal direito: a largura tem de separar
-    // os canais num material que nasceu igual dos dois lados.
     const auto wide = run(2.0f);
 
     float difference = 0.0f;
@@ -115,10 +99,6 @@ TEST(StereoWidth, WideAddsHaasSpread) {
 }
 
 TEST(StereoWidth, HaasDelayFollowsTheWidth) {
-    // o atraso tem de ser dirigido pela largura, nao um valor fixo. material de
-    // banda larga: a correlacao cruzada entre canais tem um pico unico, ao
-    // contrario de uma senoide, que repete a cada periodo. com pan ao centro o
-    // mid/side nao toca no sinal, por isso o pico mede so' o haas.
     std::vector<float> material(48000);
     std::uint32_t state = 0x12345678u;
     for (auto& sample : material) {

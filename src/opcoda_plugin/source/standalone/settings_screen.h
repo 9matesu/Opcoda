@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../fonts.h"
 #include "../look_and_feel.h"
@@ -13,18 +13,6 @@
 
 namespace opcoda {
 
-// Ecra de configuracao do standalone, aberto pelo botao SETTINGS da barra da
-// janela. Substitui o AudioDeviceSelectorComponent que o JUCE trazia dentro de um
-// DialogWindow: aquele era uma grelha de etiquetas cinzentas com sliders do
-// sistema, e aparecia sempre que se ia escolher a placa.
-//
-// **o veu nao tapa o instrumento.** o painel flutua sobre o ecra com 62% de
-// carvao por baixo, para a chapa continuar a ser o contexto; fechar e' um clique
-// fora, a tecla Escape ou o CLOSE.
-//
-// **as mudancas aplicam-se ao escolher.** nao ha botao APPLY: um pedido de
-// dispositivo que falhe deixa a razao escrita a' esquerda do CLOSE, em ferrugem,
-// e o dispositivo anterior continua a tocar.
 class SettingsScreen final : public juce::Component,
                              private juce::ChangeListener,
                              private juce::Timer {
@@ -32,14 +20,11 @@ public:
     explicit SettingsScreen(juce::AudioDeviceManager& devices);
     ~SettingsScreen() override;
 
-    // abre com os valores que o gestor tem agora e rouba o foco para o Escape
-    // chegar aqui antes de chegar ao editor.
     void open();
     void close();
 
-    // o instrumento continua a tocar por baixo do veu. as teclas que o ecra nao
-    // usa (o mapa A W S E...) vao para o editor, para se poder escolher a placa
-    // com uma nota presa; e quando o ecra fecha o foco volta ao teclado virtual.
+    void refreshPalette();
+
     std::function<bool(const juce::KeyPress&)> onUnhandledKey;
     std::function<bool(bool)> onKeyStateChanged;
     std::function<void()> onClosed;
@@ -71,12 +56,12 @@ private:
 
     juce::AudioDeviceManager& devices_;
 
-    juce::TextButton audioTab_ {"AUDIO"};
+    juce::TextButton audioTab_ {"Audio"};
     juce::TextButton midiTab_ {"MIDI"};
-    juce::TextButton themesTab_ {"THEMES"};
+    juce::TextButton themesTab_ {"Themes"};
     juce::TextButton closeButton_;
-    juce::TextButton doneButton_ {"CLOSE"};
-    juce::TextButton controlPanel_ {"CONTROL PANEL"};
+    juce::TextButton doneButton_ {"Close"};
+    juce::TextButton controlPanel_ {"Control panel"};
 
     juce::ComboBox driverBox_;
     juce::ComboBox outputBox_;
@@ -86,8 +71,8 @@ private:
     std::vector<std::unique_ptr<juce::TextButton>> midiRows_;
 
     // duas chapas: a escura monocromatica e a classica de 2025.
-    juce::TextButton darkTheme_ {"DARK"};
-    juce::TextButton classicTheme_ {"CLASSIC"};
+    juce::TextButton darkTheme_ {"Dark"};
+    juce::TextButton classicTheme_ {"Classic"};
 
     Page page_ {Page::audio};
     bool applying_ {false};
@@ -96,14 +81,11 @@ private:
     juce::Rectangle<int> panel_;
     juce::Rectangle<int> status_;
 
-    static constexpr int kPanelWidth {860};
-    static constexpr int kPanelHeight {580};
+    static constexpr int kPanelWidth {900};
+    static constexpr int kPanelHeight {620};
     static constexpr int kHeaderHeight {52};
     static constexpr int kInset {28};
-    // o compasso das linhas e a altura do bloco de estado sao um so' numero:
-    // o ecra nao tem scroll, por isso o que nao cabe tem de ser medido, e nao
-    // empurrado para baixo de uma linha que ja' la' estava.
-    static constexpr int kRowPitch {44};
+    static constexpr int kRowPitch {52};
     static constexpr int kStatusHeight {132};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SettingsScreen)
