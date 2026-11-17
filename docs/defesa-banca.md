@@ -76,10 +76,9 @@ limitado entre 0,0625 e 16 para impedir *aliasing* audível na afinação máxim
 no `prepare`, e cada grão guarda a tabela com que nasceu — mudar a janela não
 salta o envelope de um grão longo a meio.
 
-A entropia é frequência de símbolos, não análise espectral: `shannon_entropy`
-conta ocorrências de byte em janelas deslizantes de 2048 bytes, e o eixo de 0 a
-8 bits permanece verdadeiro em qualquer zoom. Nenhum caminho de áudio usa FFT; a
-transformada existe apenas no ensaio T1, que mede a saída do motor.
+A entropia é a frequência de símbolos, não análise espectral: H(X) = −Σ p(xi)·log2 p(xi), com o alfabeto de 256 valores do byte, mede a informação média por símbolo e satura em 8 bits por byte quando todos os valores são equiprováveis. A escolha é teórica, não decorativa: o material é um fluxo de símbolos, não uma onda, e a estatística canônica de uma fonte de símbolos é a entropia — a FFT seria erro de categoria, análise espectral do que ainda não é espectro. O cálculo desliza em janelas de 2048 bytes (a fundamentação registra a faixa de 256 a 1024 como referência comparativa), porque um número único para o arquivo inteiro não serve à navegação: o perfil entrópico é o mapa. Nele, regiões de zeros e áreas não inicializadas ficam perto de 0, código compilado fica no meio-termo — distribuição enviesada de opcodes e operandos —, e blocos comprimidos, empacotados ou cifrados encostam nos 8 bits, comportamento análogo ao ruído estocástico de banda larga (LYDA; HAMROCK, 2007; SHANNON, 1948). O eixo de 0 a 8 bits permanece verdadeiro em qualquer zoom, e o custo é uma histograma de 256 caixas por janela — nenhum caminho de áudio usa FFT; a transformada existe apenas no ensaio T1, que mede a saída do motor.
+
+A entropia não é só mapa: é sinal de controle. O valor de H na posição de leitura entra na matriz como fonte — o Entropy-to-CV da fundamentação —, de sorte que regiões repetitivas ancoram o grão e regiões densas o dispersam; a mesma curva desenha a vista de entropia que o usuário usa para navegar. O instrumento não toca os bytes: toca a incerteza dos bytes.
 
 A segurança do parser segue três princípios. O arquivo é aberto somente para
 leitura, copiado para um buffer próprio e fechado em seguida; nenhum trecho
@@ -191,12 +190,28 @@ PE seguro de um lado, um motor granular em tempo real do outro.
 
 A escolha tem três pernas, e cada uma se sustenta sozinha. A análise estática de
 binários entra pela segurança — leitura somente de leitura, limites verificados,
-erros tipados, nenhuma execução; a teoria da informação entra pela entropia —
-Shannon sobre janelas deslizantes, que distingue código de dados comprimidos e
-fundamenta a hipótese acústica do instrumento; e a engenharia de tempo real
-rígida entra pela arquitetura — duas threads, fila SPSC, zero alocação no
-callback, guard de alocação. Nenhuma das três é decorativa: as três aparecem no
-código e nos testes.
+erros tipados, nenhuma execução; a teoria da informação entra pela entropia, e
+aqui a justificativa é mais fina: Shannon (1948) é fundacional fora da música e
+nichada dentro dela, e o projeto importa H(X) não como enfeite, mas como a
+linguagem correta do material. Bytes são símbolos, e a entropia é a medida
+canônica da informação de uma fonte de símbolos; a mesma estatística que comprime
+arquivos, que distingue binários empacotados e cifrados (LYDA; HAMROCK, 2007) e
+que alimenta a detecção de malware é a que aqui move o grão. Uma teoria
+central no mundo e nichada no estúdio ganha, dentro da produção musical, um uso
+que nenhuma ferramenta comercial oferece — parâmetro de composição, não
+sonificação de dados; e a engenharia de tempo real rígida entra pela arquitetura
+— duas threads, fila SPSC, zero alocação no callback, guard de alocação.
+Nenhuma das três é decorativa: as três aparecem no código e nos testes.
+
+Da entropia como parâmetro abrem-se intersecções ainda menos ortodoxas de
+produção musical. A curva de H pode virar *arrangement* — as seções do arquivo
+como seções da faixa; pode ditar densidade e tamanho do grão, regiões densas
+pedindo grãos longos e regiões planas pedindo grãos curtos; pode selecionar
+material — varrer uma pasta de binários e escolher os de H perto de 8, ruidosos,
+ou perto de 0, quase silenciosos; e pode dobrar sobre si mesma — a entropia da
+entropia, a velocidade de complexidade do material, como modulador. Nenhuma
+dessas ligações existe em sampler comercial: o Opcoda é um instrumento
+estatístico, e é aí que a produção musical encontra a teoria da informação.
 
 Para um aluno de ADS, o valor do trabalho está na arquitetura — o som é só parte
 do resultado. O projeto demonstra, na prática, a divisão entre thread de
@@ -215,6 +230,16 @@ Quando perguntarem por que um binário, a resposta é a estatística: cada seç�
 arquivo tem uma assinatura própria — código com entropia intermediária, recursos
 enviesados, áreas comprimidas perto de 8 bits —, e o instrumento expõe essa
 leitura em quatro vistas e a transforma em parâmetro de síntese.
+
+Quando perguntarem por que entropia e não análise espectral, a resposta é a
+natureza do material: bytes são símbolos, não onda; H(X) = −Σ p·log2 p é a
+estatística canônica de uma fonte de símbolos, e a FFT seria erro de categoria.
+A entropia dá um eixo universal de 0 a 8 bits com interpretação física por
+região — zeros perto de 0, código no meio, comprimido perto de 8 — e é a mesma
+medida que comprime arquivos e detecta binários empacotados: teoria central no
+mundo, nichada no estúdio. E habilita o que nenhuma ferramenta comercial
+oferece: modular por densidade de informação, a curva do arquivo virando
+arrangement, o grão seguindo a incerteza do material.
 
 Quando perguntarem sobre tempo real, a resposta é o guard: o callback de áudio
 não aloca, não trava, não faz I/O e não lança exceção; a regra é vigiada por um
