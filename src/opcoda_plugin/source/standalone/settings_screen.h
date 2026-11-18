@@ -70,9 +70,12 @@ private:
 
     std::vector<std::unique_ptr<juce::TextButton>> midiRows_;
 
-    // duas chapas: a escura monocromatica e a classica de 2025.
+    // cinco chapas: grafite, classica, clara, ambar e ciano.
     juce::TextButton darkTheme_ {"Dark"};
     juce::TextButton classicTheme_ {"Classic"};
+    juce::TextButton lightTheme_ {"Light"};
+    juce::TextButton amberTheme_ {"Amber"};
+    juce::TextButton cyanTheme_ {"Cyan"};
 
     Page page_ {Page::audio};
     bool applying_ {false};

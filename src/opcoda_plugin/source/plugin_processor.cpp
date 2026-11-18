@@ -278,6 +278,42 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
 void PluginProcessor::prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) {
     engine_.prepare(sampleRate, maximumExpectedSamplesPerBlock);
     transport_.prepare(sampleRate);
+
+    // analisador de espectro: 512 amostras, Hann, 64 bandas log entre 20 Hz e
+    // 20 kHz. Tudo prealocado -- o processBlock nao aloca nada.
+    constexpr int kFftOrder {9};
+    constexpr int kFftSize {1 << kFftOrder};
+    spectrumSampleRate_ = sampleRate;
+    spectrumFifo_.assign(static_cast<std::size_t>(kFftSize), 0.0f);
+    spectrumFftBuffer_.assign(static_cast<std::size_t>(2 * kFftSize), 0.0f);
+    spectrumWindow_.resize(static_cast<std::size_t>(kFftSize));
+    for (int i = 0; i < kFftSize; ++i) {
+        spectrumWindow_[static_cast<std::size_t>(i)] =
+            0.5f - 0.5f * std::cos(juce::MathConstants<float>::twoPi *
+                                   static_cast<float>(i) /
+                                   static_cast<float>(kFftSize - 1));
+    }
+
+    const auto bins = static_cast<std::size_t>(Telemetry::kSpectrumBins);
+    const auto nyquist = 0.5 * sampleRate;
+    spectrumBinStart_.assign(bins, 1);
+    spectrumBinEnd_.assign(bins, 2);
+    for (std::size_t b = 0; b < bins; ++b) {
+        const auto f0 = 20.0 * std::pow(1000.0, static_cast<double>(b) / bins);
+        const auto f1 = 20.0 * std::pow(1000.0, static_cast<double>(b + 1) / bins);
+        auto k0 = static_cast<int>(f0 / nyquist * (kFftSize / 2));
+        auto k1 = static_cast<int>(f1 / nyquist * (kFftSize / 2));
+        k0 = juce::jmax(1, juce::jmin(k0, kFftSize / 2 - 1));
+        k1 = juce::jmax(k0 + 1, juce::jmin(k1, kFftSize / 2));
+        spectrumBinStart_[b] = k0;
+        spectrumBinEnd_[b] = k1;
+    }
+
+    spectrumWrite_ = 0;
+    spectrumFill_ = 0;
+    for (auto& bin : telemetry_.spectrum) {
+        bin.store(-100.0f, std::memory_order_relaxed);
+    }
 }
 
 void PluginProcessor::releaseResources() {
@@ -673,6 +709,65 @@ const auto numSamples = buffer.getNumSamples();
                          params);
 
     publishTelemetry(buffer);
+    publishSpectrum(buffer);
+}
+
+void PluginProcessor::publishSpectrum(const juce::AudioBuffer<float>& buffer) noexcept {
+    const auto n = static_cast<int>(spectrumFifo_.size());
+    if (n <= 0 || buffer.getNumSamples() <= 0 || spectrumFftBuffer_.size() < 2 * n) {
+        return;
+    }
+
+    const auto* left = buffer.getReadPointer(0);
+    const auto* right = buffer.getNumChannels() > 1 ? buffer.getReadPointer(1) : left;
+    for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        spectrumFifo_[static_cast<std::size_t>(spectrumWrite_)] =
+            0.5f * (left[i] + right[i]);
+        spectrumWrite_ = (spectrumWrite_ + 1) % n;
+        spectrumFill_ = juce::jmin(n, spectrumFill_ + 1);
+    }
+
+    if (spectrumFill_ < n) {
+        return; // a janela ainda esta' a encher
+    }
+
+    // ordem cronologica: a amostra mais antiga primeiro.
+    auto* fftData = spectrumFftBuffer_.data();
+    for (int i = 0; i < n; ++i) {
+        const auto index = (spectrumWrite_ + i) % n;
+        fftData[i] = spectrumFifo_[static_cast<std::size_t>(index)] *
+                     spectrumWindow_[static_cast<std::size_t>(i)];
+    }
+
+    // espectro so' de frequencias positivas: devolve (n/2 + 1) magnitudes.
+    spectrumFft_.performFrequencyOnlyForwardTransform(fftData, true);
+
+    const auto bins = static_cast<std::size_t>(Telemetry::kSpectrumBins);
+    const auto toDb = [](float magnitude) {
+        return magnitude > 1.0e-6f ? juce::Decibels::gainToDecibels(magnitude) : -100.0f;
+    };
+    // ganho do analisador: 2/N em vez de 1/N. A onda sobe 6 dB e passa a
+    // ler-se por cima do ruido de fundo do grafico.
+    const auto kNormalise = 2.0f / static_cast<float>(n);
+
+    for (std::size_t b = 0; b < bins; ++b) {
+        const auto begin = spectrumBinStart_[b];
+        const auto end = spectrumBinEnd_[b];
+        float sum = 0.0f;
+        for (int k = begin; k < end; ++k) {
+            sum += fftData[static_cast<std::size_t>(k)];
+        }
+        const auto count = static_cast<float>(juce::jmax(1, end - begin));
+        const auto magnitude = (sum / count) * kNormalise;
+        const auto target = toDb(magnitude);
+
+        // suavizacao entre quadros: ataque rapido, descida lenta. Sem isto as
+        // barras tremem a cada bloco e a leitura fica nervosa.
+        const auto previous = telemetry_.spectrum[b].load(std::memory_order_relaxed);
+        const auto coefficient = target > previous ? 0.55f : 0.10f;
+        const auto smoothed = previous + (target - previous) * coefficient;
+        telemetry_.spectrum[b].store(smoothed, std::memory_order_relaxed);
+    }
 }
 
 void PluginProcessor::publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept {

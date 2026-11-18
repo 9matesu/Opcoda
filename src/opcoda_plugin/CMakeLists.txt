@@ -120,6 +120,7 @@ target_link_libraries(Opcoda
         OpcodaBrand
         opcoda_core
         juce::juce_audio_processors
+        juce::juce_dsp
         # O Standalone exige audio_utils e audio_devices; o VST3 nao, mas os dois
         # formatos sao do mesmo alvo. O gui_extra traz o FileChooser do editor.
         juce::juce_audio_utils

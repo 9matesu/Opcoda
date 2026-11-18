@@ -99,7 +99,15 @@ void setTheme(Theme theme) {
 
     previous = active;
     currentTheme = theme;
-    active = theme == Theme::classic ? classicTokens() : darkTokens();
+
+    switch (theme) {
+        case Theme::classic: active = classicTokens(); break;
+        case Theme::light: active = lightTokens(); break;
+        case Theme::amber: active = amberTokens(); break;
+        case Theme::cyan: active = cyanTokens(); break;
+        case Theme::dark:
+        default: active = darkTokens(); break;
+    }
 }
 
 Theme loadSavedTheme() {
@@ -109,13 +117,27 @@ Theme loadSavedTheme() {
     }
 
     const auto value = file.loadFileAsString().trim().toLowerCase();
-    return value == "classic" ? Theme::classic : Theme::dark;
+    if (value == "classic") return Theme::classic;
+    if (value == "light") return Theme::light;
+    if (value == "amber") return Theme::amber;
+    if (value == "cyan") return Theme::cyan;
+    return Theme::dark;
 }
 
 void saveTheme(Theme theme) {
     auto file = themeFile();
     file.getParentDirectory().createDirectory();
-    file.replaceWithText(theme == Theme::classic ? "classic" : "dark");
+
+    juce::String name {"dark"};
+    switch (theme) {
+        case Theme::classic: name = "classic"; break;
+        case Theme::light: name = "light"; break;
+        case Theme::amber: name = "amber"; break;
+        case Theme::cyan: name = "cyan"; break;
+        case Theme::dark: default: break;
+    }
+
+    file.replaceWithText(name);
 }
 
 juce::Colour translate(juce::Colour colour) {

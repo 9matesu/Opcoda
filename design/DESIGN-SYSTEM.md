@@ -265,6 +265,30 @@ painéis primários, 3 px nos componentes aninhados — e as bordas são sempre 
 48, margem de 16, ecrã de 396, vão de 16 e painel de 176. Ver
 `docs/UX-REFINING.md`.
 
+## Temas
+
+O tema troca o instrumento inteiro, do chassis ao último rótulo, e fica guardado
+em `%APPDATA%\Opcoda\theme.txt`. São cinco, em `palette.h`:
+
+| Tema | Superfície | Acento |
+| --- | --- | --- |
+| Grafite | preto e branco | branco |
+| Clássico | creme e carvão | laranja queimado |
+| Claro | papel e grafite | azul cobalto |
+| Âmbar | grafite quente | âmbar |
+| Ciano | grafite frio | ciano |
+
+O ecrã fica preto em todos: é onde a onda é desenhada a branco, e um vidro claro
+apagá-la-ia. A cor vive no acento, não no fundo.
+
+## Filtro e analisador
+
+A vista do filtro mostra a resposta dos dois biquads e, por trás, o espectro do
+material em tempo real. O analisador é uma FFT de 512 amostras com janela de Hann,
+agrupada em 64 bandas logarítmicas entre 20 Hz e 20 kHz. A altura e o brilho da
+barra dizem a energia da banda, e o contorno claro dá o contraste. A suavização é
+de ataque rápido e descida lenta, para as barras não tremerem a cada bloco.
+
 ## Linguagem dos botões
 
 Nenhum botão de ação tem chapa, contorno ou estado deprimido. A seleção vive na

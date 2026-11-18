@@ -38,7 +38,7 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
     midiTab_.onClick = [this] { selectPage(Page::midi); };
     themesTab_.onClick = [this] { selectPage(Page::themes); };
 
-    for (auto* row : {&darkTheme_, &classicTheme_}) {
+    for (auto* row : {&darkTheme_, &classicTheme_, &lightTheme_, &amberTheme_, &cyanTheme_}) {
         row->getProperties().set("uiLook", "row");
         row->setClickingTogglesState(true);
         row->setRadioGroupId(2);
@@ -46,6 +46,9 @@ SettingsScreen::SettingsScreen(juce::AudioDeviceManager& devices) : devices_(dev
     }
     darkTheme_.onClick = [this] { chooseTheme(palette::Theme::dark); };
     classicTheme_.onClick = [this] { chooseTheme(palette::Theme::classic); };
+    lightTheme_.onClick = [this] { chooseTheme(palette::Theme::light); };
+    amberTheme_.onClick = [this] { chooseTheme(palette::Theme::amber); };
+    cyanTheme_.onClick = [this] { chooseTheme(palette::Theme::cyan); };
 
     // a cruz do cabecalho fala a lingua da rail: traco claro sobre carvao.
     closeButton_.setButtonText("");
@@ -177,15 +180,19 @@ void SettingsScreen::resized() {
         rowY += 34;
     }
 
-    darkTheme_.setBounds(body.getX(), body.getY() + 42, body.getWidth(), 42);
-    classicTheme_.setBounds(body.getX(), body.getY() + 100, body.getWidth(), 42);
+    const auto themes = {&darkTheme_, &classicTheme_, &lightTheme_, &amberTheme_, &cyanTheme_};
+    auto themeY = body.getY() + 42;
+    for (auto* row : themes) {
+        row->setBounds(body.getX(), themeY, body.getWidth(), 42);
+        themeY += 58;
+    }
 }
 
 //==============================================================================
 void SettingsScreen::refreshPalette() {
-    const auto ink = palette::currentTheme == palette::Theme::dark
-                         ? palette::textOnDark
-                         : palette::textDark;
+    const auto theme = palette::currentTheme;
+    const bool lightFace = theme == palette::Theme::classic || theme == palette::Theme::light;
+    const auto ink = lightFace ? palette::textDark : palette::textOnDark;
     for (auto* box : {&driverBox_, &outputBox_, &rateBox_, &bufferBox_}) {
         if (box->findColour(juce::ComboBox::textColourId) != ink) {
             box->setColour(juce::ComboBox::textColourId, ink);
@@ -273,6 +280,9 @@ void SettingsScreen::paint(juce::Graphics& g) {
         };
         note(darkTheme_.getBounds(), "Graphite and white. No colour anywhere.");
         note(classicTheme_.getBounds(), "Cream, charcoal and burnt orange. The 2025 face.");
+        note(lightTheme_.getBounds(), "Paper, graphite and cobalt. The light face.");
+        note(amberTheme_.getBounds(), "Graphite and amber. The warm face.");
+        note(cyanTheme_.getBounds(), "Graphite and cyan. The cold face.");
     } else {
         paintSectionLabel(g, "MIDI inputs", {body.getX(), body.getY() + 4, 300, 18});
         g.setColour(palette::textMuted);
@@ -392,13 +402,17 @@ void SettingsScreen::selectPage(Page page) {
     }
 
     const auto themes = page == Page::themes;
-    darkTheme_.setVisible(themes);
-    classicTheme_.setVisible(themes);
-    if (themes) {
-        darkTheme_.setToggleState(palette::currentTheme == palette::Theme::dark,
-                                  juce::dontSendNotification);
-        classicTheme_.setToggleState(palette::currentTheme == palette::Theme::classic,
-                                     juce::dontSendNotification);
+    const std::array<juce::TextButton*, 5> themeRows {
+        &darkTheme_, &classicTheme_, &lightTheme_, &amberTheme_, &cyanTheme_};
+    constexpr std::array<palette::Theme, 5> themeValues {
+        palette::Theme::dark, palette::Theme::classic, palette::Theme::light,
+        palette::Theme::amber, palette::Theme::cyan};
+    for (std::size_t i = 0; i < themeRows.size(); ++i) {
+        themeRows[i]->setVisible(themes);
+        if (themes) {
+            themeRows[i]->setToggleState(palette::currentTheme == themeValues[i],
+                                         juce::dontSendNotification);
+        }
     }
 
     if (page == Page::midi) {
@@ -415,9 +429,14 @@ void SettingsScreen::chooseTheme(palette::Theme theme) {
     palette::saveTheme(theme);
     palette::applyToTree(*this);
 
-    darkTheme_.setToggleState(theme == palette::Theme::dark, juce::dontSendNotification);
-    classicTheme_.setToggleState(theme == palette::Theme::classic,
-                                 juce::dontSendNotification);
+    const std::array<juce::TextButton*, 5> themeRows {
+        &darkTheme_, &classicTheme_, &lightTheme_, &amberTheme_, &cyanTheme_};
+    constexpr std::array<palette::Theme, 5> themeValues {
+        palette::Theme::dark, palette::Theme::classic, palette::Theme::light,
+        palette::Theme::amber, palette::Theme::cyan};
+    for (std::size_t i = 0; i < themeRows.size(); ++i) {
+        themeRows[i]->setToggleState(themeValues[i] == theme, juce::dontSendNotification);
+    }
 
     if (onThemeChanged) {
         onThemeChanged();

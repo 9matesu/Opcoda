@@ -305,6 +305,33 @@ void FilterView::paint(juce::Graphics& g) {
         g.fillPath(filled);
     }
 
+    // analisador de frequencia: o material atras da curva. Barras continuas,
+    // com a mesma escala em dB do grafico, para os picos se lerem contra a
+    // resposta do filtro. O contorno e' o que dá contraste.
+    if (spectrum_ != nullptr && spectrumCount_ > 1) {
+        juce::Path linePath;
+        juce::Path fillPath;
+        const auto step = plot.getWidth() / static_cast<float>(spectrumCount_ - 1);
+        fillPath.startNewSubPath(plot.getX(), plot.getBottom());
+        for (int i = 0; i < spectrumCount_; ++i) {
+            const auto db = spectrum_[i].load(std::memory_order_relaxed);
+            const auto x = plot.getX() + static_cast<float>(i) * step;
+            const auto y = yForDb(db, plot);
+            fillPath.lineTo(x, y);
+            if (i == 0) {
+                linePath.startNewSubPath(x, y);
+            } else {
+                linePath.lineTo(x, y);
+            }
+        }
+        fillPath.lineTo(plot.getRight(), plot.getBottom());
+        fillPath.closeSubPath();
+        g.setColour(palette::alpha(palette::ivory, 0.14f));
+        g.fillPath(fillPath);
+        g.setColour(palette::alpha(palette::ivory, 0.50f));
+        g.strokePath(linePath, juce::PathStrokeType {1.0f});
+    }
+
     g.setColour(palette::displayGrid);
     for (const auto hz : {100.0f, 1000.0f, 10000.0f}) {
         const auto x = xForHz(hz, plot);

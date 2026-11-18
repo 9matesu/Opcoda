@@ -285,7 +285,7 @@ private:
     Knob* masterStereoKnob_ {nullptr};
     Knob* masterLevelKnob_ {nullptr};
     Knob* modRateKnob_ {nullptr};
-    ChoiceControl* modDivControl_ {nullptr};
+    Knob* modDivKnob_ {nullptr};
     bool modSyncOn_ {false};
 
     void layoutModuleGrid(const ModuleGrid& grid, juce::Rectangle<int> area);
@@ -297,6 +297,9 @@ private:
     int gridRowHeight_ {0};
     int gridColumns_ {0};
     int gridRows_ {0};
+    // 1 = desenha o filete nessa fronteira de coluna; 0 = a fronteira cai
+    // dentro de uma celula fundida (span) e o filete nao se pinta.
+    std::vector<char> gridColumnLines_;
 
     ModuleFolderTab moduleGrainButton_ {"grainMod", "Grain module"};
     ModuleFolderTab moduleEnvelopeButton_ {"envMod", "Envelope module"};

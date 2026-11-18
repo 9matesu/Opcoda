@@ -28,6 +28,14 @@ public:
     // corte ja' modulado, publicado pelo audio. zero = ainda nao ha' leitura.
     void setLive(float cutoff1, float cutoff2);
 
+    // espectro do material (dB, 20 Hz .. 20 kHz, log). O ponteiro e' do
+    // telemetry do processador e vive enquanto o plugin viver.
+    void setSpectrum(const std::atomic<float>* bins, int count) noexcept {
+        spectrum_ = bins;
+        spectrumCount_ = count;
+        repaint();
+    }
+
 private:
     void parameterChanged(const juce::String&, float) override { repaint(); }
 
@@ -70,6 +78,9 @@ private:
 
     float liveCutoff1_ {0.0f};
     float liveCutoff2_ {0.0f};
+
+    const std::atomic<float>* spectrum_ {nullptr};
+    int spectrumCount_ {0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FilterView)
 };

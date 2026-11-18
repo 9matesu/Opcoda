@@ -7,6 +7,7 @@
 #include "opcoda_core/rt/transport.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
 #include <array>
 #include <atomic>
@@ -95,12 +96,17 @@ bool snapByteRangeToSection();
 [[nodiscard]] bool byteRangeIsSectionAligned() const noexcept;
 
     struct Telemetry {
+        static constexpr int kSpectrumBins {64};
         std::atomic<float> peakDb {-100.0f};
         std::atomic<float> peakLeftDb {-100.0f};
         std::atomic<float> peakRightDb {-100.0f};
         std::atomic<int> activeVoices {0};
         std::atomic<bool> sounding {false};
         std::atomic<float> sampleRate {48000.0f};
+
+        // espectro de frequencia do material, em dB, 20 Hz .. 20 kHz, log.
+        // Escreve o audio; le o FilterView.
+        std::atomic<float> spectrum[kSpectrumBins] {};
 
         std::atomic<float> playheadFraction {0.0f};
         std::atomic<double> playDurationSeconds {0.0};
@@ -228,6 +234,18 @@ private:
     void publishPressedNotes() noexcept;
 
     void publishTelemetry(const juce::AudioBuffer<float>& buffer) noexcept;
+    void publishSpectrum(const juce::AudioBuffer<float>& buffer) noexcept;
+
+    juce::dsp::FFT spectrumFft_ {9};
+    std::vector<float> spectrumWindow_;
+    std::vector<float> spectrumFifo_;
+    // 2 * 512: a FFT real em-place exige o dobro.
+    std::vector<float> spectrumFftBuffer_;
+    std::vector<int> spectrumBinStart_;
+    std::vector<int> spectrumBinEnd_;
+    int spectrumWrite_ {0};
+    int spectrumFill_ {0};
+    double spectrumSampleRate_ {48000.0};
 
     std::vector<std::uint8_t> sourceBytes_;
 

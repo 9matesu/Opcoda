@@ -151,6 +151,11 @@ const std::vector<ChoiceControl::Item> kLfoSyncItems {
     {"Follow host tempo", "Sync", nullptr},
 };
 
+// divisões do LFO: o knob do DIV usa esta lista (12 posições).
+const juce::StringArray kLfoDivLabels {
+    "1/1", "1/2", "1/4", "1/8", "1/16", "1/32",
+    "1/64", "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"};
+
 // o alvo do LFO: quatro botoes com rotulo curto.
 const std::vector<ChoiceControl::Item> kLfoTargetItems {
     {"Modulate pitch", "PITCH", nullptr},
@@ -257,6 +262,8 @@ PluginEditor::PluginEditor(PluginProcessor& processor)
     buildPresetSelector();
     buildParameterPanel();
     buildKeyboard();
+    filterView_.setSpectrum(owner_.telemetry().spectrum,
+                            PluginProcessor::Telemetry::kSpectrumBins);
     animateButtons();
 
     grid_.attachModParameters(owner_.parameters());
@@ -868,9 +875,11 @@ void PluginEditor::buildParameterPanel() {
         moduleGrids_[static_cast<std::size_t>(ParamModule::mod)] = std::move(grid);
 
         // o DIV so' existe quando o sync esta ligado; vive na celula do Rate.
-        modDivControl_ = addChoice("lfodiv", "DIV", "LFO division when synced",
-                                   ChoiceControl::Mode::detent, 1, {});
-        modDivControl_->setVisible(false);
+        // E' um knob, nao um slider: usa o mesmo caminho dos outros knobs, que
+        // ja' funcionam, e a lista de 12 divisoes aparece no rotulo.
+        modDivKnob_ = addKnob(Knob::Spec {"lfodiv", "DIV", "LFO division when synced",
+                                          2.0f, nullptr, kLfoDivLabels});
+        modDivKnob_->setVisible(false);
     }
 
     masterKnob_ = addKnob(kOutSpecs[0]);
@@ -1198,6 +1207,10 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     if (gridCellWidth_ > 0 && gridRowHeight_ > 0) {
         const auto area = gridArea_.toFloat();
         for (int c = 1; c < gridColumns_; ++c) {
+            const auto lineIndex = static_cast<std::size_t>(c - 1);
+            if (lineIndex < gridColumnLines_.size() && gridColumnLines_[lineIndex] == 0) {
+                continue;
+            }
             const auto x = area.getX() + static_cast<float>(c) * static_cast<float>(gridCellWidth_);
             ui::hairLine(g, x, area.getY() + static_cast<float>(tokens::space2), x,
                          area.getBottom() - static_cast<float>(tokens::space2), uiScale_,
@@ -1219,17 +1232,6 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
         g.fillRoundedRectangle(master, radius);
         g.setColour(palette::alpha(palette::ivory, tokens::borderAlpha));
         g.drawRoundedRectangle(master.reduced(0.5f), radius, 1.0f);
-
-        // rotulo no topo da coluna, com o mesmo padding do painel de parametros.
-        g.setFont(fonts().sans(9.0f, true));
-        g.setColour(palette::textSub);
-        g.drawText("Master",
-                   juce::Rectangle<float> {
-                       master.getX() + static_cast<float>(kPanelPaddingX),
-                       master.getY() + static_cast<float>(kPanelPaddingY),
-                       master.getWidth() - 2.0f * static_cast<float>(kPanelPaddingX),
-                       static_cast<float>(tokens::space3)},
-                   juce::Justification::centredLeft, false);
     }
 
     // -- teclado: um card do mesmo material do chassi, alinhado ao conteudo --
@@ -1417,9 +1419,9 @@ void PluginEditor::resized() {
     }
 
     {
-        // rotulo de 16 + duas filas de 64: a coluna fecha nos 144 do padding.
+        // sem rotulo: a coluna e' so' os quatro knobs e o medidor, centrados
+        // na altura e na largura da chapa.
         auto master = masterBayBounds_.reduced(kPanelPaddingX, kPanelPaddingY);
-        master.removeFromTop(tokens::space3);
         auto meterCol = master.removeFromRight(tokens::space4);
         master.removeFromRight(tokens::space2);
         meter_.setBounds(meterCol);
@@ -1545,6 +1547,22 @@ void PluginEditor::layoutModuleGrid(const ModuleGrid& grid, juce::Rectangle<int>
     gridColumns_ = columns;
     gridRows_ = static_cast<int>(grid.rows.size());
 
+    // fronteiras de coluna que ficam dentro de uma celula fundida nao levam
+    // filete: o botao ocupa as duas colunas e a linha atravessava-o.
+    gridColumnLines_.assign(static_cast<std::size_t>(juce::jmax(0, columns - 1)), 1);
+    for (const auto& row : grid.rows) {
+        int column = 0;
+        for (const auto& cell : row) {
+            const int span = juce::jmax(1, cell.span);
+            for (int b = column + 1; b < column + span; ++b) {
+                if (b - 1 < static_cast<int>(gridColumnLines_.size())) {
+                    gridColumnLines_[static_cast<std::size_t>(b - 1)] = 0;
+                }
+            }
+            column += span;
+        }
+    }
+
     for (std::size_t r = 0; r < grid.rows.size(); ++r) {
         int x = gridArea.getX();
         const int y = gridArea.getY() + static_cast<int>(r) * rowHeight;
@@ -1573,14 +1591,14 @@ void PluginEditor::updateModSyncLayout() {
     if (modRateKnob_ != nullptr) {
         modRateKnob_->setVisible(modActive && !sync);
     }
-    if (modDivControl_ == nullptr) {
+    if (modDivKnob_ == nullptr) {
         return;
     }
 
     const bool showDiv = modActive && sync;
-    modDivControl_->setVisible(showDiv);
+    modDivKnob_->setVisible(showDiv);
     if (showDiv && gridCellWidth_ > 0 && gridRowHeight_ > 0) {
-        modDivControl_->setBounds(
+        modDivKnob_->setBounds(
             juce::Rectangle<int> {gridArea_.getX(), gridArea_.getY(), gridCellWidth_,
                                   gridRowHeight_}
                 .reduced(2, 0));
@@ -1841,6 +1859,11 @@ void PluginEditor::refresh() {
 
     updateStatusVisibility();
     refreshPlayButton();
+
+    // o analisador e' tempo real: so' repinta quando e' a vista visivel.
+    if (activeModule_ == ParamModule::filter) {
+        filterView_.repaint();
+    }
     refreshPresetName();
 
     if (grid_.mode() != lastViewMode_) {

@@ -135,34 +135,91 @@ grão deixou de ser uma fila de quatro interruptores minúsculos: são quatro li
 empilhadas na mesma célula, sem vão, com o glifo a encher a linha e o estado
 activo a pintar a linha toda.
 
-A grelha de knobs recebe o resto da chapa: duas filas de 72 px quando o módulo
-tem oito células, uma fila de 90 quando tem quatro. Os discos de 64 px centram-se
-na célula e os filetes divisórios entram 8 px em cada ponta, para não tocarem o
-contorno do painel. O master cresceu para 216 px de largura — interior de
-184×144, com o rótulo em 16 px e duas filas de 64 — e leva os quatro knobs
-(Volume, Pan, Stereo, Level) numa grelha 2×2, com o medidor vertical de 24 px na
-coluna da direita, separado por 8. O bloco de linhas centra-se na altura
-disponível, de modo que os discos de 64 px se juntam em células de ~82 px no
-envelope, ~97 no filtro e ~122 no LFO.
+O master tem 216 px de largura e já não leva rótulo: a coluna é só o que toca.
+O interior de 184×144 recebe os quatro knobs (Volume, Pan, Stereo, Level) numa
+grelha 2×2, com o medidor vertical de 24 px na coluna da direita, separado por 8.
+Sem o título, os discos centram-se na altura toda da chapa. O bloco de linhas
+centra-se na altura disponível, de modo que os discos de 64 px se juntam em
+células de ~82 px no envelope, ~97 no filtro e ~122 no LFO.
 
 ## Módulo LFO
 
-No módulo LFO, o sync manda nos parâmetros: em Free ficam o Rate em Hz, em Sync
-esse knob dá lugar ao DIV — o detent ocupa a célula do Rate e o Rate desaparece,
-sem parâmetros mortos à vista. O botão Sync é um booleano, e o texto dele diz o
-estado (Free ou Sync) em vez de ficar em branco: sem os nomes, o botão existia e
-não se via. O grid tem quatro colunas sem células fundidas: Rate (ou DIV), Sync,
-Depth e Steps em cima; Target e Wave em baixo, cada um com duas colunas. O Sync
-fica ao lado do slider do DIV, que é a chave que manda nele — e o slider, que
-antes usava `SliderParameterAttachment` e ficava preso no primeiro detent, agora
-tem a gama 0..N-1 e escreve o parâmetro pela conversão certa. Cada forma
-acende com um banho claro e um filete quando está seleccionada, o mesmo
-tratamento dos interruptores do filtro. A onda são
-dois ciclos que correm com a fase viva do áudio: desenho dim na amplitude cheia
-e curva viva na profundidade, tudo a passar da esquerda para a direita, e a
-fase parada não congela o ecrã (avança ao ritmo do LFO). No filtro, o slope
-12/24 dB desceu para a fila de baixo como dois botões de texto clicáveis — um
-ou outro, com o ativo aceso.
+No módulo LFO, o sync manda nos parâmetros. Em Free fica o Rate em Hz. Em Sync, o
+Rate dá lugar ao DIV, que é um knob com doze divisões (1/1 a 1/16T): o cursor do
+detent ficava preso no primeiro passo, e um knob com a lista no rótulo resolve
+isso. O botão Sync está na célula ao lado do DIV, e o texto diz o estado (Free ou
+Sync) em vez de ficar em branco. O grid tem quatro colunas sem células fundidas:
+Rate (ou DIV), Sync, Depth e Steps em cima; Target e Wave em baixo, cada um com
+duas colunas. As fronteiras de coluna que caem dentro de uma célula fundida não
+recebem filete, para o botão não ficar cortado por uma linha. Cada forma acende
+com um banho claro e um filete quando está seleccionada, o mesmo tratamento dos
+interruptores do filtro.
+
+A onda são dois ciclos que correm com a fase viva do áudio: desenho dim na
+amplitude cheia e curva viva na profundidade, tudo a passar da esquerda para a
+direita, e a fase parada não congela o ecrã (avança ao ritmo do LFO). No filtro,
+o slope 12/24 dB desceu para a fila de baixo como dois botões de texto clicáveis,
+um ou outro, com o activo aceso.
+
+## Filtro e analisador
+
+A vista do filtro mostra a resposta dos dois biquads e, por trás dela, o espectro
+do material em tempo real. O analisador usa uma FFT de 512 amostras com janela de
+Hann e agrupa o resultado em 64 bandas logarítmicas entre 20 Hz e 20 kHz, a mesma
+escala do gráfico. A altura e o brilho da barra dizem a energia da banda; o
+contorno claro é o que dá contraste. A suavização é de ataque rápido e descida
+lenta, para as barras não tremerem a cada bloco. O ganho subiu 6 dB e o contorno
+passou a 50% de ivory, de sorte que os picos se lêem por cima da grelha.
+
+## Temas
+
+O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
+São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Claro
+(papel, grafite e azul cobalto), Âmbar (grafite com âmbar) e Ciano (grafite com
+ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
+vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
+
+A onda são dois ciclos que correm com a fase viva do áudio: desenho dim na
+amplitude cheia e curva viva na profundidade, tudo a passar da esquerda para a
+direita, e a fase parada não congela o ecrã (avança ao ritmo do LFO). No filtro,
+o slope 12/24 dB desceu para a fila de baixo como dois botões de texto clicáveis,
+um ou outro, com o activo aceso.
+
+## Filtro e analisador
+
+A vista do filtro mostra a resposta dos dois biquads e, por trás dela, o espectro
+do material em tempo real. O analisador usa uma FFT de 512 amostras com janela de
+Hann e agrupa o resultado em 64 bandas logarítmicas entre 20 Hz e 20 kHz, a mesma
+escala do gráfico. A altura e o brilho da barra dizem a energia da banda; o
+contorno claro é o que dá contraste. A suavização é de ataque rápido e descida
+lenta, para as barras não tremerem a cada bloco. O ganho subiu 6 dB e o contorno
+passou a 50% de ivory, de sorte que os picos se lêem por cima da grelha.
+
+## Temas
+
+O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
+São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Claro
+(papel, grafite e azul cobalto), Âmbar (grafite com âmbar) e Ciano (grafite com
+ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
+vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
+
+## Filtro e analisador
+
+A vista do filtro mostra a resposta dos dois biquads e, por trás dela, o espectro
+do material em tempo real. O analisador usa uma FFT de 512 amostras com janela de
+Hann e agrupa o resultado em 64 bandas logarítmicas entre 20 Hz e 20 kHz, a mesma
+escala do gráfico. A altura e o brilho da barra dizem a energia da banda; o
+contorno claro é o que dá contraste. A suavização é de ataque rápido e descida
+lenta, para as barras não tremerem a cada bloco. O ganho subiu 6 dB e o contorno
+passou a 50% de ivory, de sorte que os picos se lêem por cima da grelha.
+
+## Temas
+
+O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
+São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Claro
+(papel, grafite e azul cobalto), Âmbar (grafite com âmbar) e Ciano (grafite com
+ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
+vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
 
 ## Fora da caixa
 
