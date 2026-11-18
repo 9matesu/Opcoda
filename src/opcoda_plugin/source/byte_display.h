@@ -253,6 +253,8 @@ private:
 
     Eased readHeadFraction_;
     Eased playheadFraction_;
+    // fase do convite (ecra vazio): o texto respira em fade in/out.
+    float pulsePhase_ {0.0f};
     Eased modeFade_;
 
     // mira 2D: y suave, segue o parametro ligado.

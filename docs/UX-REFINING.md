@@ -70,6 +70,18 @@ exacto que está debaixo do cursor e salta o transporte para a mesma fracção d
 região — a agulha vermelha e o seu traço horizontal usam essa mesma projecção, e
 o primeiro byte da região fica acessível, com a agulha em cima dele.
 
+A precisão é de byte, não de pixe: o endereço sai de `floor(screen × bytes da
+vista)`, e não de um arredondamento ao mais próximo. Sem isso, clicar num byte
+caía no byte seguinte. O mesmo vale para o arrasto: a agulha segue o cursor byte a
+byte.
+
+O ecrã vazio deixou de ter a marca da Opcoda no centro: ficam os quatro cantos da
+moldura e o texto `No source`, que respira num fade in/out lento. Um clique em
+qualquer ponto desse ecrã abre o selector de ficheiro.
+
+Na vista HEX, mover a posição arrasta a grelha: se o byte ficar fora da página,
+a vista rola para cima ou para baixo e o endereço fica à vista.
+
 O rodapé tem a legenda da entropia à esquerda — um filete de 132 px que vai do
 cinza ao branco, com 0 e 8 bits nas pontas —, o transporte ao centro e P.RAND e
 Scan à direita dos ícones. Os botões de Play e Hold são ícones de 24 px, do mesmo
@@ -81,7 +93,9 @@ está a tocar.
 O Play e o Hold são dois botões de 32×28 px centrados no conteúdo, com o glifo a
 24 px. P.RAND e Scan ficam imediatamente à direita do par, e a paginação do hex
 fecha o canto direito quando a vista é HEX. A legenda de entropia, à esquerda,
-diz a escala da metade de baixo da onda.
+diz a escala da metade de baixo da onda. O Hold é um cadeado — argola em
+meia-lua sobre o corpo —, não um risco: a 24 px, a argola tem de fechar em cima
+do corpo, senão lê-se como um alvo.
 
 ## Proporção
 
@@ -137,9 +151,11 @@ No módulo LFO, o sync manda nos parâmetros: em Free ficam o Rate em Hz, em Syn
 esse knob dá lugar ao DIV — o detent ocupa a célula do Rate e o Rate desaparece,
 sem parâmetros mortos à vista. O botão Sync é um booleano, e o texto dele diz o
 estado (Free ou Sync) em vez de ficar em branco: sem os nomes, o botão existia e
-não se via. O grid tem três colunas sem células fundidas:
-Rate, Depth e Steps em cima; Target, Wave e Sync em baixo — os cinco ícones de
-forma colados num só compartimento de 150 px, longe das hairlines. Cada forma
+não se via. O grid tem quatro colunas sem células fundidas: Rate (ou DIV), Sync,
+Depth e Steps em cima; Target e Wave em baixo, cada um com duas colunas. O Sync
+fica ao lado do slider do DIV, que é a chave que manda nele — e o slider, que
+antes usava `SliderParameterAttachment` e ficava preso no primeiro detent, agora
+tem a gama 0..N-1 e escreve o parâmetro pela conversão certa. Cada forma
 acende com um banho claro e um filete quando está seleccionada, o mesmo
 tratamento dos interruptores do filtro. A onda são
 dois ciclos que correm com a fase viva do áudio: desenho dim na amplitude cheia

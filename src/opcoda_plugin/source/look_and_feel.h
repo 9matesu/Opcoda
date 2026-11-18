@@ -962,17 +962,18 @@ public:
         const auto c = bounds.getCentre();
         const auto ox = c.x - side * 0.5f;
         const auto oy = c.y - side * 0.5f;
-        const auto thickness = juce::jmax(1.15f, 1.5f * u);
+        const auto thickness = juce::jmax(1.2f, 1.6f * u);
 
         juce::Path glyph;
-        glyph.startNewSubPath(ox + 7.0f * u, oy + 11.0f * u);
-        glyph.lineTo(ox + 7.0f * u, oy + 8.5f * u);
-        glyph.addCentredArc(ox + 12.0f * u, oy + 8.5f * u, 5.0f * u, 5.0f * u, 0.0f,
+        // argola: meia-lua acima do corpo, de 180 a 360 graus. Antes era um
+        // circulo inteiro, que se sobrepunha ao corpo e distorcia a leitura.
+        glyph.startNewSubPath(ox + 7.5f * u, oy + 11.5f * u);
+        glyph.addCentredArc(ox + 12.0f * u, oy + 11.5f * u, 4.5f * u, 4.5f * u,
                             juce::MathConstants<float>::pi,
                             juce::MathConstants<float>::twoPi, false);
-        glyph.lineTo(ox + 17.0f * u, oy + 11.0f * u);
-        glyph.addRoundedRectangle(ox + 5.5f * u, oy + 11.0f * u, 13.0f * u, 8.5f * u,
-                                  1.6f * u);
+        // corpo: caixa arredondada encostada a' argola.
+        glyph.addRoundedRectangle(ox + 5.0f * u, oy + 11.0f * u, 14.0f * u, 9.0f * u,
+                                  1.8f * u);
 
         g.setColour(ink);
         g.strokePath(glyph, juce::PathStrokeType {thickness, juce::PathStrokeType::curved,

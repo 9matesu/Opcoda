@@ -135,9 +135,9 @@ medidor vertical de 24 px na coluna da direita.
 Margens: `kMargin 16`, `kPanelPaddingX/Y 16`, `kGap 16`. A grelha enche a largura,
 sem teto de célula, e o disco tem teto de 64 px. As células separam-se por filetes
 de 1 px (`palette::hair`), recuados 8 px nas pontas. A janela do grão são quatro
-linhas empilhadas na mesma célula, sem vão; o LFO comprimiu o gráfico para 230 px e
-alinhou os quatro alvos numa só linha; o intervalo entre o gráfico e os controlos
-é de 16 px.
+linhas empilhadas na mesma célula, sem vão; o LFO tem quatro colunas (Rate/DIV,
+Sync, Depth, Steps) com Target e Wave a ocupar duas cada; o intervalo entre o
+gráfico e os controlos é de 16 px.
 
 ### 4. Teclado — 80 px
 

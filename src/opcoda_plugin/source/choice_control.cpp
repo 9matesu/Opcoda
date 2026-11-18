@@ -63,9 +63,25 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
         value_.setSliderStyle(juce::Slider::LinearHorizontal);
         value_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         value_.getProperties().set("uiLook", "detent");
+        value_.setDoubleClickReturnValue(true, 0.0);
         addAndMakeVisible(value_);
-    }
-    if (parameter != nullptr) {
+
+        // O detent NAO usa SliderParameterAttachment: ele chama
+        // setNormalisableRange() com a gama 0..1 do parametro de escolha e
+        // repoe a gama do slider, que passa a valer 0 ou 1 -- era por isso que
+        // o DIV nunca saia do primeiro detent. Aqui o slider fica na gama
+        // 0..N-1 e e' o codigo que converte para 0..1 ao escrever.
+        if (parameter != nullptr && count > 0) {
+            // getValue() numa escolha devolve 0..1; a gama do slider e' 0..N-1.
+            value_.setValue(parameter->convertFrom0to1(parameter->getValue()),
+                            juce::dontSendNotification);
+            value_.onValueChange = [this, parameter] {
+                parameter->setValueNotifyingHost(
+                    parameter->convertTo0to1(static_cast<float>(value_.getValue())));
+                syncFromValue();
+            };
+        }
+    } else if (parameter != nullptr) {
         attachment_ = std::make_unique<juce::SliderParameterAttachment>(*parameter, value_);
     }
     value_.addListener(this);

@@ -846,20 +846,24 @@ void PluginEditor::buildParameterPanel() {
 
     {
         ModuleGrid grid;
-        grid.columns = 3;
+        grid.columns = 4;
         grid.maxCellWidth = 150;
+        // o sync fica ao lado do knob de ritmo (e do DIV, quando o sync esta
+        // ligado): e' a chave que manda no resto da linha.
         grid.rows.push_back(rowOf({
             {modRateKnob_ = addKnob(kModRow1Specs[0]), nullptr, 1},
+            {nullptr,
+             addChoice("lfosync", "Sync", "LFO follows the host tempo",
+                       ChoiceControl::Mode::toggle, 1, kLfoSyncItems),
+             1},
             {addKnob(kModRow1Specs[1]), nullptr, 1},
             {addKnob(kModRow1Specs[2]), nullptr, 1},
         }));
         grid.rows.push_back(rowOf({
             {nullptr, addChoice("lfotarget", "Target", "LFO target parameter",
-                                 ChoiceControl::Mode::text, 4, kLfoTargetItems), 1},
+                                 ChoiceControl::Mode::text, 4, kLfoTargetItems), 2},
             {nullptr, addChoice("lfowave", "Wave", "LFO waveform",
-                                 ChoiceControl::Mode::icons, 5, kLfoWaveItems), 1},
-            {nullptr, addChoice("lfosync", "Sync", "LFO follows the host tempo",
-                                 ChoiceControl::Mode::toggle, 1, kLfoSyncItems), 1},
+                                 ChoiceControl::Mode::icons, 5, kLfoWaveItems), 2},
         }));
         moduleGrids_[static_cast<std::size_t>(ParamModule::mod)] = std::move(grid);
 

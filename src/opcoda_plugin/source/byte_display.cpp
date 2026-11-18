@@ -233,6 +233,12 @@ void ByteDisplay::tickAnimation(float deltaSeconds) {
     if (std::abs(after - before) > 1.0e-4f) {
         repaint();
     }
+
+    // ecra vazio: o convite respira, e a cada quadro e' preciso repintar.
+    if (bytes_ == nullptr || bytes_->empty() || regionEnd_ <= regionStart_) {
+        pulsePhase_ = std::fmod(pulsePhase_ + deltaSeconds * 0.35f, 1.0f);
+        repaint();
+    }
 }
 
 void ByteDisplay::setGrains(
@@ -452,10 +458,13 @@ void ByteDisplay::setReadHead(std::uint64_t address) {
     readHead_ = address;
     hex_.setReadHead(address);
 
-    if (mode_ == ViewMode::hex && !hexHeadScrolled_ && bytes_ != nullptr &&
-        regionEnd_ > regionStart_) {
-        hex_.scrollToAddress(address);
-        hexHeadScrolled_ = true;
+    // na vista hex, a cabeca de leitura arrasta a grelha: se o byte estiver
+    // fora da pagina visivel, a vista rola para cima ou para baixo.
+    if (mode_ == ViewMode::hex && bytes_ != nullptr && regionEnd_ > regionStart_) {
+        if (!hexHeadScrolled_ || !hex_.isAddressVisible(address)) {
+            hex_.scrollToAddress(address);
+            hexHeadScrolled_ = true;
+        }
     }
 
     if (!caretMoved_) {
@@ -606,10 +615,7 @@ void ByteDisplay::paint(juce::Graphics& g) {
         const auto area = getLocalBounds().toFloat().reduced(22.0f);
         const auto centreY = area.getCentreY();
 
-        g.setColour(palette::alpha(palette::textOnDarkSub, 0.22f));
-        g.drawHorizontalLine(juce::roundToInt(centreY), area.getX() + 28.0f,
-                             area.getRight() - 28.0f);
-
+        // moldura de deposito: quatro cantos, sem logo nem linha.
         constexpr float kCorner {18.0f};
         const auto frame = area.reduced(34.0f, 28.0f);
         g.setColour(palette::alpha(palette::accent, 0.35f));
@@ -624,20 +630,21 @@ void ByteDisplay::paint(juce::Graphics& g) {
             g.drawLine(corner.x, corner.y, corner.x, corner.y + dy, 1.0f);
         }
 
-        OpcodaLookAndFeel::paintMark(
-            g, juce::Rectangle<float> {area.getCentreX() - 11.0f, centreY - 44.0f,
-                                       22.0f, 22.0f});
+        // o texto respira: fade in/out lento, como um convite.
+        const auto pulse = 0.5f + 0.5f * std::sin(pulsePhase_ * juce::MathConstants<float>::twoPi);
+        const auto textAlpha = 0.40f + 0.60f * pulse;
 
         g.setFont(type::displayFont());
-        g.setColour(palette::textOnDark);
-        g.drawText("No source", area.withTrimmedTop(area.getHeight() * 0.36f),
-                   juce::Justification::centredTop, false);
+        g.setColour(palette::alpha(palette::textOnDark, textAlpha));
+        g.drawText("No source",
+                   juce::Rectangle<float> {area.getX(), centreY - 22.0f, area.getWidth(), 22.0f},
+                   juce::Justification::centred, false);
 
         g.setFont(fonts().sans(9.5f));
-        g.setColour(palette::textOnDarkSub);
+        g.setColour(palette::alpha(palette::textOnDarkSub, textAlpha));
         g.drawText("DROP .EXE / .DLL / .BIN  OR  PRESS L",
-                   area.withTrimmedTop(area.getHeight() * 0.36f + 20.0f),
-                   juce::Justification::centredTop, false);
+                   juce::Rectangle<float> {area.getX(), centreY + 2.0f, area.getWidth(), 14.0f},
+                   juce::Justification::centred, false);
         return;
     }
 
@@ -1284,14 +1291,19 @@ std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
         return none;
     }
 
-    const auto region = regionFractionAt(position.x, area.getX(), area.getWidth());
-    if (region < 0.0f || region > 1.0f) {
+    // byte exacto debaixo do cursor: a vista toda mapeia linearmente no eixo,
+    // e o chao (floor) e' o que impede a agulha de saltar para o byte seguinte.
+    const auto [viewStart, viewEnd] = viewByteRange();
+    const auto viewBytes = static_cast<double>(viewEnd - viewStart);
+    if (viewBytes <= 0.0) {
         return none;
     }
-
-    const auto address = pe::byteForPosition(static_cast<double>(region),
-                                             pe::ByteRange {regionStart_, regionEnd_});
-    return std::min(address, regionEnd_ - 1);
+    const auto screen = (static_cast<double>(position.x) - area.getX()) / area.getWidth();
+    if (screen < 0.0 || screen > 1.0) {
+        return none;
+    }
+    const auto offset = static_cast<std::uint64_t>(std::floor(screen * viewBytes));
+    return std::min(viewStart + offset, viewEnd - 1);
 }
 
 juce::Rectangle<float> ByteDisplay::plotBounds() const noexcept {
@@ -1330,17 +1342,22 @@ void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
         const auto ruler = full.removeFromTop(kRulerHeight);
         if (ruler.contains(event.position)) {
             const auto [viewStart, viewEnd] = viewByteRange();
-            const auto span = static_cast<double>(viewEnd - viewStart);
-            const auto fraction =
-                regionFractionAt(event.position.x, ruler.getX(), ruler.getWidth());
-            if (fraction >= 0.0f && fraction <= 1.0f && span > 0.0) {
-                const auto address =
-                    viewStart + static_cast<std::uint64_t>(fraction * span);
+            const auto viewBytes = static_cast<double>(viewEnd - viewStart);
+            const auto screen = juce::jlimit(
+                0.0, 1.0, (static_cast<double>(event.position.x) - ruler.getX()) /
+                             ruler.getWidth());
+            if (viewBytes > 0.0) {
+                const auto offset =
+                    static_cast<std::uint64_t>(std::floor(screen * viewBytes));
+                const auto address = std::min(viewStart + offset, viewEnd - 1);
                 if (onAddressPinned != nullptr) {
-                    onAddressPinned(std::min(address, viewEnd - 1));
+                    onAddressPinned(address);
                 }
-                if (onTransportSeek != nullptr) {
-                    onTransportSeek(juce::jlimit(0.0f, 1.0f, fraction));
+                if (onTransportSeek != nullptr && regionEnd_ > regionStart_) {
+                    const auto region =
+                        static_cast<double>(address - regionStart_) /
+                        static_cast<double>(regionEnd_ - regionStart_);
+                    onTransportSeek(juce::jlimit(0.0f, 1.0f, static_cast<float>(region)));
                 }
             }
             return;
@@ -1430,11 +1447,10 @@ void ByteDisplay::dragTo(juce::Point<float> position) {
     const auto yFrac = juce::jlimit(0.0f, 1.0f,
                                     (area.getBottom() - position.y) / area.getHeight());
 
-    // x: rola a cabeca de leitura para a posicao pedida.
+    // x: rola a cabeca de leitura para o byte exacto debaixo do cursor.
     if (onAddressActivated != nullptr && regionEnd_ > regionStart_) {
-        const auto address = pe::byteForPosition(static_cast<double>(xFrac),
-                                                 pe::ByteRange {regionStart_, regionEnd_});
-        if (address < regionEnd_) {
+        const auto address = addressAt(position);
+        if (address != std::numeric_limits<std::uint64_t>::max()) {
             caretMoved_ = false;
             onAddressActivated(address);
         }
