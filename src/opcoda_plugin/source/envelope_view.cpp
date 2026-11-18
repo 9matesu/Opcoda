@@ -23,8 +23,8 @@ juce::String formatSeconds(float seconds) {
 
 EnvelopeView::EnvelopeView(juce::AudioProcessorValueTreeState& state) : state_(state) {
     setName("Envelope");
-    setHelpText("Arraste as pegas para moldar ataque, decay, sustain e release. "
-                "As pegas de curva dobram cada segmento.");
+    setHelpText("Drag the handles to shape attack, decay, sustain and release. "
+                "The curve handles bend each segment.");
     setWantsKeyboardFocus(false);
 
     for (const char* id : {"attack", "decay", "sustain", "release", "atkcurve", "deccurve",

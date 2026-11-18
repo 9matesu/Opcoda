@@ -99,7 +99,7 @@ public:
 
         g.setFont(fontFit);
         g.setColour(name_.isEmpty() ? palette::textMuted : palette::textDark);
-        g.drawText(name_.isEmpty() ? juce::String {"Sem binario"} : name_, nameArea,
+        g.drawText(name_.isEmpty() ? juce::String {"No binary"} : name_, nameArea,
                    juce::Justification::centredLeft, true);
 
         OpcodaLookAndFeel::paintGlyph(
@@ -139,7 +139,7 @@ public:
     }
 
 private:
-    juce::String name_ {"Sem binario"};
+    juce::String name_ {"No binary"};
     juce::String size_;
     juce::String format_;
     PressHover hover_;

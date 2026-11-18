@@ -54,8 +54,8 @@ float biquadDb(const dsp::BiquadCoeffs& c, float hz, double sampleRate) {
 
 FilterView::FilterView(juce::AudioProcessorValueTreeState& state) : state_(state) {
     setName("Filter response");
-    setHelpText("Arraste as pegas para mudar o corte (horizontal) e o Q (vertical) "
-                "de cada filtro.");
+    setHelpText("Drag the handles to change the cutoff (horizontal) and the Q "
+                "(vertical) of each filter.");
     setWantsKeyboardFocus(false);
 
     for (const char* id : {"f1type", "f1cutoff", "f1q", "f1slope", "f1drive", "f1keytrack",

@@ -12,8 +12,8 @@ constexpr int kCycles {2};
 
 LfoView::LfoView(juce::AudioProcessorValueTreeState& state) : state_(state) {
     setName("Modulation");
-    setHelpText("A forma do LFO, a profundidade e o ponto vivo do audio. Os "
-                "knobs ao lado escolhem onda, ritmo, alvo e profundidade.");
+    setHelpText("The LFO shape, the depth and the live point of the audio. The "
+                "knobs beside it choose wave, rate, target and depth.");
     setWantsKeyboardFocus(false);
 
     for (const char* id : {"lfowave", "lfotarget", "lfodepth", "lfosteps", "lforate",
