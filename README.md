@@ -10,11 +10,11 @@
 > [releases page](https://github.com/9matesu/Opcoda/releases).** The VST3 and the
 > standalone app ship together, and no build step is required.
 
-Opcoda is a VST3 instrument and a standalone application for Windows x64. It opens a
-Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), reads its structure, turns the
-bytes into samples and plays them through an eight-voice granular engine. The
-instrument is monochrome by design, runs a 61-parameter granular engine and keeps the
-whole signal chain allocation-free on the audio path.
+Opcoda is a VST3 instrument and a standalone app for Windows x64. It reads a
+Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes into samples
+and plays them through an eight-voice granular engine. The instrument is
+monochrome, runs a 61-parameter engine and keeps the audio path free of
+allocations.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
@@ -27,8 +27,8 @@ whole signal chain allocation-free on the audio path.
 - **Four views of the material**: waveform, byte grid with ASM disassembly, entropy
   curve and modulation matrix. The ASM column disassembles 64-bit code with a
   built-in decoder, no external library.
-- **Real-time safe by construction**: no allocation, no lock, no I/O on the audio
-  path; UI-to-DSP communication goes through atomics and a single-producer queue.
+- **Real-time safe**: no allocation, no lock, no I/O on the audio path; UI-to-DSP
+  communication goes through atomics and a single-producer queue.
 - **Five themes**: Graphite, Classic, Light, Amber and Cyan. The screen stays black
   in all of them, so the waveform always reads.
 - **Factory presets** and `.opcoda` files to save and load state.
@@ -55,33 +55,6 @@ C++ runtime when it is missing.
 | `HEX` | `ENTROPY` |
 | --- | --- |
 | ![Byte grid with ASM](docs/assets/screenshots/opcoda-hex.png) | ![Entropy curve](docs/assets/screenshots/opcoda-entropy.png) |
-
-## The instrument
-
-Every file has a shape. A Windows executable is not just code: it is a header,
-sections, resources and data, each with its own statistical signature. Opcoda treats
-that signature as sound material. The grain size, density, position and spray shape
-the texture; the filters, envelope and LFO shape the tone; the modulation matrix
-routes movement between them.
-
-The sound is not a sample. It is the material itself.
-
-## Design system
-
-The interface is one chassis on an 8 px grid: 16 px margins, 6 px panel radius and
-1 px hairlines. The screen is black glass, the panels are charcoal, the active state
-is ivory. Type is Switzer (Medium for labels, Semibold for values) with tabular
-figures, so addresses and readouts align. See [design/DESIGN-SYSTEM.md](design/DESIGN-SYSTEM.md).
-
-| Graphite | Classic | Light |
-| --- | --- | --- |
-| black and white | cream and burnt orange | paper and cobalt |
-| `#0A0A0A` | `#D6C9AE` | `#F7F4EE` |
-
-| Amber | Cyan |
-| --- | --- |
-| graphite and amber | graphite and cyan |
-| `#FFA726` | `#35D0E0` |
 
 ## Build
 
