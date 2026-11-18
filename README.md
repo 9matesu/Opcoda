@@ -5,88 +5,93 @@
 <h1 align="center">Opcoda</h1>
 
 <p align="center">
-  <strong>Sintetizador granular que lê executáveis como matéria-prima sonora.</strong><br>
-  VST3 e standalone para Windows x64 &middot; versão 0.1.0
+  <strong>Granular synthesizer that reads executables as sound material.</strong><br>
+  VST3 and standalone for Windows x64 &middot; version 0.1.0
 </p>
 
-![Interface do Opcoda com um binário carregado](docs/assets/screenshots/opcoda-ui.png)
+![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
-## O instrumento
+## The instrument
 
-O Opcoda lê a estrutura de um arquivo PE (`.exe`, `.dll`, `.bin`, `.sys`), converte
-os bytes em amostras e os reproduz com um motor granular de oito vozes. O grão vai
-de 1 ms a 2 s. Cada região do arquivo tem uma assinatura estatística própria, e o
-instrumento expõe essa leitura em quatro vistas: forma de onda, grade de bytes com
-desmontagem, curva de entropia e matriz de modulação.
+Opcoda reads the structure of a PE file (`.exe`, `.dll`, `.bin`, `.sys`), turns its
+bytes into samples and plays them through an eight-voice granular engine. The grain
+runs from 1 ms to 2 s. Each region of the file has its own statistical signature,
+and the instrument exposes that reading in four views: waveform, byte grid with
+disassembly, entropy curve and modulation matrix.
 
-O som não vem de um sample. Vem do material: o cabeçalho, o código, os dados. É um
-instrumento de textura, ruído e ritmo, e não um reprodutor de arquivos.
+The sound does not come from a sample. It comes from the material: the header, the
+code, the data. Opcoda is an instrument for texture, noise and rhythm, not a file
+player.
 
-## O que está incluído
+## Included
 
-- Motor granular de oito vozes, com janelas Hann, Gauss, Hamming e Blackman.
-- 61 parâmetros automatizáveis, do tamanho do grão ao LFO e à matriz de modulação.
-- Dois filtros biquad em série, envelope ADSR com curvas e oito rotas de modulação.
-- Quatro vistas do material, incluindo a coluna ASM que desmonta código 64 bits.
-- Transporte sem MIDI, teclado virtual e controle por MIDI.
-- Presets de fábrica e arquivos `.opcoda` para guardar o estado.
-- Cinco temas: Grafite, Clássico, Claro, Âmbar e Ciano.
+- Eight-voice granular engine with Hann, Gaussian, Hamming and Blackman windows.
+- 61 automatable parameters, from grain size to the LFO and the modulation matrix.
+- Two serial biquad filters, an ADSR envelope with curves and eight modulation
+  routes.
+- Four views of the material, including an ASM column that disassembles 64-bit
+  code.
+- Transport without MIDI, virtual keyboard and MIDI control.
+- Factory presets and `.opcoda` files to save and load state.
+- Five themes: Graphite, Classic, Light, Amber and Cyan.
 
-## A interface
+## Interface
 
-| `ENV`: ADSR desenhado, com o ponto vivo | `FILTER`: resposta dos dois biquads |
+| `ENV`: ADSR drawn, with the live point | `FILTER`: response of both biquads |
 | --- | --- |
-| ![Envelope com o ponto vivo no patamar do sustain](docs/assets/screenshots/opcoda-env.png) | ![Resposta dos filtros com as pegas de corte e Q](docs/assets/screenshots/opcoda-filter.png) |
+| ![Envelope with the live point on the sustain stage](docs/assets/screenshots/opcoda-env.png) | ![Filter response with the cutoff and Q handles](docs/assets/screenshots/opcoda-filter.png) |
 
-| `HEX`: bytes, ASCII e ASM | `ENTROPY` com zoom |
+| `HEX`: bytes, ASCII and ASM | `ENTROPY` with zoom |
 | --- | --- |
-| ![Grade de bytes com a coluna ASM a desmontar o código](docs/assets/screenshots/opcoda-hex.png) | ![Curva de entropia com zoom, em janelas de 256 bytes](docs/assets/screenshots/opcoda-entropy.png) |
+| ![Byte grid with the ASM column disassembling code](docs/assets/screenshots/opcoda-hex.png) | ![Entropy curve with zoom, in 256-byte windows](docs/assets/screenshots/opcoda-entropy.png) |
 
-O ecrã é uma chapa escura com um rail de navegação à esquerda. O painel de
-parâmetros fica por baixo, com a coluna master à direita e o teclado no pé. Tudo
-assenta numa grelha de 8 px: margens de 16, painéis de 6 px de raio e filetes de
-1 px. Os detalhes estão em `design/DESIGN-SYSTEM.md`.
+The screen is a black glass panel with a navigation rail on the left. The parameter
+panel sits below, with the master column on the right and the keyboard at the
+bottom. Everything is on an 8 px grid: 16 px margins, 6 px panel radius and 1 px
+hairlines. The details are in `design/DESIGN-SYSTEM.md`.
 
-## Temas
+## Themes
 
-O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
+The theme changes the whole instrument, from the chassis to the last label, and is
+saved.
 
-| Grafite | Clássico | Claro |
+| Graphite | Classic | Light |
 | --- | --- | --- |
-| preto e branco, sem cor | creme, carvão e laranja queimado | papel, grafite e azul cobalto |
+| black and white, no colour | cream, charcoal and burnt orange | paper, graphite and cobalt blue |
 | `#0A0A0A` | `#D6C9AE` | `#F7F4EE` |
 
-| Âmbar | Ciano |
+| Amber | Cyan |
 | --- | --- |
-| grafite com âmbar | grafite com ciano |
+| graphite with amber | graphite with cyan |
 | `#FFA726` | `#35D0E0` |
 
-O desenho é monocromático em todos eles. A cor fica no acento, não no fundo.
+The screen stays black in all of them: that is where the waveform is drawn in
+white. Colour lives in the accent, not in the background.
 
-## Requisitos
+## Requirements
 
-- Windows 10 ou 11, 64 bits.
-- 4 GB de RAM.
-- Host VST3 opcional (Ableton Live, Reaper, FL Studio).
-- O standalone funciona sozinho, sem host.
+- Windows 10 or 11, 64-bit.
+- 4 GB of RAM.
+- VST3 host optional (Ableton Live, Reaper, FL Studio).
+- The standalone works on its own, without a host.
 
-## Instalação
+## Installation
 
-1. Baixe o instalador `Opcoda-Setup-0.1.0.exe` na pasta `installer/Output`.
-2. Execute e escolha os componentes: VST3, standalone e manual.
-3. O VST3 é instalado em `C:\Program Files\Common Files\VST3`.
+1. Download `Opcoda-Setup-0.1.0.exe` from `installer/Output`.
+2. Run it and choose the components: VST3, standalone and manual.
+3. The VST3 is installed in `C:\Program Files\Common Files\VST3`.
 
-O instalador oferece o runtime do Visual C++ quando ele falta na máquina. A
-instalação é por máquina e pede elevação.
+The installer offers the Microsoft Visual C++ runtime when it is missing. The
+install is per machine and asks for elevation.
 
-## Licença
+## License
 
-O uso é pessoal, intransferível e não exclusivo. Você pode usar o instrumento em
-produções próprias e publicar o áudio resultante sem pagar royalties. Não é
-permitido redistribuir, sublicenciar ou engenharia reversa do software. O texto
-completo está em `installer/LICENSE.txt`.
+Use is personal, non-transferable and non-exclusive. You may use the instrument in
+your own productions and publish the resulting audio without royalties. You may not
+redistribute, sublicense or reverse engineer the software. The full text is in
+`installer/LICENSE.txt`.
 
-## Créditos
+## Credits
 
-Referências de síntese granular: Granulator II (Robert Henke) e Quanta 2.
-Sistema de design e interface: `design/DESIGN-SYSTEM.md`.
+Granular synthesis references: Granulator II (Robert Henke) and Quanta 2.
+Design system and interface: `design/DESIGN-SYSTEM.md`.
