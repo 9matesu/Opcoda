@@ -179,48 +179,6 @@ São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Clar
 ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
 vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
 
-A onda são dois ciclos que correm com a fase viva do áudio: desenho dim na
-amplitude cheia e curva viva na profundidade, tudo a passar da esquerda para a
-direita, e a fase parada não congela o ecrã (avança ao ritmo do LFO). No filtro,
-o slope 12/24 dB desceu para a fila de baixo como dois botões de texto clicáveis,
-um ou outro, com o activo aceso.
-
-## Filtro e analisador
-
-A vista do filtro mostra a resposta dos dois biquads e, por trás dela, o espectro
-do material em tempo real. O analisador usa uma FFT de 512 amostras com janela de
-Hann e agrupa o resultado em 64 bandas logarítmicas entre 20 Hz e 20 kHz, a mesma
-escala do gráfico. A altura e o brilho da barra dizem a energia da banda; o
-contorno claro é o que dá contraste. A suavização é de ataque rápido e descida
-lenta, para as barras não tremerem a cada bloco. O ganho subiu 6 dB e o contorno
-passou a 50% de ivory, de sorte que os picos se lêem por cima da grelha.
-
-## Temas
-
-O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
-São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Claro
-(papel, grafite e azul cobalto), Âmbar (grafite com âmbar) e Ciano (grafite com
-ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
-vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
-
-## Filtro e analisador
-
-A vista do filtro mostra a resposta dos dois biquads e, por trás dela, o espectro
-do material em tempo real. O analisador usa uma FFT de 512 amostras com janela de
-Hann e agrupa o resultado em 64 bandas logarítmicas entre 20 Hz e 20 kHz, a mesma
-escala do gráfico. A altura e o brilho da barra dizem a energia da banda; o
-contorno claro é o que dá contraste. A suavização é de ataque rápido e descida
-lenta, para as barras não tremerem a cada bloco. O ganho subiu 6 dB e o contorno
-passou a 50% de ivory, de sorte que os picos se lêem por cima da grelha.
-
-## Temas
-
-O tema muda o instrumento inteiro, do chassis ao último rótulo, e fica guardado.
-São cinco: Grafite (preto e branco), Clássico (creme e laranja queimado), Claro
-(papel, grafite e azul cobalto), Âmbar (grafite com âmbar) e Ciano (grafite com
-ciano). Em todos, o ecrã continua preto: é onde a onda é desenhada a branco, e um
-vidro claro apagá-la-ia. A cor vive no acento, não no fundo.
-
 ## Fora da caixa
 
 O teclado MIDI deixou de ser uma gaveta pendurada no exterior e passou a ser um
