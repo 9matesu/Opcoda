@@ -7,7 +7,7 @@
 namespace opcoda {
 
 // Ponto de actividade MIDI: acende quando entra um evento, apaga sozinho.
-// Sem glow: disco chapado, so muda o preenchimento.
+// Disco chapado em branco: a actividade MIDI e' sinal, nao estado.
 class MidiLed : public juce::Component {
 public:
     MidiLed() {
@@ -33,15 +33,14 @@ public:
         g.setColour(palette::alpha(palette::ivory, 0.28f));
         g.drawEllipse(dot, 1.0f);
 
-        // preenchimento aceso
+        // preenchimento aceso: branco cheio.
         if (lit_ > 0.01f) {
-            g.setColour(palette::alpha(midiGreen_, lit_));
+            g.setColour(palette::alpha(palette::ivory, lit_));
             g.fillEllipse(dot.reduced(1.0f));
         }
     }
 
 private:
-    juce::Colour midiGreen_ {0xff3ce86a};
     float lit_ {0.0f};
 };
 

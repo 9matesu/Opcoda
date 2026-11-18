@@ -182,6 +182,12 @@ public:
     void tickAnimation(float deltaSeconds);
 
     std::function<void(std::uint64_t address)> onAddressActivated;
+    // clique na regua de enderecos: leva a cabeca de leitura e o transporte ao
+    // byte escolhido, cada um na sua unidade.
+    std::function<void(std::uint64_t address)> onAddressPinned;
+    std::function<void(float regionFraction)> onTransportSeek;
+    // clique no ecra vazio: abre o selector de ficheiro.
+    std::function<void()> onEmptyClick;
     // intervalo seleccionado na grelha de bytes (end exclusivo).
     std::function<void(std::uint64_t start, std::uint64_t end)> onRegionSelected;
     std::function<void()> onSnapRequested;

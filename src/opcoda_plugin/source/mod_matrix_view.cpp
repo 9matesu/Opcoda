@@ -41,8 +41,8 @@ int indexOf(dsp::ModDest dest) {
 
 ModMatrixView::ModMatrixView() {
     setName("Modulation matrix");
-    setHelpText("Matriz de modulacao: cinco fontes em colunas, o destino em linhas. "
-                "Cada celula e' o amount da rota, editavel por arrasto.");
+    setHelpText("Modulation matrix: five sources in columns, destinations in rows. "
+                "Each cell is the amount of the route, editable by dragging.");
     setWantsKeyboardFocus(true);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 }
@@ -270,7 +270,7 @@ void ModMatrixView::paint(juce::Graphics& g) {
     if (rows_.empty()) {
         g.setFont(type::bodyFont());
         g.setColour(palette::textOnDarkSub);
-        g.drawText("Selecione um parâmetro para abrir a matriz",
+        g.drawText("Select a parameter to open the matrix",
                    area.withTrimmedTop(kHeaderHeight), juce::Justification::centred, false);
         return;
     }

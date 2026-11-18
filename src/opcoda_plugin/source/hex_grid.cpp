@@ -84,12 +84,12 @@ HexGrid::HexGrid() {
 
     font_ = fonts().sans(13.5f);
 
-    setName("Grelha de bytes do binario");
+    setName("Binary byte grid");
     setHelpText(
-        "Cada celula e' um byte do ficheiro, com o endereco a esquerda, o "
-        "caractere ASCII e a instrucao ASM a direita. Clique num byte, na "
-        "coluna ASCII ou na barra de rolagem para saltar. Com a roda do rato "
-        "desloca-se o ficheiro; Shift rola mais depressa.");
+        "Each cell is one byte of the file, with the address on the left, the "
+        "ASCII character and the ASM instruction on the right. Click a byte, the "
+        "ASCII column or the scroll bar to jump. The mouse wheel scrolls the "
+        "file; Shift scrolls faster.");
 }
 
 void HexGrid::setSource(const std::vector<std::uint8_t>* bytes, std::uint64_t fileSize) {
@@ -470,7 +470,7 @@ void HexGrid::paint(juce::Graphics& g) {
 
     if (fileSize_ == 0 || bytes_ == nullptr || bytes_->empty()) {
         g.setColour(palette::textOnDarkSub);
-        g.drawText("Sem binário", bounds.reduced(kPadding, 0.0f), juce::Justification::centred,
+        g.drawText("No binary", bounds.reduced(kPadding, 0.0f), juce::Justification::centred,
                    false);
         return;
     }

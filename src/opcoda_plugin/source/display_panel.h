@@ -45,12 +45,13 @@ public:
             g.setColour(palette::display);
             g.fillRect(bounds);
 
-            // rail da sidebar: um degrau acima do vidro, com o fio no fim.
+            // rail da sidebar: o mesmo preto do vidro. O que separa a coluna do
+            // resto do ecrã é o fio, não um tom mais claro.
             if (railWidth_ > 0) {
                 const auto rail = static_cast<float>(railWidth_);
-                g.setColour(palette::displayPanel);
+                g.setColour(palette::display);
                 g.fillRect(bounds.withWidth(rail));
-                g.setColour(palette::alpha(palette::ivory, 0.07f));
+                g.setColour(palette::alpha(palette::ivory, 0.14f));
                 g.fillRect(juce::Rectangle<float> {rail, bounds.getY() + 16.0f, 1.0f,
                                                    bounds.getHeight() - 32.0f});
             }

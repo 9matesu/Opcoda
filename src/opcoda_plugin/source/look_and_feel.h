@@ -325,6 +325,15 @@ public:
             return;
         }
 
+        // botao de icone ligado: banho claro atras do glifo. E' o que faz o
+        // estado activo ler-se nos botoes de forma do LFO e na lista de janelas.
+        if (look == "icon" && on) {
+            g.setColour(palette::alpha(palette::ivory, 0.12f));
+            g.fillRoundedRectangle(bounds.reduced(1.0f), 3.0f);
+            g.setColour(palette::alpha(palette::ivory, 0.30f));
+            g.drawRoundedRectangle(bounds.reduced(1.5f), 3.0f, 1.0f);
+        }
+
         if (paintGlyph(g, kind, bounds, ink, on)) {
             return;
         }

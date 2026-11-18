@@ -45,14 +45,43 @@ item activo parece pertencer à sidebar em vez de ser um botão independente.
 
 O rail do ecrã mede 96 px — 16 de padding, 72 de botão e 8 de folga — e um filete
 vertical, recuado 16 px do topo e do fundo do painel, marca o fim da coluna. O
-conteúdo do ecrã começa 8 px depois do filete, aos 104 px da borda, que é
-exactamente a coluna onde arrancam os knobs do painel. As duas metades da
+rail é do mesmo preto do vidro: a coluna separa-se pelo filete, não por um tom
+mais claro. O conteúdo do ecrã começa 8 px depois do filete, aos 104 px da borda,
+que é exactamente a coluna onde arrancam os knobs do painel. As duas metades da
 interface ficam, assim, presas ao mesmo eixo vertical.
 
 Os módulos ficam dentro da chapa do painel, não no vidro: a coluna de 72 px herda
 o material do painel, e os quatro itens de 32 px centram-se na altura interior com
 8 px de folga em cima e em baixo. O painel tem 176 px e a sidebar ocupa 128 — a
 diferença é o respiro, não um transbordo.
+
+## Leitura do ecrã
+
+A forma de onda tem duas leituras no mesmo eixo. Em cima, o envelope em branco:
+barra cheia, altura esticada entre a mais baixa e a mais alta, para a forma
+aparecer mesmo quando o binário tem amplitudes parecidas. Em baixo, a entropia:
+a altura e o brilho crescem juntos, de sorte que barra alta e clara é material
+aleatório e barra baixa e escura é material repetitivo. A leitura é directa, sem
+grelha de bits nem números por cima.
+
+A régua de endereços partilha o sistema de coordenadas das barras: o mesmo
+`pxPerByte`, a mesma origem. Um clique na régua leva a cabeça de leitura ao byte
+exacto que está debaixo do cursor e salta o transporte para a mesma fracção da
+região — a agulha vermelha e o seu traço horizontal usam essa mesma projecção, e
+o primeiro byte da região fica acessível, com a agulha em cima dele.
+
+O rodapé tem a legenda da entropia à esquerda — um filete de 132 px que vai do
+cinza ao branco, com 0 e 8 bits nas pontas —, o transporte ao centro e P.RAND e
+Scan à direita dos ícones. Os botões de Play e Hold são ícones de 24 px, do mesmo
+tamanho dos outros glifos, e acendem com o estado: o Play pinta o fundo quando
+está a tocar.
+
+## Rodapé e transporte
+
+O Play e o Hold são dois botões de 32×28 px centrados no conteúdo, com o glifo a
+24 px. P.RAND e Scan ficam imediatamente à direita do par, e a paginação do hex
+fecha o canto direito quando a vista é HEX. A legenda de entropia, à esquerda,
+diz a escala da metade de baixo da onda.
 
 ## Proporção
 
@@ -87,7 +116,10 @@ do grain continuam numa fila única de seis — Size, Density,
 Position, Spray, Pitch, Glide —, com a janela do grain na sétima célula. A curva
 do envelope ocupa a altura toda da faixa (280×144) e vive só no módulo ENV. O
 P.RAND e o Scan saíram dos knobs e são dois sliders lineares no rodapé do ecrã,
-ao lado do Play — trilho fino com leitura à direita, como no Ableton.
+ao lado do Play — trilho fino com leitura à direita, como no Ableton. A janela do
+grão deixou de ser uma fila de quatro interruptores minúsculos: são quatro linhas
+empilhadas na mesma célula, sem vão, com o glifo a encher a linha e o estado
+activo a pintar a linha toda.
 
 A grelha de knobs recebe o resto da chapa: duas filas de 72 px quando o módulo
 tem oito células, uma fila de 90 quando tem quatro. Os discos de 64 px centram-se
@@ -107,7 +139,9 @@ sem parâmetros mortos à vista. O botão Sync é um booleano, e o texto dele di
 estado (Free ou Sync) em vez de ficar em branco: sem os nomes, o botão existia e
 não se via. O grid tem três colunas sem células fundidas:
 Rate, Depth e Steps em cima; Target, Wave e Sync em baixo — os cinco ícones de
-forma colados num só compartimento de 150 px, longe das hairlines. A onda são
+forma colados num só compartimento de 150 px, longe das hairlines. Cada forma
+acende com um banho claro e um filete quando está seleccionada, o mesmo
+tratamento dos interruptores do filtro. A onda são
 dois ciclos que correm com a fase viva do áudio: desenho dim na amplitude cheia
 e curva viva na profundidade, tudo a passar da esquerda para a direita, e a
 fase parada não congela o ecrã (avança ao ritmo do LFO). No filtro, o slope
@@ -130,11 +164,19 @@ char*)` interpreta os bytes acima de 127 como Latin-1.
 
 Aberto, o cartão mede 80 px e as teclas ocupam a largura do conteúdo; fechado,
 resta uma tira de 32 px com a palavra MIDI à esquerda e o interruptor à direita.
-A janela acompanha: 764 px de design com o teclado aberto, 716 com ele fechado,
+O LED de actividade MIDI é branco e fica acima do interruptor, dentro do cartão;
+fechado, a tira não tem altura para os dois e a luz passa para o lado. A janela
+acompanha: 764 px de design com o teclado aberto, 716 com ele fechado,
 uma diferença de 48. O chassis, esse, fecha sempre em 652, e a escala do
 interface continua ancorada na altura aberta, de modo que alternar a gaveta não
 reescala o resto. Na janela standalone as luzes de X e risco ficam à direita do
 cabeçalho, com 14 px de lado, e o trio de zoom foi suprimido por completo.
+
+## Cabeçalho
+
+A engrenagem dos temas senta-se à esquerda do campo de ficheiro, colada a ele, e
+o grupo de presets fica no canto direito. O LED de entrada MIDI saiu do cabeçalho
+e foi para o teclado.
 
 ## Marca no cabeçalho
 

@@ -129,11 +129,11 @@ StandaloneWindow::StandaloneWindow(juce::String title,
     setTitleBarHeight(0);
     setResizable(false, false);
 
-    closeButton_.setName("Fechar");
-    closeButton_.setTooltip("Fechar o Opcoda");
+    closeButton_.setName("Close");
+    closeButton_.setTooltip("Close Opcoda");
     closeButton_.onClick = [this] { closeButtonPressed(); };
-    minimiseButton_.setName("Minimizar");
-    minimiseButton_.setTooltip("Minimizar");
+    minimiseButton_.setName("Minimise");
+    minimiseButton_.setTooltip("Minimise");
     minimiseButton_.onClick = [this] { minimiseButtonPressed(); };
     addAndMakeVisible(closeButton_);
     addAndMakeVisible(minimiseButton_);

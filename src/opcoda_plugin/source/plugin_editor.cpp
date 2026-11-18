@@ -46,9 +46,10 @@ constexpr int kChassisBottom {
 constexpr int kDesignHeightClosed {kChassisBottom + kGap + kKeyToggleHeight + kMargin};
 constexpr int kDesignHeightOpen {kChassisBottom + kGap + kKeyboardHeight + kMargin};
 
-constexpr int kTransportButtonWidth {52};
-constexpr int kTransportButtonHeight {22};
-constexpr int kTransportGap {tokens::space1};
+constexpr int kTransportButtonWidth {32};
+constexpr int kTransportButtonHeight {28};
+constexpr int kTransportGap {tokens::space2};
+constexpr int kLegendWidth {132};
 
 // sidebar de vistas: 16 de padding + 72 de botao + 8 de folga ate' ao fio. O
 // conteudo do ecra comeca 8 px depois do fio, na mesma coluna dos modulos.
@@ -498,6 +499,15 @@ void PluginEditor::buildHeader() {
     fileField_.onClick = [this] { chooseFile(); };
 
     grid_.onAddressActivated = [this](std::uint64_t address) { activateByte(address); };
+    // clique na regua: a cabeca de leitura trava no byte e o transporte salta
+    // para a mesma fracao da regiao.
+    grid_.onAddressPinned = [this](std::uint64_t address) { activateByte(address); };
+    grid_.onTransportSeek = [this](float fraction) {
+        owner_.seekTransportTo(fraction);
+        refresh();
+    };
+    grid_.onEmptyClick = [this] { chooseFile(); };
+    canvas_.addAndMakeVisible(entropyLegend_);
 
     // arrasto 2D da mira: x = posicao (via activateByte), y = pitch (semitons).
     grid_.onCrosshairMoved = [this](float xFraction, float yFraction) {
@@ -554,11 +564,11 @@ void PluginEditor::buildNavigation() {
     };
 
     const ViewSpec views[] = {
-        {&viewWaveButton_, "wave", "WAVE", "Forma de onda do material", "Tecla 1",
+        {&viewWaveButton_, "wave", "WAVE", "Waveform of the material", "Key 1",
          ByteDisplay::ViewMode::waveform},
-        {&viewHexButton_, "hex", "HEX", "Grelha de bytes do material", "Tecla 2",
+        {&viewHexButton_, "hex", "HEX", "Byte grid of the material", "Key 2",
          ByteDisplay::ViewMode::hex},
-        {&viewMatrixButton_, "matrix", "MATRIX", "Matriz de modulacao", "Tecla 3",
+        {&viewMatrixButton_, "matrix", "MATRIX", "Modulation matrix", "Key 3",
          ByteDisplay::ViewMode::matrix},
     };
 
@@ -596,8 +606,8 @@ void PluginEditor::buildNavigation() {
     canvas_.addChildComponent(*viewHexTab_);
     canvas_.addChildComponent(*viewMatrixTab_);
 
-    setupIcon(playButton_, "transport", "bar", "Reproduzir a regiao",
-              "Tecla de espaco");
+    setupIcon(playButton_, "transport", "icon", "Play the region",
+              "Space key");
     playButton_.setButtonText("Play");
     playButton_.setClickingTogglesState(true);
     playButton_.onClick = [this] {
@@ -608,8 +618,8 @@ void PluginEditor::buildNavigation() {
         refreshPlayButton();
     };
 
-    setupIcon(holdButton_, "hold", "bar", "Congelar a cabeca do transporte",
-              "Tecla H");
+    setupIcon(holdButton_, "hold", "icon", "Freeze the transport head",
+              "H key");
     holdButton_.setButtonText("Hold");
     holdButton_.setClickingTogglesState(true);
     holdButton_.onClick = [this] { refreshHoldButton(); };
@@ -617,19 +627,19 @@ void PluginEditor::buildNavigation() {
     canvas_.addAndMakeVisible(pitchRandSlider_);
     canvas_.addAndMakeVisible(scanSpeedSlider_);
 
-    setupIcon(pageUpButton_, "pageUp", "icon", "Pagina anterior do hex", "Page Up");
-    setupIcon(pageDownButton_, "pageDown", "icon", "Pagina seguinte do hex",
+    setupIcon(pageUpButton_, "pageUp", "icon", "Previous hex page", "Page Up");
+    setupIcon(pageDownButton_, "pageDown", "icon", "Next hex page",
               "Page Down");
-    setupIcon(homeButton_, "home", "icon", "Inicio do ficheiro", "Home");
-    setupIcon(endButton_, "end", "icon", "Fim do ficheiro", "End");
+    setupIcon(homeButton_, "home", "icon", "Start of file", "Home");
+    setupIcon(endButton_, "end", "icon", "End of file", "End");
     pageUpButton_.onClick = [this] { grid_.scrollHexPage(-1); };
     pageDownButton_.onClick = [this] { grid_.scrollHexPage(1); };
     homeButton_.onClick = [this] { grid_.scrollHexToStart(); };
     endButton_.onClick = [this] { grid_.scrollHexToEnd(); };
 
     themeButton_.setButtonText("");
-    themeButton_.setName("Temas e ajustes");
-    themeButton_.setTooltip("Temas e ajustes de audio e MIDI");
+    themeButton_.setName("Themes and settings");
+    themeButton_.setTooltip("Themes and audio/MIDI settings");
     themeButton_.getProperties().set("uiIcon", "settings");
     themeButton_.getProperties().set("uiLook", "icon");
     themeButton_.setVisible(false);
@@ -648,15 +658,15 @@ void PluginEditor::buildNavigation() {
     canvas_.addAndMakeVisible(brandButton_);
 
     keyboardToggle_.setButtonText("");
-    keyboardToggle_.setName("Esconder o teclado MIDI");
-    keyboardToggle_.setTooltip("Abrir ou fechar o teclado MIDI");
+    keyboardToggle_.setName("Hide the MIDI keyboard");
+    keyboardToggle_.setTooltip("Open or close the MIDI keyboard");
     keyboardToggle_.getProperties().set("uiIcon", "minus");
     keyboardToggle_.getProperties().set("uiLook", "icon");
     keyboardToggle_.onClick = [this] {
         keyboardOpen_ = !keyboardOpen_;
         keyboardToggle_.getProperties().set("uiIcon", keyboardOpen_ ? "minus" : "plus");
-        keyboardToggle_.setName(keyboardOpen_ ? "Esconder o teclado MIDI"
-                                              : "Mostrar o teclado MIDI");
+        keyboardToggle_.setName(keyboardOpen_ ? "Hide the MIDI keyboard"
+                                              : "Show the MIDI keyboard");
         keyboard_.setVisible(keyboardOpen_);
         resized();
         applyWindowSize();
@@ -701,8 +711,8 @@ void PluginEditor::updateStatusVisibility() {
 void PluginEditor::refreshPlayButton() {
     const bool playing = owner_.isTransportPlaying();
 
-    const auto spoken = playing ? juce::String {"Pausar a reproducao"}
-                                 : juce::String {"Reproduzir a regiao"};
+    const auto spoken = playing ? juce::String {"Pause playback"}
+                                 : juce::String {"Play the region"};
     if (playButton_.getName() != spoken) {
         playButton_.setName(spoken);
         playButton_.setTooltip(spoken);
@@ -730,8 +740,8 @@ void PluginEditor::refreshPlayButton() {
     if (holdButton_.getToggleState() != held) {
         holdButton_.setToggleState(held, juce::dontSendNotification);
     }
-    holdButton_.setName(held ? "Largar a cabeca do transporte"
-                             : "Congelar a cabeca do transporte");
+    holdButton_.setName(held ? "Release the transport head"
+                             : "Freeze the transport head");
 }
 
 void PluginEditor::refreshHoldButton() {
@@ -784,8 +794,7 @@ void PluginEditor::buildParameterPanel() {
             {addKnob(kGrainRow1Specs[5]), nullptr, 1},
             {nullptr, [this, &addChoice] {
                  auto* choice = addChoice("window", "Window", "Grain window shape",
-                                          ChoiceControl::Mode::icons, 4, kWindowItems);
-                 choice->setCompactSwitches(true);
+                                          ChoiceControl::Mode::icons, 1, kWindowItems);
                  return choice;
              }(), 1},
         }));
@@ -1248,7 +1257,7 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
         g.drawRoundedRectangle(target, 6.0f, 2.0f);
         g.setFont(fonts().sans(14.0f, true));
         g.setColour(palette::ivory);
-        g.drawText("Solte o binário", display_.getBounds(),
+        g.drawText("Drop the binary", display_.getBounds(),
                    juce::Justification::centred, false);
     }
 }
@@ -1276,11 +1285,9 @@ void PluginEditor::resized() {
 
         constexpr int kGear {22};
         constexpr int kGearGap {8};
-        constexpr int kLed {9};
 
         const int presetWidth = kArrow + kArrowGap + kName + kArrowGap + kArrow;
-        int x = header.getRight() - kMargin - chromeRightInset_ - presetWidth -
-                kGearGap - kGear;
+        int x = header.getRight() - kMargin - chromeRightInset_ - presetWidth;
 
         const auto cy = header.getCentreY();
         const auto rowY = [cy](int height) { return cy - height / 2; };
@@ -1290,15 +1297,12 @@ void PluginEditor::resized() {
         presetNameButton_.setBounds(x, rowY(28), kName, 28);
         x += kName + kArrowGap;
         presetNextButton_.setBounds(x, rowY(22), kArrow, 22);
-        x += kArrow + kGearGap;
-        themeButton_.setBounds(x, rowY(kGear), kGear, kGear);
-
-        // LED de entrada MIDI: a esquerda da engrenagem.
-        midiLed_.setBounds(x - kLed - 5, rowY(kLed) + 2, kLed, kLed);
 
         headerDividerX_ = -1;
-        fileField_.setBounds(header.getCentreX() - kField / 2, rowY(kFieldHeight), kField,
-                             kFieldHeight);
+        const int fieldX = header.getCentreX() - kField / 2;
+        // a engrenagem fica a esquerda do campo de ficheiro, colada a ele.
+        themeButton_.setBounds(fieldX - kGearGap - kGear, rowY(kGear), kGear, kGear);
+        fileField_.setBounds(fieldX, rowY(kFieldHeight), kField, kFieldHeight);
         brandButton_.setBounds(header.getX() + kMargin + chromeInset_, header.getY() + 10,
                                240, 28);
     }
@@ -1342,20 +1346,27 @@ void PluginEditor::resized() {
     status_.setBounds(content.getX() + tokens::space2, content.getY(),
                       content.getWidth() - tokens::space2, kStatusHeight);
 
+    // -- rodape: legenda a esquerda, transporte ao centro, P.RAND e Scan a
+    // direita dos icones, paginacao do hex no canto direito --
     const int footerY = content.getBottom() - kFooterHeight;
     const int transportY = footerY + (kFooterHeight - kTransportButtonHeight) / 2;
 
-    int fx = content.getCentreX() - kTransportButtonWidth - kTransportGap / 2;
-    playButton_.setBounds(fx, transportY, kTransportButtonWidth, kTransportButtonHeight);
-    fx += kTransportButtonWidth + kTransportGap;
-    holdButton_.setBounds(fx, transportY, kTransportButtonWidth, kTransportButtonHeight);
+    entropyLegend_.setBounds(content.getX(), footerY + 6, kLegendWidth, 16);
+
+    const int pairWidth = 2 * kTransportButtonWidth + kTransportGap;
+    const int pairLeft = content.getCentreX() - pairWidth / 2;
+    playButton_.setBounds(pairLeft, transportY, kTransportButtonWidth,
+                          kTransportButtonHeight);
+    holdButton_.setBounds(pairLeft + kTransportButtonWidth + kTransportGap, transportY,
+                          kTransportButtonWidth, kTransportButtonHeight);
 
     {
-        constexpr int kMiniWidth {190};
+        constexpr int kMiniWidth {168};
         constexpr int kMiniHeight {20};
         const int my = footerY + (kFooterHeight - kMiniHeight) / 2;
-        pitchRandSlider_.setBounds(content.getX(), my, kMiniWidth, kMiniHeight);
-        scanSpeedSlider_.setBounds(content.getX() + kMiniWidth + kGap, my, kMiniWidth,
+        const int slidersX = pairLeft + pairWidth + kGap;
+        pitchRandSlider_.setBounds(slidersX, my, kMiniWidth, kMiniHeight);
+        scanSpeedSlider_.setBounds(slidersX + kMiniWidth + kGap, my, kMiniWidth,
                                    kMiniHeight);
     }
 
@@ -1434,6 +1445,17 @@ void PluginEditor::resized() {
         keyboardToggle_.setBounds(bay.getRight() - kMargin - kToggle,
                                   bay.getCentreY() - kToggle / 2, kToggle, kToggle);
         keyboardToggle_.getProperties().set("uiIcon", keyboardOpen_ ? "minus" : "plus");
+
+        // LED MIDI: acima do botao de colapsar, dentro do cartao. Fechado, a
+        // tira nao tem altura para cima e a luz passa para o lado.
+        if (keyboardOpen_) {
+            midiLed_.setBounds(keyboardToggle_.getX() + (kToggle - 9) / 2,
+                               keyboardToggle_.getY() - 9 - tokens::space1, 9, 9);
+        } else {
+            const auto toggle = keyboardToggle_.getBounds();
+            midiLed_.setBounds(toggle.getX() - 9 - tokens::space1,
+                               toggle.getCentreY() - 4, 9, 9);
+        }
 
         if (keyboardOpen_) {
             auto keys = bay.reduced(tokens::space2);
@@ -1968,7 +1990,7 @@ void PluginEditor::moveRegionTo(std::uint64_t address) {
 
 void PluginEditor::chooseFile() {
     chooser_ = std::make_unique<juce::FileChooser>(
-        "Escolha um binario", juce::File::getCurrentWorkingDirectory(),
+        "Choose a binary", juce::File::getCurrentWorkingDirectory(),
         "*.exe;*.dll;*.bin;*.sys");
 
     chooser_->launchAsync(

@@ -40,15 +40,14 @@ ByteDisplay::ByteDisplay() {
 
     font_ = fonts().sans(10.0f);
 
-    setName("Display do material binario");
+    setName("Binary material display");
     setHelpText(
-        "Quatro vistas: forma de onda, grelha de bytes, curva de entropia e "
-        "matriz de modulacao. Clique para mover a cabeca de leitura; o botao "
-        "direito acrescenta ou tira um marcador, e click sobre a bandeira salta para "
-        "ele. Com o teclado: setas movem o cursor, Enter ativa o byte, Esc "
-        "volta a cabeca de leitura, espaco liga e desliga a reproducao, 1 a 4 "
-        "mudam de vista, + e - zoom, 0 enquadra a regiao e A alinha a regiao a "
-        "uma secao PE.");
+        "Four views: waveform, byte grid, entropy curve and modulation matrix. "
+        "Click to move the read head; right-click adds or removes a bookmark, "
+        "and click a flag to jump to it. With the keyboard: arrows move the "
+        "cursor, Enter activates the byte, Esc returns to the read head, space "
+        "toggles playback, 1 to 4 change view, + and - zoom, 0 fits the region "
+        "and A aligns the region to a PE section.");
 
     hex_.onCellActivated = [this](std::uint64_t address) {
         if (onAddressActivated != nullptr) {
@@ -71,8 +70,8 @@ ByteDisplay::ByteDisplay() {
     addAndMakeVisible(hex_);
     addAndMakeVisible(matrix_);
     addChildComponent(sectionCombo_);
-    sectionCombo_.setName("Secoes do PE");
-    sectionCombo_.setTooltip("Secoes do formato PE");
+    sectionCombo_.setName("PE sections");
+    sectionCombo_.setTooltip("PE format sections");
     sectionCombo_.onChange = [this] {
         const auto index = sectionCombo_.getSelectedId() - 1;
         if (index >= 0 && index < static_cast<int>(sections_.size())) {
@@ -952,8 +951,9 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
         const auto norm = juce::jlimit(0.0f, 1.0f, (bar.envelope - minRms) * invSpan);
         const auto env = juce::jmax(4.0f / halfHeight,
                                     0.12f + 0.88f * std::pow(norm, 1.2f));
-        const auto contrast = juce::jlimit(0.0f, 1.0f, (bar.entropy - 0.45f) / 0.45f);
-        const auto ent = juce::jmax(4.0f / halfHeight, contrast * 0.95f);
+        // entropia: altura e brilho crescem juntos. Barras altas e claras sao
+        // material aleatorio; baixas e escuras sao material repetitivo.
+        const auto ent = juce::jmax(4.0f / halfHeight, bar.entropy);
         return std::pair<float, float> {env, ent};
     };
 
@@ -1013,12 +1013,11 @@ void ByteDisplay::paintWaveform(juce::Graphics& g) {
         g.setColour(juce::Colour {0xfff2f2f2});
         g.fillRect(juce::Rectangle<float> {x, baseline - envHeight, barWidth, envHeight});
 
-        // metade de baixo: entropia em greyscale (escuro = alta, claro = baixa).
-        // A gama e' comprimida para [30, 245]: com o mapeamento antigo (255*(1-ent))
-        // uma entropia de 6 bits dava cinzento 64 sobre fundo quase preto e a barra
-        // desaparecia. Assim nenhuma barra fica invisivel.
+        // metade de baixo: entropia em greyscale -- escuro = previsivel (poucos
+        // valores), claro = aleatorio (muitos valores). A altura cresce com a
+        // entropia, para a leitura nao depender so' do brilho.
         const auto grey = static_cast<std::uint8_t>(
-            juce::jlimit(30.0f, 245.0f, 245.0f - (bar.entropy - 0.45f) / 0.45f * 215.0f));
+            juce::jlimit(40.0f, 245.0f, 40.0f + bar.entropy * 205.0f));
         const juce::Colour entropyGrey {0xff000000 | (grey << 16) | (grey << 8) | grey};
         g.setColour(entropyGrey);
         g.fillRect(juce::Rectangle<float> {x, baseline, barWidth, entropyHeight});
@@ -1286,13 +1285,13 @@ std::uint64_t ByteDisplay::addressAt(juce::Point<float> position) const {
     }
 
     const auto region = regionFractionAt(position.x, area.getX(), area.getWidth());
-    if (region < 0.0f || region >= 1.0f) {
+    if (region < 0.0f || region > 1.0f) {
         return none;
     }
 
     const auto address = pe::byteForPosition(static_cast<double>(region),
                                              pe::ByteRange {regionStart_, regionEnd_});
-    return address < regionEnd_ ? address : none;
+    return std::min(address, regionEnd_ - 1);
 }
 
 juce::Rectangle<float> ByteDisplay::plotBounds() const noexcept {
@@ -1315,6 +1314,38 @@ juce::Rectangle<float> ByteDisplay::overviewBounds() const noexcept {
 
 void ByteDisplay::mouseDown(const juce::MouseEvent& event) {
     grabKeyboardFocus();
+
+    // ecra vazio: um clique abre o selector de ficheiro.
+    if (bytes_ == nullptr || bytes_->empty() || regionEnd_ <= regionStart_) {
+        if (onEmptyClick != nullptr) {
+            onEmptyClick();
+        }
+        return;
+    }
+
+    // regua de enderecos: clicar leva a leitura e o transporte ao byte exacto
+    // que esta debaixo do cursor.
+    if (mode_ == ViewMode::waveform) {
+        auto full = getLocalBounds().toFloat().reduced(kPadding);
+        const auto ruler = full.removeFromTop(kRulerHeight);
+        if (ruler.contains(event.position)) {
+            const auto [viewStart, viewEnd] = viewByteRange();
+            const auto span = static_cast<double>(viewEnd - viewStart);
+            const auto fraction =
+                regionFractionAt(event.position.x, ruler.getX(), ruler.getWidth());
+            if (fraction >= 0.0f && fraction <= 1.0f && span > 0.0) {
+                const auto address =
+                    viewStart + static_cast<std::uint64_t>(fraction * span);
+                if (onAddressPinned != nullptr) {
+                    onAddressPinned(std::min(address, viewEnd - 1));
+                }
+                if (onTransportSeek != nullptr) {
+                    onTransportSeek(juce::jlimit(0.0f, 1.0f, fraction));
+                }
+            }
+            return;
+        }
+    }
 
     if (mode_ == ViewMode::hex) {
         return;

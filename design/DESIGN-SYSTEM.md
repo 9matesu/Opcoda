@@ -102,10 +102,11 @@ todo o rectângulo.
 ### 2. Ecrã — 396 px
 
 O ecrã é uma chapa do mesmo material do painel de parâmetros — raio de 6 px,
-filete de 1 px — com o vidro por dentro. A sidebar ocupa o rail de 96 px à
+filete de 1 px — com o vidro preto por dentro. A sidebar ocupa o rail de 96 px à
 esquerda: 16 de padding, os três botões de 72×32 e 8 de folga até ao filete
-vertical que fecha a coluna. O conteúdo começa aos 104 px da borda, na mesma
-coluna em que arrancam os knobs do painel.
+vertical que fecha a coluna. O rail é do mesmo preto do vidro; o filete é que
+separa a coluna. O conteúdo começa aos 104 px da borda, na mesma coluna em que
+arrancam os knobs do painel.
 
 A onda carro-chefe mede os 396 px de largura e dispensa bisel: o vidro ocupa a
 região toda, sem sombra interna. A silhueta leva o corpo a 10 %, o núcleo de RMS
@@ -114,9 +115,10 @@ vidro apagado. As amostras cruas são desenhadas uma a uma, 2 400 pontos à larg
 do vidro, por cima de um envelope a 5 % e de um núcleo de RMS a 16 %; é esse traço
 que converte o bloco de ruído numa leitura. O navegador só aparece quando há
 janela para navegar — com o material todo à vista a miniatura seria o mesmo
-desenho outra vez, e a faixa vai para a onda. O rodapé de 28 px leva o transporte
-de 52×22 px ao centro, os sliders de P.RAND e Scan à esquerda e a paginação do hex
-à direita, com 18 px por tecla.
+desenho outra vez, e a faixa vai para a onda. O rodapé de 28 px leva a legenda de
+entropia à esquerda (132 px, do cinza ao branco), o transporte ao centro — dois
+ícones de 24 px em botões de 32×28 —, P.RAND e Scan à direita dos ícones e a
+paginação do hex no canto direito, com 18 px por tecla.
 
 ### 3. Painel de parâmetros — 176 px
 
@@ -132,9 +134,10 @@ medidor vertical de 24 px na coluna da direita.
 
 Margens: `kMargin 16`, `kPanelPaddingX/Y 16`, `kGap 16`. A grelha enche a largura,
 sem teto de célula, e o disco tem teto de 64 px. As células separam-se por filetes
-de 1 px (`palette::hair`), recuados 8 px nas pontas. A janela do grão usa quatro
-interruptores pequenos em fila, o LFO comprimiu o gráfico para 230 px e alinhou os
-quatro alvos numa só linha; o intervalo entre o gráfico e os controlos é de 16 px.
+de 1 px (`palette::hair`), recuados 8 px nas pontas. A janela do grão são quatro
+linhas empilhadas na mesma célula, sem vão; o LFO comprimiu o gráfico para 230 px e
+alinhou os quatro alvos numa só linha; o intervalo entre o gráfico e os controlos
+é de 16 px.
 
 ### 4. Teclado — 80 px
 
@@ -224,7 +227,7 @@ arredondado pertence à janela e não só ao desenho. Como a pega desapareceu co
 barra, o cabeçalho passou a arrastar a janela — em qualquer direção, mas só a
 partir da faixa de 48 px do cabeçalho, medida em coordenadas de ecrã. O seletor
 de ficheiro ocupa 470×32 px no centro dessa faixa. A engrenagem
-dos temas senta-se ao lado dos presets; `#setOnThemeRequested` liga o botão ao
+dos temas senta-se à esquerda do campo, colada a ele; `#setOnThemeRequested` liga o botão ao
 ecrã de ajustes no `standalone` e deixa-o escondido no VST3, onde não há tema
 para trocar.
 
@@ -275,6 +278,11 @@ repouso não há fundo nenhum — a coluna é uma lista contínua; o hover põe 
 de 5 % de ivory; o estado activo põe um banho de 10 % e um filete de 2 px na
 esquerda, com o glifo e o rótulo em ivory. O acento é da coluna, não do botão, e
 é isso que faz o item activo parecer parte da sidebar.
+
+Os botões só de ícone seguem a mesma gramática: quando estão ligados, ganham um
+banho de 12 % de ivory e um filete de 30 %. É o estado activo das formas do LFO,
+da lista de janelas e do Play, e é o que responde à pergunta "o que está
+seleccionado?" sem depender da cor do glifo.
 
 ## Entropia
 

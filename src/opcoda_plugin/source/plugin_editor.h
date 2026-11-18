@@ -4,6 +4,7 @@
 #include "choice_control.h"
 #include "display_panel.h"
 #include "envelope_view.h"
+#include "entropy_legend.h"
 #include "file_field.h"
 #include "filter_view.h"
 #include "keyboard.h"
@@ -216,6 +217,7 @@ private:
     juce::TextButton presetNextButton_;
     juce::TextButton themeButton_;
     MidiLed midiLed_;
+    EntropyLegend entropyLegend_;
     std::uint32_t lastMidiActivity_ {0};
     float midiLedLevel_ {0.0f};
     juce::TextButton brandButton_;

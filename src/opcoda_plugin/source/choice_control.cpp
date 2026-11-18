@@ -146,13 +146,19 @@ void ChoiceControl::resized() {
     const int switchWidth = juce::jmin(26, cellWidth - 3);
     const int switchHeight = juce::jmin(13, cellHeight - 3);
 
+    // lista empilhada: uma coluna, um botao por linha, sem vao. O glifo enche a
+    // celula e o estado activo pinta a linha toda.
+    const bool stacked = mode_ == Mode::icons && columns_ == 1 && count > 1;
+
     for (int i = 0; i < count; ++i) {
         const auto cell = juce::Rectangle<int> {
             area.getX() + (i % columns) * cellWidth,
             area.getY() + (i / columns) * cellHeight,
             cellWidth, cellHeight};
         auto& button = *buttons_[static_cast<std::size_t>(i)];
-        if (compactSwitches_) {
+        if (stacked) {
+            button.setBounds(cell);
+        } else if (compactSwitches_) {
             button.setBounds(cell.withSizeKeepingCentre(switchWidth, switchHeight));
         } else {
             button.setBounds(cell.withSizeKeepingCentre(buttonSize, buttonSize));
