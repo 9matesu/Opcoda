@@ -110,3 +110,25 @@ docs/atlas/*.log
 
 # Paginas de render intermedias. O SVG e o PNG ficam versionados.
 docs/atlas/assets/render/*.html
+
+# Ferramentas de desenvolvimento do agente (skills, agentes, spec-kit). Ficam no
+# disco para quem usa o OpenCode, mas nao fazem parte do repositorio.
+.opencode/
+.claude/
+.specify/
+specs/
+opencode.json
+
+# Residuos de build na raiz.
+vc140.pdb
+
+# Ferramentas de desenvolvimento do agente (skills, agentes, spec-kit). Ficam
+# no disco para quem usa o OpenCode, mas nao fazem parte do repositorio.
+.opencode/
+.claude/
+.specify/
+specs/
+opencode.json
+
+# Residuos de build na raiz.
+vc140.pdb
