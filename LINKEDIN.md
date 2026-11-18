@@ -2,9 +2,9 @@
 
 **A granular synthesizer that reads executables as sound material.**
 
-Opcoda is a VST3 instrument and a standalone app for Windows x64. It opens a Portable
-Executable (`.exe`, `.dll`, `.bin`, `.sys`), reads its structure, turns the bytes into
-samples and plays them through an eight-voice granular engine.
+Opcoda is a VST3 instrument and a standalone app for Windows x64. It opens a
+Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), reads its structure, turns the
+bytes into samples and plays them through an eight-voice granular engine.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
