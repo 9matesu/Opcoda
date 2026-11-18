@@ -206,15 +206,15 @@ void SettingsScreen::paint(juce::Graphics& g) {
     for (int i = 3; i >= 1; --i) {
         const auto spread = static_cast<float>(i) * 4.0f;
         g.setColour(palette::alpha(juce::Colours::black, 0.12f));
-        g.fillRoundedRectangle(panel.expanded(spread).translated(0.0f, 8.0f), 10.0f + spread);
+        g.fillRoundedRectangle(panel.expanded(spread).translated(0.0f, 8.0f), 6.0f + spread);
     }
 
     g.setColour(palette::faceplate);
-    g.fillRoundedRectangle(panel, 8.0f);
+    g.fillRoundedRectangle(panel, 6.0f);
 
     {
         juce::Path clipped;
-        clipped.addRoundedRectangle(panel, 8.0f);
+        clipped.addRoundedRectangle(panel, 6.0f);
 
         juce::Graphics::ScopedSaveState saved(g);
         g.reduceClipRegion(clipped);
@@ -340,12 +340,12 @@ void SettingsScreen::paintStatus(juce::Graphics& g) const {
     paintSectionLabel(g, "CPU", {area.getX(), area.getY() + 74, 30, 20});
 
     g.setColour(palette::alpha(palette::ivory, 0.10f));
-    g.fillRoundedRectangle(bar.toFloat(), 2.0f);
+    g.fillRoundedRectangle(bar.toFloat(), 3.0f);
     g.setColour(load > 0.85 ? palette::meterRed
                             : (load > 0.60 ? palette::meterAmber : palette::meterGreen));
     g.fillRoundedRectangle(
         bar.toFloat().withWidth(static_cast<float>(bar.getWidth()) * static_cast<float>(load)),
-        2.0f);
+        3.0f);
 
     g.setColour(palette::textDark);
     g.setFont(fonts().sans(10.5f));

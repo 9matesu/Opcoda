@@ -45,6 +45,13 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     const auto* choice = dynamic_cast<const juce::AudioParameterChoice*>(parameter);
     if (choice != nullptr) {
         labels_ = choice->getAllValueStrings();
+    } else if (!items_.empty()) {
+        // parametro booleano (ou nao-choice): os nomes vem dos itens da vista.
+        // Sem isto o controlo ficava vazio, porque so' sabia ler AudioParameterChoice.
+        labels_.clear();
+        for (const auto& item : items_) {
+            labels_.add(item.shortLabel.isNotEmpty() ? item.shortLabel : item.label);
+        }
     }
 
     const auto count = static_cast<int>(labels_.size());

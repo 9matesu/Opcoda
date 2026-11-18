@@ -113,7 +113,7 @@ void LfoView::paint(juce::Graphics& g) {
 
     // -- ecra afundado --
     g.setColour(palette::display);
-    g.fillRoundedRectangle(bezel, 6.0f);
+    g.fillRoundedRectangle(bezel, 3.0f);
 
     const auto wave = dsp::sanitizeLFOWave(
         static_cast<dsp::LFOWave>(juce::roundToInt(valueOf("lfowave"))));

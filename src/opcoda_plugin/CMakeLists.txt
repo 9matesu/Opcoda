@@ -1,20 +1,21 @@
 ﻿add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
 
 # Tipografia embebida. Os ficheiros ja vem reduzidos pelo tools/vendor_fonts.py, que
-# os corta aos caracteres que a interface escreve e mantem a hinting: 183 KB no
-# lugar dos TTF originais.
+# os corta aos caracteres que a interface escreve e mantem a hinting: 79 KB nos
+# tres pesos, no lugar dos 196 KB originais.
 #
 # **Sao binarios no repositorio de proposito.** A alternativa era a fonte do sistema,
-# que e' o que a interface usava ate aqui e o que a fazia parecer de 2010. Inter
-# Display e' o corte,opticamente desenhado para texto pequeno, e esta interface vive
-# entre 9 e 11 px. E' a unica familia: numeros e texto usam a mesma letra, e as
-# leituras vao alinhadas a direita para nao respirarem.
+# que e' o que a interface usava ate aqui e o que a fazia parecer de 2010. Switzer
+# e' um grotesco suico de eixo neutro (Fontshare, licenca FFL) e e' a unica
+# familia: numeros, enderecos e texto usam a mesma letra, e os algarismos sao
+# tabulares de nascenca, pelo que as leituras alinham sem fonte monoespacada.
 juce_add_binary_data(OpcodaFonts
     HEADER_NAME OpcodaFonts.h
     NAMESPACE BinaryData
     SOURCES
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-Medium.ttf
-        ${CMAKE_SOURCE_DIR}/resources/fonts/InterDisplay-SemiBold.ttf)
+        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Regular.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Medium.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/Switzer-Semibold.ttf)
 
 # O icone da janela vai por BinaryData: o standalone carrega o mesmo PNG que
 # alimenta o .ico do executavel, e a janela, a barra de tarefas e o ficheiro no

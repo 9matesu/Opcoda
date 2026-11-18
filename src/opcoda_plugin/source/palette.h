@@ -7,80 +7,73 @@ namespace opcoda::palette {
 enum class Theme { dark, classic };
 
 struct Tokens {
+    // Material do chassi, do mais fundo ao mais claro. Cada degrau vale 3 a 6
+    // niveis: a hierarquia le-se sem contorno e dois paineis vizinhos nunca
+    // parecem materiais diferentes.
     juce::Colour chassis, chassisDark, chassisBorder, header, faceplate, faceplateLight,
-        faceplateDark, charcoal, charcoalDeep, panelBg, subPanel, valBox;
-    juce::Colour toolbarTop, toolbarBottom, hair, knobTrack, waveBody, regionFill;
-    juce::Colour knobTop, knobBottom, knobEdge, brass, rust, sage, ivory;
+        faceplateDark, charcoal, charcoalDeep, subPanel;
+    juce::Colour toolbarTop, toolbarBottom, hair, knobTrack;
+    juce::Colour knobEdge, brass, rust, sage, ivory;
     juce::Colour display, displayPanel, displayBorder, displayGrid;
     juce::Colour textDark, textSub, textMuted, textField, textOnDark, textOnDarkSub;
     juce::Colour focusRing;
     juce::Colour accent, accentSoft, accentWarn, ok, okBright, error, errorLight;
-    juce::Colour waveLow, waveHigh;
     juce::Colour meterBed, meterGreen, meterAmber, meterRed;
-    juce::Colour rail;
 };
 
 inline Tokens darkTokens() {
     Tokens t {};
-    t.chassis = juce::Colour {0xff1b1b1d};
-    t.chassisDark = juce::Colour {0xff111111};
-    t.chassisBorder = juce::Colour {0xff37373a};
-    t.header = juce::Colour {0xff2a2a2c};
-    t.faceplate = juce::Colour {0xff202022};
-    t.faceplateLight = juce::Colour {0xff262628};
-    t.faceplateDark = juce::Colour {0xff161618};
-    t.charcoal = juce::Colour {0xff2c2c2e};
-    t.charcoalDeep = juce::Colour {0xff161618};
-    t.panelBg = juce::Colour {0xff202022};
-    t.subPanel = juce::Colour {0xff262628};
-    t.valBox = juce::Colour {0xff2c2c2e};
+    // a janela e o 0x0a; a sombra do chassi e o 5 degraus abaixo.
+    t.chassis = juce::Colour {0xff0a0a0a};
+    t.chassisDark = juce::Colour {0xff050505};
+    t.chassisBorder = juce::Colour {0xff2a2a2a};
+    t.header = juce::Colour {0xff141414};
+    // corpo atras dos paineis: um degrau acima da janela, nunca preto.
+    t.faceplate = juce::Colour {0xff0e0e0e};
+    t.faceplateLight = juce::Colour {0xff181818}; // painel primario
+    t.faceplateDark = juce::Colour {0xff080808};  // filetes e separadores
+    t.charcoal = juce::Colour {0xff1c1c1c};       // controlo e teclado
+    t.charcoalDeep = juce::Colour {0xff080808};   // encaixes, celulas, teclas pretas
+    t.subPanel = juce::Colour {0xff141414};       // painel secundario (master)
 
-    t.toolbarTop = juce::Colour {0xff333335};
-    t.toolbarBottom = juce::Colour {0xff2a2a2c};
-    t.hair = juce::Colour {0x12ffffff};
-    t.knobTrack = juce::Colour {0x38ffffff};
-    t.waveBody = juce::Colour {0xffc9c9cb};
-    t.regionFill = juce::Colour {0x0fffffff};
+    t.toolbarTop = juce::Colour {0xff202020};
+    t.toolbarBottom = juce::Colour {0xff161616};
+    t.hair = juce::Colour {0x14ffffff};
+    t.knobTrack = juce::Colour {0x44ffffff};
 
-    t.knobTop = juce::Colour {0xff2c2c2e};
-    t.knobBottom = juce::Colour {0xff161618};
-    t.knobEdge = juce::Colour {0xff37373a};
+    t.knobEdge = juce::Colour {0xff2e2e2e};
     t.brass = juce::Colour {0xff9a9a9e};
-    t.rust = juce::Colour {0xffe8e8e8};
+    t.rust = juce::Colour {0xfff2f2f2};
     t.sage = juce::Colour {0xff6f6f74};
-    t.ivory = juce::Colour {0xffdcdcde};
+    t.ivory = juce::Colour {0xfff2f2f2};
 
-    t.display = juce::Colour {0xff0c0c0d};
-    t.displayPanel = juce::Colour {0xff161618};
-    t.displayBorder = juce::Colour {0xff37373a};
-    t.displayGrid = juce::Colour {0x0dffffff};
+    t.display = juce::Colour {0xff000000};
+    t.displayPanel = juce::Colour {0xff0a0a0a};
+    t.displayBorder = juce::Colour {0xff2a2a2a};
+    t.displayGrid = juce::Colour {0x10ffffff};
 
-    t.textDark = juce::Colour {0xffdcdcde};
-    t.textSub = juce::Colour {0xff9a9a9e};
-    t.textMuted = juce::Colour {0xff6f6f74};
-    t.textField = juce::Colour {0xff9a9a9e};
-    t.textOnDark = juce::Colour {0xffdcdcde};
-    t.textOnDarkSub = juce::Colour {0xff9a9a9e};
+    t.textDark = juce::Colour {0xfff2f2f2};
+    t.textSub = juce::Colour {0xffb0b0b0};
+    t.textMuted = juce::Colour {0xff808080};
+    t.textField = juce::Colour {0xffb0b0b0};
+    t.textOnDark = juce::Colour {0xfff2f2f2};
+    t.textOnDarkSub = juce::Colour {0xffb0b0b0};
 
-    t.focusRing = juce::Colour {0xffe8e8e8};
+    t.focusRing = juce::Colour {0xfff2f2f2};
 
-    t.accent = juce::Colour {0xffe8e8e8};
-    t.accentSoft = juce::Colour {0xfff0f0f0};
+    t.accent = juce::Colour {0xfff2f2f2};
+    t.accentSoft = juce::Colour {0xffffffff};
     t.accentWarn = juce::Colour {0xffffffff};
-    t.ok = juce::Colour {0xff9a9a9e};
-    t.okBright = juce::Colour {0xffdcdcde};
-    t.error = juce::Colour {0xffffffff};
-    t.errorLight = juce::Colour {0xffffffff};
+    t.ok = juce::Colour {0xffb0b0b0};
+    t.okBright = juce::Colour {0xfff2f2f2};
+    t.error = juce::Colour {0xffe8323c};
+    t.errorLight = juce::Colour {0xffe8323c};
 
-    t.waveLow = juce::Colour {0xff8c8c8e};
-    t.waveHigh = juce::Colour {0xffe8e8e8};
+    t.meterBed = juce::Colour {0xff0a0a0a};
+    t.meterGreen = juce::Colour {0xffb0b0b0};
+    t.meterAmber = juce::Colour {0xffd0d0d0};
+    t.meterRed = juce::Colour {0xffe8323c};
 
-    t.meterBed = juce::Colour {0xff161618};
-    t.meterGreen = juce::Colour {0xff9a9a9e};
-    t.meterAmber = juce::Colour {0xffc4c4c4};
-    t.meterRed = juce::Colour {0xffffffff};
-
-    t.rail = juce::Colour {0xff161618};
     return t;
 }
 
@@ -90,24 +83,18 @@ inline Tokens classicTokens() {
     t.chassisDark = juce::Colour {0xff0d0c0a};
     t.chassisBorder = juce::Colour {0xff6b5f4c};
     t.header = juce::Colour {0xffd6c9ae};
-    t.faceplate = juce::Colour {0xffd6c9ae};
+    t.faceplate = juce::Colour {0xffcfc2a8};
     t.faceplateLight = juce::Colour {0xffe4d9c3};
     t.faceplateDark = juce::Colour {0xff9e8e73};
     t.charcoal = juce::Colour {0xff211d18};
     t.charcoalDeep = juce::Colour {0xff100e0c};
-    t.panelBg = juce::Colour {0xff26231e};
-    t.subPanel = juce::Colour {0xff302c25};
-    t.valBox = juce::Colour {0xff38332b};
+    t.subPanel = juce::Colour {0xffc9bca2};
 
     t.toolbarTop = t.faceplateLight;
     t.toolbarBottom = t.faceplate;
     t.hair = juce::Colour {0x12ffffff};
     t.knobTrack = juce::Colour {0x38ffffff};
-    t.waveBody = t.sage;
-    t.regionFill = juce::Colour {0x0fffffff};
 
-    t.knobTop = juce::Colour {0xff3b352c};
-    t.knobBottom = juce::Colour {0xff161310};
     t.knobEdge = juce::Colour {0xff7d7059};
     t.brass = juce::Colour {0xffc09552};
     t.rust = juce::Colour {0xffe2661c};
@@ -136,15 +123,11 @@ inline Tokens classicTokens() {
     t.error = juce::Colour {0xffc05a43};
     t.errorLight = juce::Colour {0xffd3705a};
 
-    t.waveLow = juce::Colour {0xffa9c09a};
-    t.waveHigh = juce::Colour {0xffe0703a};
-
     t.meterBed = juce::Colour {0xff080706};
     t.meterGreen = juce::Colour {0xff6fae5c};
     t.meterAmber = juce::Colour {0xffd9a63c};
     t.meterRed = juce::Colour {0xffd4563a};
 
-    t.rail = juce::Colour {0xff1d1a16};
     return t;
 }
 
@@ -161,18 +144,12 @@ inline juce::Colour& faceplateLight = active.faceplateLight;
 inline juce::Colour& faceplateDark = active.faceplateDark;
 inline juce::Colour& charcoal = active.charcoal;
 inline juce::Colour& charcoalDeep = active.charcoalDeep;
-inline juce::Colour& panelBg = active.panelBg;
 inline juce::Colour& subPanel = active.subPanel;
-inline juce::Colour& valBox = active.valBox;
 inline juce::Colour& toolbarTop = active.toolbarTop;
 inline juce::Colour& toolbarBottom = active.toolbarBottom;
 inline juce::Colour& hair = active.hair;
 inline juce::Colour& knobTrack = active.knobTrack;
-inline juce::Colour& waveBody = active.waveBody;
-inline juce::Colour& regionFill = active.regionFill;
 
-inline juce::Colour& knobTop = active.knobTop;
-inline juce::Colour& knobBottom = active.knobBottom;
 inline juce::Colour& knobEdge = active.knobEdge;
 inline juce::Colour& brass = active.brass;
 inline juce::Colour& rust = active.rust;
@@ -201,15 +178,10 @@ inline juce::Colour& okBright = active.okBright;
 inline juce::Colour& error = active.error;
 inline juce::Colour& errorLight = active.errorLight;
 
-inline juce::Colour& waveLow = active.waveLow;
-inline juce::Colour& waveHigh = active.waveHigh;
-
 inline juce::Colour& meterBed = active.meterBed;
 inline juce::Colour& meterGreen = active.meterGreen;
 inline juce::Colour& meterAmber = active.meterAmber;
 inline juce::Colour& meterRed = active.meterRed;
-
-inline juce::Colour& rail = active.rail;
 
 inline juce::Colour alpha(juce::Colour colour, float opacity) {
     return colour.withAlpha(opacity);

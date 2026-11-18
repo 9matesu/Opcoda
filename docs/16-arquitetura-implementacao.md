@@ -275,7 +275,7 @@ O nome acessível de cada controle é a descrição completa em inglês
 ("Grain size, in milliseconds") e não o rótulo curto ("SIZE"), que
 seria inútil para quem navega por leitor de tela. Os **61 parâmetros** vivem em
 quatro módulos (GRAIN, ENV, FILTER, MOD), com uma faixa visível de cada
-vez e sem páginas internas: a janela fixa de 1180×760 dá a altura para os
+vez e sem páginas internas: a janela fixa de 1180×764 dá a altura para os
 controles numa linha. A aba MAIN saiu porque repetia os onze parâmetros de grão;
 a aba OUT saiu porque volume e pan formam o master persistente na coluna escura
 da direita, ao lado do medidor de saída. A aba KEYS saiu: a nota afina direto,
@@ -324,15 +324,18 @@ caberem com o rótulo inteiro.
 
 ### A janela fixa e as quatro vistas
 
-O chassi fecha em 1180×760 e não aceita redimensionamento (`setResizable(false,
-false)`). O display ocupa a faixa superior de 288 px, com os chips de vista na
-faixa de secção e os zooms no canto do ecrã; as quatro abas de módulo encostam
-no display, sem tira de navegação pelo meio; os controles e a coluna mestra de
-104 px preenchem o meio; o teclado de 62 px fecha o desenho. O layout foi escrito para estes números e não tem um caminho
-alternativo — a guarda de `resized()` contra o primeiro rectângulo 0×0 é a única
-excepção. A coluna mestra cresceu de 116 para 168 px quando pan e volume passaram
-a dividi-la, e as leituras de POS e REG subiram para a tira superior do visor,
-deixando o pé do ecrã com o transporte e as páginas do hex.
+O chassi fecha em 1180×764 com o teclado aberto e em 1180×716 com ele fechado,
+e não aceita redimensionamento (`setResizable(false, false)`). A divisão vertical
+sai da grelha de 8: cabeçalho de 48, margem de 16, display de 396, vão de 16 e
+painel de 176 — os 652 px em que o corpo fecha —, depois vão de 16, teclado de 80
+e margem de 16. As três vistas (WAVE/HEX/MATRIX) vivem no rail de 96 px à
+esquerda do vidro e os quatro módulos (GRAIN/ENV/FILTER/MOD) na coluna de 72 px
+do painel, na mesma coordenada x; o conteúdo do ecrã e os knobs arrancam ambos aos
+104 px da borda. A coluna master mede 216 px e leva os quatro knobs numa grelha
+2×2, com o medidor de 24 px à direita. O layout foi escrito para estes números e
+não tem um caminho alternativo — a guarda de `resized()` contra o primeiro
+rectângulo 0×0 é a única excepção. O pé do ecrã fica com o transporte, os sliders
+de P.RAND e Scan e as páginas do hex.
 
 A grelha hexadecimal é contínua, com 16 bytes por linha num bloco só (o vão de
 12 px que partia a linha em dois grupos de oito saiu), endereços de 8 dígitos,

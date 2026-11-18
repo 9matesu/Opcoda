@@ -1,7 +1,7 @@
 """Extrai e reduz os ficheiros de fonte que o Opcoda embebe.
 
-Porquê reduzir em vez de embutir os TTF inteiros: Inter tem 408 KB por peso, e os
-dois pesos que a interface usa somam 816 KB. A interface nao usa mais de 120
+Porquê reduzir em vez de embutir os TTF inteiros: Switzer tem 65 KB por peso, e os
+três pesos que a interface usa somam 196 KB. A interface nao usa mais de 120
 caracteres diferentes, e reduzir so' a esses dá um resultado visualmente
 identico.
 
@@ -51,6 +51,7 @@ CHARACTERS = (
 # grotesco suico de eixo neutro: formas mais fechadas e um `a` mais estreito, por
 # isso a linha de 9 px cabe com folga no cabecalho e nos rotulos de 8,5 px.
 WANTED = [
+    ("Fonts/WEB/fonts/Switzer-Regular.ttf", "Switzer-Regular.ttf"),
     ("Fonts/WEB/fonts/Switzer-Medium.ttf", "Switzer-Medium.ttf"),
     ("Fonts/WEB/fonts/Switzer-Semibold.ttf", "Switzer-Semibold.ttf"),
 ]
@@ -64,6 +65,7 @@ WANTED = [
 # peso, sem aviso nenhum. Um nome errado aqui e' um defeite silencioso, e por isso
 # se reescreve em vez de confiar no que a fonte traz.
 NAMING = {
+    "Switzer-Regular.ttf": ("Switzer", "Regular", "Switzer-Regular"),
     "Switzer-Medium.ttf": ("Switzer", "Medium", "Switzer-Medium"),
     "Switzer-Semibold.ttf": ("Switzer", "SemiBold", "Switzer-Semibold"),
 }
@@ -126,7 +128,7 @@ def locate(roots: list[Path], relative: str) -> Path | None:
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print(__doc__)
         return 2
 

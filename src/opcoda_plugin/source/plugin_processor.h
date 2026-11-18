@@ -129,6 +129,11 @@ bool snapByteRangeToSection();
                 pressedHigh_.load(std::memory_order_relaxed)};
     }
 
+    // Deriva de eventos MIDI: a interface usa para acender o LED do header.
+    [[nodiscard]] std::uint32_t midiActivity() const noexcept {
+        return midiActivity_.load(std::memory_order_relaxed);
+    }
+
     [[nodiscard]] const dsp::GrainTelemetry& grainTelemetry() const noexcept {
         return engine_.telemetry();
     }
@@ -263,15 +268,22 @@ private:
     std::atomic<std::uint64_t> pressedLow_ {0};
     std::atomic<std::uint64_t> pressedHigh_ {0};
 
+    // contador de eventos MIDI: sobe a cada mensagem, a interface compara.
+    std::atomic<std::uint32_t> midiActivity_ {0};
+
     Telemetry telemetry_;
 
-    static constexpr int kCcSustain = 64;
-    static constexpr int kCcModWheel = 1;  // roda de modulacao, fonte da matriz
-    static constexpr int kCcDensity = 74;  // Brightness, mapeia em DENSITY
-    static constexpr int kCcPosition = 71; // Resonance, mapeia em POSITION
-    static constexpr int kDensityController = 0;
-    static constexpr int kPositionController = 1;
-    static constexpr int kModWheelController = 2;
+    // Mapa de controladores. O MiniLab 3 manda CC74 no knob 1 e CC71 no knob 2,
+    // e as pads vem no canal 10: a leitura e' omnichannel, sem filtro de canal.
+    static constexpr int kCcSustain = 64;   // pedal
+    static constexpr int kCcModWheel = 1;   // roda de modulacao, fonte da matriz
+    static constexpr int kCcDensity = 74;   // Brightness
+    static constexpr int kCcPosition = 71;  // Resonance
+    static constexpr int kCcAllSoundOff = 120;
+    static constexpr int kCcAllNotesOff = 123;
+
+    enum ControllerSlot : int { kDensityController = 0, kPositionController = 1,
+                                kModWheelController = 2, kControllerSlots = 3 };
 
     static constexpr const char* kModMatrixNode = "MODMATRIX";
 

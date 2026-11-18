@@ -264,7 +264,7 @@ bool ModMatrixView::cellAt(const juce::Point<int>& position, int& row, int& colu
 
 void ModMatrixView::paint(juce::Graphics& g) {
     const auto area = gridBounds();
-    g.setColour(palette::displayPanel);
+    g.setColour(palette::display);
     g.fillRect(getLocalBounds().toFloat());
 
     if (rows_.empty()) {

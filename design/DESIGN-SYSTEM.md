@@ -4,7 +4,7 @@ Reescrito em 16/11/2026 a partir de `src/opcoda_plugin/source/palette.h`,
 `fonts.h`, `look_and_feel.h`, `knob.h`, `ui_animation.h` e `plugin_editor.cpp`. A
 versão anterior descrevia uma interface que já não existia: falava de âmbar e
 teal (o tema escuro é monocromático desde 13/11/2026) e de um display de 200–320
-px (a janela é 1180×760 com display de 288).
+px (a janela é 1180×764 com o teclado aberto e display de 396).
 
 **A fonte da verdade é o código.** Este documento descreve o que ele faz; quando
 os dois divergirem, o código ganha e este ficheiro é que está errado.
@@ -87,49 +87,63 @@ não.
 
 ## Layout
 
-Janela de projeto 1180×760 (escala por `uiScale_`), três faixas.
+Janela de projeto 1180×764 com o teclado aberto e 1180×716 com ele fechado
+(escala por `uiScale_`), quatro faixas sobre uma grelha de 8 px.
 
-### 1. Barra do topo — 44 px
+### 1. Cabeçalho — 48 px
 
 Gradiente vertical de 3 % (`toolbarTop` → `toolbarBottom`), filete de 1 px
-embaixo. **Sem sombra:** a profundidade vem do filete. Três pezas, três pesos: a
-marca à esquerda (depois das luzes, no standalone), o campo do ficheiro no
-centro exacto da barra e o preset à direita, discreto. O campo é um sulco com
-pasta, nome, tamanho, formato e chevron, como no preview; o clique é em todo o
-rectângulo.
+embaixo. **Sem sombra:** a profundidade vem do filete. Três peças, três pesos: a
+marca à esquerda, a 16 px da borda (depois das luzes, no standalone), o campo do
+ficheiro no centro exacto da faixa e o preset à direita, discreto. O campo é um
+sulco com pasta, nome, tamanho, formato e chevron, como no preview; o clique é em
+todo o rectângulo.
 
-### 2. Display — 352 px
+### 2. Ecrã — 396 px
 
-A onda carro-chefe da interface mede 376 px e dispensa moldura: o vidro ocupa a
-região toda, sem bisel nem sombra interna, e as vistas empilham-se dentro dele.
-A silhueta leva o corpo a 10 %, o núcleo de RMS a 30 % e a textura das amostras
-a 34 % — a onda tem de se ler cheia, não como um vidro apagado. As amostras cruas são desenhadas uma a
-uma, 2 400 pontos a' largura do vidro, por cima de um envelope a 5 % e de um
-núcleo de RMS a 16 %; é esse traço que converte o bloco de ruído numa leitura. O
-navegador só aparece quando há janela para navegar — com o material todo à vista
-a miniatura seria o mesmo desenho outra vez, e a faixa vai para a onda. Zooms de
-18 px no canto superior direito, transporte de 52×22 px no rodapé de 28 px, sem
-POS nem REG.
+O ecrã é uma chapa do mesmo material do painel de parâmetros — raio de 6 px,
+filete de 1 px — com o vidro por dentro. A sidebar ocupa o rail de 96 px à
+esquerda: 16 de padding, os três botões de 72×32 e 8 de folga até ao filete
+vertical que fecha a coluna. O conteúdo começa aos 104 px da borda, na mesma
+coluna em que arrancam os knobs do painel.
 
-### 3. Painel de parâmetros
+A onda carro-chefe mede os 396 px de largura e dispensa bisel: o vidro ocupa a
+região toda, sem sombra interna. A silhueta leva o corpo a 10 %, o núcleo de RMS
+a 30 % e a textura das amostras a 34 % — a onda tem de se ler cheia, não como um
+vidro apagado. As amostras cruas são desenhadas uma a uma, 2 400 pontos à largura
+do vidro, por cima de um envelope a 5 % e de um núcleo de RMS a 16 %; é esse traço
+que converte o bloco de ruído numa leitura. O navegador só aparece quando há
+janela para navegar — com o material todo à vista a miniatura seria o mesmo
+desenho outra vez, e a faixa vai para a onda. O rodapé de 28 px leva o transporte
+de 52×22 px ao centro, os sliders de P.RAND e Scan à esquerda e a paginação do hex
+à direita, com 18 px por tecla.
 
-As quatro vistas vivem dentro do ecrã, empilhadas à esquerda, sobre o vidro.
-Os módulos desceram para dentro do painel e empilharam-se numa coluna de 30 px à
-esquerda dos knobs — a escolha pertence ao painel que ela altera, e a coluna
-mantém o olho na mesma zona. Os
+### 3. Painel de parâmetros — 176 px
+
+O painel mede 176 px: 16 de padding em cima, quatro módulos de 32 px na sidebar
+(128 no total, centrados) e 16 em baixo — sobram 8 px de folga de cada lado. Os
+módulos ficam dentro da chapa do painel, não no vidro. Os
+(GRAIN/ENV/FILTER/MOD) ocupam a coluna de 72 px à esquerda dos knobs — a escolha
+pertence ao painel que ela altera, e a coluna mantém o olho na mesma zona. Os
 glifos são os mesmos da barra de modo do Granulator III; o nome sobrevive no
-tooltip e no leitor de ecrã. O master fica na coluna de 104 px à direita, com o
-cabeçalho Master, o disco alinhado à primeira fila e duas barras finas de nível,
-como no preview.
+rótulo, no tooltip e no leitor de ecrã. O master ocupa 216 px à direita, com o
+rótulo Master, os quatro knobs (Volume, Pan, Stereo, Level) numa grelha 2×2 e o
+medidor vertical de 24 px na coluna da direita.
 
-Margens no grid de 8: `kBodyMargin 24`, `kBodyTopGap 8`, `kPanelPaddingX 12`,
-`kPanelPaddingY 4`. A grelha enche a largura, sem teto de célula, e o disco tem
-teto de 64 px. As células separam-se por filetes de 1 px (`palette::hair`). A
-janela do grão usa quatro interruptores pequenos em fila, o LFO comprimiu o
-gráfico para 230 px e alinhou os quatro alvos numa só linha, e o intervalo entre
-o gráfico e os controlos desceu para 6 px. O teclado é um módulo adicional: a
-faixa pinta-se com a cor da janela, não com a da caixa, e a tira `MIDI - / MIDI +`
-abre e fecha a baia; fechada, a altura volta ao corpo e não desenha caixa.
+Margens: `kMargin 16`, `kPanelPaddingX/Y 16`, `kGap 16`. A grelha enche a largura,
+sem teto de célula, e o disco tem teto de 64 px. As células separam-se por filetes
+de 1 px (`palette::hair`), recuados 8 px nas pontas. A janela do grão usa quatro
+interruptores pequenos em fila, o LFO comprimiu o gráfico para 230 px e alinhou os
+quatro alvos numa só linha; o intervalo entre o gráfico e os controlos é de 16 px.
+
+### 4. Teclado — 80 px
+
+O teclado é um cartão dentro do chassis, com a largura do corpo, raio de 6 px e
+filete de 1 px, separado do painel pelo mesmo vão de 16. As teclas entram 8 px
+para dentro do cartão e o interruptor de 20×20 fica no canal de 44 px à direita.
+Fechado, o cartão reduz-se a uma tira de 32 px com a palavra MIDI e o `+`, e a
+janela encolhe 48 px.
+
 
 ## Controles
 
@@ -208,8 +222,8 @@ luzes de fechar e minimizar ficam sobrepostas ao cabeçalho, em círculos de 10 
 Uma região do Windows recorta os 12 px exteriores, de sorte que o canto
 arredondado pertence à janela e não só ao desenho. Como a pega desapareceu com a
 barra, o cabeçalho passou a arrastar a janela — em qualquer direção, mas só a
-partir da faixa de 56 px do cabeçalho, medida em coordenadas de ecrã. O seletor
-de ficheiro ocupa 420×32 px no centro dessa faixa. A engrenagem
+partir da faixa de 48 px do cabeçalho, medida em coordenadas de ecrã. O seletor
+de ficheiro ocupa 470×32 px no centro dessa faixa. A engrenagem
 dos temas senta-se ao lado dos presets; `#setOnThemeRequested` liga o botão ao
 ecrã de ajustes no `standalone` e deixa-o escondido no VST3, onde não há tema
 para trocar.
@@ -240,18 +254,27 @@ a do Ableton: a rota e a profundidade, nada mais.
 
 ## Tokens
 
-A escala de espaçamento é a do Atlassian/USWDS: 4, 8, 12, 16, 24, 32, 48 px,
-em `src/opcoda_plugin/source/ui_tokens.h`. O ícone padrão mede 24×24 px, o
-pequeno 18 px, a altura de controlo 22 px e o raio 8 px. A divisão entre o ecrã
-e o painel segue a proporção áurea (0,618): 376 px de ecrã, o resto para o
-painel. Ver `docs/UX-REFINING.md`.
+A escala de espaçamento é uma grelha de 8 px com um único passo de 4: 4, 8, 16,
+24 e 32 px, em `src/opcoda_plugin/source/ui_tokens.h`. O ícone padrão mede 24×24
+px, o pequeno 18 px e a altura de controlo 22 px. Os raios são dois — 6 px nos
+painéis primários, 3 px nos componentes aninhados — e as bordas são sempre de
+1 px com o mesmo alfa (0,09). A divisão vertical fecha em 652 px: cabeçalho de
+48, margem de 16, ecrã de 396, vão de 16 e painel de 176. Ver
+`docs/UX-REFINING.md`.
 
 ## Linguagem dos botões
 
-Nenhum botão tem chapa, contorno ou estado deprimido. A seleção vive na tinta do
-glifo — `accentSoft` quando ativo —, e o único rasto do rato é um banho de 5 %
-durante o hover. Essa decisão retira da interface a pilha de caixas que competia
-com a onda e aproxima o desenho do princípio de menos é mais.
+Nenhum botão de ação tem chapa, contorno ou estado deprimido. A seleção vive na
+tinta do glifo — `accentSoft` quando ativo —, e o único rasto do rato é um banho
+de 5 % durante o hover. Essa decisão retira da interface a pilha de caixas que
+competia com a onda e aproxima o desenho do princípio de menos é mais.
+
+A exceção é a coluna de navegação. As abas de vista e de módulo precisam de uma
+área de toque legível, e a caixa de 72×32 resolve isso sem contorno nem chapa: no
+repouso não há fundo nenhum — a coluna é uma lista contínua; o hover põe um banho
+de 5 % de ivory; o estado activo põe um banho de 10 % e um filete de 2 px na
+esquerda, com o glifo e o rótulo em ivory. O acento é da coluna, não do botão, e
+é isso que faz o item activo parecer parte da sidebar.
 
 ## Entropia
 

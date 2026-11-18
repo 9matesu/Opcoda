@@ -90,6 +90,9 @@ private:
     void rebuildAsmIfNeeded();
     void clampViewport();
     [[nodiscard]] std::uint64_t rowAddress(int row) const;
+    [[nodiscard]] std::uint64_t firstVisibleRowAddress() const noexcept {
+        return rowAddress(0);
+    }
     [[nodiscard]] std::uint64_t highestTop() const noexcept;
     [[nodiscard]] juce::Rectangle<float> thumbRect() const noexcept;
     void paintScrollRail(juce::Graphics& g);
@@ -103,6 +106,7 @@ private:
 
     void paintColumnHeader(juce::Graphics& g);
     void paintReadingColumns(juce::Graphics& g);
+    void paintCaret(juce::Graphics& g);
     void paintRow(juce::Graphics& g, int row);
     void paintGutter(juce::Graphics& g, int row);
     void paintBytes(juce::Graphics& g, int row);
@@ -129,6 +133,11 @@ private:
     std::uint64_t regionStart_ {0};
     std::uint64_t regionEnd_ {0};
     std::uint64_t readHead_ {0};
+
+    // caixa da cabeca de leitura: posicao animada entre celulas.
+    float caretX_ {0.0f};
+    float caretY_ {0.0f};
+    bool caretValid_ {false};
 
     bool asmEnabled_ {false};
     std::vector<AsmItem> asmItems_;

@@ -29,42 +29,42 @@ dsp::ModDest destForParam(const juce::String& id) {
 constexpr int kDesignWidth {1180};
 constexpr int kHeaderHeight {48};
 
-constexpr int kBodyMargin {tokens::space5};
-constexpr int kBodyTopGap {2};
-constexpr int kScreenBezel {6};
-constexpr int kDisplayHeight {410};
+// Uma grelha so' para o chassi: margem 16, vao 16, alturas em multiplos de 8.
+// Nao ha' 12, 10 nem 6 px espalhados pelo layout a partir daqui.
+constexpr int kMargin {tokens::space3};
+constexpr int kGap {tokens::space3};
 
-constexpr int kGapBelowDisplay {tokens::space3};
-constexpr int kGapBelowTabs {0};
+constexpr int kDisplayHeight {396};
+constexpr int kParameterHeight {176};
+constexpr int kKeyboardHeight {80};
+constexpr int kKeyToggleHeight {32};
+constexpr int kMasterWidth {216};
+
+// cabecalho + margem + ecra + vao + painel: o chassi fecha aqui.
+constexpr int kChassisBottom {
+    kHeaderHeight + kMargin + kDisplayHeight + kGap + kParameterHeight};
+constexpr int kDesignHeightClosed {kChassisBottom + kGap + kKeyToggleHeight + kMargin};
+constexpr int kDesignHeightOpen {kChassisBottom + kGap + kKeyboardHeight + kMargin};
 
 constexpr int kTransportButtonWidth {52};
 constexpr int kTransportButtonHeight {22};
-constexpr int kTransportGap {3};
+constexpr int kTransportGap {tokens::space1};
 
-// altura total da faixa: o trilho de 30 px cabe aqui com 2 px de respiro.
+// sidebar de vistas: 16 de padding + 72 de botao + 8 de folga ate' ao fio. O
+// conteudo do ecra comeca 8 px depois do fio, na mesma coluna dos modulos.
+constexpr int kRailWidth {kMargin + sidebar::kWidth + tokens::space2};
+constexpr int kContentX {kRailWidth + tokens::space2};
 
-// tira de vistas dentro do ecra, a' esquerda: quatro teclas empilhadas.
-constexpr int kViewRailWidth {38};
-constexpr int kViewButtonWidth {tokens::icon};
-constexpr int kViewButtonHeight {tokens::icon};
-
-constexpr int kKeyboardHeight {78};
-constexpr int kKeyToggleHeight {20};
-constexpr int kChassisBottom {652};
-constexpr int kDesignHeightClosed {kChassisBottom + kKeyToggleHeight};
-constexpr int kDesignHeightOpen {kDesignHeightClosed + kKeyboardHeight};
-constexpr int kMasterWidth {198};
-constexpr int kMasterGap {12};
 constexpr int kAdsrStripWidth {280};
 constexpr int kKnobContentHeight {90};
 constexpr int kFooterHeight {28};
 constexpr int kStatusHeight {16};
 
 // padding do painel de parametros: o que ha' entre a chapa e o primeiro knob.
-constexpr int kPanelPaddingX {tokens::space4};
-constexpr int kPanelPaddingY {tokens::space2};
+constexpr int kPanelPaddingX {kMargin};
+constexpr int kPanelPaddingY {kMargin};
 // o grafico do modulo ocupa a esquerda; os controles ficam a' direita.
-constexpr int kGraphGap {6};
+constexpr int kGraphGap {kGap};
 constexpr int kModGraphWidth {230};
 
 constexpr std::uint32_t kGestureGapMs {400};
@@ -140,6 +140,14 @@ const std::vector<ChoiceControl::Item> kFilterTypeItems {
     {"High-pass filter", "High-pass", "filterHighPass"},
     {"Band-pass filter", "Band-pass", "filterBandPass"},
     {"Notch filter", "Notch", "filterNotch"},
+};
+
+// o sync do LFO: um parametro booleano, sem itens proprios. Os nomes ficam
+// aqui porque a ChoiceControl so' le AudioParameterChoice -- sem esta lista o
+// botao existia e nao tinha texto, e era como se nao existisse.
+const std::vector<ChoiceControl::Item> kLfoSyncItems {
+    {"Free running", "Free", nullptr},
+    {"Follow host tempo", "Sync", nullptr},
 };
 
 // o alvo do LFO: quatro botoes com rotulo curto.
@@ -490,6 +498,19 @@ void PluginEditor::buildHeader() {
     fileField_.onClick = [this] { chooseFile(); };
 
     grid_.onAddressActivated = [this](std::uint64_t address) { activateByte(address); };
+
+    // arrasto 2D da mira: x = posicao (via activateByte), y = pitch (semitons).
+    grid_.onCrosshairMoved = [this](float xFraction, float yFraction) {
+        juce::ignoreUnused(xFraction);
+        if (auto* parameter = owner_.parameters().getParameter("pitch")) {
+            constexpr auto kMinSt = -48.0f;
+            constexpr auto kMaxSt = 48.0f;
+            const auto target = juce::jlimit(kMinSt, kMaxSt,
+                                             kMinSt + yFraction * (kMaxSt - kMinSt));
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(target));
+        }
+        pushUndoSnapshot();
+    };
     grid_.onSnapRequested = [this] { static_cast<void>(owner_.snapByteRangeToSection()); };
     grid_.onRegionSelected = [this](std::uint64_t start, std::uint64_t end) {
         if (end <= start) {
@@ -537,9 +558,7 @@ void PluginEditor::buildNavigation() {
          ByteDisplay::ViewMode::waveform},
         {&viewHexButton_, "hex", "HEX", "Grelha de bytes do material", "Tecla 2",
          ByteDisplay::ViewMode::hex},
-        {&viewEntropyButton_, "entropy", "ENTROPIA", "Curva de entropia do material",
-         "Tecla 3", ByteDisplay::ViewMode::entropy},
-        {&viewMatrixButton_, "matrix", "MATRIX", "Matriz de modulacao", "Tecla 4",
+        {&viewMatrixButton_, "matrix", "MATRIX", "Matriz de modulacao", "Tecla 3",
          ByteDisplay::ViewMode::matrix},
     };
 
@@ -553,6 +572,29 @@ void PluginEditor::buildNavigation() {
             resized();
         };
     }
+
+    // sidebar das vistas: largura fixa, rotulo sempre visivel, um abaixo do outro.
+    viewWaveTab_ = std::make_unique<ViewTab>("wave", "WAVE");
+    viewHexTab_ = std::make_unique<ViewTab>("hex", "HEX");
+    viewMatrixTab_ = std::make_unique<ViewTab>("matrix", "MATRIX");
+    viewWaveTab_->onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::waveform);
+        updateViewButtons();
+        resized();
+    };
+    viewHexTab_->onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::hex);
+        updateViewButtons();
+        resized();
+    };
+    viewMatrixTab_->onClick = [this] {
+        grid_.setMode(ByteDisplay::ViewMode::matrix);
+        updateViewButtons();
+        resized();
+    };
+    canvas_.addChildComponent(*viewWaveTab_);
+    canvas_.addChildComponent(*viewHexTab_);
+    canvas_.addChildComponent(*viewMatrixTab_);
 
     setupIcon(playButton_, "transport", "bar", "Reproduzir a regiao",
               "Tecla de espaco");
@@ -597,6 +639,7 @@ void PluginEditor::buildNavigation() {
         }
     };
     canvas_.addAndMakeVisible(themeButton_);
+    canvas_.addAndMakeVisible(midiLed_);
 
     brandButton_.setButtonText("");
     brandButton_.setName("Bloodworm Trax");
@@ -604,13 +647,14 @@ void PluginEditor::buildNavigation() {
     brandButton_.getProperties().set("uiLook", "brand");
     canvas_.addAndMakeVisible(brandButton_);
 
-    keyboardToggle_.setButtonText("MIDI -");
+    keyboardToggle_.setButtonText("");
     keyboardToggle_.setName("Esconder o teclado MIDI");
     keyboardToggle_.setTooltip("Abrir ou fechar o teclado MIDI");
+    keyboardToggle_.getProperties().set("uiIcon", "minus");
     keyboardToggle_.getProperties().set("uiLook", "icon");
     keyboardToggle_.onClick = [this] {
         keyboardOpen_ = !keyboardOpen_;
-        keyboardToggle_.setButtonText(keyboardOpen_ ? "MIDI -" : "MIDI +");
+        keyboardToggle_.getProperties().set("uiIcon", keyboardOpen_ ? "minus" : "plus");
         keyboardToggle_.setName(keyboardOpen_ ? "Esconder o teclado MIDI"
                                               : "Mostrar o teclado MIDI");
         keyboard_.setVisible(keyboardOpen_);
@@ -635,8 +679,11 @@ void PluginEditor::updateViewButtons() {
 
     mark(viewWaveButton_, ByteDisplay::ViewMode::waveform);
     mark(viewHexButton_, ByteDisplay::ViewMode::hex);
-    mark(viewEntropyButton_, ByteDisplay::ViewMode::entropy);
     mark(viewMatrixButton_, ByteDisplay::ViewMode::matrix);
+
+    viewWaveTab_->setToggled(mode == ByteDisplay::ViewMode::waveform);
+    viewHexTab_->setToggled(mode == ByteDisplay::ViewMode::hex);
+    viewMatrixTab_->setToggled(mode == ByteDisplay::ViewMode::matrix);
 
     const auto hex = mode == ByteDisplay::ViewMode::hex;
     for (auto* button : {&pageUpButton_, &pageDownButton_, &homeButton_, &endButton_}) {
@@ -803,7 +850,7 @@ void PluginEditor::buildParameterPanel() {
             {nullptr, addChoice("lfowave", "Wave", "LFO waveform",
                                  ChoiceControl::Mode::icons, 5, kLfoWaveItems), 1},
             {nullptr, addChoice("lfosync", "Sync", "LFO follows the host tempo",
-                                 ChoiceControl::Mode::toggle, 1, {}), 1},
+                                 ChoiceControl::Mode::toggle, 1, kLfoSyncItems), 1},
         }));
         moduleGrids_[static_cast<std::size_t>(ParamModule::mod)] = std::move(grid);
 
@@ -827,9 +874,9 @@ void PluginEditor::buildParameterPanel() {
 }
 
 void PluginEditor::buildModuleTabs() {
-    const auto setup = [this](ModuleFolderTab& button, const char* title,
+    const auto setup = [this](ModuleFolderTab& button, const char* label,
                               const char* spokenName, ParamModule module) {
-        button.setButtonText(title);
+        button.setButtonText(label);
         button.setName(spokenName);
         button.setTooltip(juce::String {spokenName});
         button.setClickingTogglesState(true);
@@ -837,14 +884,17 @@ void PluginEditor::buildModuleTabs() {
         canvas_.addAndMakeVisible(button);
     };
     const auto setupModule = [&setup](ModuleFolderTab& button, const char* icon,
-                                       const char* spokenName, ParamModule module) {
-        setup(button, spokenName, spokenName, module);
+                                       const char* label, const char* spokenName,
+                                       ParamModule module) {
+        setup(button, label, spokenName, module);
         button.getProperties().set("uiIcon", icon);
     };
-    setupModule(moduleGrainButton_, "grainMod", "Grain module", ParamModule::grain);
-    setupModule(moduleEnvelopeButton_, "envMod", "Envelope module", ParamModule::envelope);
-    setupModule(moduleFilterButton_, "filterMod", "Filter module", ParamModule::filter);
-    setupModule(moduleModButton_, "modMod", "Modulation module", ParamModule::mod);
+    setupModule(moduleGrainButton_, "grainMod", "GRAIN", "Grain module", ParamModule::grain);
+    setupModule(moduleEnvelopeButton_, "envMod", "ENV", "Envelope module",
+                ParamModule::envelope);
+    setupModule(moduleFilterButton_, "filterMod", "FILTER", "Filter module",
+                ParamModule::filter);
+    setupModule(moduleModButton_, "modMod", "MOD", "Modulation module", ParamModule::mod);
 }
 
 void PluginEditor::updateModuleTabs() {
@@ -1009,16 +1059,35 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     const auto design = juce::Rectangle<int> {0, 0, kDesignWidth, designHeight()};
     const auto full = design.toFloat();
 
+    // sombra 3D do chassi: projectada para baixo-direita, visivel porque o
+    // plugin e' desenhado com uma margem escura a volta (paint() fillAll).
+    {
+        const juce::Graphics::ScopedSaveState save(g);
+        for (int i = 6; i >= 1; --i) {
+            const auto offset = static_cast<float>(i) * 1.6f;
+            g.setColour(palette::alpha(juce::Colour {0xff000000}, 0.055f));
+            g.fillRect(full.translated(offset, offset));
+        }
+    }
+
     juce::ColourGradient chassis {
         palette::chassis, full.getCentreX(), full.getY(), palette::chassisDark,
         full.getCentreX(), full.getBottom(), false};
     g.setGradientFill(chassis);
     g.fillRect(full);
 
+    // volume: topo iluminado, base escurecida (efeito 3D por dentro).
+    g.setColour(palette::alpha(palette::ivory, 0.07f));
+    g.fillRect(juce::Rectangle<float> {full.getX() + 1.0f, full.getY() + 1.0f,
+                                       full.getWidth() - 2.0f, 2.0f});
+    g.setColour(palette::alpha(juce::Colour {0xff000000}, 0.22f));
+    g.fillRect(juce::Rectangle<float> {full.getX() + 1.0f,
+                                       full.getBottom() - 3.0f,
+                                       full.getWidth() - 2.0f, 2.0f});
+
+    // borda fina do chassi
     g.setColour(palette::chassisBorder);
-    g.drawRect(full, 1.0f);
-    g.setColour(palette::alpha(palette::charcoalDeep, 0.85f));
-    g.drawRect(full.reduced(1.0f), 1.0f);
+    g.drawRect(full.reduced(0.5f), 1.0f);
 
     const auto header = design.withHeight(kHeaderHeight).toFloat();
     g.setGradientFill(juce::ColourGradient {palette::toolbarTop, header.getCentreX(),
@@ -1028,7 +1097,8 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     ui::hairLine(g, 0.0f, static_cast<float>(kHeaderHeight) - 1.0f, header.getWidth(),
                  static_cast<float>(kHeaderHeight) - 1.0f, uiScale_, palette::charcoalDeep);
 
-    const auto brandX = header.getX() + 12.0f + static_cast<float>(chromeInset_);
+    const auto brandX = header.getX() + static_cast<float>(kMargin) +
+                        static_cast<float>(chromeInset_);
     const auto brandHover = hoverOf(brandButton_);
     const auto brandApproach = 1.0f + 0.10f * brandHover;
     const auto brandCentreY = header.getCentreY();
@@ -1095,16 +1165,20 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     }
 
     const auto body = design.withTrimmedTop(kHeaderHeight).toFloat();
+    // o corpo pinta-se ate' ao fundo do desenho: e' o que separa o teclado do
+    // vazio. Antes parava no fim do painel e o teclado assentava num rectangulo
+    // preto -- era esse o "fundo preto" da seccao MIDI.
     g.setColour(palette::faceplate);
-    g.fillRect(mainBodyBounds_.isEmpty()
-                   ? body
-                   : body.withBottom(static_cast<float>(mainBodyBounds_.getBottom())));
+    g.fillRect(body);
 
-    // -- painel de parametros --
+    // -- painel de parametros: chapa, raio 6, fio de 1 px --
     if (!parameterPanelBounds_.isEmpty()) {
         const auto panel = parameterPanelBounds_.toFloat();
+        const auto radius = static_cast<float>(tokens::radiusPanel);
         g.setColour(palette::faceplateLight);
-        g.fillRoundedRectangle(panel, 8.0f);
+        g.fillRoundedRectangle(panel, radius);
+        g.setColour(palette::alpha(palette::ivory, tokens::borderAlpha));
+        g.drawRoundedRectangle(panel.reduced(0.5f), radius, 1.0f);
     }
 
     // -- grelha do painel: filetes de 1 px entre as celulas, como no preview --
@@ -1112,66 +1186,55 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
         const auto area = gridArea_.toFloat();
         for (int c = 1; c < gridColumns_; ++c) {
             const auto x = area.getX() + static_cast<float>(c) * static_cast<float>(gridCellWidth_);
-            ui::hairLine(g, x, area.getY() + 5.0f, x, area.getBottom() - 5.0f, uiScale_,
+            ui::hairLine(g, x, area.getY() + static_cast<float>(tokens::space2), x,
+                         area.getBottom() - static_cast<float>(tokens::space2), uiScale_,
                          palette::hair);
         }
         for (int r = 1; r < gridRows_; ++r) {
             const auto y = area.getY() + static_cast<float>(r) * static_cast<float>(gridRowHeight_);
-            ui::hairLine(g, area.getX() + 6.0f, y, area.getRight() - 6.0f, y, uiScale_,
+            ui::hairLine(g, area.getX() + static_cast<float>(tokens::space2), y,
+                         area.getRight() - static_cast<float>(tokens::space2), y, uiScale_,
                          palette::hair);
         }
     }
 
-    // -- master: coluna escura, do painel ao teclado --
+    // -- master: painel secundario, um degrau abaixo do principal --
     if (!masterBayBounds_.isEmpty()) {
         const auto master = masterBayBounds_.toFloat();
-        g.setColour(palette::charcoalDeep);
-        g.fillRoundedRectangle(master, 8.0f);
+        const auto radius = static_cast<float>(tokens::radiusPanel);
+        g.setColour(palette::subPanel);
+        g.fillRoundedRectangle(master, radius);
+        g.setColour(palette::alpha(palette::ivory, tokens::borderAlpha));
+        g.drawRoundedRectangle(master.reduced(0.5f), radius, 1.0f);
+
+        // rotulo no topo da coluna, com o mesmo padding do painel de parametros.
         g.setFont(fonts().sans(9.0f, true));
         g.setColour(palette::textSub);
-        g.drawText("Master", juce::Rectangle<float> {master.getX() + 8.0f,
-                                                     master.getY() + 4.0f,
-                                                     master.getWidth() - 16.0f, 12.0f},
+        g.drawText("Master",
+                   juce::Rectangle<float> {
+                       master.getX() + static_cast<float>(kPanelPaddingX),
+                       master.getY() + static_cast<float>(kPanelPaddingY),
+                       master.getWidth() - 2.0f * static_cast<float>(kPanelPaddingX),
+                       static_cast<float>(tokens::space3)},
                    juce::Justification::centredLeft, false);
     }
 
-    if (!mainBodyBounds_.isEmpty()) {
-        const auto edge = mainBodyBounds_.toFloat();
-        ui::hairLine(g, edge.getX(), edge.getBottom() - 1.0f, edge.getRight(),
-                     edge.getBottom() - 1.0f, uiScale_, palette::alpha(palette::ivory, 0.06f));
-    }
-
-    // -- teclado --
+    // -- teclado: um card do mesmo material do chassi, alinhado ao conteudo --
     if (!keyboardBayBounds_.isEmpty()) {
         const auto bay = keyboardBayBounds_.toFloat();
-        const auto tab = juce::Rectangle<float> {
-            bay.getCentreX() - 46.0f, bay.getY(), 92.0f,
-            static_cast<float>(kKeyToggleHeight)};
-        juce::Path tabShape;
-        tabShape.addRoundedRectangle(tab.getX(), tab.getY(), tab.getWidth(),
-                                     tab.getHeight(), 4.0f, 4.0f, false, false,
-                                     true, true);
+        const auto radius = static_cast<float>(tokens::radiusPanel);
         g.setColour(palette::charcoal);
-        g.fillPath(tabShape);
-        g.setColour(palette::alpha(palette::brass, 0.28f));
-        g.strokePath(tabShape, juce::PathStrokeType {1.0f});
+        g.fillRoundedRectangle(bay, radius);
+        g.setColour(palette::alpha(palette::ivory, tokens::borderAlpha));
+        g.drawRoundedRectangle(bay.reduced(0.5f), radius, 1.0f);
 
-        if (keyboardOpen_) {
-            const auto card = juce::Rectangle<float> {
-                bay.getX() + 6.0f, bay.getY() + static_cast<float>(kKeyToggleHeight),
-                bay.getWidth() - 12.0f,
-                bay.getHeight() - static_cast<float>(kKeyToggleHeight)};
-            juce::Path cardShape;
-            cardShape.addRoundedRectangle(card.getX(), card.getY(), card.getWidth(),
-                                          card.getHeight(), 8.0f, 8.0f, false, false,
-                                          true, true);
-            g.setColour(palette::charcoal);
-            g.fillPath(cardShape);
-            g.setColour(palette::alpha(palette::brass, 0.20f));
-            g.strokePath(cardShape, juce::PathStrokeType {1.0f});
-            ui::hairLine(g, card.getX() + 8.0f, card.getY() + 1.0f,
-                         card.getRight() - 8.0f, card.getY() + 1.0f, uiScale_,
-                         palette::alpha(palette::ivory, 0.05f));
+        if (!keyboardOpen_) {
+            g.setFont(fonts().mono(9.0f, true));
+            g.setColour(palette::textOnDarkSub);
+            g.drawText("MIDI",
+                       bay.withTrimmedLeft(static_cast<float>(kMargin))
+                           .withWidth(80.0f),
+                       juce::Justification::centredLeft, false);
         }
     }
 
@@ -1180,9 +1243,9 @@ void PluginEditor::paintDesign(juce::Graphics& g) {
     if (dragHovered_) {
         const auto target = screenBezelBounds_.toFloat().expanded(2.0f);
         g.setColour(palette::alpha(palette::accent, 0.18f));
-        g.fillRoundedRectangle(target, 4.0f);
+        g.fillRoundedRectangle(target, 6.0f);
         g.setColour(palette::accent);
-        g.drawRoundedRectangle(target, 4.0f, 2.0f);
+        g.drawRoundedRectangle(target, 6.0f, 2.0f);
         g.setFont(fonts().sans(14.0f, true));
         g.setColour(palette::ivory);
         g.drawText("Solte o binário", display_.getBounds(),
@@ -1209,137 +1272,149 @@ void PluginEditor::resized() {
         constexpr int kName {168};
         constexpr int kField {470};
         constexpr int kFieldHeight {32};
-        constexpr int kGap {2};
+        constexpr int kArrowGap {2};
 
         constexpr int kGear {22};
         constexpr int kGearGap {8};
+        constexpr int kLed {9};
 
-        const int presetWidth = kArrow + kGap + kName + kGap + kArrow;
-        int x = header.getRight() - kBodyMargin - chromeRightInset_ - presetWidth -
+        const int presetWidth = kArrow + kArrowGap + kName + kArrowGap + kArrow;
+        int x = header.getRight() - kMargin - chromeRightInset_ - presetWidth -
                 kGearGap - kGear;
 
         const auto cy = header.getCentreY();
         const auto rowY = [cy](int height) { return cy - height / 2; };
 
         presetPrevButton_.setBounds(x, rowY(22), kArrow, 22);
-        x += kArrow + kGap;
+        x += kArrow + kArrowGap;
         presetNameButton_.setBounds(x, rowY(28), kName, 28);
-        x += kName + kGap;
+        x += kName + kArrowGap;
         presetNextButton_.setBounds(x, rowY(22), kArrow, 22);
         x += kArrow + kGearGap;
         themeButton_.setBounds(x, rowY(kGear), kGear, kGear);
 
+        // LED de entrada MIDI: a esquerda da engrenagem.
+        midiLed_.setBounds(x - kLed - 5, rowY(kLed) + 2, kLed, kLed);
+
         headerDividerX_ = -1;
         fileField_.setBounds(header.getCentreX() - kField / 2, rowY(kFieldHeight), kField,
                              kFieldHeight);
-        brandButton_.setBounds(header.getX() + 6 + chromeInset_, header.getY() + 8, 240, 28);
+        brandButton_.setBounds(header.getX() + kMargin + chromeInset_, header.getY() + 10,
+                               240, 28);
     }
 
-    // -- corpo --
-    auto body = area.reduced(kBodyMargin, kBodyTopGap);
-    body.removeFromBottom(designHeight() - kChassisBottom - kBodyTopGap);
+    // -- corpo: margem 16 em cima, aos lados e em baixo. Tudo o que vem a
+    // seguir sai desta caixa; nao ha' desvios de 2 px.
+    auto body = area.reduced(kMargin, 0);
+    body.removeFromTop(kMargin);
+    body.removeFromBottom(kMargin);
 
-    // ecra
-    auto displayRow = body.removeFromTop(kDisplayHeight);
-    displayRow.removeFromRight(8);
+    // -- ecra: largura toda do corpo --
+    const auto displayRow = body.removeFromTop(kDisplayHeight);
     screenBezelBounds_ = displayRow;
     display_.setBounds(displayRow);
+    display_.setRailWidth(kRailWidth);
 
-    // as vistas ficam dentro do ecra, empilhadas a' esquerda.
+    // as vistas sao a sidebar (largura fixa, rotulo sempre visivel); os botoes
+    // originais ficam invisiveis.
     {
-        int y = displayRow.getY() + 8;
-        for (auto* button : {&viewWaveButton_, &viewHexButton_, &viewEntropyButton_,
-                             &viewMatrixButton_}) {
-            button->setBounds(displayRow.getX() + 8, y, kViewButtonWidth,
-                              kViewButtonHeight);
-            y += kViewButtonHeight + tokens::space1;
+        for (auto* button : {&viewWaveButton_, &viewHexButton_, &viewMatrixButton_}) {
+            button->setVisible(false);
+        }
+
+        // mesma caixa das abas de modulo: 72x36, coladas, a 16 do ecra.
+        int y = displayRow.getY() + kMargin;
+        const int x = displayRow.getX() + kMargin;
+        for (auto* tab : {viewWaveTab_.get(), viewHexTab_.get(), viewMatrixTab_.get()}) {
+            tab->setBounds(x, y, sidebar::kWidth, sidebar::kHeight);
+            tab->setVisible(true);
+            y += sidebar::kHeight;
         }
     }
 
-    // leituras e area de desenho, por dentro do ecra
-    const auto displayBounds = display_.getBounds();
-    status_.setBounds(displayBounds.getX() + kViewRailWidth + 10,
-                      displayBounds.getY() + 4,
-                      displayBounds.getWidth() - kViewRailWidth - 26, kStatusHeight);
+    // -- conteudo do ecra: rail a' esquerda, 16 de padding nos outros lados --
+    const auto content = displayRow.withTrimmedLeft(kContentX)
+                             .withTrimmedRight(kMargin)
+                             .withTrimmedTop(kMargin)
+                             .withTrimmedBottom(kMargin);
 
-    const int footerY = displayBounds.getBottom() - kFooterHeight - 4;
+    // a leitura alinha com a régua: mesma margem interna de 8 px que o display usa.
+    status_.setBounds(content.getX() + tokens::space2, content.getY(),
+                      content.getWidth() - tokens::space2, kStatusHeight);
+
+    const int footerY = content.getBottom() - kFooterHeight;
     const int transportY = footerY + (kFooterHeight - kTransportButtonHeight) / 2;
 
-    const auto transportArea =
-        displayBounds.withTrimmedLeft(kViewRailWidth + 8).withTrimmedRight(8);
-    int fx = transportArea.getCentreX() - kTransportButtonWidth - kTransportGap / 2;
+    int fx = content.getCentreX() - kTransportButtonWidth - kTransportGap / 2;
     playButton_.setBounds(fx, transportY, kTransportButtonWidth, kTransportButtonHeight);
-    fx += kTransportButtonWidth + 3;
+    fx += kTransportButtonWidth + kTransportGap;
     holdButton_.setBounds(fx, transportY, kTransportButtonWidth, kTransportButtonHeight);
 
     {
         constexpr int kMiniWidth {190};
         constexpr int kMiniHeight {20};
-        constexpr int kMiniGap {10};
         const int my = footerY + (kFooterHeight - kMiniHeight) / 2;
-        pitchRandSlider_.setBounds(transportArea.getX() + 10, my, kMiniWidth, kMiniHeight);
-        scanSpeedSlider_.setBounds(transportArea.getX() + 10 + kMiniWidth + kMiniGap, my,
-                                   kMiniWidth, kMiniHeight);
+        pitchRandSlider_.setBounds(content.getX(), my, kMiniWidth, kMiniHeight);
+        scanSpeedSlider_.setBounds(content.getX() + kMiniWidth + kGap, my, kMiniWidth,
+                                   kMiniHeight);
     }
 
     {
         constexpr int kPageButton {18};
-        constexpr int kPageGap {2};
-        int px = displayBounds.getRight() - 14 - (4 * kPageButton + 3 * kPageGap);
+        int px = content.getRight() - (4 * kPageButton + 3 * tokens::space1);
         for (auto* button : {&pageUpButton_, &pageDownButton_, &homeButton_,
                              &endButton_}) {
             button->setBounds(px, footerY + (kFooterHeight - kPageButton) / 2,
                               kPageButton, kPageButton);
-            px += kPageButton + kPageGap;
+            px += kPageButton + tokens::space1;
         }
     }
 
-    const int gridTop = displayBounds.getY() + kStatusHeight + 8;
-    grid_.setBounds(juce::Rectangle<int> {
-        displayBounds.getX() + kViewRailWidth + 8, gridTop,
-        displayBounds.getWidth() - kViewRailWidth - 16, footerY - gridTop});
+    const int gridTop = content.getY() + kStatusHeight + tokens::space2;
+    grid_.setBounds(content.getX(), gridTop, content.getWidth(),
+                    footerY - tokens::space2 - gridTop);
 
-    body.removeFromTop(kGapBelowDisplay);
+    // -- painel de parametros + master: uma linha so', 176 de altura --
+    body.removeFromTop(kGap);
+    auto panelRow = body.removeFromTop(kParameterHeight);
 
-    // -- corpo do synth: painel e master. o teclado fica fora dele --
-    keyboardBayBounds_ = juce::Rectangle<int> {
-        body.getX(), kChassisBottom, body.getWidth(),
-        designHeight() - kChassisBottom};
-    auto lower = body;
-    mainBodyBounds_ = lower;
-    masterBayBounds_ = lower.removeFromRight(kMasterWidth);
-    lower.removeFromRight(kMasterGap);
+    masterBayBounds_ = panelRow.removeFromRight(kMasterWidth);
+    panelRow.removeFromRight(kGap);
+    parameterPanelBounds_ = panelRow;
 
-    parameterPanelBounds_ = lower;
-    // os modulos empilham-se a' esquerda dos knobs, dentro da mesma chapa.
-    moduleTabsBounds_ =
-        parameterPanelBounds_.reduced(kPanelPaddingX, kPanelPaddingY).removeFromLeft(34);
-    moduleRowBounds_ = moduleTabsBounds_;
+    // sidebar dos modulos: mesma caixa das vistas, dentro da chapa do painel.
+    // A altura sai da area util e o grupo centra-se nela, para a coluna nunca
+    // encostar nas bordas do painel nem transbordar.
+    auto moduleArea = parameterPanelBounds_.reduced(kPanelPaddingX, kPanelPaddingY);
+    const auto moduleTabsBounds = moduleArea.removeFromLeft(sidebar::kWidth);
     {
-        constexpr int kModuleIcon {30};
-        constexpr int kModuleGap {4};
-        int y = moduleTabsBounds_.getY();
+        constexpr int kTabCount {4};
+        const int tabHeight = sidebar::kHeight;
+        const int totalHeight = kTabCount * tabHeight;
+        int y = moduleTabsBounds.getY() +
+                juce::jmax(0, (moduleTabsBounds.getHeight() - totalHeight) / 2);
+        const int x = moduleTabsBounds.getX();
         for (auto* button : {&moduleGrainButton_, &moduleEnvelopeButton_,
                              &moduleFilterButton_, &moduleModButton_}) {
-            button->setVertical(true);
-            button->setBounds(moduleTabsBounds_.getX(), y, kModuleIcon, kModuleIcon);
-            y += kModuleIcon + kModuleGap;
+            button->setBounds(x, y, sidebar::kWidth, tabHeight);
+            y += tabHeight;
         }
     }
 
     {
-        auto master = masterBayBounds_.reduced(4, 4);
-        auto meterCol = master.removeFromRight(30);
+        // rotulo de 16 + duas filas de 64: a coluna fecha nos 144 do padding.
+        auto master = masterBayBounds_.reduced(kPanelPaddingX, kPanelPaddingY);
+        master.removeFromTop(tokens::space3);
+        auto meterCol = master.removeFromRight(tokens::space4);
+        master.removeFromRight(tokens::space2);
         meter_.setBounds(meterCol);
-        master.removeFromTop(14);
 
         const int cellWidth = master.getWidth() / 2;
         const int cellHeight = master.getHeight() / 2;
         const auto cellAt = [&](int column, int row) {
             return juce::Rectangle<int> {master.getX() + column * cellWidth,
                                          master.getY() + row * cellHeight, cellWidth,
-                                         cellHeight}
-                .reduced(tokens::spaceQuarter, 0);
+                                         cellHeight};
         };
         masterKnob_->setBounds(cellAt(0, 0));
         masterPanKnob_->setBounds(cellAt(1, 0));
@@ -1347,17 +1422,28 @@ void PluginEditor::resized() {
         masterLevelKnob_->setBounds(cellAt(1, 1));
     }
 
-    constexpr int kTabWidth {92};
-    keyboardToggle_.setBounds(keyboardBayBounds_.getCentreX() - kTabWidth / 2,
-                              keyboardBayBounds_.getY(), kTabWidth, kKeyToggleHeight);
+    // -- teclado: card na largura do corpo, com 8 de respiro para as teclas --
+    {
+        body.removeFromTop(kGap);
+        const auto bay =
+            body.removeFromTop(keyboardOpen_ ? kKeyboardHeight : kKeyToggleHeight);
+        keyboardBayBounds_ = bay;
 
-    if (keyboardOpen_) {
-        keyboard_.setBounds(keyboardBayBounds_.withTrimmedTop(kKeyToggleHeight)
-                                .reduced(tokens::space2Half + 4, tokens::space1Half + 2));
+        constexpr int kToggle {20};
+        constexpr int kKeyGutter {kMargin + kToggle + tokens::space2};
+        keyboardToggle_.setBounds(bay.getRight() - kMargin - kToggle,
+                                  bay.getCentreY() - kToggle / 2, kToggle, kToggle);
+        keyboardToggle_.getProperties().set("uiIcon", keyboardOpen_ ? "minus" : "plus");
 
-        constexpr float kWhiteKeys {43.0f};
-        const auto bayWidth = static_cast<float>(keyboard_.getWidth());
-        keyboard_.setKeyWidth(juce::jmax(10.0f, bayWidth / kWhiteKeys));
+        if (keyboardOpen_) {
+            auto keys = bay.reduced(tokens::space2);
+            keys.removeFromRight(kKeyGutter - tokens::space2);
+            keyboard_.setBounds(keys);
+
+            constexpr float kWhiteKeys {43.0f};
+            keyboard_.setKeyWidth(juce::jmax(
+                10.0f, static_cast<float>(keys.getWidth()) / kWhiteKeys));
+        }
     }
 
     const auto moduleIndex = static_cast<std::size_t>(activeModule_);
@@ -1370,7 +1456,7 @@ void PluginEditor::resized() {
         envelopeView_.isVisible() || filterView_.isVisible() || lfoView_.isVisible();
 
     auto knobArea = parameterPanelBounds_.reduced(kPanelPaddingX, kPanelPaddingY);
-    knobArea.removeFromLeft(34 + tokens::space2Half);
+    knobArea.removeFromLeft(sidebar::kWidth + kPanelPaddingX);
 
     if (hasVisual) {
         if (activeModule_ == ParamModule::envelope) {
@@ -1501,6 +1587,18 @@ void PluginEditor::timerCallback() {
     refresh();
     mirrorIncomingNotes();
 
+    // LED de entrada MIDI: acende com o evento e decai.
+    {
+        const auto activity = owner_.midiActivity();
+        if (activity != lastMidiActivity_) {
+            lastMidiActivity_ = activity;
+            midiLedLevel_ = 1.0f;
+        } else if (midiLedLevel_ > 0.0f) {
+            midiLedLevel_ = juce::jmax(0.0f, midiLedLevel_ - static_cast<float>(delta) * 3.2f);
+        }
+        midiLed_.setLit(midiLedLevel_);
+    }
+
     {
         const auto* syncParam = owner_.parameters().getParameter("lfosync");
         const bool sync = syncParam != nullptr && syncParam->getValue() > 0.5f;
@@ -1607,7 +1705,7 @@ bool PluginEditor::keyPressed(const juce::KeyPress& key) {
     }
 
     if (isDigitKey(key, '3')) {
-        grid_.setMode(ByteDisplay::ViewMode::entropy);
+        grid_.setMode(ByteDisplay::ViewMode::matrix);
         updateViewButtons();
         return true;
     }
@@ -1778,6 +1876,15 @@ void PluginEditor::refreshTelemetry(const PluginProcessor::SourceInfo& info) {
     preview.sampleRate = telemetry.sampleRate.load(std::memory_order_relaxed);
     grid_.setParamPreview(preview);
 
+    // a mira segue o pitch: o eixo Y e' o mesmo parametro.
+    {
+        constexpr auto kMinSt = -48.0f;
+        constexpr auto kMaxSt = 48.0f;
+        const auto norm = juce::jlimit(0.0f, 1.0f,
+                                       (preview.pitchSemitones - kMinSt) / (kMaxSt - kMinSt));
+        grid_.setCrosshairY(norm);
+    }
+
     const auto rateText =
         juce::String {telemetry.sampleRate.load(std::memory_order_relaxed) / 1000.0f, 1}
         + " kHz";
@@ -1824,7 +1931,6 @@ void PluginEditor::animateButtons() {
                          static_cast<juce::Button*>(&presetNextButton_),
                          static_cast<juce::Button*>(&viewWaveButton_),
                          static_cast<juce::Button*>(&viewHexButton_),
-                         static_cast<juce::Button*>(&viewEntropyButton_),
                          static_cast<juce::Button*>(&viewMatrixButton_),
                          static_cast<juce::Button*>(&playButton_),
                          static_cast<juce::Button*>(&holdButton_),

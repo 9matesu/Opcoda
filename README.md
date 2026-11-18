@@ -49,8 +49,9 @@ entropia e matriz de modulação.
   bits continue verdadeiro em qualquer zoom.
 - Ícone próprio: a onda que os bytes fazem, verde-água sobre preto, dentro do
   executável e na barra de tarefas.
-- Interface fixa de 1180×760, com o display como elemento dominante, o
-  transporte no pé do display, medidor stereo de saída e *HOLD*.
+- Interface fixa de 1180×764 com o teclado aberto (716 fechado), com o display
+  como elemento dominante, o transporte no pé do display, medidor stereo de saída
+  e *HOLD*.
 - Visualizadores de envelope e de resposta dos filtros no painel dos módulos
   `ENV` e `FILTER`, com pegas que escrevem os mesmos parâmetros dos knobs.
 - Desfazer por `Ctrl+Z` no Standalone, um passo por gesto.

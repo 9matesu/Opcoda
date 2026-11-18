@@ -48,8 +48,7 @@ public:
     enum class ViewMode {
         waveform,  // tecla 1
         hex,       // tecla 2
-        entropy,   // tecla 3
-        matrix,    // tecla 4
+        matrix,    // tecla 3
     };
 
     struct ParamPreview {
@@ -83,6 +82,19 @@ public:
     }
     void setRegion(std::uint64_t start, std::uint64_t end);
     void setReadHead(std::uint64_t address);
+
+    // eixo Y da mira: 0 = fundo, 1 = topo. Vem do parametro ligado (grain size).
+    void setCrosshairY(float fraction) {
+        const auto clamped = juce::jlimit(0.0f, 1.0f, fraction);
+        if (std::abs(clamped - crosshairY_) > 0.002f) {
+            crosshairY_ = clamped;
+            crosshairYE_.set(clamped);
+            repaint();
+        }
+    }
+
+    // arrasto 2D no display: x = posicao, y = parametro vertical.
+    std::function<void(float xFraction, float yFraction)> onCrosshairMoved;
 
     void setPlayhead(float fraction, bool visible) {
         const bool already = playheadVisible_ == visible &&
@@ -199,9 +211,6 @@ public:
 private:
     void rebuildColumnsIfNeeded();
     [[nodiscard]] std::uint32_t columnCountForWidth() const noexcept;
-    [[nodiscard]] std::uint32_t entropyColumnCount() const noexcept;
-
-    void rebuildEntropyColumnsIfNeeded();
 
     // a navegacao de seccoes da vista hex: um combo com as seccoes do PE.
     void rebuildSectionCombo();
@@ -209,11 +218,6 @@ private:
     void applyModeVisibility();
 
     void paintWaveform(juce::Graphics& g);
-    void paintEntropy(juce::Graphics& g);
-
-    [[nodiscard]] static int entropyBucket(float bits) noexcept;
-
-    void resampleEnvelope(int pixels);
 
     void paintBookmarks(juce::Graphics& g, const juce::Rectangle<float>& area);
     [[nodiscard]] std::uint64_t bookmarkAt(
@@ -225,6 +229,8 @@ private:
     void paintGrainsInHex(juce::Graphics& g);
 
     void paintParamPreview(juce::Graphics& g, const juce::Rectangle<float>& area);
+    void paintParamHud(juce::Graphics& g);
+    void dragTo(juce::Point<float> position);
 
     static constexpr float kPlayheadHalfLife {0.030f};
     static constexpr float kReadHeadHalfLife {0.060f};
@@ -242,6 +248,11 @@ private:
     Eased readHeadFraction_;
     Eased playheadFraction_;
     Eased modeFade_;
+
+    // mira 2D: y suave, segue o parametro ligado.
+    float crosshairY_ {0.5f};
+    Eased crosshairYE_;
+    bool crosshairDrag_ {false};
 
     Eased sprayE_ {};
     Eased densityE_ {};
@@ -263,13 +274,14 @@ private:
     [[nodiscard]] double fractionFor(std::uint64_t address) const noexcept;
     [[nodiscard]] std::pair<std::uint64_t, std::uint64_t> viewByteRange() const noexcept;
 
-    static constexpr float kPadding {10.0f};
+    // 8 px: o mesmo passo da grelha do chassi. O conteúdo do ecrã começa aqui e
+    // a régua, as barras e a agulha partilham esta caixa.
+    static constexpr float kPadding {8.0f};
     static constexpr float kAxisHeight {12.0f};
     static constexpr float kAxisInset {22.0f};
     static constexpr float kRulerHeight {16.0f};
     static constexpr float kOverviewHeight {20.0f};
     static constexpr std::uint64_t kMinViewBytes {64};
-    static constexpr std::uint64_t kEntropyColumnBytes {256};
 
     HexGrid hex_;
     ModMatrixView matrix_;
@@ -277,15 +289,6 @@ private:
 
     // marcadores: enderecos absolutos, ordenados. sessao, nao projeto.
     std::vector<std::uint64_t> bookmarks_;
-
-    // envelope reamostrado por pixel, reaproveitado entre repaints.
-    std::vector<float> pixelMax_;
-    std::vector<float> pixelMin_;
-    // hull: maximo corrido de +-2 px que fecha as valas de um pixel.
-    std::vector<float> hullMax_;
-    std::vector<float> hullMin_;
-    std::vector<float> pixelRms_;
-    std::vector<float> hullRms_;
 
     const std::vector<std::uint8_t>* bytes_ {nullptr};
     std::vector<PluginProcessor::SourceInfo::SectionInfo> sections_;
@@ -303,7 +306,7 @@ private:
     bool previewValid_ {false};
     float liveLevel_ {0.0f};
 
-    ViewMode mode_ {ViewMode::matrix};
+    ViewMode mode_ {ViewMode::waveform};
 
     float wheelBoost_ {1.0f};
     std::uint32_t lastWheelMs_ {0};
@@ -332,7 +335,6 @@ private:
 
     [[nodiscard]] bool overviewShown() const noexcept;
     [[nodiscard]] juce::Rectangle<float> plotBounds() const noexcept;
-    [[nodiscard]] juce::Rectangle<float> entropyPlotBounds() const noexcept;
 
     std::vector<pe::Column> overviewColumns_ {};
     std::uint64_t overviewRegionStart_ {0};
@@ -340,25 +342,8 @@ private:
     bool overviewValid_ {false};
     void rebuildOverviewIfNeeded();
 
-    std::vector<pe::Column> entropyColumns_ {};
-    std::uint64_t entropyRegionStart_ {0};
-    std::uint64_t entropyRegionEnd_ {0};
-    std::uint32_t entropyColumnCount_ {0};
-    float entropyViewStart_ {-1.0f};
-    float entropyViewLength_ {-1.0f};
-    bool entropyCacheValid_ {false};
-
     void paintRuler(juce::Graphics& g, const juce::Rectangle<float>& plotArea);
     void paintOverview(juce::Graphics& g);
-    void paintNoiseTexture(juce::Graphics& g, const juce::Rectangle<float>& plotArea,
-                           std::uint64_t viewStartByte, std::uint64_t viewEndByte);
-
-    void paintSampleDots(juce::Graphics& g,
-                         const juce::Rectangle<float>& plotArea,
-                         std::uint64_t viewStartByte,
-                         std::uint64_t viewEndByte,
-                         float alpha);
-    [[nodiscard]] bool sampleDotsVisible() const noexcept;
 
     std::vector<pe::Column> columns_;
     std::uint64_t cachedRegionStart_ {0};

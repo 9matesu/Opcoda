@@ -79,70 +79,116 @@ void PluginProcessor::migrateLegacyModMatrix() {
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout() {
-    const auto range = [](const char* id, const char* name, float lo, float hi, float def) {
+    // Automatizacao: so o que e' continuo e vale a pena gravar numa automacao.
+    // Escolhas, interruptores e rotas discretas ficam de fora (rumo no Live).
+    // Os nomes levam a unidade, e os valores saem formatados para o host.
+    const auto autoAttr = [](bool automatable) {
+        return automatable ? juce::AudioParameterFloatAttributes {}
+                           : juce::AudioParameterFloatAttributes {}.withAutomatable (false);
+    };
+
+    const auto range = [&autoAttr](const char* id, const char* name, float lo, float hi,
+                                   float def, const char* unit = nullptr,
+                                   bool automatable = true) {
+        auto attributes = autoAttr (automatable);
+        if (unit != nullptr) {
+            attributes = attributes.withLabel (unit);
+        }
         return std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID {id, 1}, juce::String {name}, juce::NormalisableRange<float> {lo, hi}, def);
+            juce::ParameterID {id, 1}, juce::String {name},
+            juce::NormalisableRange<float> {lo, hi}, def, attributes);
     };
-    const auto intRange = [](const char* id, const char* name, int lo, int hi, int def) {
+
+    const auto intRange = [](const char* id, const char* name, int lo, int hi, int def,
+                             bool automatable = true) {
+        auto attributes = juce::AudioParameterIntAttributes {};
+        if (!automatable) {
+            attributes = attributes.withAutomatable (false);
+        }
         return std::make_unique<juce::AudioParameterInt>(
-            juce::ParameterID {id, 1}, juce::String {name}, lo, hi, def);
+            juce::ParameterID {id, 1}, juce::String {name}, lo, hi, def, attributes);
     };
+
+    const auto boolParam = [](const char* id, const char* name, bool def,
+                              const char* onText, const char* offText) {
+        auto attributes = juce::AudioParameterBoolAttributes {};
+        if (onText != nullptr) {
+            attributes = attributes.withStringFromValueFunction (
+                [onText, offText](float value, int) {
+                    return juce::String {value > 0.5f ? onText : offText};
+                });
+        }
+        return std::make_unique<juce::AudioParameterBool>(
+            juce::ParameterID {id, 1}, juce::String {name}, def, attributes);
+    };
+
     const auto logCutoff = [](const char* id, const char* name, float def) {
         juce::NormalisableRange<float> cutoff {20.0f, 20000.0f};
-        cutoff.setSkewForCentre(1000.0f);
+        cutoff.setSkewForCentre (1000.0f);
         return std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID {id, 1}, juce::String {name}, cutoff, def);
+            juce::ParameterID {id, 1}, juce::String {name}, cutoff, def,
+            juce::AudioParameterFloatAttributes {}.withLabel ("Hz"));
     };
+
     const auto grainSize = [] {
         juce::NormalisableRange<float> size {dsp::GranularEngine::kMinGrainMs,
                                             dsp::GranularEngine::kMaxGrainMs};
-        size.setSkewForCentre(100.0f);
+        size.setSkewForCentre (100.0f);
         return std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID {"grain", 1}, "Grain Size", size, 40.0f);
+            juce::ParameterID {"grain", 1}, "Grain Size (ms)", size, 40.0f,
+            juce::AudioParameterFloatAttributes {}.withLabel ("ms"));
     };
-    const auto choice = [](const char* id, const char* name, juce::StringArray options, int def) {
+
+    const auto choice = [](const char* id, const char* name, juce::StringArray options, int def,
+                           bool automatable = false) {
+        auto attributes = juce::AudioParameterChoiceAttributes {};
+        if (!automatable) {
+            attributes = attributes.withAutomatable (false);
+        }
         return std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID {id, 1}, juce::String {name}, std::move(options), def);
+            juce::ParameterID {id, 1}, juce::String {name}, std::move (options), def,
+            attributes);
     };
 
     juce::AudioProcessorValueTreeState::ParameterLayout layout {
         grainSize(),
-        range("density", "Density", 1.0f, 200.0f, 20.0f),
+        range("density", "Density (grains/s)", 1.0f, 200.0f, 20.0f, "grains/s"),
         range("position", "Position", 0.0f, 1.0f, 0.5f),
         range("spray", "Spray", 0.0f, 1.0f, 0.0f),
-        range("pitch", "Pitch", -48.0f, 48.0f, 0.0f),
-        range("volume", "Volume", -60.0f, 0.0f, 0.0f),
+        range("pitch", "Pitch (semitones)", -48.0f, 48.0f, 0.0f, "st"),
+        range("volume", "Volume (dB)", -60.0f, 0.0f, 0.0f, "dB"),
         choice("window", "Window", {"Hann", "Gaussian", "Hamming", "Blackman"}, 0),
         range("pan", "Pan", -1.0f, 1.0f, 0.0f),
         range("grainlevel", "Grain Level", 0.0f, 1.0f, 1.0f),
-        range("pitchrand", "Pitch Random", 0.0f, 12.0f, 0.0f),
-        range("scanspeed", "Scan Speed", 0.25f, 4.0f, 1.0f),
-        range("attack", "Attack", 0.001f, 2.0f, 0.005f),
-        range("decay", "Decay", 0.001f, 2.0f, 0.1f),
+        range("pitchrand", "Pitch Random (semitones)", 0.0f, 12.0f, 0.0f, "st"),
+        range("scanspeed", "Scan Speed (x)", 0.25f, 4.0f, 1.0f, "x"),
+        range("attack", "Attack (s)", 0.001f, 2.0f, 0.005f, "s"),
+        range("decay", "Decay (s)", 0.001f, 2.0f, 0.1f, "s"),
         range("sustain", "Sustain", 0.0f, 1.0f, 1.0f),
-        range("release", "Release", 0.001f, 2.0f, 0.05f),
-        range("atkcurve", "Attack Curve", -1.0f, 1.0f, 0.0f),
-        range("deccurve", "Decay Curve", -1.0f, 1.0f, 0.0f),
-        range("relcurve", "Release Curve", -1.0f, 1.0f, 0.0f),
+        range("release", "Release (s)", 0.001f, 2.0f, 0.05f, "s"),
+        range("atkcurve", "Attack Curve", -1.0f, 1.0f, 0.0f, nullptr, false),
+        range("deccurve", "Decay Curve", -1.0f, 1.0f, 0.0f, nullptr, false),
+        range("relcurve", "Release Curve", -1.0f, 1.0f, 0.0f, nullptr, false),
         choice("f1type", "Filter 1 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
-        logCutoff("f1cutoff", "Filter 1 Cutoff", 20000.0f),
+        logCutoff("f1cutoff", "Filter 1 Cutoff (Hz)", 20000.0f),
         range("f1q", "Filter 1 Q", 0.5f, 12.0f, 0.7071f),
-        choice("f1slope", "Filter 1 Slope", {"12 dB", "24 dB"}, 0),
-        range("f1drive", "Filter 1 Drive", 0.0f, 24.0f, 0.0f),
-        range("f1keytrack", "Filter 1 Keytrack", 0.0f, 1.0f, 0.0f),
-        range("f1env", "Filter 1 Env", -1.0f, 1.0f, 0.0f),
+        boolParam("f1slope", "Filter 1 Slope", false, "24 dB/oct", "12 dB/oct"),
+        range("f1drive", "Filter 1 Drive (dB)", 0.0f, 24.0f, 0.0f, "dB", false),
+        range("f1keytrack", "Filter 1 Keytrack", 0.0f, 1.0f, 0.0f, nullptr, false),
+        range("f1env", "Filter 1 Env Amount", -1.0f, 1.0f, 0.0f, nullptr, false),
         choice("f2type", "Filter 2 Type", {"Low-pass", "High-pass", "Band-pass", "Notch"}, 0),
-        logCutoff("f2cutoff", "Filter 2 Cutoff", 20000.0f),
+        logCutoff("f2cutoff", "Filter 2 Cutoff (Hz)", 20000.0f),
         range("f2q", "Filter 2 Q", 0.5f, 12.0f, 0.7071f),
-        range("lforate", "LFO Rate", 0.0f, 20.0f, 1.0f),
+        range("lforate", "LFO Rate (Hz)", 0.0f, 20.0f, 1.0f, "Hz"),
         range("lfodepth", "LFO Depth", 0.0f, 1.0f, 0.0f),
         choice("lfotarget", "LFO Target", {"Pitch", "Density", "Cutoff", "Position"}, 0),
         choice("lfowave", "LFO Wave", {"Sine", "Tri", "Saw", "Square", "S&H"}, 0),
-        range("glide", "Glide", 0.0f, 2.0f, 0.0f),
-        choice("lfosync", "LFO Sync", {"Free", "Sync"}, 0),
-        choice("lfodiv", "LFO Div", {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64",
-                                     "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"}, 2),
-        intRange("lfosteps", "LFO Steps", 1, 16, 16),
+        range("glide", "Glide (s)", 0.0f, 2.0f, 0.0f, "s"),
+        boolParam("lfosync", "LFO Sync", false, "Sync", "Free"),
+        choice("lfodiv", "LFO Division",
+               {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64",
+                "1/4.", "1/8.", "1/4T", "1/8T", "1/16T"}, 2),
+        intRange("lfosteps", "LFO Steps", 1, 16, 16, false),
         range("width", "Stereo Width", 0.0f, 2.0f, 1.0f),
     };
 
@@ -152,6 +198,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         "Off",  "Pitch",  "Density", "Position", "Spray",     "Grain Size",
         "Cut 1", "Q 1",   "Cut 2",   "Q 2",      "Pan",       "Grain Level",
         "Drive", "Stereo Width"};
+    // src/dst sao discretos: fora da automacao. amount fica, e' o que se grava.
     for (int i = 1; i <= dsp::kMaxModRoutes; ++i) {
         const auto n = juce::String {i};
         const auto srcId = ("m" + n + "src");
@@ -198,7 +245,7 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.f1type = dsp::sanitizeFilterType(static_cast<dsp::FilterType>(choiceIndex("f1type")));
     params.f1cutoffHz = value("f1cutoff");
     params.f1q = value("f1q");
-    params.f1Slope = (choiceIndex("f1slope") == 1) ? 1 : 0;
+    params.f1Slope = value("f1slope") > 0.5f ? 1 : 0;
     params.f1DriveDb = value("f1drive");
     params.f1Keytrack = value("f1keytrack");
     params.f1Env = value("f1env");
@@ -214,7 +261,7 @@ dsp::GranularParams PluginProcessor::currentParams() const noexcept {
     params.noteNumber = notes_.activeNote();
     params.glideSeconds = value("glide");
 
-    params.lfoSync = choiceIndex("lfosync") == 1;
+    params.lfoSync = value("lfosync") > 0.5f;
     params.lfoDiv = dsp::sanitizeLFODiv(choiceIndex("lfodiv"));
     params.lfoSteps = dsp::sanitizeLFOSteps(static_cast<int>(value("lfosteps") + 0.5f));
     params.hostBpm = hostBpm_.load(std::memory_order_relaxed);
@@ -533,9 +580,16 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
 
     for (const auto metadata : midi) {
         const juce::MidiMessage message = metadata.getMessage();
+        midiActivity_.fetch_add(1, std::memory_order_relaxed);
+
+        // nota solta por velocidade zero: pad que manda note-on 0 em vez de note-off.
+        const bool noteOn = message.isNoteOn() && message.getVelocity() > 0;
+        const bool noteOff = message.isNoteOff() || (message.isNoteOn() && !noteOn);
 
         auto kind = rt::NoteTracker::Event::Kind::other;
-        if (message.isAllNotesOff() || message.isAllSoundOff()) {
+        if (message.isAllNotesOff() || message.isAllSoundOff()
+            || message.getControllerNumber() == kCcAllNotesOff
+            || message.getControllerNumber() == kCcAllSoundOff) {
             kind = rt::NoteTracker::Event::Kind::allNotesOff;
         } else if (message.getControllerNumber() == kCcSustain) {
             kind = rt::NoteTracker::Event::Kind::sustain;
@@ -543,19 +597,25 @@ void PluginProcessor::readNotes(const juce::MidiBuffer& midi) noexcept {
                    || message.getControllerNumber() == kCcPosition
                    || message.getControllerNumber() == kCcModWheel) {
             kind = rt::NoteTracker::Event::Kind::controller;
-        } else if (message.isNoteOn()) {
+        } else if (noteOn) {
             kind = rt::NoteTracker::Event::Kind::noteOn;
-        } else if (message.isNoteOff()) {
+        } else if (noteOff) {
             kind = rt::NoteTracker::Event::Kind::noteOff;
         }
 
         const float normalised = message.getControllerValue() / 127.0f;
-        if (message.getControllerNumber() == kCcDensity) {
-            notes_.setController(kDensityController, normalised);
-        } else if (message.getControllerNumber() == kCcPosition) {
-            notes_.setController(kPositionController, normalised);
-        } else if (message.getControllerNumber() == kCcModWheel) {
-            notes_.setController(kModWheelController, normalised);
+        switch (message.getControllerNumber()) {
+            case kCcDensity:
+                notes_.setController(kDensityController, normalised);
+                break;
+            case kCcPosition:
+                notes_.setController(kPositionController, normalised);
+                break;
+            case kCcModWheel:
+                notes_.setController(kModWheelController, normalised);
+                break;
+            default:
+                break;
         }
 
         notes_.handle({kind, message.getNoteNumber(), message.getControllerValue()});

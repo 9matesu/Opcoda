@@ -357,12 +357,12 @@ void HexGrid::paintScrollRail(juce::Graphics& g) {
         return;
     }
     g.setColour(palette::alpha(palette::displayBorder, 0.65f));
-    g.fillRoundedRectangle(metrics_.rail, 2.0f);
+    g.fillRoundedRectangle(metrics_.rail, 3.0f);
 
     const auto thumb = thumbRect();
     if (!thumb.isEmpty()) {
         g.setColour(palette::alpha(palette::accent, 0.85f));
-        g.fillRoundedRectangle(thumb, 2.0f);
+        g.fillRoundedRectangle(thumb, 3.0f);
     }
 }
 
@@ -463,7 +463,8 @@ void HexGrid::mouseWheelMove(const juce::MouseEvent& event,
 void HexGrid::paint(juce::Graphics& g) {
     const auto bounds = getLocalBounds().toFloat();
 
-    g.setColour(palette::displayPanel);
+    // o mesmo vidro preto da vista de onda: mudar de vista nao muda o material.
+    g.setColour(palette::display);
     g.fillRect(bounds);
     g.setFont(font_);
 
@@ -486,7 +487,37 @@ void HexGrid::paint(juce::Graphics& g) {
         paintRow(g, row);
     }
 
+    paintCaret(g);
     paintScrollRail(g);
+}
+
+// caixa opaca da cabeca de leitura, deslizando entre celulas.
+void HexGrid::paintCaret(juce::Graphics& g) {
+    if (bytes_ == nullptr || fileSize_ == 0 || readHead_ >= fileSize_) {
+        return;
+    }
+
+    const auto row = static_cast<int>(
+        (readHead_ - firstVisibleRowAddress()) / kBytesPerRow);
+    const auto column = static_cast<int>(readHead_ % kBytesPerRow);
+    const auto target = cellRect(static_cast<std::uint64_t>(column),
+                                 static_cast<std::uint64_t>(row));
+
+    if (!caretValid_) {
+        caretX_ = target.getX();
+        caretY_ = target.getY();
+        caretValid_ = true;
+    } else {
+        caretX_ += (target.getX() - caretX_) * 0.35f;
+        caretY_ += (target.getY() - caretY_) * 0.35f;
+    }
+
+    const auto caretRect = juce::Rectangle<float> {
+        caretX_ - 2.0f, caretY_ + (target.getHeight() - 15.0f) * 0.5f,
+        target.getWidth() + 4.0f, 15.0f};
+
+    g.setColour(palette::ivory);
+    g.fillRect(caretRect);
 }
 
 void HexGrid::paintColumnHeader(juce::Graphics& g) {
@@ -515,9 +546,9 @@ void HexGrid::paintReadingColumns(juce::Graphics& g) {
     const auto draw = [&g](juce::Rectangle<float> column) {
         const auto box = column.expanded(5.0f, 0.0f);
         g.setColour(palette::display);
-        g.fillRoundedRectangle(box, 4.0f);
+        g.fillRoundedRectangle(box, 3.0f);
         g.setColour(palette::alpha(palette::displayBorder, 0.55f));
-        g.drawRoundedRectangle(box, 4.0f, 1.0f);
+        g.drawRoundedRectangle(box, 3.0f, 1.0f);
     };
 
     if (metrics_.showAscii) {
@@ -581,13 +612,15 @@ void HexGrid::paintBytes(juce::Graphics& g, int row) {
         const auto byte = (*bytes_)[static_cast<std::size_t>(byteAddress)];
         const auto touched = byteAddress == readHead_;
 
+        // a caixa opaca e' desenhada uma vez em paintCaret, deslizando.
+        // aqui so' o texto fica invertido quando a celula e' a da cabeca.
         if (touched) {
-            g.setColour(palette::alpha(palette::accent, 0.18f));
-            g.fillRoundedRectangle(cell.reduced(1.0f, 3.0f), 2.0f);
+            g.setFont(fonts().sans(13.5f, true));
+            g.setColour(palette::charcoalDeep);
+        } else {
+            g.setFont(font_);
+            g.setColour(palette::textOnDark);
         }
-
-        g.setFont(touched ? fonts().sans(13.5f, true) : font_);
-        g.setColour(touched ? palette::accentSoft : palette::textOnDark);
         g.drawText(toHex2(byte), cell, juce::Justification::centredLeft, false);
     }
 }

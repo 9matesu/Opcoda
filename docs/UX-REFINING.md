@@ -2,20 +2,21 @@
 
 ## Escala de espaçamento
 
-A interface usa uma escala de 4 px, a mesma do Atlassian Design System, do USWDS
-e do Material: 4, 8, 12, 16, 24, 32, 48. Os valores vivem em
-`src/opcoda_plugin/source/ui_tokens.h` (`tokens::space1` … `tokens::space7`) e
-nenhum espaçamento fora desta lista entra no layout.
+A interface assenta numa grelha de 8 px, com um único passo de 4 px para o
+ajuste entre ícone e rótulo: 4, 8, 16, 24 e 32. Os valores vivem em
+`src/opcoda_plugin/source/ui_tokens.h` (`tokens::space1` … `tokens::space5`) e
+nenhum espaçamento fora desta lista entra no layout. A revisão expulsou o 12 e o
+48 que ainda sobreviviam da escala anterior: margem do chassis, vão entre secções
+e respiro interno dos componentes passaram a ser o mesmo número, de sorte que
+deixa de haver desalinhamentos de 2 ou 3 px a compensar à mão.
 
 | Token | px | Uso |
 | --- | --- | --- |
-| `space1` | 4 | respiro entre teclas da mesma família |
-| `space2` | 8 | margem superior do corpo, gap do ecrã |
-| `space3` | 12 | margem inferior do ecrã, gap do corpo |
-| `space4` | 16 | cabeçalho, controlos compostos |
-| `space5` | 24 | margem lateral do corpo, ícone padrão |
-| `space6` | 32 | colunas largas |
-| `space7` | 48 | separações de secção |
+| `space1` | 4 | micro: ícone e rótulo, folga entre as setas do preset |
+| `space2` | 8 | respiro interno de componente, folga do rail |
+| `space3` | 16 | margem do chassis, padding dos painéis, vão entre secções |
+| `space4` | 24 | coluna do medidor, separação entre blocos |
+| `space5` | 32 | espaço estrutural exterior |
 
 ## Controlos
 
@@ -25,16 +26,43 @@ nenhum espaçamento fora desta lista entra no layout.
 - Os três botões de zoom saíram da interface; a navegação do ecrã continua por
   roda do rato, teclado e duplo clique.
 - Altura de controlo: 22 px (`tokens::controlHeight`).
-- Raio: 8 px (`tokens::radius`), igual ao do painel e do vidro.
+- Raios: dois valores e mais nada. Painéis primários a 6 px
+  (`tokens::radiusPanel`) — ecrã, painel de parâmetros, master e cartão do
+  teclado; componentes aninhados a 3 px (`tokens::radiusControl`).
+- Bordas: 1 px em toda a parte, com o mesmo `tokens::borderAlpha` (0,09). Um
+  painel nunca leva contorno duplicado: o filete pertence ao painel, não ao
+  conteúdo que ele aloja.
+
+## Sidebar
+
+As duas colunas de navegação — WAVE/HEX/MATRIX no ecrã, GRAIN/ENV/FILTER/MOD no
+painel — partilham a mesma caixa: 72×32 px (`sidebar::kWidth` e
+`sidebar::kHeight`), sem vão entre itens, glifo e rótulo sempre visíveis. Não há
+caixa no repouso: a coluna é uma lista contínua, não uma pilha de cartões a
+flutuar. O hover põe um banho de 5% de ivory; o estado activo põe um banho de 10%
+e um filete de 2 px na esquerda — o acento é da coluna, não do botão, e por isso o
+item activo parece pertencer à sidebar em vez de ser um botão independente.
+
+O rail do ecrã mede 96 px — 16 de padding, 72 de botão e 8 de folga — e um filete
+vertical, recuado 16 px do topo e do fundo do painel, marca o fim da coluna. O
+conteúdo do ecrã começa 8 px depois do filete, aos 104 px da borda, que é
+exactamente a coluna onde arrancam os knobs do painel. As duas metades da
+interface ficam, assim, presas ao mesmo eixo vertical.
+
+Os módulos ficam dentro da chapa do painel, não no vidro: a coluna de 72 px herda
+o material do painel, e os quatro itens de 32 px centram-se na altura interior com
+8 px de folga em cima e em baixo. O painel tem 176 px e a sidebar ocupa 128 — a
+diferença é o respiro, não um transbordo.
 
 ## Proporção
 
-A divisão vertical entre o ecrã e o painel segue a proporção áurea
-(`tokens::golden = 0,618`): o ecrã mede 410 px e o painel recebe o resto,
-trinta por cento acima da divisão anterior. O ecrã é o objeto de maior peso
-visual; os parâmetros são o painel de controlo, não o centro. O cabeçalho desceu
-para 48 px e os elementos nele postos cresceram — campo de 470×32 px, preset de
-168 px, setas de 22 px —, de sorte que a margem encolheu sem comprimir a leitura.
+A divisão vertical do chassis deixou de ser aproximada. Cabeçalho de 48 px,
+margem de 16, ecrã de 396, vão de 16 e painel de 176 somam exactamente os 652 px
+em que o corpo fecha. O ecrã conserva o maior peso visual; os parâmetros são o
+painel de controlo, não o centro. A proporção áurea que antes justificava os
+410 px do ecrã cedeu lugar à grelha de oito, e o ganho de 14 px foi para o
+painel. O cabeçalho mantém os 48 px e os elementos nele postos — campo de 470×32
+px, preset de 168 px, setas de 22 px —, agora com a margem certa de 16.
 
 ## Matriz de modulação
 
@@ -52,25 +80,32 @@ calculada a partir da área disponível e limitada entre 15 e 34 px.
 
 ## Painel de knobs
 
-O painel encolheu de 314 para 180 px de chapa: a seção do master dita a altura
-da faixa, e o painel acompanha. Os knobs do grain ficaram numa fila única de
-seis — Size, Density, Position, Spray, Pitch, Glide — com a janela do grain na
-sétima célula, ocupando a largura toda da chapa (~120 px por célula). A curva
-do envelope, agora com a caixa a ocupar a altura toda da faixa (280×164),
-vive só no módulo ENV. O P.RAND e o Scan
-saíram dos knobs e viraram dois sliders lineares no rodapé do ecrã, ao lado do
-Play — trilho fino com leitura à direita, como no Ableton. O Pan, o Stereo e o
-Level desceram para a seção Master: ela passou a 198 px de largura, com os
-quatro knobs (Volume, Pan, Stereo, Level) numa grelha 2×2 e o medidor vertical
-na coluna da direita. O bloco de linhas do painel centra-se na altura
-disponível, e os discos de 64 px juntam-se em células de ~82 px no envelope,
-~97 no filtro e ~122 no LFO.
+O painel mede 176 px de chapa: 16 de padding em cima, quatro módulos de 32 px na
+sidebar (128 no total, centrados na altura interior) e 16 em baixo — sobram 8 px de
+folga de cada lado, e é essa folga que mantém a coluna dentro do painel. Os knobs
+do grain continuam numa fila única de seis — Size, Density,
+Position, Spray, Pitch, Glide —, com a janela do grain na sétima célula. A curva
+do envelope ocupa a altura toda da faixa (280×144) e vive só no módulo ENV. O
+P.RAND e o Scan saíram dos knobs e são dois sliders lineares no rodapé do ecrã,
+ao lado do Play — trilho fino com leitura à direita, como no Ableton.
+
+A grelha de knobs recebe o resto da chapa: duas filas de 72 px quando o módulo
+tem oito células, uma fila de 90 quando tem quatro. Os discos de 64 px centram-se
+na célula e os filetes divisórios entram 8 px em cada ponta, para não tocarem o
+contorno do painel. O master cresceu para 216 px de largura — interior de
+184×144, com o rótulo em 16 px e duas filas de 64 — e leva os quatro knobs
+(Volume, Pan, Stereo, Level) numa grelha 2×2, com o medidor vertical de 24 px na
+coluna da direita, separado por 8. O bloco de linhas centra-se na altura
+disponível, de modo que os discos de 64 px se juntam em células de ~82 px no
+envelope, ~97 no filtro e ~122 no LFO.
 
 ## Módulo LFO
 
 No módulo LFO, o sync manda nos parâmetros: em Free ficam o Rate em Hz, em Sync
 esse knob dá lugar ao DIV — o detent ocupa a célula do Rate e o Rate desaparece,
-sem parâmetros mortos à vista. O grid tem três colunas sem células fundidas:
+sem parâmetros mortos à vista. O botão Sync é um booleano, e o texto dele diz o
+estado (Free ou Sync) em vez de ficar em branco: sem os nomes, o botão existia e
+não se via. O grid tem três colunas sem células fundidas:
 Rate, Depth e Steps em cima; Target, Wave e Sync em baixo — os cinco ícones de
 forma colados num só compartimento de 150 px, longe das hairlines. A onda são
 dois ciclos que correm com a fase viva do áudio: desenho dim na amplitude cheia
@@ -81,15 +116,25 @@ ou outro, com o ativo aceso.
 
 ## Fora da caixa
 
-O teclado MIDI é uma gaveta fora do chassis: a chapa do instrumento termina no
-filete de fim do corpo — e termina sempre aí, em 652 px de design, com o
-teclado aberto ou fechado. A aba `MIDI - / MIDI +` fica colada por baixo, a
-92×20 px, e nunca se move: abre e fecha para fora, para baixo. Aberta, o cartão
-das teclas desdobra-se por baixo da aba até à borda da janela; fechada, resta
-apenas a aba e a janela encolhe 78 px. A escala do interface é ancorada na
-altura aberta, de modo que alternar a gaveta não reescala o resto. Na janela
-standalone as luzes de X e risco ficam à direita do cabeçalho, com 14 px de
-lado, e o trio de zoom foi suprimido por completo.
+O teclado MIDI deixou de ser uma gaveta pendurada no exterior e passou a ser um
+cartão do próprio chassis: largura do corpo, raio de 6 px, filete de 1 px e o
+mesmo respiro de 16 px que separa o painel do cabeçalho. O cartão assenta no
+`faceplate` do corpo, que agora se pinta até ao fundo do desenho — antes parava no
+fim do painel e o teclado ficava sobre um rectângulo preto, que era o "fundo
+preto" da secção. As teclas entram 8 px
+para dentro do cartão e o conjunto termina num canal de 44 px que aloja o
+interruptor de 20×20 — um `−` vectorial com o teclado aberto, um `+` com ele
+fechado. O glifo é desenhado em `paintGlyph`, não escrito: o carácter Unicode do
+menos chegava ao JUCE como três glifos de mojibake, porque `juce::String(const
+char*)` interpreta os bytes acima de 127 como Latin-1.
+
+Aberto, o cartão mede 80 px e as teclas ocupam a largura do conteúdo; fechado,
+resta uma tira de 32 px com a palavra MIDI à esquerda e o interruptor à direita.
+A janela acompanha: 764 px de design com o teclado aberto, 716 com ele fechado,
+uma diferença de 48. O chassis, esse, fecha sempre em 652, e a escala do
+interface continua ancorada na altura aberta, de modo que alternar a gaveta não
+reescala o resto. Na janela standalone as luzes de X e risco ficam à direita do
+cabeçalho, com 14 px de lado, e o trio de zoom foi suprimido por completo.
 
 ## Marca no cabeçalho
 
@@ -106,8 +151,11 @@ filete corre por baixo do nome. O kerning do "Opcoda" é o de sempre:
 A revisão seguinte assentou quatro contratos que antes viviam dispersos pelo
 código. A escala tipográfica ficou em `fonts.h`: caption de 9,5 px para
 etiquetas, body de 11 px para valores, title de 12,5 px para assinaturas e
-display de 14 px para estados vazios. O mono de 11 px serve apenas à coluna de
-desmontagem. As tooltips, que o JUCE desenhava na fonte do sistema, passaram a
+display de 14 px para estados vazios. A família é uma só — Switzer, em três pesos
+(Regular, Medium, Semibold) — e a coluna de desmontagem, que antes usava uma
+monoespacada do sistema, passou a usar a mesma Switzer: os algarismos do desenho
+têm avanço fixo, de sorte que os endereços continuam a alinhar sem uma segunda
+letra no ecrã. As tooltips, que o JUCE desenhava na fonte do sistema, passaram a
 usar o mesmo body; já não há uma superfície a falar outra língua.
 
 A cor segue um contrato de estado: `accent` diz activo, `accentSoft` fica
@@ -131,6 +179,5 @@ de 45 ms e a mesma curva — o que antes era excepção passou a regra.
 - U.S. Web Design System — *Design tokens*.
 - Design System Checklist — *Tokens, type, components and spacing*.
 - aiuxplayground — skills *Better Interface*, *Impeccable*, *Spacing Audit*.
-- Figma Community — *Golden Ratio Design Token Styler*.
 - Vanity Ibex — *Rogo* (estudo de formas geradas por corda; referência visual
   para a linguagem blocky e monocromática).

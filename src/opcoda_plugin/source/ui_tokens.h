@@ -2,23 +2,24 @@
 
 namespace opcoda::tokens {
 
-inline constexpr int spaceQuarter {2};
-inline constexpr int space1 {4};
-inline constexpr int space1Half {6};
-inline constexpr int space2 {8};
-inline constexpr int space2Half {10};
-inline constexpr int space3 {12};
-inline constexpr int space4 {16};
-inline constexpr int space5 {24};
-inline constexpr int space6 {32};
-inline constexpr int space7 {48};
+// Escala de espacamento: grelha de 8 px. 4 e' o unico passo abaixo de 8, para o
+// ajuste icone-rotulo. Tudo o resto sai daqui -- nao ha 6, 10, 12 nem 18 px
+// espalhados pelo layout.
+inline constexpr int space1 {4};   // micro: icone <-> rotulo
+inline constexpr int space2 {8};   // interno de componente
+inline constexpr int space3 {16};  // padding standard e separacao
+inline constexpr int space4 {24};  // separacao entre seccoes
+inline constexpr int space5 {32};  // espaco estrutural exterior
+
+// Raios: dois valores, mais nada. Paineis 6, controlos 3.
+inline constexpr int radiusPanel {6};
+inline constexpr int radiusControl {3};
+
+// Bordas: 1 px, sempre. O alpha fica aqui para todos os paineis usarem o mesmo.
+inline constexpr float borderAlpha {0.09f};
 
 inline constexpr int icon {24};
 inline constexpr int iconSmall {18};
 inline constexpr int controlHeight {22};
-inline constexpr int radius {8};
-
-// Proporção áurea: a divisão entre o ecrã e o painel segue 0,618.
-inline constexpr float golden {0.618f};
 
 } // namespace opcoda::tokens

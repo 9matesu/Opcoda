@@ -212,7 +212,7 @@ public:
         if (isRow) {
             if (lit > 0.01f && !down) {
                 g.setColour(palette::alpha(palette::ivory, 0.05f * lit));
-                g.fillRoundedRectangle(bounds, 2.0f);
+                g.fillRoundedRectangle(bounds, 3.0f);
             }
             const auto box = juce::Rectangle<float> {bounds.getX() + 2.0f,
                                                     bounds.getCentreY() - 5.5f, 11.0f, 11.0f};
@@ -285,7 +285,8 @@ public:
 
         if (look == "bar") {
             // glifo a' esquerda, nome a' direita: duas leituras no mesmo rectangulo.
-            const auto glyphBox = bounds.withWidth(18.0f).reduced(2.0f);
+            // caixa de 20 px, a mesma das abas de vista e dos botoes de parametro.
+            const auto glyphBox = bounds.withWidth(20.0f).reduced(2.0f);
             if (!paintGlyph(g, kind, glyphBox, ink, on)) {
                 // botao so' de texto (transporte): o nome ocupa o rectangulo todo
                 g.setFont(fonts().sans(9.0f, true));
@@ -296,7 +297,7 @@ public:
             }
             g.setFont(type::captionFont(on));
             g.setColour(ink);
-            g.drawText(button.getButtonText(), bounds.withTrimmedLeft(20.0f).reduced(2.0f, 0.0f),
+            g.drawText(button.getButtonText(), bounds.withTrimmedLeft(22.0f).reduced(2.0f, 0.0f),
                        juce::Justification::centredLeft, false);
             return;
         }
@@ -355,7 +356,7 @@ public:
 
         if (isHighlighted) {
             g.setColour(palette::alpha(palette::ivory, 0.09f));
-            g.fillRoundedRectangle(area.reduced(3, 1).toFloat(), 2.0f);
+            g.fillRoundedRectangle(area.reduced(3, 1).toFloat(), 3.0f);
         }
 
         if (isTicked) {
@@ -469,9 +470,9 @@ public:
 
     static void drawFocusRing(juce::Graphics& g, juce::Rectangle<float> bounds) {
         g.setColour(palette::charcoalDeep);
-        g.drawRoundedRectangle(bounds, 2.5f, 3.0f);
+        g.drawRoundedRectangle(bounds, 3.0f, 3.0f);
         g.setColour(palette::focusRing);
-        g.drawRoundedRectangle(bounds, 2.5f, 1.5f);
+        g.drawRoundedRectangle(bounds, 3.0f, 1.5f);
     }
 
     static void drawDetentSlider(juce::Graphics& g,
@@ -660,6 +661,13 @@ public:
             }
         };
 
+        // o hexagono e' construido acima, antes desta cadeia; sem este atalho
+        // caia no `else { return false; }` e o glifo nunca era desenhado.
+        if (kind == "hex") {
+            stroke();
+            return true;
+        }
+
         if (kind == "folder") {
             move(3.5f, 7.5f);
             line(3.5f, 6.5f);
@@ -763,6 +771,14 @@ public:
             line(18.0f, 18.0f);
             move(18.0f, 6.0f);
             line(6.0f, 18.0f);
+        } else if (kind == "minus") {
+            move(5.0f, 12.0f);
+            line(19.0f, 12.0f);
+        } else if (kind == "plus") {
+            move(5.0f, 12.0f);
+            line(19.0f, 12.0f);
+            move(12.0f, 5.0f);
+            line(12.0f, 19.0f);
         } else if (kind == "settings") {
             constexpr int kTeeth {6};
             for (int i = 0; i < kTeeth * 2; ++i) {

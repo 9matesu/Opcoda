@@ -16,6 +16,8 @@
 #include "palette.h"
 #include "plugin_processor.h"
 #include "ui_animation.h"
+#include "view_tab.h"
+#include "midi_led.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -184,8 +186,12 @@ private:
     // tira vertical a' direita do ecra: vistas e zoom, icones empilhados.
     juce::TextButton viewWaveButton_;
     juce::TextButton viewHexButton_;
-    juce::TextButton viewEntropyButton_;
     juce::TextButton viewMatrixButton_;
+
+    // abas tacteis das vistas: expandem com o hover mostrando o nome.
+    std::unique_ptr<ViewTab> viewWaveTab_;
+    std::unique_ptr<ViewTab> viewHexTab_;
+    std::unique_ptr<ViewTab> viewMatrixTab_;
 
     juce::TextButton playButton_;
     juce::TextButton holdButton_;
@@ -209,6 +215,9 @@ private:
     juce::TextButton presetNameButton_;
     juce::TextButton presetNextButton_;
     juce::TextButton themeButton_;
+    MidiLed midiLed_;
+    std::uint32_t lastMidiActivity_ {0};
+    float midiLedLevel_ {0.0f};
     juce::TextButton brandButton_;
     std::function<void()> onThemeRequested_;
     std::unique_ptr<juce::FileChooser> presetChooser_;
@@ -300,18 +309,12 @@ private:
 
     // areas que o paint precisa de conhecer sem perguntar aos filhos.
     juce::Rectangle<int> screenBezelBounds_;
-    juce::Rectangle<int> railBounds_;
-    juce::Rectangle<int> moduleRowBounds_;
-    juce::Rectangle<int> moduleTabsBounds_;
     juce::Rectangle<int> parameterPanelBounds_;
     juce::Rectangle<int> masterBayBounds_;
     juce::Rectangle<int> keyboardBayBounds_;
 
     // filete vertical entre o grupo do preset e o grupo do ficheiro no header.
     int headerDividerX_ {-1};
-
-    // o corpo do synth (ecra + painel + master), sem a baia do teclado.
-    juce::Rectangle<int> mainBodyBounds_;
 
     int chromeInset_ {0};
     int chromeRightInset_ {0};

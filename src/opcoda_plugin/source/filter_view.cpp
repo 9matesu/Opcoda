@@ -270,7 +270,7 @@ void FilterView::paint(juce::Graphics& g) {
 
     const auto bezel = getLocalBounds().toFloat();
     g.setColour(palette::display);
-    g.fillRoundedRectangle(bezel, 6.0f);
+    g.fillRoundedRectangle(bezel, 3.0f);
 
     const auto buildPath = [&](float cutoff1, float cutoff2) {
         juce::Path path;

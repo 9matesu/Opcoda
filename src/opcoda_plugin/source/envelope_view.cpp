@@ -320,7 +320,7 @@ void EnvelopeView::paint(juce::Graphics& g) {
     // -- ecra afundado --
     const auto bezel = getLocalBounds().toFloat();
     g.setColour(palette::display);
-    g.fillRoundedRectangle(bezel, 6.0f);
+    g.fillRoundedRectangle(bezel, 3.0f);
 
     g.setColour(palette::displayGrid);
     for (int i = 1; i < 4; ++i) {
