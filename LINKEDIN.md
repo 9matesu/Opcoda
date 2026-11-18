@@ -2,19 +2,19 @@
 
 **A granular synthesizer that reads executables as sound material.**
 
-Opcoda is a VST3 instrument and standalone app for Windows x64. It opens a
-Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), reads its structure, turns the
-bytes into samples and plays them through an eight-voice granular engine.
+Opcoda is a VST3 instrument and a standalone app for Windows x64. It opens a Portable
+Executable (`.exe`, `.dll`, `.bin`, `.sys`), reads its structure, turns the bytes into
+samples and plays them through an eight-voice granular engine.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
 ## The idea
 
-Every file has a shape. A Windows executable is not just code: it is a header, sections,
-resources and data, each with its own statistical signature. Opcoda treats that
-signature as sound material. The grain size, density, position and spray shape the
-texture; the filters, envelope and LFO shape the tone; the modulation matrix routes
-movement between them.
+Every file has a shape. A Windows executable is not just code: it is a header,
+sections, resources and data, each with its own statistical signature. Opcoda treats
+that signature as sound material. The grain size, density, position and spray shape
+the texture; the filters, envelope and LFO shape the tone; the modulation matrix
+routes movement between them.
 
 The sound is not a sample. It is the material itself.
 
