@@ -12,8 +12,7 @@
 
 Opcoda is a VST3 instrument and a standalone app for Windows x64. It reads a
 Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes into samples
-and plays them through an eight-voice granular engine. The instrument is
-monochrome, runs a 61-parameter engine and keeps the audio path free of
+and plays them through an eight-voice granular engine. The audio path is free of
 allocations.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
@@ -29,8 +28,7 @@ allocations.
   built-in decoder, no external library.
 - **Real-time safe**: no allocation, no lock, no I/O on the audio path; UI-to-DSP
   communication goes through atomics and a single-producer queue.
-- **Five themes**: Graphite, Classic, Light, Amber and Cyan. The screen stays black
-  in all of them, so the waveform always reads.
+- **Five themes**: Graphite, Classic, Light, Amber and Cyan.
 - **Factory presets** and `.opcoda` files to save and load state.
 - **Standalone and VST3** from the same binary.
 
@@ -52,9 +50,9 @@ C++ runtime when it is missing.
 | --- | --- |
 | ![ADSR with the live point](docs/assets/screenshots/opcoda-env.png) | ![Filter response with the analyser](docs/assets/screenshots/opcoda-filter.png) |
 
-| `HEX` | `ENTROPY` |
+| `HEX` | `MATRIX` |
 | --- | --- |
-| ![Byte grid with ASM](docs/assets/screenshots/opcoda-hex.png) | ![Entropy curve](docs/assets/screenshots/opcoda-entropy.png) |
+| ![Byte grid with ASM](docs/assets/screenshots/opcoda-hex.png) | ![Modulation matrix](docs/assets/screenshots/opcoda-matrix.png) |
 
 ## Build
 
