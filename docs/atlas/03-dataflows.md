@@ -54,7 +54,7 @@ flowchart LR
 | parametros | `dsp::GranularParams` | `src/opcoda_plugin/source/plugin_processor.cpp:484` | `src/opcoda_core/dsp/granular_engine.cpp:280` |
 | audio | `float`, dois canais | `src/opcoda_core/dsp/granular_engine.cpp:478` | `src/opcoda_plugin/source/plugin_processor.cpp:499` |
 
-A curva de entropia viaja com as amostras para alimentar a vista visual, porque o motor nao a pode calcular.
+A curva de entropia viaja com as amostras para desenhar a vista visual.
 Medir a entropia de toda a regiao dentro de `processBlock` seria trabalho de
 tamanho da regiao dentro da thread de audio, e com o transporte a arrastar a
 regiao isso acontecia a cada evento de rato. A medicao fica na thread de

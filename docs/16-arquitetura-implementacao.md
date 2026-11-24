@@ -96,7 +96,7 @@ Hann, e o corte ouvia-se. `rebuildWindow` passou a ser uma troca de ponteiro
 janela não salta o envelope de um grão de 2 s a meio. `activeWindowLength_`
 desapareceu porque o comprimento vive no grão que está a soar.
 
-O spray e' dispersao pura dos graos e nao depende da entropia local. A curva de entropia e' um mapa visual: regioes repetitivas aparecem baixas e regioes densas aparecem altas, e o usuario escolhe a regiao a ouvir. Nenhum parametro muda por causa da curva.
+A curva de entropia e' visual: o usuario a le para escolher a regiao a ouvir.
 
 ## Verificação de limites no parser
 

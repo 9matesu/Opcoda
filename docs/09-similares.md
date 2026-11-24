@@ -46,4 +46,4 @@ Limites para este TG: importação offline, sem tempo real e sem polifonia. Não
 
 ## Síntese
 
-Granulator II e Quanta 2 mostram como um granular deve soar e se comportar num instrumento sério. O Audacity mostra como o databending acontece hoje: rápido, mas bruto e fora de tempo real. O espaço do Opcoda fica exatamente entre eles. Nenhum dos três lê estrutura PE com segurança nem oferece um mapa visual de entropia por janela, que são as duas contribuições do trabalho.
+Granulator II e Quanta 2 mostram como um granular deve soar e se comportar num instrumento sério. O Audacity mostra como o databending acontece hoje: rápido, mas bruto e fora de tempo real. O espaço do Opcoda fica exatamente entre eles. Nenhum dos três lê estrutura PE com segurança nem mostra a entropia como imagem, que são as duas contribuições do trabalho.

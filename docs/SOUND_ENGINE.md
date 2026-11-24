@@ -64,30 +64,11 @@ posição = clamp(POSITION + uniforme(-SPRAY, +SPRAY) + LFO, 0, 1)
 O desvio é uma fração do material. `SPRAY = 0` mantém todos os grãos ancorados
 na mesma posição. `SPRAY = 1` permite leitura em qualquer ponto do buffer.
 
-O parâmetro `SPRAY` é independente da entropia. Ele sortea posições a partir do
-próprio knob. A curva de entropia não desloca grãos, não muda a densidade e não
-altera o som em nenhuma circunstância durante o uso normal do instrumento. O
-Granulator II usa spray como dispersão da posição de leitura; o Opcoda segue
-essa ideia, sem afirmar que a implementação seja idêntica.
+O parâmetro `SPRAY` sortea posições a partir do próprio knob.
 
 ## Entropia
 
-A entropia no Opcoda é um conceito visual. O Opcoda mede entropia de Shannon por
-coluna de bytes. A unidade é bits por byte, de 0 a 8. A curva tem no máximo
-1024 pontos e alimenta somente a vista `ENT`, com a legenda de 0 a 8 bits no
-rodapé. O usuário lê a curva para encontrar regiões densas ou repetitivas e
-escolher a região que quer ouvir.
-
-Entropia mede incerteza da distribuição de bytes. Um bloco com um único valor
-tem entropia 0; um bloco com os 256 valores igualmente distribuídos tem
-entropia 8. A medida não é um gerador aleatório, não substitui o spray e não
-controla nenhum parâmetro. A matriz exibida na interface tem cinco colunas
-(`Amp`, `Env`, `LFO`, `Key`, `Wheel`) e não oferece a entropia como fonte
-selecionável. O valor `entropy` existe no núcleo e é calculado a cada bloco,
-mas não é uma ferramenta de modulação ao alcance do usuário.
-
-O cálculo roda na thread de interface em `pe::reduceToColumns`. A thread de
-áudio recebe a curva pronta para desenhar a vista.
+A entropia no Opcoda é visual. O Opcoda mede entropia de Shannon por coluna de bytes, de 0 a 8 bits por byte, com até 1024 pontos, e desenha a vista `ENT`. O usuário lê a curva para escolher a região que quer ouvir.
 
 O cálculo roda na thread de interface em `pe::reduceToColumns`. A thread de
 áudio recebe a curva pronta.

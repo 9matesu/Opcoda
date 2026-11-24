@@ -40,9 +40,7 @@ A correlação entre H e a natureza do conteúdo é direta. Regiões com repeti�
 
 ### 5.2.4 Entropia como guia visual
 
-No Opcoda, a curva de entropia é um mapa. Ela mostra onde o arquivo é denso e onde é repetitivo, e serve para o usuário escolher por olho a região que quer ouvir. Nenhum parâmetro muda por causa da curva. A entropia não gera aleatoriedade, não desloca grãos e não altera a densidade por conta própria.
-
-A matriz de modulação mostrada na interface oferece cinco fontes: velocity, envelope, LFO, keytrack e mod wheel. A entropia não aparece nela. O núcleo calcula o valor de entropia na posição de leitura e o guarda como fonte interna, mas a interface não expõe essa fonte e nenhum parâmetro muda por causa dela no uso normal. A entropia é, para quem usa o instrumento, uma ferramenta de leitura visual: a curva ajuda a escolher a região, e o som vem da região escolhida.
+No Opcoda, a entropia é visual. A curva mostra a densidade do arquivo e o usuário escolhe por olho a região que quer ouvir.
 
 ## 5.3 Processamento digital de sinais e síntese granular
 
@@ -94,7 +92,7 @@ A solução canônica separa dois domínios temporais. A interface gráfica (cer
 
 ## 5.5 Síntese dos eixos
 
-Os quatro eixos convergem para a hipótese do trabalho: a leitura estática segura (5.1) fornece material bruto íntegro; a entropia (5.2) descreve esse material em um mapa visual; a granulação com janelamento e filtragem (5.3) converte o material em som utilizável; a arquitetura lock-free (5.4) garante a entrega em tempo real rígido. Cada eixo é testável por um ensaio do plano de validação: segurança por fuzzing, condicionamento por análise FFT, tempo real por medição de bloco e usabilidade por aceite com MIDI.
+Os quatro eixos convergem para a hipótese do trabalho: a leitura estática segura (5.1) fornece material bruto íntegro; a entropia (5.2) mostra o material em um mapa visual; a granulação com janelamento e filtragem (5.3) converte o material em som utilizável; a arquitetura lock-free (5.4) garante a entrega em tempo real rígido. Cada eixo é testável por um ensaio do plano de validação: segurança por fuzzing, condicionamento por análise FFT, tempo real por medição de bloco e usabilidade por aceite com MIDI.
 
 ## Referências
 

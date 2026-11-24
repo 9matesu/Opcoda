@@ -78,7 +78,7 @@ salta o envelope de um grão longo a meio.
 
 A entropia é a frequência de símbolos, não análise espectral: H(X) = −Σ p(xi)·log2 p(xi), com o alfabeto de 256 valores do byte, mede a informação média por símbolo e satura em 8 bits por byte quando todos os valores são equiprováveis. A escolha é teórica, não decorativa: o material é um fluxo de símbolos, não uma onda, e a estatística canônica de uma fonte de símbolos é a entropia — a FFT seria erro de categoria, análise espectral do que ainda não é espectro. O cálculo desliza em janelas de 2048 bytes (a fundamentação registra a faixa de 256 a 1024 como referência comparativa), porque um número único para o arquivo inteiro não serve à navegação: o perfil entrópico é o mapa. Nele, regiões de zeros e áreas não inicializadas ficam perto de 0, código compilado fica no meio-termo — distribuição enviesada de opcodes e operandos —, e blocos comprimidos, empacotados ou cifrados encostam nos 8 bits, comportamento análogo ao ruído estocástico de banda larga (LYDA; HAMROCK, 2007; SHANNON, 1948). O eixo de 0 a 8 bits permanece verdadeiro em qualquer zoom, e o custo é uma histograma de 256 caixas por janela — nenhum caminho de áudio usa FFT; a transformada existe apenas no ensaio T1, que mede a saída do motor.
 
-A entropia é um mapa visual. A curva desenha a vista ENT e o usuário a usa para escolher a região que quer ouvir. Nada muda no som por causa da curva. A matriz da interface oferece cinco fontes (velocity, envelope, LFO, keytrack e mod wheel) e não inclui a entropia. O valor de H é calculado no núcleo, mas não é uma ferramenta de modulação ao alcance do usuário. O instrumento toca os bytes da região escolhida; a curva ajuda a escolher essa região.
+A entropia é visual. A curva desenha a vista ENT e o usuário a usa para escolher a região que quer ouvir.
 
 A segurança do parser segue três princípios. O arquivo é aberto somente para
 leitura, copiado para um buffer próprio e fechado em seguida; nenhum trecho
@@ -203,13 +203,7 @@ sonificação de dados; e a engenharia de tempo real rígida entra pela arquitet
 — duas threads, fila SPSC, zero alocação no callback, guard de alocação.
 Nenhuma das três é decorativa: as três aparecem no código e nos testes.
 
-A entropia como mapa visual abre caminhos de leitura que não existem em sampler
-comercial. A curva de H deixa ver as seções do arquivo como seções de uma faixa,
-mostra regiões densas e regiões planas antes de qualquer audição e permite
-comparar binários diferentes pelo perfil. Nada disso é automático: o instrumento
-não toma decisão a partir da curva. O músico lê o mapa e escolhe a região. É essa
-a intersecção entre produção musical e teoria da informação que o Opcoda
-apresenta, e ela acontece na interface, não no motor de áudio.
+A entropia é visual. Mostra as seções do arquivo e regiões densas e planas antes da audição.
 
 Para um aluno de ADS, o valor do trabalho está na arquitetura — o som é só parte
 do resultado. O projeto demonstra, na prática, a divisão entre thread de
@@ -235,9 +229,7 @@ estatística canônica de uma fonte de símbolos, e a FFT seria erro de categori
 A entropia dá um eixo universal de 0 a 8 bits com interpretação física por
 região — zeros perto de 0, código no meio, comprimido perto de 8 — e é a mesma
 medida que comprime arquivos e detecta binários empacotados: teoria central no
-mundo, nichada no estúdio. E habilita o que nenhuma ferramenta comercial
-oferece: ver a densidade de informação do arquivo antes de ouvir, ler a curva
-como mapa de seções e escolher por olho a região que vai virar som.
+mundo, nichada no estúdio. No Opcoda, ela aparece como imagem na tela.
 
 Quando perguntarem sobre tempo real, a resposta é o guard: o callback de áudio
 não aloca, não trava, não faz I/O e não lança exceção; a regra é vigiada por um
