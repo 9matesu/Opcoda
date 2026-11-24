@@ -52,3 +52,13 @@ add_test(NAME opcoda_tests COMMAND opcoda_tests)
 add_executable(opcoda_alloc_guard_test alloc_guard_test.cpp)
 target_link_libraries(opcoda_alloc_guard_test PRIVATE opcoda_core GTest::gtest_main)
 add_test(NAME opcoda_alloc_guard COMMAND opcoda_alloc_guard_test)
+
+# O alloc guard substitui new/delete globais por malloc/free de proposito. O ASan
+# do GCC/Clang chama a isso alloc-dealloc-mismatch (a alocacao parece new e a
+# libertacao parece free) e aborta antes de o primeiro teste correr; o ASan do
+# MSVC nao faz essa verificacao. A recomendacao do proprio ASan para este caso e'
+# desligar a verificacao, nao a guarda.
+if(OPCODA_ASAN AND NOT MSVC)
+    set_tests_properties(opcoda_tests opcoda_alloc_guard PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=alloc_dealloc_mismatch=0")
+endif()
