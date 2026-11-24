@@ -13,14 +13,13 @@
 \usepackage{fancyhdr}
 \usepackage{titlesec}
 \usepackage{enumitem}
-\usepackage{graphicx}
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textbf{bloodworm trax} \quad Opcoda -- plano de implantaÃ§Ã£o}
-\fancyhead[R]{\small VersÃ£o 1.0 -- 24/11/2026}
-\fancyfoot[L]{\small Documento interno -- circulaÃ§Ã£o restrita}
-\fancyfoot[R]{\small PÃ¡gina \thepage}
+\fancyhead[L]{\small\textbf{bloodworm trax} \quad Opcoda, plano de implantação}
+\fancyhead[R]{\small Versão 1.0, 24/11/2026}
+\fancyfoot[L]{\small Documento interno, circulação restrita}
+\fancyfoot[R]{\small Página \thepage}
 \renewcommand{\headrulewidth}{0.6pt}
 \renewcommand{\footrulewidth}{0.4pt}
 
@@ -38,15 +37,15 @@
 {\Large\textbf{bloodworm trax}}\\[2mm]
 {\large Instrumento granular Opcoda}\\[6mm]
 \rule{\textwidth}{1.2pt}\\[4mm]
-{\LARGE\textbf{Plano de implantaÃ§Ã£o em produÃ§Ã£o}}\\[3mm]
-{\large Proposta de investimento -- versÃ£o 1.0}\\[8mm]
+{\LARGE\textbf{Plano de implantação em produção}}\\[3mm]
+{\large Proposta de investimento, versão 1.0}\\[8mm]
 \rule{\textwidth}{0.6pt}\\[6mm]
 \begin{tabular}{ll}
-Emitente & bloodworm trax, Vale do ParaÃ­ba -- SP \\
-DestinatÃ¡rio & Investidor -- circulaÃ§Ã£o restrita \\
+Emitente & bloodworm trax, Vale do Paraíba, SP \\
+Destinatário & Investidor, circulação restrita \\
 Data & 24 de novembro de 2026 \\
-ReferÃªncia & PLANO-IMP-2026-01 \\
-RepositÃ³rio & github.com/9matesu/Opcoda \\
+Referência & PLANO-IMP-2026-01 \\
+Repositório & github.com/9matesu/Opcoda \\
 Site & github.com/9matesu/bloodwormtrax \\
 \end{tabular}\\[4mm]
 \rule{\textwidth}{0.6pt}
@@ -56,67 +55,67 @@ Site & github.com/9matesu/bloodwormtrax \\
 
 \section{Objeto do documento}
 
-Este documento apresenta o plano de colocaÃ§Ã£o do instrumento Opcoda em operaÃ§Ã£o comercial, com estimativa de custos, responsabilidades, sequÃªncia de execuÃ§Ã£o e condiÃ§Ãµes de risco. O produto Ã© um sintetizador granular distribuÃ­do em trÃªs formatos -- VST3, aplicativo standalone e pacotes por sistema operacional -- acompanhado de site institucional e canal de venda direta.
+Este documento apresenta o plano de colocação do instrumento Opcoda em operação comercial, com estimativa de custos, responsabilidades, sequência de execução e condições de risco. O produto é um sintetizador granular distribuído em três formatos, a saber, VST3, aplicativo standalone e pacotes por sistema operacional, acompanhado de site institucional e canal de venda direta.
 
-A proposta limita-se Ã  implantaÃ§Ã£o. NÃ£o trata de pesquisa de mercado, projeto de produto ou captaÃ§Ã£o de recursos alÃ©m do necessÃ¡rio para executar o plano. Os valores apresentados foram levantados em 24 de novembro de 2026 e devem ser reconfirmados no momento da contrataÃ§Ã£o.
+A proposta limita-se à implantação. Não trata de pesquisa de mercado, projeto de produto ou captação de recursos além do necessário para executar o plano. Os valores foram levantados em 24 de novembro de 2026 e hão de ser reconfirmados no momento da contratação.
 
-\section{DecisÃµes tomadas}
+\section{Decisões tomadas}
 
 \begin{table}[h]
 \centering
 \begin{tabular}{@{}p{4.2cm}p{10.4cm}@{}}
 \toprule
-Item & DecisÃ£o \\
+Item & Decisão \\
 \midrule
-Modelo comercial & Venda direta proprietÃ¡ria. Sem lojas de aplicativos e sem revendedores. \\
-Hospedagem & GitHub Pages, branch master, pasta raiz. Sem servidor fÃ­sico e sem mÃ¡quina virtual. \\
-DomÃ­nio & bloodwormtr.ax, com DNS no Cloudflare. \\
+Modelo comercial & Venda direta proprietária. Não há lojas de aplicativos nem revendedores. \\
+Hospedagem & GitHub Pages, branch master, pasta raiz. Não há servidor físico nem máquina virtual. \\
+Domínio & bloodwormtr.ax, com DNS no Cloudflare. \\
 Certificado & Let's Encrypt emitido e renovado pelo GitHub Pages. \\
-Pagamento & Checkout hosted: Mercado Pago no Brasil, Stripe no exterior. \\
-DistribuiÃ§Ã£o & Releases do GitHub por tag de versÃ£o. \\
-LicenÃ§a & EULA prÃ³prio, pessoal, nÃ£o exclusivo e intransferÃ­vel, com duas ativaÃ§Ãµes. \\
+Pagamento & Checkout hosted, com Mercado Pago no Brasil e Stripe no exterior. \\
+Distribuição & Releases do GitHub por tag de versão. \\
+Licença & EULA próprio, pessoal, não exclusivo e intransferível, com duas ativações. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-A exclusÃ£o das lojas de aplicativos decorre da natureza do produto. O instrumento Ã© um plugin de estaÃ§Ã£o de trabalho digital; pacotes iOS e Android nÃ£o sÃ£o compatÃ­veis com esse formato. Manter presenÃ§a nessas lojas exigiria conta de desenvolvedor, assinatura de aplicativo e comissÃ£o sobre vendas, sem contrapartida de distribuiÃ§Ã£o Ãºtil.
+A exclusão das lojas de aplicativos decorre da natureza do produto. O instrumento é um plugin de estação de trabalho digital, e pacotes iOS e Android não são compatíveis com esse formato. Manter presença nessas lojas exigiria conta de desenvolvedor, assinatura de aplicativo e comissão sobre vendas, sem contrapartida de distribuição útil.
 
-\section{Ativo jÃ¡ constituÃ­do}
+\section{Ativo já constituído}
 
 \subsection{Produto}
 
-O repositÃ³rio contÃ©m o motor granular em C++20, sem dependÃªncia de JUCE no nÃºcleo, com leitura delimitada de arquivos PE, erros tipados e tratamento de oito vozes granulares, filtros, envelope, modulaÃ§Ã£o e 66 parÃ¢metros automatizÃ¡veis. A esteira de integraÃ§Ã£o jÃ¡ executa testes com ASan e publica artefatos para Windows, macOS e Linux.
+O repositório contém o motor granular em C++20, sem dependência de JUCE no núcleo, com leitura delimitada de arquivos PE, erros tipados e tratamento de oito vozes granulares, filtros, envelope, modulação e 66 parâmetros automatizáveis. A esteira de integração já executa testes com ASan e publica artefatos para Windows, macOS e Linux.
 
 \subsection{Site}
 
-O repositÃ³rio bloodwormtrax contÃ©m site estÃ¡tico em HTML, CSS e JavaScript puro: catÃ¡logo do selo, pÃ¡gina comercial do Opcoda e sistema de componentes. NÃ£o hÃ¡ etapa de construÃ§Ã£o, banco de dados ou cÃ³digo de servidor.
+O repositório bloodwormtrax contém site estático em HTML, CSS e JavaScript puro: catálogo do selo, página comercial do Opcoda e sistema de componentes. Não há etapa de construção, banco de dados ou código de servidor.
 
-\subsection{DistribuiÃ§Ã£o}
+\subsection{Distribuição}
 
-O arquivo .github/workflows/release.yml publica, a cada tag v*, os pacotes Windows VST3, Windows standalone, instalador Inno Setup, imagem macOS e arquivo Linux, com notas de versÃ£o geradas automaticamente. A infraestrutura de entrega de binÃ¡rios jÃ¡ opera sem custo.
+O arquivo .github/workflows/release.yml publica, a cada tag v*, os pacotes Windows VST3, Windows standalone, instalador Inno Setup, imagem macOS e arquivo Linux, com notas de versão geradas automaticamente. A infraestrutura de entrega de binários já opera sem custo.
 
-\section{AlteraÃ§Ãµes necessÃ¡rias}
+\section{Alterações necessárias}
 
 \begin{enumerate}[label=\arabic*.]
-\item Registrar o domÃ­nio bloodwormtr.ax e configurar os registros DNS: www como CNAME para 9matesu.github.io; Ã¡pice com quatro registros A para os IPs do GitHub Pages.
-\item Ativar domÃ­nio personalizado e redirecionamento forÃ§ado para HTTPS nas configuraÃ§Ãµes do GitHub Pages.
-\item Substituir os trÃªs marcadores em js/checkout.js pelos links reais de pagamento de Mercado Pago e Stripe.
-\item Confirmar que o commit de incremento de versÃ£o nÃ£o contÃ©m a marcaÃ§Ã£o [skip ci] antes de publicar a prÃ³xima tag.
+\item Registrar o domínio bloodwormtr.ax e configurar os registros DNS: www como CNAME para 9matesu.github.io; ápice com quatro registros A para os IPs do GitHub Pages.
+\item Ativar domínio personalizado e redirecionamento forçado para HTTPS nas configurações do GitHub Pages.
+\item Substituir os três marcadores em js/checkout.js pelos links reais de pagamento de Mercado Pago e Stripe.
+\item Confirmar que o commit de incremento de versão não contém a marcação [skip ci] antes de publicar a próxima tag.
 \item Configurar Cloudflare Email Routing para contato@bloodwormtr.ax e envio transacional da chave por Resend.
-\item Habilitar Dependabot, varredura de segredos e espelho do repositÃ³rio em provedor secundÃ¡rio.
+\item Habilitar Dependabot, varredura de segredos e espelho do repositório em provedor secundário.
 \item Instalar Cloudflare Web Analytics e monitoramento de disponibilidade em plano gratuito.
-\item Executar a verificaÃ§Ã£o final de DNS, HTTPS, links, moeda e presenÃ§a dos quatro artefatos na Release.
+\item Executar a verificação final de DNS, HTTPS, links, moeda e presença dos quatro artefatos na Release.
 \end{enumerate}
 
-Os itens 1, 2, 5, 6 e 7 dependem de credenciais e nÃ£o foram executados. Os itens 3, 4 e 8 foram preparados no cÃ³digo e aguardam apenas a inserÃ§Ã£o dos links de pagamento.
+Os itens 1, 2, 5, 6 e 7 dependem de credenciais e não foram executados. Os itens 3, 4 e 8 foram preparados no código e aguardam apenas a inserção dos links de pagamento.
 
-\section{PolÃ­tica de preÃ§os}
+\section{Política de preços}
 
 \begin{table}[h]
 \centering
 \begin{tabular}{@{}llr@{}}
 \toprule
-RegiÃ£o & Moeda & PreÃ§o \\
+Região & Moeda & Preço \\
 \midrule
 Brasil & BRL & R\$ 97 \\
 Estados Unidos & USD & US\$ 59 \\
@@ -125,9 +124,9 @@ Europa & EUR & EUR 55 \\
 \end{tabular}
 \end{table}
 
-A conversÃ£o de referÃªncia em 24 de novembro de 2026 Ã© de US\$ 1 para R\$ 5,85. Nessa base, R\$ 97 equivalem a aproximadamente US\$ 16,5. A polÃ­tica adota preÃ§o de produto, nÃ£o conversÃ£o cambial: o mercado brasileiro paga valor reduzido, e os mercados externos pagam preÃ§o internacional cheio. A moeda Ã© selecionada na pÃ¡gina comercial e mantida no navegador; valores e botÃµes de compra sÃ£o atualizados em conjunto a partir de js/checkout.js.
+A conversão de referência em 24 de novembro de 2026 é de US\$ 1 para R\$ 5,85. Nessa base, R\$ 97 equivalem a aproximadamente US\$ 16,5. A política adota preço de produto, não conversão cambial: o mercado brasileiro paga valor reduzido, e os mercados externos pagam preço internacional cheio. A moeda é selecionada na página comercial e mantida no navegador; valores e botões de compra são atualizados em conjunto a partir de js/checkout.js.
 
-A licenÃ§a inclui VST3, standalone, dez presets de fÃ¡brica, atualizaÃ§Ãµes da sÃ©rie 0.x, duas ativaÃ§Ãµes e suporte por e-mail. A entrega Ã© digital, por e-mail, em atÃ© 24 horas apÃ³s a confirmaÃ§Ã£o do pagamento.
+A licença inclui VST3, standalone, dez presets de fábrica, atualizações da série 0.x, duas ativações e suporte por e-mail. A entrega é digital, por e-mail, em até 24 horas após a confirmação do pagamento.
 
 \section{Custos}
 
@@ -135,36 +134,36 @@ A licenÃ§a inclui VST3, standalone, dez presets de fÃ¡brica, atualizaÃ§Ã�
 \toprule
 Item & Custo anual \\
 \midrule
-DomÃ­nio bloodwormtr.ax & US\$ 31 a US\$ 45 \\
+Domínio bloodwormtr.ax & US\$ 31 a US\$ 45 \\
 Hospedagem GitHub Pages & R\$ 0 \\
 Certificado TLS & R\$ 0 \\
-DNS, DNSSEC e proteÃ§Ã£o bÃ¡sica & R\$ 0 \\
-IntegraÃ§Ã£o contÃ­nua e publicaÃ§Ã£o & R\$ 0, dentro da cota gratuita \\
-Armazenamento e distribuiÃ§Ã£o de binÃ¡rios & R\$ 0 \\
-Checkout -- Stripe ou Mercado Pago & R\$ 0 fixo, mais 3\% a 6\% por transaÃ§Ã£o \\
-E-mail transacional -- atÃ© trÃªs mil mensagens & R\$ 0 \\
+DNS, DNSSEC e proteção básica & R\$ 0 \\
+Integração contínua e publicação & R\$ 0, dentro da cota gratuita \\
+Armazenamento e distribuição de binários & R\$ 0 \\
+Checkout, Stripe ou Mercado Pago & R\$ 0 fixo, mais 3\% a 6\% por transação \\
+E-mail transacional, até três mil mensagens & R\$ 0 \\
 Analytics e monitoramento & R\$ 0 \\
-Assinatura de cÃ³digo e notarizaÃ§Ã£o, fase posterior & US\$ 0 a US\$ 500 \\
+Assinatura de código e notarização, fase posterior & US\$ 0 a US\$ 500 \\
 \bottomrule
 \end{longtable}
 
-O custo fixo de entrada situa-se entre US\$ 31 e US\$ 45 por ano, correspondente ao domÃ­nio. Os valores de domÃ­nio variam por registrador e dependem da elegibilidade do titular para a extensÃ£o .ax; a cotaÃ§Ã£o definitiva deve ser obtida antes da aquisiÃ§Ã£o. A comissÃ£o de pagamento incide somente sobre vendas concluÃ­das.
+O custo fixo de entrada situa-se entre US\$ 31 e US\$ 45 por ano, correspondente ao domínio. Os valores variam por registrador e dependem da elegibilidade do titular para a extensão .ax; a cotação definitiva há de ser obtida antes da aquisição. A comissão de pagamento incide somente sobre vendas concluídas.
 
-A hospedagem gratuita nÃ£o admite checkout embutido. Por essa razÃ£o, o pagamento Ã© processado fora do site e a pÃ¡gina permanece como vitrine e canal de entrega.
+A hospedagem gratuita não admite checkout embutido. Por essa razão, o pagamento é processado fora do site, e a página permanece como vitrine e canal de entrega.
 
 \section{Cronograma}
 
 \begin{enumerate}[label=Fase \arabic*.]
-\item Registro de domÃ­nio, DNS, HTTPS, seguranÃ§a do repositÃ³rio e espelho. ResponsÃ¡vel: infraestrutura. Prazo: 1 dia Ãºtil.
-\item ConferÃªncia do commit de versÃ£o e publicaÃ§Ã£o de tag de ensaio. ResponsÃ¡vel: engenharia. Prazo: 1 dia Ãºtil.
-\item InserÃ§Ã£o dos links de pagamento e configuraÃ§Ã£o de e-mail transacional. ResponsÃ¡vel: operaÃ§Ã£o. Prazo: 1 dia Ãºtil.
-\item InstalaÃ§Ã£o de analytics e monitoramento; verificaÃ§Ã£o final. ResponsÃ¡vel: operaÃ§Ã£o. Prazo: 1 dia Ãºtil.
-\item Abertura de vendas. ResponsÃ¡vel: operaÃ§Ã£o. Prazo: imediato apÃ³s a verificaÃ§Ã£o.
+\item Registro de domínio, DNS, HTTPS, segurança do repositório e espelho. Responsável: infraestrutura. Prazo: 1 dia útil.
+\item Conferência do commit de versão e publicação de tag de ensaio. Responsável: engenharia. Prazo: 1 dia útil.
+\item Inserção dos links de pagamento e configuração de e-mail transacional. Responsável: operação. Prazo: 1 dia útil.
+\item Instalação de analytics e monitoramento, seguida da verificação final. Responsável: operação. Prazo: 1 dia útil.
+\item Abertura de vendas. Responsável: operação. Prazo: imediato após a verificação.
 \end{enumerate}
 
-A sequÃªncia Ã© rÃ­gida por dependÃªncia: domÃ­nio e certificado precedem qualquer prova pÃºblica; a Release precede o checkout, pois nÃ£o se vende licenÃ§a sem binÃ¡rio publicado; o e-mail transacional precede a primeira venda, pois Ã© por ele que a chave chega ao comprador.
+A sequência é rígida por dependência. Domínio e certificado precedem qualquer prova pública; a Release precede o checkout, pois não se vende licença sem binário publicado; o e-mail transacional precede a primeira venda, pois é por ele que a chave chega ao comprador. Cada etapa concluída reduz uma incerteza concreta da operação.
 
-\section{ Riscos e limitaÃ§Ãµes}
+\section{Riscos e limitações}
 
 \begin{table}[h]
 \centering
@@ -172,32 +171,31 @@ A sequÃªncia Ã© rÃ­gida por dependÃªncia: domÃ­nio e certificado prece
 \toprule
 Risco & Tratamento \\
 \midrule
-DomÃ­nio .ax com preÃ§o elevado ou elegibilidade restrita & Confirmar disponibilidade e registrador antes da aquisiÃ§Ã£o; alternativa: .com, com custo menor. \\
-Links de pagamento ainda em fase de configuraÃ§Ã£o & Substituir marcadores em js/checkout.js; enquanto isso, botÃµes levam Ã  seÃ§Ã£o de licenÃ§a. \\
-Commit de versÃ£o com [skip ci] impede a Release & Conferir mensagem antes de publicar a tag; validar artefatos na tag de ensaio. \\
-AusÃªncia de backend impede revogaÃ§Ã£o de chave & Registrado como limitaÃ§Ã£o transitÃ³ria; conta de usuÃ¡rio prevista para fase posterior. \\
-Aviso de publicador desconhecido no Windows & Assinatura de cÃ³digo prevista como item opcional de fase posterior. \\
-CobranÃ§a divergente do preÃ§o exibido & VerificaÃ§Ã£o final compara valor da pÃ¡gina com valor do checkout antes da abertura de vendas. \\
+Domínio .ax com preço elevado ou elegibilidade restrita & Confirmar disponibilidade e registrador antes da aquisição. A alternativa é o domínio .com, de custo menor. \\
+Links de pagamento ainda em fase de configuração & Substituir marcadores em js/checkout.js. Até lá, os botões levam à seção de licença. \\
+Commit de versão com [skip ci] impede a Release & Conferir mensagem antes de publicar a tag e validar artefatos na tag de ensaio. \\
+Ausência de backend impede revogação de chave & Limitação transitória. A conta de usuário está prevista para fase posterior. \\
+Aviso de publicador desconhecido no Windows & Assinatura de código prevista como item opcional de fase posterior. \\
+Cobrança divergente do preço exibido & A verificação final compara o valor da página com o valor do checkout antes da abertura de vendas. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{Indicadores de acompanhamento}
 
-ApÃ³s a abertura de vendas, acompanham: licenÃ§as emitidas por perÃ­odo, taxa de conversÃ£o da pÃ¡gina comercial, disponibilidade do site e da Release, e tempo mÃ©dio de entrega da chave. O volume inicial nÃ£o justifica contrataÃ§Ã£o de infraestrutura adicional; novos custos entram apenas quando a demanda exceder a cota gratuita de qualquer serviÃ§o.
+Após a abertura de vendas, acompanham-se licenças emitidas por período, taxa de conversão da página comercial, disponibilidade do site e da Release, e tempo médio de entrega da chave. O volume inicial não justifica contratação de infraestrutura adicional; novos custos entram apenas quando a demanda exceder a cota gratuita de qualquer serviço.
 
-\section{ AprovaÃ§Ã£o}
+\section{Aprovação}
 
 \begin{tabular}{ll}
-Preparado por & -------------------------------------------- \\
-ResponsÃ¡vel tÃ©cnico & -------------------------------------------- \\
-Investidor & -------------------------------------------- \\
-Data & -------------------------------------------- \\
+Preparado por & \rule{7cm}{0.4pt} \\\
+Responsável técnico & \rule{7cm}{0.4pt} \\\
+Investidor & \rule{7cm}{0.4pt} \\\
+Data & \rule{7cm}{0.4pt} \\\
 \end{tabular}
 
 \vspace{4mm}
 \rule{\textwidth}{0.4pt}
 
 \end{document}
-
 
