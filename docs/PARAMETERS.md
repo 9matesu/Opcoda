@@ -72,7 +72,7 @@ estéreo e as 24 células da matriz.
 Oito rotas, cada uma em três parâmetros automatizáveis e editáveis na vista
 MATRIX do display (tecla 4): `m1src`, `m1dst` e `m1amt` até `m8src`, `m8dst`,
 `m8amt`. Fontes: Off, LFO, envelope, velocidade, keytrack, mod wheel, CC74,
-CC71 e entropia. Destinos: Off, pitch, density, position, spray, grain size,
+CC71. Destinos: Off, pitch, density, position, spray, grain size,
 cutoff 1, Q 1, cutoff 2, Q 2, pan, grain level, drive e stereo width. O amount
 é bipolar, de -1 a +1, e o audio lê os 24 valores crus por bloco.
 

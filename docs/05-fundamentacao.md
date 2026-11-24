@@ -1,6 +1,6 @@
 # 5. Fundamentação teórica / Revisão da literatura
 
-Este capítulo organiza a base conceitual do Opcoda em quatro eixos: arquitetura de arquivos binários e engenharia reversa estática; teoria da informação e entropia; processamento digital de sinais e síntese granular; engenharia de software em tempo real rígido. O encadeamento entre os eixos corresponde ao pipeline do instrumento: o arquivo executável é lido com segurança, descrito por entropia, ressintetizado por granulação e entregue sob restrições de tempo real.
+Este capítulo organiza a base conceitual do Opcoda em quatro eixos: arquitetura de arquivos binários e engenharia reversa estática; teoria da informação e entropia; processamento digital de sinais e síntese granular; engenharia de software em tempo real rígido. O encadeamento entre os eixos corresponde ao pipeline do instrumento: o arquivo executável é lido com segurança, descrito visualmente pela curva de entropia, ressintetizado por granulação e entregue sob restrições de tempo real.
 
 ## 5.1 Arquitetura de arquivos binários e engenharia reversa estática
 
@@ -38,9 +38,11 @@ O cálculo sobre o arquivo completo produz um único número, insuficiente para 
 
 A correlação entre H e a natureza do conteúdo é direta. Regiões com repetição massiva de bytes, como preenchimento com zeros ou áreas não inicializadas, apresentam entropia próxima de zero. Código compilado padrão apresenta entropia intermediária, refletindo a distribuição enviesada de opcodes e operandos. Blocos comprimidos, empacotados ou cifrados apresentam entropia próxima de 8 bits por byte, comportamento análogo ao ruído estocástico de banda larga (LYDA; HAMROCK, 2007; SHANNON, 1948).
 
-### 5.2.4 Entropia como sinal de controle
+### 5.2.4 Entropia como guia visual
 
-No Opcoda, a curva de entropia opera como fonte de modulação paramétrica contínua (Entropy-to-CV): a entropia local pondera a dispersão temporal dos grãos, sua aleatoriedade de posição e a densidade da nuvem. Regiões de alta entropia geram texturas instáveis e ruidosas; regiões de baixa entropia geram texturas estáveis e periódicas. A justificativa teórica é que a entropia resume, em um escalar por janela, a mesma distinção entre ordem e ruído que a síntese granular manipula no domínio temporal.
+No Opcoda, a curva de entropia é um mapa. Ela mostra onde o arquivo é denso e onde é repetitivo, e serve para o usuário escolher por olho a região que quer ouvir. Nenhum parâmetro muda por causa da curva. A entropia não gera aleatoriedade, não desloca grãos e não altera a densidade por conta própria.
+
+A matriz de modulação mostrada na interface oferece cinco fontes: velocity, envelope, LFO, keytrack e mod wheel. A entropia não aparece nela. O núcleo calcula o valor de entropia na posição de leitura e o guarda como fonte interna, mas a interface não expõe essa fonte e nenhum parâmetro muda por causa dela no uso normal. A entropia é, para quem usa o instrumento, uma ferramenta de leitura visual: a curva ajuda a escolher a região, e o som vem da região escolhida.
 
 ## 5.3 Processamento digital de sinais e síntese granular
 
@@ -92,7 +94,7 @@ A solução canônica separa dois domínios temporais. A interface gráfica (cer
 
 ## 5.5 Síntese dos eixos
 
-Os quatro eixos convergem para a hipótese do trabalho: a leitura estática segura (5.1) fornece material bruto íntegro; a entropia (5.2) descreve esse material em sinal de controle; a granulação com janelamento e filtragem (5.3) converte o material em som utilizável; a arquitetura lock-free (5.4) garante a entrega em tempo real rígido. Cada eixo é testável por um ensaio do plano de validação: segurança por fuzzing, condicionamento por análise FFT, tempo real por medição de bloco e usabilidade por aceite com MIDI.
+Os quatro eixos convergem para a hipótese do trabalho: a leitura estática segura (5.1) fornece material bruto íntegro; a entropia (5.2) descreve esse material em um mapa visual; a granulação com janelamento e filtragem (5.3) converte o material em som utilizável; a arquitetura lock-free (5.4) garante a entrega em tempo real rígido. Cada eixo é testável por um ensaio do plano de validação: segurança por fuzzing, condicionamento por análise FFT, tempo real por medição de bloco e usabilidade por aceite com MIDI.
 
 ## Referências
 

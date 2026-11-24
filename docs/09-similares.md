@@ -20,7 +20,7 @@ Sintetizador granular comercial da Audio Damage, empresa independente ativa desd
 
 Pontos fortes: roda em qualquer DAW moderna, inclui CLAP como o Opcoda, interface pensada para palco e estúdio, produto mantido com suporte.
 
-Limites para este TG: a fonte continua sendo sample tradicional. Não há parser de executáveis, mapa de seções PE ou modulação guiada por entropia de bytes. O tratamento de entrada assume áudio válido, então robustez contra binários corrompidos não faz parte do escopo.
+Limites para este TG: a fonte continua sendo sample tradicional. Não há parser de executáveis, mapa de seções PE nem mapa visual de entropia de bytes. O tratamento de entrada assume áudio válido, então robustez contra binários corrompidos não faz parte do escopo.
 
 ## Similar 3: Audacity, importação de dados brutos
 
@@ -38,7 +38,7 @@ Limites para este TG: importação offline, sem tempo real e sem polifonia. Não
 | Granular em tempo real | sim, até 32 vozes | sim, polifônico | não | sim, 8 grãos simultâneos (MVP) |
 | Janelamento de grãos | sim, 4 formas | sim | não | sim, Hann e Gaussiana |
 | Parser estrutural PE | não | não | não | sim, com bounds checking |
-| Modulação por entropia | não | não | não | sim, Shannon por janela e seção |
+| Mapa visual de entropia | não | não | não | sim, Shannon por janela e seção |
 | Condicionamento DC/limiter | não se aplica | parcial | não | sim, DC-blocker e limiter |
 | Segurança contra corrompidos | não se aplica | não se aplica | não | sim, sandbox READONLY e fuzzing |
 | Formatos | Max for Live | VST3, AU, AAX, CLAP | editor offline | VST3 (CLAP pós-entrega) |
@@ -46,4 +46,4 @@ Limites para este TG: importação offline, sem tempo real e sem polifonia. Não
 
 ## Síntese
 
-Granulator II e Quanta 2 mostram como um granular deve soar e se comportar num instrumento sério. O Audacity mostra como o databending acontece hoje: rápido, mas bruto e fora de tempo real. O espaço do Opcoda fica exatamente entre eles. Nenhum dos três lê estrutura PE com segurança nem usa entropia como sinal de controle, que são as duas contribuições do trabalho.
+Granulator II e Quanta 2 mostram como um granular deve soar e se comportar num instrumento sério. O Audacity mostra como o databending acontece hoje: rápido, mas bruto e fora de tempo real. O espaço do Opcoda fica exatamente entre eles. Nenhum dos três lê estrutura PE com segurança nem oferece um mapa visual de entropia por janela, que são as duas contribuições do trabalho.

@@ -18,11 +18,11 @@ Duas regras valem para o artigo inteiro:
 ## Parte 1 — O que o instrumento é
 
 Opcoda é um sintetizador granular que usa um executável Portable Executable (PE)
-como matéria-prima e como mecanismo de controle. O utilizador arrasta um `.exe`,
+como matéria-prima e oferece um mapa visual de entropia para escolher a região. O utilizador arrasta um `.exe`,
 `.dll`, `.bin` ou `.sys` para a janela; o parser valida o cabeçalho, enumera as
-seções e converte os bytes da região escolhida em amostras de áudio. A entropia
-de Shannon, calculada por janelas de 2048 bytes, vira sinal de controle da
-distribuição dos grãos.
+seções e converte os bytes da região escolhida em amostras de áudio. A curva de entropia
+de Shannon, calculada por janelas de 2048 bytes, é um mapa visual da densidade do
+arquivo. O usuário a lê para escolher a região a ouvir. A curva não altera os grãos.
 
 ### 1.1 Cadeia de sinal
 
@@ -48,7 +48,7 @@ não procura assinaturas de empacotador, não faz análise de malware.
 - **FM**: o grão é reprodução amostrada, não oscilador. FM real exigiria
   portadora por grão.
 - **Seleção inteligente de blocos**: adiada pela própria especificação; a
-  entropia já modula a dispersão.
+  entropia é apenas um mapa visual da densidade do arquivo.
 - **CLAP**: previsto na arquitetura, fora da entrega. A entrega é VST3 x64 e
   Standalone para Windows.
 - **Polifonia**: nunca existiu. O motor tem um gate e um envelope global.
@@ -453,8 +453,8 @@ Cada rota é um terno:
 { source, destination, amount }
 ```
 
-- **Fontes:** LFO 1, envelope 1, envelope 2, velocity, keytrack, mod wheel, CC 74,
-  CC 71, entropia da janela de leitura.
+- **Fontes expostas na interface:** velocity, envelope, LFO, keytrack e mod wheel.
+  A entropia é um mapa visual e não aparece como fonte selecionável na matriz.
 - **Destinos:** pitch, density, position, spray, grain size, cutoff 1, Q 1,
   cutoff 2, Q 2, pan, grain level, drive.
 - **Profundidade:** −1 a +1, somada ao valor do parâmetro e limitada à faixa.

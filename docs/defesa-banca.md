@@ -78,7 +78,7 @@ salta o envelope de um grão longo a meio.
 
 A entropia é a frequência de símbolos, não análise espectral: H(X) = −Σ p(xi)·log2 p(xi), com o alfabeto de 256 valores do byte, mede a informação média por símbolo e satura em 8 bits por byte quando todos os valores são equiprováveis. A escolha é teórica, não decorativa: o material é um fluxo de símbolos, não uma onda, e a estatística canônica de uma fonte de símbolos é a entropia — a FFT seria erro de categoria, análise espectral do que ainda não é espectro. O cálculo desliza em janelas de 2048 bytes (a fundamentação registra a faixa de 256 a 1024 como referência comparativa), porque um número único para o arquivo inteiro não serve à navegação: o perfil entrópico é o mapa. Nele, regiões de zeros e áreas não inicializadas ficam perto de 0, código compilado fica no meio-termo — distribuição enviesada de opcodes e operandos —, e blocos comprimidos, empacotados ou cifrados encostam nos 8 bits, comportamento análogo ao ruído estocástico de banda larga (LYDA; HAMROCK, 2007; SHANNON, 1948). O eixo de 0 a 8 bits permanece verdadeiro em qualquer zoom, e o custo é uma histograma de 256 caixas por janela — nenhum caminho de áudio usa FFT; a transformada existe apenas no ensaio T1, que mede a saída do motor.
 
-A entropia não é só mapa: é sinal de controle. O valor de H na posição de leitura entra na matriz como fonte — o Entropy-to-CV da fundamentação —, de sorte que regiões repetitivas ancoram o grão e regiões densas o dispersam; a mesma curva desenha a vista de entropia que o usuário usa para navegar. O instrumento não toca os bytes: toca a incerteza dos bytes.
+A entropia é um mapa visual. A curva desenha a vista ENT e o usuário a usa para escolher a região que quer ouvir. Nada muda no som por causa da curva. A matriz da interface oferece cinco fontes (velocity, envelope, LFO, keytrack e mod wheel) e não inclui a entropia. O valor de H é calculado no núcleo, mas não é uma ferramenta de modulação ao alcance do usuário. O instrumento toca os bytes da região escolhida; a curva ajuda a escolher essa região.
 
 A segurança do parser segue três princípios. O arquivo é aberto somente para
 leitura, copiado para um buffer próprio e fechado em seguida; nenhum trecho
@@ -203,15 +203,13 @@ sonificação de dados; e a engenharia de tempo real rígida entra pela arquitet
 — duas threads, fila SPSC, zero alocação no callback, guard de alocação.
 Nenhuma das três é decorativa: as três aparecem no código e nos testes.
 
-Da entropia como parâmetro abrem-se intersecções ainda menos ortodoxas de
-produção musical. A curva de H pode virar *arrangement* — as seções do arquivo
-como seções da faixa; pode ditar densidade e tamanho do grão, regiões densas
-pedindo grãos longos e regiões planas pedindo grãos curtos; pode selecionar
-material — varrer uma pasta de binários e escolher os de H perto de 8, ruidosos,
-ou perto de 0, quase silenciosos; e pode dobrar sobre si mesma — a entropia da
-entropia, a velocidade de complexidade do material, como modulador. Nenhuma
-dessas ligações existe em sampler comercial: o Opcoda é um instrumento
-estatístico, e é aí que a produção musical encontra a teoria da informação.
+A entropia como mapa visual abre caminhos de leitura que não existem em sampler
+comercial. A curva de H deixa ver as seções do arquivo como seções de uma faixa,
+mostra regiões densas e regiões planas antes de qualquer audição e permite
+comparar binários diferentes pelo perfil. Nada disso é automático: o instrumento
+não toma decisão a partir da curva. O músico lê o mapa e escolhe a região. É essa
+a intersecção entre produção musical e teoria da informação que o Opcoda
+apresenta, e ela acontece na interface, não no motor de áudio.
 
 Para um aluno de ADS, o valor do trabalho está na arquitetura — o som é só parte
 do resultado. O projeto demonstra, na prática, a divisão entre thread de
@@ -238,8 +236,8 @@ A entropia dá um eixo universal de 0 a 8 bits com interpretação física por
 região — zeros perto de 0, código no meio, comprimido perto de 8 — e é a mesma
 medida que comprime arquivos e detecta binários empacotados: teoria central no
 mundo, nichada no estúdio. E habilita o que nenhuma ferramenta comercial
-oferece: modular por densidade de informação, a curva do arquivo virando
-arrangement, o grão seguindo a incerteza do material.
+oferece: ver a densidade de informação do arquivo antes de ouvir, ler a curva
+como mapa de seções e escolher por olho a região que vai virar som.
 
 Quando perguntarem sobre tempo real, a resposta é o guard: o callback de áudio
 não aloca, não trava, não faz I/O e não lança exceção; a regra é vigiada por um

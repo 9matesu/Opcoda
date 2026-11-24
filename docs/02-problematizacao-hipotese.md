@@ -14,7 +14,7 @@ Abrir um .exe como áudio bruto em um editor como o Audacity gera som, mas um so
 
 ## Pergunta de pesquisa
 
-Como construir um instrumento em tempo real que leia binários PE arbitrários com segurança e os converta em material sonoro controlável, por síntese granular guiada por entropia, sem travar ou atrasar o host de áudio?
+Como construir um instrumento em tempo real que leia binários PE arbitrários com segurança e os converta em material sonoro controlável, por síntese granular com mapa visual de entropia para escolher a região, sem travar ou atrasar o host de áudio?
 
 ## Hipóteses
 

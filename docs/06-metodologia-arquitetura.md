@@ -10,7 +10,7 @@
     -> valida PE + NumberOfSections
     -> para cada seção: valida PointerToRawData + SizeOfRawData < fileSize
     -> copia defensiva p/ heap owned (float normalizado)
-    -> calcula entropia H por janela 2048B + metadados por seção
+    -> calcula entropia H por janela 2048B + metadados por seção (mapa visual)
     -> munmap/close
     -> publica descritor imutável via SPSC Queue
          |
