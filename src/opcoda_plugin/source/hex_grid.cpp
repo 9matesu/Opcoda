@@ -347,7 +347,7 @@ juce::Rectangle<float> HexGrid::thumbRect() const noexcept {
     const auto travel = metrics_.rail.getHeight() - thumbHeight;
     const auto position = juce::jlimit(
         0.0f, 1.0f,
-        static_cast<float>(topByte_) / static_cast<float>(juce::jmax<std::uint64_t>(1, highestTop())));
+        static_cast<float>(topByte_) / static_cast<float>(juce::jmax(std::uint64_t {1}, highestTop())));
     return {metrics_.rail.getX(), metrics_.rail.getY() + travel * position,
             metrics_.rail.getWidth(), thumbHeight};
 }

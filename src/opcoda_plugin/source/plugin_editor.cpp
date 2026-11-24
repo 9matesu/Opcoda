@@ -2010,7 +2010,7 @@ void PluginEditor::activateByte(std::uint64_t address) {
 
 void PluginEditor::moveRegionTo(std::uint64_t address) {
     const auto range = owner_.byteRange();
-    const auto length = juce::jmax<std::uint64_t>(range.length(), 64);
+    const auto length = juce::jmax(range.length(), std::uint64_t {64});
     pushUndoSnapshot();
     static_cast<void>(owner_.setByteRange(address, address + length));
 }

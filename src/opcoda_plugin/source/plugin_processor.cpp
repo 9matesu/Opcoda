@@ -871,8 +871,8 @@ std::unique_ptr<juce::XmlElement> PluginProcessor::stateXml() {
 
     state.setProperty("sourcePath", sourcePath_, nullptr);
 
-    state.setProperty("byteStart", static_cast<std::int64_t>(byteRange_.start), nullptr);
-    state.setProperty("byteEnd", static_cast<std::int64_t>(byteRange_.end), nullptr);
+    state.setProperty("byteStart", static_cast<juce::int64>(byteRange_.start), nullptr);
+    state.setProperty("byteEnd", static_cast<juce::int64>(byteRange_.end), nullptr);
 
     return state.createXml();
 }
@@ -897,10 +897,10 @@ bool PluginProcessor::loadStateXml(const juce::XmlElement& xml) {
     if (path.isNotEmpty() && juce::File(path).existsAsFile()) {
         if (ingest(path)) {
             const auto start = static_cast<std::uint64_t>(
-                juce::jmax<juce::int64>(0, tree.getProperty("byteStart").toString()
+                juce::jmax(static_cast<juce::int64>(0), tree.getProperty("byteStart").toString()
                                                      .getLargeIntValue()));
             const auto end = static_cast<std::uint64_t>(
-                juce::jmax<juce::int64>(0, tree.getProperty("byteEnd").toString()
+                juce::jmax(static_cast<juce::int64>(0), tree.getProperty("byteEnd").toString()
                                                    .getLargeIntValue()));
             if (end > start) {
                 static_cast<void>(setByteRange(start, end));
