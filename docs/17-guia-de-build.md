@@ -105,6 +105,13 @@ padrão do CMake. Não é preciso clang, lld-link nem qualquer ajuste manual.
 No macOS e no Linux o mesmo `OPCODA_ASAN` usa `-fsanitize=address`, com a flag de
 compilador escolhida por `if(MSVC)` no `CMakeLists.txt`.
 
+O alloc guard substitui `new`/`delete` globais por `malloc`/`free`. O ASan do
+GCC/Clang chama a isso `alloc-dealloc-mismatch` e aborta antes do primeiro teste;
+o ASan do MSVC não faz essa verificação. Os testes correm com
+`ASAN_OPTIONS=alloc_dealloc_mismatch=0` fora do MSVC (definido em
+`tests/CMakeLists.txt`). É um falso positivo da configuração do guard, não um
+vazamento.
+
 O preset `dev` fica com CRT dinâmico porque o ASan do MSVC exige `/MD` ou
 `/MDd`. O `release` usa CRT estático de propósito: um VST3 que linka contra
 `MSVCP140D.dll` só carrega numa máquina com Visual Studio instalado. Ver
@@ -157,6 +164,10 @@ testes) e o build de release em Windows, macOS e Linux em cada push e pull
 request. `.github/workflows/release.yml` corre a release nos três sistemas
 quando uma tag `v*` é publicada, empacota (instalador, `.dmg` e `.tar.gz`) e
 publica os ficheiros no GitHub Release.
+
+Os testes de ponta a ponta que leem `C:\Windows\System32\notepad.exe` são
+saltados com `GTEST_SKIP()` fora do Windows; o resto da suíte corre em todos os
+sistemas.
 
 ## CMAKE_BUILD_TYPE ausente: o plugin que o Ableton não abria
 

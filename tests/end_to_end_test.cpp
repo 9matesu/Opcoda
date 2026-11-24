@@ -139,7 +139,9 @@ std::vector<float> renderThroughTransport(const std::vector<std::uint8_t>& bytes
 TEST(EndToEnd, RealExecutableBecomesAudio) {
     // notepad.exe e' o binario de referencia do ensaio T1.
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty()) << "notepad.exe nao encontrado";
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
     ASSERT_TRUE(parsed.ok()) << opcoda::pe::toString(parsed.error);
@@ -157,7 +159,9 @@ TEST(EndToEnd, RealExecutableBecomesAudio) {
 
 TEST(EndToEnd, OutputHasNoDcOffset) {
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty());
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
     ASSERT_TRUE(parsed.ok());
@@ -178,7 +182,9 @@ TEST(EndToEnd, OutputHasNoDcOffset) {
 
 TEST(EndToEnd, CorruptedBinaryIsRejectedWithTypedError) {
     auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty());
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     bytes[0] = 'X';
     const auto bad = opcoda::pe::parse(bytes.data(), bytes.size());
@@ -189,7 +195,9 @@ TEST(EndToEnd, CorruptedBinaryIsRejectedWithTypedError) {
 
 TEST(EndToEnd, TruncatedRealBinaryIsRejected) {
     auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty());
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     bytes.resize(bytes.size() / 2);
     const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
@@ -206,7 +214,9 @@ TEST(EndToEnd, TruncatedRealBinaryIsRejected) {
 
 TEST(EndToEnd, TransportPlayProducesAudioWithoutMidi) {
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty()) << "notepad.exe nao encontrado";
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     std::vector<float> heads;
     const auto audio = renderThroughTransport(bytes, 200, &heads);
@@ -225,7 +235,9 @@ TEST(EndToEnd, TransportPlayProducesAudioWithoutMidi) {
 
 TEST(EndToEnd, StalledTransportIsSilent) {
     const auto bytes = readFile("C:\\Windows\\System32\\notepad.exe");
-    ASSERT_FALSE(bytes.empty());
+    if (bytes.empty()) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
 
     const auto parsed = opcoda::pe::parse(bytes.data(), bytes.size());
     ASSERT_TRUE(parsed.ok());
@@ -261,6 +273,9 @@ TEST(EndToEnd, StalledTransportIsSilent) {
 
 TEST(EndToEnd, ParseFileReadsFromDisk) {
     const auto parsed = parseFile("C:\\Windows\\System32\\notepad.exe");
+    if (!parsed.ok() && parsed.error == opcoda::pe::PeError::kEmpty) {
+        GTEST_SKIP() << "notepad.exe ausente (o fixture e' do Windows)";
+    }
     ASSERT_TRUE(parsed.ok()) << opcoda::pe::toString(parsed.error);
     EXPECT_GT(parsed.image.numberOfSections, 3u);
     EXPECT_STREQ(parsed.image.sections[0].name, ".text");
