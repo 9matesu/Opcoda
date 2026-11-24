@@ -28,25 +28,23 @@
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
 \titlespacing*{\subsection}{0pt}{10pt}{4pt}
 
-\setlength{\parskip}{5pt}
+\setlength{\parskip}{4pt}
 \setlength{\parindent}{0pt}
+\setlength{\fboxsep}{6pt}
 
 \begin{document}
 
 \begin{center}
-\begin{tabular}{cc}
-\includegraphics[height=1.5cm]{assets/bloodwormtrax-mark.png} &
-\includegraphics[height=1.5cm]{assets/opcoda-icon.png} \\[3mm]
-bloodworm trax & Opcoda \\
-\end{tabular}
+\includegraphics[height=1.9cm]{assets/bloodwormtrax-mark.png}\quad
+\includegraphics[height=1.9cm]{assets/opcoda-icon.png}
 
-\vspace{14mm}
+\vspace{8mm}
 
-{\LARGE\textbf{Plano de implantação em produção}}\\[5mm]
+{\LARGE\textbf{Plano de implantação em produção}}\\[4mm]
 {\large Apresentação do produto, dos custos e das condições de operação comercial}
 \end{center}
 
-\vspace{10mm}
+\vspace{8mm}
 
 \section{Objeto do documento}
 
@@ -58,10 +56,10 @@ A proposta limita-se à implantação. Não trata de pesquisa de mercado, projet
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}p{4.2cm}p{10.4cm}@{}}
-\toprule
+\fbox{\begin{tabular}{p{4.1cm}p{10.2cm}}
+\hline
 Item & Decisão \\
-\midrule
+\hline
 Modelo comercial & Venda direta proprietária. Não há lojas de aplicativos nem revendedores. \\
 Hospedagem & GitHub Pages, branch master, pasta raiz. Não há servidor físico nem máquina virtual. \\
 Domínio & bloodwormtr.ax, com DNS no Cloudflare. \\
@@ -69,9 +67,8 @@ Certificado & Let's Encrypt emitido e renovado pelo GitHub Pages. \\
 Pagamento & Checkout hosted, com Mercado Pago no Brasil e Stripe no exterior. \\
 Distribuição & Releases do GitHub por tag de versão. \\
 Licença & EULA próprio, pessoal, não exclusivo e intransferível, com duas ativações. \\
-\bottomrule
-\end{tabular}
-\end{table}
+\hline
+\end{tabular}}\end{table}
 
 A exclusão das lojas de aplicativos decorre da natureza do produto. O instrumento é um plugin de estação de trabalho digital, e pacotes iOS e Android não são compatíveis com esse formato. Manter presença nessas lojas exigiria conta de desenvolvedor, assinatura de aplicativo e comissão sobre vendas, sem contrapartida de distribuição útil.
 
@@ -108,16 +105,15 @@ Os itens 1, 2, 5, 6 e 7 dependem de credenciais e não foram executados. Os iten
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}llr@{}}
-\toprule
+\fbox{\begin{tabular}{llr}
+\hline
 Região & Moeda & Preço \\
-\midrule
+\hline
 Brasil & BRL & R\$ 97 \\
 Estados Unidos & USD & US\$ 59 \\
 Europa & EUR & EUR 55 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\hline
+\end{tabular}}\end{table}
 
 A conversão de referência em 24 de novembro de 2026 é de US\$ 1 para R\$ 5,85. Nessa base, R\$ 97 equivalem a aproximadamente US\$ 16,5. Os valores foram fixados por região, de sorte que o mercado brasileiro paga valor reduzido e os mercados externos pagam preço internacional cheio. A moeda é selecionada na página comercial e mantida no navegador; valores e botões de compra são atualizados em conjunto a partir de js/checkout.js.
 
@@ -125,10 +121,10 @@ A licença inclui VST3, standalone, dez presets de fábrica, atualizações da s
 
 \section{Custos}
 
-\begin{longtable}{@{}p{8.4cm}p{6.2cm}@{}}
-\toprule
+\fbox{\begin{tabular}{p{8.0cm}p{5.8cm}}
+\hline
 Item & Custo anual \\
-\midrule
+\hline
 Domínio bloodwormtr.ax & US\$ 31 a US\$ 45 \\
 Hospedagem GitHub Pages & R\$ 0 \\
 Certificado TLS & R\$ 0 \\
@@ -139,8 +135,8 @@ Checkout, Stripe ou Mercado Pago & R\$ 0 fixo, mais 3\% a 6\% por transação \\
 E-mail transacional, até três mil mensagens & R\$ 0 \\
 Analytics e monitoramento & R\$ 0 \\
 Assinatura de código e notarização, fase posterior & US\$ 0 a US\$ 500 \\
-\bottomrule
-\end{longtable}
+\hline
+\end{tabular}}
 
 O custo fixo de entrada situa-se entre US\$ 31 e US\$ 45 por ano, correspondente ao domínio. Os valores variam por registrador e dependem da elegibilidade do titular para a extensão .ax; a cotação definitiva há de ser obtida antes da aquisição. A comissão de pagamento incide somente sobre vendas concluídas.
 
@@ -162,19 +158,18 @@ A sequência é rígida por dependência. Domínio e certificado precedem qualqu
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}p{4.6cm}p{10cm}@{}}
-\toprule
+\fbox{\begin{tabular}{p{4.5cm}p{9.9cm}}
+\hline
 Risco & Tratamento \\
-\midrule
+\hline
 Domínio .ax com preço elevado ou elegibilidade restrita & Confirmar disponibilidade e registrador antes da aquisição. A alternativa é o domínio .com, de custo menor. \\
 Links de pagamento ainda em fase de configuração & Substituir marcadores em js/checkout.js. Até lá, os botões levam à seção de licença. \\
 Commit de versão com [skip ci] impede a Release & Conferir mensagem antes de publicar a tag e validar artefatos na tag de ensaio. \\
 Ausência de backend impede revogação de chave & Limitação transitória. A conta de usuário está prevista para fase posterior. \\
 Aviso de publicador desconhecido no Windows & Assinatura de código prevista como item opcional de fase posterior. \\
 Cobrança divergente do preço exibido & A verificação final compara o valor da página com o valor do checkout antes da abertura de vendas. \\
-\bottomrule
-\end{tabular}
-\end{table}
+\hline
+\end{tabular}}\end{table}
 
 \section{Indicadores de acompanhamento}
 
@@ -182,13 +177,14 @@ Após a abertura de vendas, acompanham-se licenças emitidas por período, taxa 
 
 \section{Aprovação}
 
-\begin{tabular}{ll}
-Preparado por & \rule{7cm}{0.4pt} \\\
-Responsável técnico & \rule{7cm}{0.4pt} \\\
-Investidor & \rule{7cm}{0.4pt} \\\
-Data & \rule{7cm}{0.4pt} \\\
-\end{tabular}
+\fbox{\begin{tabular}{ll}
+Preparado por & \rule{6.5cm}{0.4pt} \\
+Responsável técnico & \rule{6.5cm}{0.4pt} \\
+Investidor & \rule{6.5cm}{0.4pt} \\
+Data & \rule{6.5cm}{0.4pt} \\
+\end{tabular}}
 
 \end{document}
+
 
 
