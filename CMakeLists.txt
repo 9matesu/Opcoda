@@ -42,6 +42,12 @@ add_library(opcoda_core STATIC
     src/opcoda_core/rt/note_tracker.cpp
     src/opcoda_core/rt/transport.cpp)
 
+# O VST3 e' uma shared module no Linux (e um bundle no macOS): os objetos do
+# nucleo sao ligados nela e precisam de -fPIC. Sem isto o link no Linux falha
+# com "relocation R_X86_64_TPOFF32 ... can not be used when making a shared
+# object". No Windows a propriedade nao tem efeito.
+set_target_properties(opcoda_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_include_directories(opcoda_core PUBLIC src)
 target_compile_options(opcoda_core PUBLIC
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /Zc:__cplusplus /utf-8 /EHsc>
