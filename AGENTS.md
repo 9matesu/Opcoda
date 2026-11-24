@@ -13,6 +13,23 @@
 - Test binaries need the vcvars session too: the ASan runtime is a DLL on the vcvars PATH. `STATUS_DLL_NOT_FOUND` when running `build\tests\*.exe` outside it is an env error, not a code bug (`docs/17-guia-de-build.md`).
 - `cmake --build --preset vst3` / `standalone` (after a release configure) builds one format.
 
+### macOS / Linux
+
+```bash
+tools/build.sh dev       # Debug + ASan + testes
+tools/build.sh           # Release, VST3 + standalone
+tools/package-macos.sh   # dist/Opcoda-<versao>-macOS.dmg
+tools/package-linux.sh   # dist/Opcoda-<versao>-Linux.tar.gz
+```
+
+- No macOS e no Linux o script usa o compilador da máquina (`mac` / `linux`
+  presets) e JUCE em `deps/JUCE`. O preset `mac` gera universal arm64 + x86_64
+  com alvo macOS 11.0.
+- O chrome da janela standalone (botões, cantos, arrasto) é exclusivo do
+  Windows; fora dele a janela usa a barra nativa do sistema.
+- Os scripts são LF por `.gitattributes`: um CRLF no shebang quebra o
+  `#!/usr/bin/env bash` no Linux.
+
 ## Tests
 
 - `ctest --preset dev -C Debug` runs both suites (invoked by `build.ps1` for `dev`).

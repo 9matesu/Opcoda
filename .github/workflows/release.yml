@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build release
+        run: ./tools/build.ps1 -Release
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        run: ./tools/build-installer.ps1 -SkipBuild
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern '^project\(Opcoda VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          $vst3 = (Get-ChildItem build-release/src/opcoda_plugin/Opcoda_artefacts -Filter Opcoda.vst3 -Directory -Recurse | Select-Object -First 1).FullName
+          if (-not $vst3) { throw "bundle do VST3 nao encontrado" }
+          $standalone = Join-Path (Split-Path (Split-Path $vst3)) 'Standalone\Opcoda.exe'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path $vst3 -DestinationPath "dist/Opcoda-$version-Windows-VST3.zip"
+          Compress-Archive -Path $standalone -DestinationPath "dist/Opcoda-$version-Windows-Standalone.zip"
+          Copy-Item installer/Output/Opcoda-Setup-*.exe dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opcoda-windows
+          path: dist/*
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build and test
+        run: tools/build.sh dev
+      - name: Build release
+        run: tools/build.sh release
+      - name: Package
+        run: tools/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opcoda-macos
+          path: dist/*.dmg
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libjack-jackd2-dev libfreetype6-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build and test
+        run: tools/build.sh dev
+      - name: Build release
+        run: tools/build.sh release
+      - name: Package
+        run: tools/package-linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opcoda-linux
+          path: dist/*.tar.gz
+
+  publish:
+    needs: [windows, macos, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true

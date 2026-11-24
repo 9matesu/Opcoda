@@ -1,0 +1,4 @@
+# Os scripts de build e de empacotamento correm no macOS e no Linux a partir do
+# clone. Com core.autocrlf=true, um CRLF no shebang vira
+# "bad interpreter: /usr/bin/env bash^M" na maquina do utilizador.
+*.sh text eol=lf

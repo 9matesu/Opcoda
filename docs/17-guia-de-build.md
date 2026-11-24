@@ -8,6 +8,9 @@
 - Windows SDK 10.0.26100
 - JUCE 8.0.14, clonado em `I:\deps\JUCE` (só para o plugin)
 
+macOS e Linux usam o compilador da máquina (Xcode 15 / GCC) e o mesmo JUCE, em
+`deps/JUCE`. Ver "macOS e Linux" abaixo.
+
 ## Dependências
 
 O GoogleTest vem por `FetchContent`, clonado no primeiro configure. O JUCE é
@@ -40,8 +43,8 @@ não indica defeito no código.
 Depois de `-Release`:
 
 ```
-build-release/src/opcoda_plugin/Opcoda_artefacts/Debug/VST3/Opcoda.vst3
-build-release/src/opcoda_plugin/Opcoda_artefacts/Debug/Standalone/Opcoda.exe
+build-release/src/opcoda_plugin/Opcoda_artefacts/Release/VST3/Opcoda.vst3
+build-release/src/opcoda_plugin/Opcoda_artefacts/Release/Standalone/Opcoda.exe
 ```
 
 Para compilar um formato só:
@@ -82,18 +85,78 @@ perfeitamente contra o toolset v145, inclusive o `juce_vst3_helper` que gera o
 
 ## Presets
 
-| Preset | Compilador | CRT | ASan | Plugin | Uso |
+| Preset | Sistema | Compilador | ASan | Plugin | Uso |
 | --- | --- | --- | --- | --- | --- |
-| `dev` | MSVC v145 | dinâmico `/MDd` | sim | não | desenvolvimento e portões B, C, D |
-| `release` | MSVC v145 | estático `/MT` | não | sim | build de entrega, VST3 e Standalone |
+| `dev` | Windows | MSVC v145, CRT dinâmico `/MDd` | sim | não | desenvolvimento e portões B, C, D |
+| `release` | Windows | MSVC v145, CRT estático `/MT` | não | sim | build de entrega, VST3 e Standalone |
+| `mac-dev` | macOS | Clang (Xcode) | sim | não | desenvolvimento e testes |
+| `mac` | macOS | Clang (Xcode), universal arm64 + x86_64 | não | sim | build de entrega |
+| `linux-dev` | Linux | GCC/Clang do sistema | sim | não | desenvolvimento e testes |
+| `linux` | Linux | GCC/Clang do sistema | não | sim | build de entrega |
+
+O `tools/build.sh` escolhe o preset certo para o sistema (`dev` ou release) e
+roda o `ctest` no modo de desenvolvimento; é o equivalente de
+`tools/build.ps1` sem a sessão de vcvars. Os presets `mac` e `linux` usam o
+compilador da máquina, e o `mac` fixa `CMAKE_OSX_DEPLOYMENT_TARGET` em 11.0 e
+gera um binário universal.
 
 O AddressSanitizer é nativo do MSVC (`/fsanitize=address`) e usa a regra de link
 padrão do CMake. Não é preciso clang, lld-link nem qualquer ajuste manual.
+No macOS e no Linux o mesmo `OPCODA_ASAN` usa `-fsanitize=address`, com a flag de
+compilador escolhida por `if(MSVC)` no `CMakeLists.txt`.
 
 O preset `dev` fica com CRT dinâmico porque o ASan do MSVC exige `/MD` ou
 `/MDd`. O `release` usa CRT estático de propósito: um VST3 que linka contra
 `MSVCP140D.dll` só carrega numa máquina com Visual Studio instalado. Ver
 "CMAKE_BUILD_TYPE ausente" abaixo.
+
+## macOS e Linux
+
+### Requisitos
+
+- macOS 11.0 ou superior, Xcode 15, CMake 3.28
+- Linux: Ubuntu 22.04 (glibc 2.35), CMake 3.28, compilador C++20 e os pacotes
+  `libasound2-dev libfreetype6-dev libx11-dev libxcomposite-dev libxcursor-dev
+  libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libglu1-mesa-dev
+  mesa-common-dev`
+- JUCE 8.0.14 em `deps/JUCE` (o `.gitignore` mantém o clone fora do git)
+
+### Comandos
+
+```bash
+git clone --depth 1 --branch 8.0.14 --single-branch https://github.com/juce-framework/JUCE.git deps/JUCE
+
+tools/build.sh dev      # debug + ASan + testes
+tools/build.sh          # release
+tools/package-macos.sh  # dist/Opcoda-<versao>-macOS.dmg
+tools/package-linux.sh  # dist/Opcoda-<versao>-Linux.tar.gz
+```
+
+### Janela standalone
+
+No Windows a janela usa chrome próprio: botões de fechar e minimizar desenhados
+pelo look and feel, cantos arredondados por `SetWindowRgn` e arrasto pelo
+cabeçalho. No macOS e no Linux a janela usa a barra nativa do sistema
+(`setUsingNativeTitleBar(true)`): sem botões próprios, sem os 72 px reservados no
+cabeçalho e sem arrasto manual. A diferença está em `standalone_window.cpp` e no
+`setStandaloneChrome` do editor, ambos guardados por `#if JUCE_WINDOWS`.
+
+### Empacotamento
+
+- macOS: `hdiutil` cria o `.dmg` com o `Opcoda.vst3`, o `Opcoda.app` e um atalho
+  para `/Applications`. Não há assinatura nem notarização — a conta Apple
+  Developer não existe — e o utilizador abre a primeira execução com Ctrl+clique
+  (ou botão direito) e **Abrir**.
+- Linux: `tar.gz` com o `Opcoda.vst3`, o executável, o ícone e um `install.sh`
+  que copia para `~/.vst3`, `~/.local/bin` e cria o `.desktop`.
+
+### CI
+
+`.github/workflows/ci.yml` corre o build de desenvolvimento (debug + ASan +
+testes) e o build de release em Windows, macOS e Linux em cada push e pull
+request. `.github/workflows/release.yml` corre a release nos três sistemas
+quando uma tag `v*` é publicada, empacota (instalador, `.dmg` e `.tar.gz`) e
+publica os ficheiros no GitHub Release.
 
 ## CMAKE_BUILD_TYPE ausente: o plugin que o Ableton não abria
 

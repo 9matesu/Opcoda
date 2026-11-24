@@ -26,6 +26,19 @@ cmake --build --preset vst3
 cmake --build --preset standalone
 ```
 
+## macOS e Linux
+
+- macOS 11.0 ou superior, Xcode 15; Linux com GCC/Clang e os pacotes de
+  desenvolvimento X11, ALSA e FreeType.
+- JUCE 8.0.14 em `deps/JUCE` (o clone fica fora do git).
+- `tools/build.sh dev` compila Debug com AddressSanitizer e corre os testes;
+  `tools/build.sh` compila o Release.
+- `tools/package-macos.sh` gera o `.dmg` e `tools/package-linux.sh` gera o
+  `.tar.gz` com `install.sh`.
+- O chrome próprio da janela standalone (botões de fechar/minimizar, cantos
+  arredondados e arrasto) é exclusivo do Windows. No macOS e no Linux a janela
+  usa a barra nativa do sistema.
+
 ## Testes
 
 ```powershell
@@ -81,6 +94,9 @@ se encontrar DLL de debug. O instalador remove `.ilk` e `.pdb` do bundle.
 ```powershell
 .\tools\install-vst3.ps1
 ```
+
+No Linux o `install.sh` copia o VST3 para `~/.vst3`, o standalone para
+`~/.local/bin` e cria o lançador `.desktop`.
 
 ## Defeito conhecido
 

@@ -39,6 +39,9 @@ $cmakeCandidates = @(
     'C:\Program Files\CMake\bin\cmake.exe',
     'C:\Program Files (x86)\CMake\bin\cmake.exe'
 ) + (Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter "cmake.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+# No GitHub Actions o CMake vem no PATH e nem sempre na raiz de Program Files.
+$cmakePath = (Get-Command cmake -ErrorAction SilentlyContinue).Source
+if ($cmakePath) { $cmakeCandidates += $cmakePath }
 $cmake = $cmakeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $cmake) { throw "cmake.exe nao encontrado" }
 $ctest = Join-Path (Split-Path $cmake) 'ctest.exe'

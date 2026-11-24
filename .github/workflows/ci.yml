@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build and test (debug + ASan)
+        run: ./tools/build.ps1
+      - name: Build release
+        run: ./tools/build.ps1 -Release
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build and test (debug + ASan)
+        run: tools/build.sh dev
+      - name: Build release
+        run: tools/build.sh release
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libjack-jackd2-dev libfreetype6-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev
+      - name: Clone JUCE
+        run: git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+      - name: Build and test (debug + ASan)
+        run: tools/build.sh dev
+      - name: Build release
+        run: tools/build.sh release

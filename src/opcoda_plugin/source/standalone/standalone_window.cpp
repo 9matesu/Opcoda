@@ -21,9 +21,15 @@ StandaloneWindow::Body::Body(juce::StandalonePluginHolder& holder) {
 
     if (editor_ != nullptr) {
         addAndMakeVisible(*editor_);
+#if JUCE_WINDOWS
+        // No Windows a janela usa o chrome proprio: as luzes de fechar e
+        // minimizar ficam a direita do cabecalho, e o editor reserva 72 px
+        // para elas. No macOS e no Linux a barra e' do sistema e o editor
+        // ocupa a largura toda.
         if (auto* pluginEditor = dynamic_cast<PluginEditor*>(editor_.get())) {
             pluginEditor->setStandaloneChrome(true);
         }
+#endif
         preferredWidth_ = editor_->getWidth();
         preferredHeight_ = editor_->getHeight();
     }
@@ -102,11 +108,12 @@ void StandaloneWindow::Body::childBoundsChanged(juce::Component* child) {
                                 .getDisplays()
                                 .getDisplayForRect(bounds)) {
             const auto area = display->userBounds;
+            // userBounds e' Rectangle<float> no JUCE 8; a janela e' int.
             if (bounds.getBottom() > area.getBottom()) {
-                bounds.setY(area.getBottom() - bounds.getHeight());
+                bounds.setY(juce::roundToInt(area.getBottom()) - bounds.getHeight());
             }
             if (bounds.getRight() > area.getRight()) {
-                bounds.setX(area.getRight() - bounds.getWidth());
+                bounds.setX(juce::roundToInt(area.getRight()) - bounds.getWidth());
             }
             window->setBounds(bounds);
         }
@@ -125,8 +132,18 @@ StandaloneWindow::StandaloneWindow(juce::String title,
                                    std::unique_ptr<juce::StandalonePluginHolder> holder)
     : DocumentWindow(std::move(title), background, 0),
       holder_(std::move(holder)) {
+#if JUCE_WINDOWS
+    // O chrome proprio e' so' do Windows: ca o cabecalho do sistema fica
+    // desligado e os botoes de fechar/minimizar sao desenhados pelo look and
+    // feel da casa.
     setUsingNativeTitleBar(false);
     setTitleBarHeight(0);
+#else
+    // macOS e Linux recebem a barra nativa. Imitar as luzes do macOS num ecra
+    // que ja as tem dava dois jogos de botoes, e sem SetWindowRgn os cantos
+    // arredondados nao existiam fora do Windows.
+    setUsingNativeTitleBar(true);
+#endif
     setResizable(false, false);
 
     closeButton_.setName("Close");
@@ -135,15 +152,19 @@ StandaloneWindow::StandaloneWindow(juce::String title,
     minimiseButton_.setName("Minimise");
     minimiseButton_.setTooltip("Minimise");
     minimiseButton_.onClick = [this] { minimiseButtonPressed(); };
+#if JUCE_WINDOWS
     addAndMakeVisible(closeButton_);
     addAndMakeVisible(minimiseButton_);
+#endif
 
     auto body = std::make_unique<Body>(*holder_);
     body_ = body.get();
     setContentOwned(body.release(), false);
 
+#if JUCE_WINDOWS
     closeButton_.toFront(false);
     minimiseButton_.toFront(false);
+#endif
 
     const auto border = getBorderThickness();
     setSize(body_->preferredWidth() + border.getLeftAndRight(),
@@ -162,6 +183,7 @@ StandaloneWindow::~StandaloneWindow() {
 void StandaloneWindow::resized() {
     DocumentWindow::resized();
 
+#if JUCE_WINDOWS
     const auto place = [this](juce::Button& button, int x, int size) {
         // centrado no cabecalho de 48 px, encostado a' direita.
         button.setBounds(x, (48 - size) / 2, size, size);
@@ -172,6 +194,7 @@ void StandaloneWindow::resized() {
     place(minimiseButton_, closeX - windowChrome::kTrafficSize -
                                windowChrome::kTrafficGap,
           windowChrome::kTrafficSize);
+#endif
     applyRoundedCorners();
 }
 

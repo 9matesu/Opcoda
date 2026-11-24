@@ -3,6 +3,10 @@ edge-tmp/
 # Build CMake / Ninja / MSBuild
 build/
 build-release/
+build-mac/
+build-mac-dev/
+build-linux/
+build-linux-dev/
 cmake-build-*/
 design/stitch/*.html
 CMakeUserPresets.json

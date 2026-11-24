@@ -13,7 +13,7 @@ FetchContent_MakeAvailable(googletest)
 # char32_t implicitamente. A dependencia e' isenta, o codigo do Opcoda nao.
 # O /WX- substitui o /WX herdado, por isso o warning D9025: e' esperado.
 foreach(t gtest gtest_main gmock gmock_main)
-    target_compile_options(${t} PRIVATE /WX-)
+    target_compile_options(${t} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/WX->)
 endforeach()
 
 add_executable(opcoda_tests

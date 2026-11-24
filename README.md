@@ -3,17 +3,17 @@
 **A granular synthesizer that reads executables as sound material.**
 
 [![Release](https://img.shields.io/github/v/release/9matesu/Opcoda?color=FFD400&label=release)](https://github.com/9matesu/Opcoda/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0A0A0A)](https://github.com/9matesu/Opcoda/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0A0A0A)](https://github.com/9matesu/Opcoda/releases)
 [![License](https://img.shields.io/badge/license-Opcoda%20EULA-2A2A2A)](LICENSE.txt)
 
 > **If you are a musician looking to use Opcoda, download the installer from the
 > [releases page](https://github.com/9matesu/Opcoda/releases).** The VST3 and the
 > standalone app ship together, and no build step is required.
 
-Opcoda is a VST3 instrument and a standalone app for Windows x64. It reads a
-Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes into samples
-and plays them through an eight-voice granular engine. The audio path is free of
-allocations.
+Opcoda is a VST3 instrument and a standalone app for Windows, macOS and Linux.
+It reads a Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes
+into samples and plays them through an eight-voice granular engine. The audio
+path is free of allocations.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
@@ -36,13 +36,37 @@ allocations.
 
 | Build | Where |
 | --- | --- |
-| Installer (VST3 + standalone + manual) | [Releases](https://github.com/9matesu/Opcoda/releases) |
-| VST3 bundle | inside the installer |
-| Standalone app | inside the installer |
+| Windows installer (VST3 + standalone + manual) | [Releases](https://github.com/9matesu/Opcoda/releases) |
+| macOS disk image (`.dmg`) | [Releases](https://github.com/9matesu/Opcoda/releases) |
+| Linux archive (`.tar.gz`) | [Releases](https://github.com/9matesu/Opcoda/releases) |
+| VST3 bundle | inside each package |
+| Standalone app | inside each package |
 
-The VST3 is installed to `C:\Program Files\Common Files\VST3`. The standalone is
-installed to `C:\Program Files\Opcoda`. The installer offers the Microsoft Visual
-C++ runtime when it is missing.
+### Windows
+
+Run the installer. The VST3 is installed to
+`C:\Program Files\Common Files\VST3` and the standalone to
+`C:\Program Files\Opcoda`. The installer offers the Microsoft Visual C++ runtime
+when it is missing.
+
+### macOS
+
+Open the disk image, drag `Opcoda.vst3` to `~/Library/Audio/Plug-Ins/VST3` and
+`Opcoda.app` to Applications. macOS 11 or newer, 64-bit Intel or Apple Silicon.
+The build is not notarized, so the first launch needs a right-click (or
+Ctrl-click) on `Opcoda.app` and **Open**.
+
+### Linux
+
+```
+tar -xzf Opcoda-<version>-Linux.tar.gz
+cd Opcoda-<version>
+./install.sh
+```
+
+The script installs the VST3 to `~/.vst3`, the standalone to `~/.local/bin` and
+a launcher to `~/.local/share/applications`. No root is required. Built against
+glibc 2.35 (Ubuntu 22.04 or newer).
 
 ## Screenshots
 
@@ -79,6 +103,38 @@ powershell -File tools\build-installer.ps1
 
 The output is `installer/Output/Opcoda-Setup-<version>.exe`. Inno Setup 6 must be
 installed.
+
+### macOS
+
+Requirements: Xcode 15 or newer, CMake 3.28 or newer, and JUCE 8.0.14 cloned to
+`deps/JUCE`. The first CMake configure fetches GoogleTest 1.15.2.
+
+```
+git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+tools/build.sh dev       # debug + ASan + tests
+tools/build.sh           # release, universal arm64 + x86_64
+tools/package-macos.sh   # dist/Opcoda-<version>-macOS.dmg
+```
+
+The release build targets macOS 11.0 and produces both architectures in one
+bundle. The build is not signed or notarized.
+
+### Linux
+
+Requirements: CMake 3.28 or newer, a C++20 compiler, and the X11, ALSA and
+FreeType development packages (`libasound2-dev libfreetype6-dev libx11-dev
+libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev
+libxrender-dev libglu1-mesa-dev mesa-common-dev`).
+
+```
+git clone --depth 1 --branch 8.0.14 https://github.com/juce-framework/JUCE.git deps/JUCE
+tools/build.sh dev       # debug + ASan + tests
+tools/build.sh           # release
+tools/package-linux.sh   # dist/Opcoda-<version>-Linux.tar.gz
+```
+
+Release builds target glibc 2.35 (Ubuntu 22.04) so the plugin loads on current
+distributions.
 
 ## Contributing
 

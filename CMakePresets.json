@@ -5,6 +5,7 @@
     {
       "name": "dev",
       "displayName": "Desenvolvimento (MSVC, ASan)",
+      "generator": "NMake Makefiles",
       "toolchainFile": "${sourceDir}/cmake/msvc.cmake",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
@@ -17,6 +18,7 @@
     {
       "name": "release",
       "displayName": "Release (MSVC, plugin, CRT estatico)",
+      "generator": "NMake Makefiles",
       "toolchainFile": "${sourceDir}/cmake/msvc.cmake",
       "binaryDir": "${sourceDir}/build-release",
       "cacheVariables": {
@@ -25,18 +27,81 @@
         "OPCODA_BUILD_PLUGIN": "ON",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded"
       }
+    },
+    {
+      "name": "mac-dev",
+      "displayName": "macOS (Debug, ASan, testes)",
+      "binaryDir": "${sourceDir}/build-mac-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_ASAN": "ON",
+        "OPCODA_BUILD_PLUGIN": "OFF",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      }
+    },
+    {
+      "name": "mac",
+      "displayName": "macOS (Release, universal arm64+x86_64, VST3)",
+      "binaryDir": "${sourceDir}/build-mac",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_BUILD_PLUGIN": "ON",
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      }
+    },
+    {
+      "name": "linux-dev",
+      "displayName": "Linux (Debug, ASan, testes)",
+      "binaryDir": "${sourceDir}/build-linux-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_ASAN": "ON",
+        "OPCODA_BUILD_PLUGIN": "OFF"
+      }
+    },
+    {
+      "name": "linux",
+      "displayName": "Linux (Release, VST3)",
+      "binaryDir": "${sourceDir}/build-linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_STANDARD": "20",
+        "OPCODA_BUILD_PLUGIN": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "dev", "configurePreset": "dev" },
     { "name": "release", "configurePreset": "release" },
     { "name": "vst3", "configurePreset": "release", "targets": ["Opcoda_VST3"] },
-    { "name": "standalone", "configurePreset": "release", "targets": ["Opcoda_Standalone"] }
+    { "name": "standalone", "configurePreset": "release", "targets": ["Opcoda_Standalone"] },
+    { "name": "mac-dev", "configurePreset": "mac-dev" },
+    { "name": "mac", "configurePreset": "mac" },
+    { "name": "mac-vst3", "configurePreset": "mac", "targets": ["Opcoda_VST3"] },
+    { "name": "mac-standalone", "configurePreset": "mac", "targets": ["Opcoda_Standalone"] },
+    { "name": "linux-dev", "configurePreset": "linux-dev" },
+    { "name": "linux", "configurePreset": "linux" },
+    { "name": "linux-vst3", "configurePreset": "linux", "targets": ["Opcoda_VST3"] },
+    { "name": "linux-standalone", "configurePreset": "linux", "targets": ["Opcoda_Standalone"] }
   ],
   "testPresets": [
     {
       "name": "dev",
       "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mac-dev",
+      "configurePreset": "mac-dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-dev",
+      "configurePreset": "linux-dev",
       "output": { "outputOnFailure": true }
     }
   ]

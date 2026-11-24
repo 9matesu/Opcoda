@@ -14,8 +14,13 @@ option(OPCODA_WERROR "Trata warnings como erro" ON)
 set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/JUCE" CACHE PATH "Clone do JUCE")
 
 if(OPCODA_ASAN)
-    add_compile_options(/fsanitize=address)
-    add_link_options(/fsanitize=address)
+    if(MSVC)
+        add_compile_options(/fsanitize=address)
+        add_link_options(/fsanitize=address)
+    else()
+        add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address)
+    endif()
 endif()
 
 add_library(opcoda_core STATIC
@@ -38,13 +43,16 @@ add_library(opcoda_core STATIC
     src/opcoda_core/rt/transport.cpp)
 
 target_include_directories(opcoda_core PUBLIC src)
-target_compile_options(opcoda_core PUBLIC /W4 /permissive- /Zc:__cplusplus /utf-8 /EHsc)
-target_compile_definitions(opcoda_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+target_compile_options(opcoda_core PUBLIC
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive- /Zc:__cplusplus /utf-8 /EHsc>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>)
+target_compile_definitions(opcoda_core PUBLIC
+    $<$<PLATFORM_ID:Windows>:NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS>)
 
 if(OPCODA_WERROR)
     # PRIVATE: o /WX propagado vai parar no codigo C do JUCE (opus), que gera
     # C4005 inofensivo e derruba o build release inteiro.
-    target_compile_options(opcoda_core PRIVATE /WX)
+    target_compile_options(opcoda_core PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/WX>)
 endif()
 
 if(OPCODA_BUILD_TESTS)
