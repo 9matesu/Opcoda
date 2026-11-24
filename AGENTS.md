@@ -49,6 +49,9 @@ tools/package-linux.sh   # dist/Opcoda-<versao>-Linux.tar.gz
 - `build.ps1 -Release` runs a `dumpbin` guard: VST3 must not link `*D.dll`/`ucrtbased.dll` (debug CRT). `dbghelp.dll` is exempt (system DLL). Failure means the build type is wrong, not the code.
 - `COPY_PLUGIN_AFTER_BUILD` is OFF. Install via elevated `.\tools\install-vst3.ps1` (target `C:\Program Files\Common Files\VST3` needs UAC). The per-user VST3 path does **not** work — Ableton ignores it. Bundle path is found by glob, never hardcode it.
 - `*.ilk`/`*.pdb` inside the bundle are link residue (up to 89 MB); the install script strips them.
+- O commit de bump de versão **não pode levar `[skip ci]`**: o push da tag usa a
+  mensagem desse commit e o GitHub Actions salta o workflow `Release`. É o que
+  impedia a release de arrancar sozinha quando a tag era empurrada.
 
 ## Known defect (do not re-investigate)
 

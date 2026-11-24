@@ -1,6 +1,6 @@
 # Histórico
 
-## 0.1.1
+## 0.1.1 — 2026-11-24
 
 - Cinco temas: Grafite, Clássico, Claro, Âmbar e Ciano.
 - Analisador de espectro no módulo FILTER, com 64 bandas logarítmicas.
