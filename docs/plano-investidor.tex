@@ -31,6 +31,7 @@
 \setlength{\parskip}{4pt}
 \setlength{\parindent}{0pt}
 \setlength{\fboxsep}{6pt}
+\setlength{\tabcolsep}{5pt}
 
 \begin{document}
 
@@ -56,7 +57,7 @@ A proposta limita-se à implantação. Não trata de pesquisa de mercado, projet
 
 \begin{table}[h]
 \centering
-\fbox{\begin{tabular}{p{4.1cm}p{10.2cm}}
+\begin{tabular}{|p{4.0cm}|p{10.0cm}|}
 \hline
 Item & Decisão \\
 \hline
@@ -68,7 +69,7 @@ Pagamento & Checkout hosted, com Mercado Pago no Brasil e Stripe no exterior. \\
 Distribuição & Releases do GitHub por tag de versão. \\
 Licença & EULA próprio, pessoal, não exclusivo e intransferível, com duas ativações. \\
 \hline
-\end{tabular}}\end{table}
+\end{tabular}\end{table}
 
 A exclusão das lojas de aplicativos decorre da natureza do produto. O instrumento é um plugin de estação de trabalho digital, e pacotes iOS e Android não são compatíveis com esse formato. Manter presença nessas lojas exigiria conta de desenvolvedor, assinatura de aplicativo e comissão sobre vendas, sem contrapartida de distribuição útil.
 
@@ -105,7 +106,7 @@ Os itens 1, 2, 5, 6 e 7 dependem de credenciais e não foram executados. Os iten
 
 \begin{table}[h]
 \centering
-\fbox{\begin{tabular}{llr}
+\begin{tabular}{|l|l|r|}
 \hline
 Região & Moeda & Preço \\
 \hline
@@ -113,7 +114,7 @@ Brasil & BRL & R\$ 97 \\
 Estados Unidos & USD & US\$ 59 \\
 Europa & EUR & EUR 55 \\
 \hline
-\end{tabular}}\end{table}
+\end{tabular}\end{table}
 
 A conversão de referência em 24 de novembro de 2026 é de US\$ 1 para R\$ 5,85. Nessa base, R\$ 97 equivalem a aproximadamente US\$ 16,5. Os valores foram fixados por região, de sorte que o mercado brasileiro paga valor reduzido e os mercados externos pagam preço internacional cheio. A moeda é selecionada na página comercial e mantida no navegador; valores e botões de compra são atualizados em conjunto a partir de js/checkout.js.
 
@@ -121,7 +122,7 @@ A licença inclui VST3, standalone, dez presets de fábrica, atualizações da s
 
 \section{Custos}
 
-\fbox{\begin{tabular}{p{8.0cm}p{5.8cm}}
+\begin{tabular}{|p{7.9cm}|p{5.7cm}|}
 \hline
 Item & Custo anual \\
 \hline
@@ -136,7 +137,7 @@ E-mail transacional, até três mil mensagens & R\$ 0 \\
 Analytics e monitoramento & R\$ 0 \\
 Assinatura de código e notarização, fase posterior & US\$ 0 a US\$ 500 \\
 \hline
-\end{tabular}}
+\end{tabular}
 
 O custo fixo de entrada situa-se entre US\$ 31 e US\$ 45 por ano, correspondente ao domínio. Os valores variam por registrador e dependem da elegibilidade do titular para a extensão .ax; a cotação definitiva há de ser obtida antes da aquisição. A comissão de pagamento incide somente sobre vendas concluídas.
 
@@ -158,7 +159,7 @@ A sequência é rígida por dependência. Domínio e certificado precedem qualqu
 
 \begin{table}[h]
 \centering
-\fbox{\begin{tabular}{p{4.5cm}p{9.9cm}}
+\begin{tabular}{|p{4.4cm}|p{9.8cm}|}
 \hline
 Risco & Tratamento \\
 \hline
@@ -169,7 +170,7 @@ Ausência de backend impede revogação de chave & Limitação transitória. A c
 Aviso de publicador desconhecido no Windows & Assinatura de código prevista como item opcional de fase posterior. \\
 Cobrança divergente do preço exibido & A verificação final compara o valor da página com o valor do checkout antes da abertura de vendas. \\
 \hline
-\end{tabular}}\end{table}
+\end{tabular}\end{table}
 
 \section{Indicadores de acompanhamento}
 
@@ -177,14 +178,15 @@ Após a abertura de vendas, acompanham-se licenças emitidas por período, taxa 
 
 \section{Aprovação}
 
-\fbox{\begin{tabular}{ll}
+\begin{tabular}{|l|l|}
 Preparado por & \rule{6.5cm}{0.4pt} \\
 Responsável técnico & \rule{6.5cm}{0.4pt} \\
 Investidor & \rule{6.5cm}{0.4pt} \\
 Data & \rule{6.5cm}{0.4pt} \\
-\end{tabular}}
+\end{tabular}
 
 \end{document}
+
 
 
 
