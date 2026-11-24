@@ -6,14 +6,16 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0A0A0A)](https://github.com/9matesu/Opcoda/releases)
 [![License](https://img.shields.io/badge/license-Opcoda%20EULA-2A2A2A)](LICENSE.txt)
 
-> **If you are a musician looking to use Opcoda, download the installer from the
-> [releases page](https://github.com/9matesu/Opcoda/releases).** The VST3 and the
+> **If you are a musician looking to use Opcoda, download the build for your
+> system from the [releases page](https://github.com/9matesu/Opcoda/releases).**
+> Windows installer, macOS disk image or Linux archive. The VST3 and the
 > standalone app ship together, and no build step is required.
 
 Opcoda is a VST3 instrument and a standalone app for Windows, macOS and Linux.
-It reads a Portable Executable (`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes
-into samples and plays them through an eight-voice granular engine. The audio
-path is free of allocations.
+Prebuilt binaries are available for Windows 10/11, macOS 11 or newer (Intel and
+Apple Silicon) and Ubuntu 22.04 or newer. It reads a Portable Executable
+(`.exe`, `.dll`, `.bin`, `.sys`), turns the bytes into samples and plays them
+through an eight-voice granular engine. The audio path is free of allocations.
 
 ![Opcoda interface with a binary loaded](docs/assets/screenshots/opcoda-ui.png)
 
@@ -42,9 +44,11 @@ path is free of allocations.
 | VST3 bundle | inside each package |
 | Standalone app | inside each package |
 
+Every package ships the VST3 and the standalone app; no build step is required.
+
 ### Windows
 
-Run the installer. The VST3 is installed to
+Windows 10 or newer. Run the installer. The VST3 is installed to
 `C:\Program Files\Common Files\VST3` and the standalone to
 `C:\Program Files\Opcoda`. The installer offers the Microsoft Visual C++ runtime
 when it is missing.
